@@ -78,8 +78,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::{HistoryAction, LocationAction};
 
-use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
 use megi_net::{ResourceLoader, Scheme, Url};
 
 /// Default maximum size of one script source (8 MiB).
@@ -293,12 +293,17 @@ pub struct ScriptingHostContext {
     /// Pre-script layout geometry (`NodeId → viewport rects`) installed into the JS
     /// runtime so scripts can measure the initial layout (viewport coords, scroll = 0).
     #[cfg(feature = "js")]
-    pub layout:
-        Option<std::sync::Arc<std::collections::HashMap<megi_core::NodeId, megi_js::host::LayoutRect>>>,
+    pub layout: Option<
+        std::sync::Arc<std::collections::HashMap<megi_core::NodeId, megi_js::host::LayoutRect>>,
+    >,
     /// Lazy pre-script layout resolver invoked only if a script queries geometry (#534).
     #[cfg(feature = "js")]
     pub layout_provider: Option<
-        Arc<dyn Fn() -> std::collections::HashMap<megi_core::NodeId, megi_js::host::LayoutRect> + Send + Sync>,
+        Arc<
+            dyn Fn() -> std::collections::HashMap<megi_core::NodeId, megi_js::host::LayoutRect>
+                + Send
+                + Sync,
+        >,
     >,
     /// Optional `<iframe sandbox>` flags applied when this document is a framed subdocument (#1544).
     #[cfg(feature = "js")]
@@ -383,7 +388,8 @@ pub struct ScriptExecution {
     /// Canvas 2D surfaces created/filled by scripts (#1545), keyed by `<canvas>` node.
     /// Only available when the `js` feature is enabled (no canvas without scripts).
     #[cfg(feature = "js")]
-    pub canvas_surfaces: std::collections::HashMap<megi_core::NodeId, megi_js::canvas::CanvasSurface>,
+    pub canvas_surfaces:
+        std::collections::HashMap<megi_core::NodeId, megi_js::canvas::CanvasSurface>,
     /// Mutated/initialized child `<iframe>` documents captured during scripting (#1544).
     #[cfg(feature = "js")]
     pub frame_documents: Vec<(NodeId, Document, megi_js::SandboxFlags, String)>,
@@ -616,7 +622,8 @@ pub fn load_scripts_with_csp(
             // Subresource Integrity (#1527): verify the decoded bytes before execution and fail
             // closed on mismatch or malformed metadata. An absent `integrity` is a no-op.
             if let Some(integrity) = &candidate.integrity
-                && let Err(error) = megi_net::integrity::verify_integrity(&resource.bytes, integrity)
+                && let Err(error) =
+                    megi_net::integrity::verify_integrity(&resource.bytes, integrity)
             {
                 report.skipped += 1;
                 warnings.push(format!(
@@ -859,7 +866,7 @@ pub fn execute_scripts(
         let frame_no_network = host.no_network;
         let frame_csp = host.csp.clone();
         let frame_options = host.fetch_options.clone();
-        runtime.set_frame_loader(Box::new(move |raw_url| {
+        runtime.set_frame_loader(Arc::new(move |raw_url| {
             let url = Url::parse(raw_url).map_err(|e| format!("invalid frame URL: {e}"))?;
             if frame_no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
                 return Err(format!("frame blocked (--no-network): {url}"));
@@ -909,12 +916,12 @@ pub fn execute_scripts(
     // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),
     // and innerWidth/innerHeight/devicePixelRatio come from the real viewport (DPR 1.0).
     if let Some(styles) = host.styles.clone() {
-        runtime.set_computed_style_provider(Box::new(move |document, node_id| {
+        runtime.set_computed_style_provider(Arc::new(move |document, node_id| {
             crate::browser_host::computed_style_for(&styles, document, node_id)
         }));
     }
     let media = host.media.clone();
-    runtime.set_media_provider(Box::new(move |query: &str| {
+    runtime.set_media_provider(Arc::new(move |query: &str| {
         crate::browser_host::media_matches(&media, query)
     }));
     let viewport_info = megi_js::host::ViewportInfo {
@@ -924,7 +931,7 @@ pub fn execute_scripts(
         scroll_x: 0.0,
         scroll_y: 0.0,
     };
-    runtime.set_viewport_provider(Box::new(move || viewport_info));
+    runtime.set_viewport_provider(Arc::new(move || viewport_info));
     if host.enable_workers {
         // R203: fetch() provider backed by the render's effective FetchOptions. Scripts run
         // synchronously; the Promise settles when the host drains microtasks. CORS policy is
@@ -948,7 +955,8 @@ pub fn execute_scripts(
                 options.origin = Some(origin);
             }
             if options.mixed_content.is_none() {
-                options.mixed_content = Some(megi_net::MixedContentPolicy::new(base.scheme(), true));
+                options.mixed_content =
+                    Some(megi_net::MixedContentPolicy::new(base.scheme(), true));
             }
             let no_network = host.no_network;
             let fetch_csp = host.csp.clone();
@@ -958,7 +966,7 @@ pub fn execute_scripts(
             let fetch_bytes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
             let max_fetch_calls = limits.max_fetch_calls;
             let max_fetch_bytes = limits.max_fetch_bytes;
-            runtime.set_fetch_provider(Box::new(move |request| {
+            runtime.set_fetch_provider(Arc::new(move |request| {
                 let calls = fetch_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 if calls > max_fetch_calls {
                     return Err(megi_js::JsError::Runtime(format!(
@@ -1032,7 +1040,9 @@ pub fn execute_scripts(
                         .collect();
                     let mut req_options = options.clone();
                     match request.redirect.as_deref() {
-                        Some("manual") => req_options.redirect_mode = megi_net::RedirectMode::Manual,
+                        Some("manual") => {
+                            req_options.redirect_mode = megi_net::RedirectMode::Manual
+                        }
                         Some("error") => req_options.redirect_mode = megi_net::RedirectMode::Error,
                         _ => req_options.redirect_mode = megi_net::RedirectMode::Follow,
                     }
@@ -1084,7 +1094,7 @@ pub fn execute_scripts(
         let ws_no_network = host.no_network;
         let ws_csp = host.csp.clone();
         let ws_doc_url = document_url.clone();
-        runtime.set_websocket_provider(Box::new(move |raw_url| {
+        runtime.set_websocket_provider(Arc::new(move |raw_url| {
             if ws_no_network {
                 return Err(megi_js::JsError::Runtime(format!(
                     "WebSocket blocked: --no-network prevents opening {raw_url}"
@@ -1130,18 +1140,18 @@ pub fn execute_scripts(
         }));
         let worker_allow_file = document_url.is_file();
         let max_worker_bytes = limits.max_script_bytes;
-        runtime.set_worker_loader(Box::new(move |url| {
+        runtime.set_worker_loader(Arc::new(move |url| {
             load_worker_source(url, worker_allow_file, max_worker_bytes)
         }));
     }
     #[cfg(feature = "js")]
     if let Some(layout) = host.layout.clone() {
-        runtime.set_layout_provider(Box::new(move |node_id| layout.get(&node_id).copied()));
+        runtime.set_layout_provider(Arc::new(move |node_id| layout.get(&node_id).copied()));
     } else if let Some(provider) = host.layout_provider.clone() {
         // No OnceLock: a one-shot cache froze the very first measurement for the whole
         // render (#1470). Re-evaluate the provider on every query so later checkpoints see
         // fresh geometry (the provider itself is the pre-script snapshot in the pipeline).
-        runtime.set_layout_provider(Box::new(move |node_id| provider().get(&node_id).copied()));
+        runtime.set_layout_provider(Arc::new(move |node_id| provider().get(&node_id).copied()));
     }
 
     // Browser-facing host providers (R155): History/location actions are queued for the
@@ -1151,7 +1161,7 @@ pub fn execute_scripts(
     let location_actions: Arc<Mutex<Vec<LocationAction>>> = Arc::new(Mutex::new(Vec::new()));
     {
         let queue = Arc::clone(&location_actions);
-        runtime.set_location_provider(Box::new(move |action| {
+        runtime.set_location_provider(Arc::new(move |action| {
             queue
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1165,7 +1175,7 @@ pub fn execute_scripts(
     let history_actions: Arc<Mutex<Vec<HistoryAction>>> = Arc::new(Mutex::new(Vec::new()));
     {
         let queue = Arc::clone(&history_actions);
-        runtime.set_history_provider(Box::new(move |action| {
+        runtime.set_history_provider(Arc::new(move |action| {
             queue
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1196,7 +1206,7 @@ pub fn execute_scripts(
         let local_save = Arc::clone(&per_render_local);
         let session_save = Arc::clone(&per_render_session);
         runtime.set_storage_provider(megi_js::host::StorageProvider {
-            load: Box::new(move |kind| match kind {
+            load: Arc::new(move |kind| match kind {
                 megi_js::host::StorageKind::Local => match &shared_for_load {
                     Some(storage) => {
                         let storage = storage
@@ -1217,7 +1227,7 @@ pub fn execute_scripts(
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .clone(),
             }),
-            save: Box::new(move |kind, entries| match kind {
+            save: Arc::new(move |kind, entries| match kind {
                 megi_js::host::StorageKind::Local => match &shared_for_save {
                     Some(storage) => {
                         let mut storage = storage
@@ -1253,7 +1263,7 @@ pub fn execute_scripts(
         let jar_get = Arc::clone(&cookie_jar);
         let jar_set = Arc::clone(&cookie_jar);
         runtime.set_cookie_provider(megi_js::host::CookieProvider {
-            get: Box::new(move |url| {
+            get: Arc::new(move |url| {
                 let Ok(parsed) = Url::parse(url) else {
                     return String::new();
                 };
@@ -1262,7 +1272,7 @@ pub fn execute_scripts(
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .document_cookie_string(&parsed)
             }),
-            set: Box::new(move |url, value| {
+            set: Arc::new(move |url, value| {
                 let Ok(parsed) = Url::parse(url) else {
                     return;
                 };
@@ -1282,7 +1292,7 @@ pub fn execute_scripts(
         .iter()
         .any(|script| script.is_module || script.text.contains("import"))
     {
-        runtime.set_module_resolver(Box::new(
+        runtime.set_module_resolver(Arc::new(
             |specifier: &str, base: &str| -> Result<Option<String>, megi_js::JsError> {
                 let resolved = match Url::parse(specifier) {
                     Ok(url) => Some(url),
@@ -1314,7 +1324,7 @@ pub fn execute_scripts(
         // unbounded graph of tiny/empty modules would otherwise bypass the attempt cap.
         let module_fetches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let max_module_fetches = limits.max_module_fetches;
-        runtime.set_module_loader(Box::new(
+        runtime.set_module_loader(Arc::new(
             move |url_str: &str| -> Result<String, megi_js::JsError> {
                 if module_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                     >= max_module_fetches
@@ -1324,7 +1334,9 @@ pub fn execute_scripts(
                     )));
                 }
                 let url = Url::parse(url_str).map_err(|error| {
-                    megi_js::JsError::ModuleNotFound(format!("invalid module URL {url_str}: {error}"))
+                    megi_js::JsError::ModuleNotFound(format!(
+                        "invalid module URL {url_str}: {error}"
+                    ))
                 })?;
                 if let Some(policy) = &module_csp
                     && !policy.allows_external(&url, &module_doc_url)
@@ -1343,7 +1355,9 @@ pub fn execute_scripts(
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .load_checked(&url, true)
                     .map_err(|error| {
-                        megi_js::JsError::ModuleNotFound(format!("cannot load module {url}: {error}"))
+                        megi_js::JsError::ModuleNotFound(format!(
+                            "cannot load module {url}: {error}"
+                        ))
                     })?;
                 if resource.bytes.len() > max_module_bytes {
                     return Err(megi_js::JsError::ModuleNotFound(format!(
@@ -1364,7 +1378,9 @@ pub fn execute_scripts(
                     )));
                 }
                 let text = String::from_utf8(resource.bytes.clone()).map_err(|error| {
-                    megi_js::JsError::ModuleNotFound(format!("module {url} is not valid UTF-8: {error}"))
+                    megi_js::JsError::ModuleNotFound(format!(
+                        "module {url} is not valid UTF-8: {error}"
+                    ))
                 })?;
                 let mut total = total_module_bytes
                     .lock()
@@ -1432,7 +1448,9 @@ pub fn execute_scripts(
             } else {
                 match runtime.eval_module(&script.text, &script.source_name, &base, &budget) {
                     Ok(_) => Ok(None),
-                    Err(megi_js::JsError::DynamicImport(_) | megi_js::JsError::TopLevelAwait(_)) => {
+                    Err(
+                        megi_js::JsError::DynamicImport(_) | megi_js::JsError::TopLevelAwait(_),
+                    ) => {
                         let module_budget = megi_js::ModuleAsyncBudget {
                             timer_tasks: limits.max_tasks.saturating_sub(module_tasks),
                             virtual_time_ms: limits
@@ -1743,8 +1761,10 @@ fn resolve_host_dom_target(
         crate::HostEventTarget::Document => megi_js::JsEventTarget::Document,
         crate::HostEventTarget::FormControl(form_id) => {
             let needle = form_id.to_string();
-            find_element_with_attr(document, "data-megi-form-id", Some(&needle))
-                .map_or(megi_js::JsEventTarget::Document, megi_js::JsEventTarget::Node)
+            find_element_with_attr(document, "data-megi-form-id", Some(&needle)).map_or(
+                megi_js::JsEventTarget::Document,
+                megi_js::JsEventTarget::Node,
+            )
         }
         crate::HostEventTarget::OwningForm(form_id) => {
             let needle = form_id.to_string();
@@ -1767,8 +1787,10 @@ fn resolve_host_dom_target(
                 )
         }
         crate::HostEventTarget::Focused => {
-            find_element_with_attr(document, "data-megi-focused", None)
-                .map_or(megi_js::JsEventTarget::Document, megi_js::JsEventTarget::Node)
+            find_element_with_attr(document, "data-megi-focused", None).map_or(
+                megi_js::JsEventTarget::Document,
+                megi_js::JsEventTarget::Node,
+            )
         }
     }
 }

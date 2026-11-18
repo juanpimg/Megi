@@ -1,7 +1,7 @@
 //! TDD regression specifications for the JS host-bridge rewrite (plan Task 4).
 //!
-//! Every test here is `#[ignore]`d until the migration completes, so the current
-//! suite stays green while these pin the intended re-entrancy contract:
+//! These tests pin the re-entrancy contract of the host bridge (they were
+//! `#[ignore]`d until the provider migration landed):
 //!
 //! - a provider may call back into JavaScript without hitting `already borrowed`;
 //! - a nested (re-entrant) event listener sees DOM nodes created by its caller;
@@ -20,8 +20,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use megi_js::host::FetchResult;
 use megi_js::JsRuntime;
+use megi_js::host::FetchResult;
 
 /// Counts provider invocations across a `Send + Sync` closure.
 fn call_counter() -> (Arc<Mutex<usize>>, impl Fn() -> usize) {
@@ -39,18 +39,20 @@ fn reentrant_eval(script: &str, source_name: &str) -> String {
 }
 
 #[test]
-#[ignore = "enabled when host bridge migration completes"]
 fn provider_can_call_back_into_javascript() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let (calls, call_count) = call_counter();
 
-    runtime.set_computed_style_provider(Box::new(move |_document, _node| {
+    runtime.set_computed_style_provider(Arc::new(move |_document, _node| {
         // A provider is allowed to enter JS while the outer `getComputedStyle`
         // binding is on the stack. With a borrowed host this panics with
         // `already borrowed: BorrowMutError`; the migrated bridge parks the host
         // in the Boa Context so the nested call runs cleanly.
         let value = reentrant_eval("window.__called = 1; __called", "reentry.js");
-        assert_eq!(value, "1", "the re-entered realm must observe its own global");
+        assert_eq!(
+            value, "1",
+            "the re-entered realm must observe its own global"
+        );
         *calls.lock().expect("counter lock") += 1;
         vec![("color".to_string(), "rgb(1, 2, 3)".to_string())]
     }));
@@ -70,11 +72,14 @@ fn provider_can_call_back_into_javascript() {
         "rgb(1, 2, 3)",
         "the provider's value must still reach the original realm"
     );
-    assert_eq!(call_count(), 1, "one getComputedStyle call ⇒ one provider call");
+    assert_eq!(
+        call_count(),
+        1,
+        "one getComputedStyle call ⇒ one provider call"
+    );
 }
 
 #[test]
-#[ignore = "enabled when host bridge migration completes"]
 fn nested_callback_sees_nodes_created_by_outer() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime
@@ -100,7 +105,9 @@ fn nested_callback_sees_nodes_created_by_outer() {
         .expect("nested dispatch");
 
     assert_eq!(
-        runtime.eval("__order.join(',')", "nested.js").expect("order"),
+        runtime
+            .eval("__order.join(',')", "nested.js")
+            .expect("order"),
         "outer,inner",
         "both listeners must run even though the outer one is still on the stack"
     );
@@ -112,12 +119,11 @@ fn nested_callback_sees_nodes_created_by_outer() {
 }
 
 #[test]
-#[ignore = "enabled when host bridge migration completes"]
 fn history_provider_reentry_does_not_panic() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let (calls, call_count) = call_counter();
 
-    runtime.set_history_provider(Box::new(move |_action| {
+    runtime.set_history_provider(Arc::new(move |_action| {
         // Dispatching an event from a provider is the re-entrant host effect the
         // old `Rc<RefCell<Host>>` bridge could not express safely.
         let log = reentrant_eval(
@@ -134,28 +140,30 @@ fn history_provider_reentry_does_not_panic() {
     }));
 
     runtime
-        .eval(
-            "history.pushState({n: 1}, '', '/reentry')",
-            "history.js",
-        )
+        .eval("history.pushState({n: 1}, '', '/reentry')", "history.js")
         .expect("history.pushState");
 
     assert_eq!(call_count(), 1, "one pushState ⇒ one provider call");
     assert_eq!(
-        runtime.eval("history.length", "history.js").expect("length"),
+        runtime
+            .eval("history.length", "history.js")
+            .expect("length"),
         "2",
         "the outer realm keeps its own history state"
     );
 }
 
 #[test]
-#[ignore = "enabled when host bridge migration completes"]
 fn fetch_provider_can_pump_microtasks() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let (calls, call_count) = call_counter();
 
-    runtime.set_fetch_provider(Box::new(move |request| {
-        assert_eq!(request.url, "/data", "provider receives the normalized request");
+    runtime.set_fetch_provider(Arc::new(move |request| {
+        // `new Request('/data')` normalizes against the document base `about:blank`.
+        assert_eq!(
+            request.url, "about:/data",
+            "provider receives the normalized request"
+        );
         // Pumping from inside a provider must deliver each queued job exactly
         // once. A real same-realm handle would pump the runtime being called;
         // the probe verifies the same contract on its own microtask queue.

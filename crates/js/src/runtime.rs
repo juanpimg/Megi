@@ -350,6 +350,9 @@ impl JsRuntime {
     /// CSS property/value pairs (e.g. from `megi_css::ComputedStyle`). Without a provider,
     /// `getComputedStyle` falls back to the element's inline declarations (read-only).
     pub fn set_computed_style_provider(&mut self, provider: crate::host::ComputedStyleProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.computed_style = Some(provider.clone());
+        }
         self.host.borrow_mut().computed_style_provider = Some(provider);
     }
 
@@ -360,6 +363,9 @@ impl JsRuntime {
     /// `change` events are not fired automatically (the host re-evaluates and can re-run
     /// scripts); `addListener`/`addEventListener` are accepted as no-ops.
     pub fn set_media_provider(&mut self, provider: crate::host::MediaProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.media = Some(provider.clone());
+        }
         self.host.borrow_mut().media_provider = Some(provider);
     }
 
@@ -370,6 +376,9 @@ impl JsRuntime {
         // The provider's scroll offsets are the initial scroll position; `scrollTo`/
         // `scrollBy` then move the host-controlled offsets (exposed as pageX/YOffset).
         let initial = provider();
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.viewport = Some(provider.clone());
+        }
         let mut host = self.host.borrow_mut();
         host.scroll_x = initial.scroll_x;
         host.scroll_y = initial.scroll_y;
@@ -379,11 +388,17 @@ impl JsRuntime {
     /// Installs the History API provider (`pushState`/`replaceState`/`back`/`forward`/`go`).
     /// Without a provider those methods are a documented no-op.
     pub fn set_history_provider(&mut self, provider: crate::host::HistoryProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.history = Some(provider.clone());
+        }
         self.host.borrow_mut().history_provider = Some(provider);
     }
 
     /// Installs the `location.assign/replace/reload` provider.
     pub fn set_location_provider(&mut self, provider: crate::host::LocationProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.location = Some(provider.clone());
+        }
         self.host.borrow_mut().location_provider = Some(provider);
     }
 
@@ -391,6 +406,10 @@ impl JsRuntime {
     pub fn set_storage_provider(&mut self, provider: StorageProvider) {
         let local = (provider.load)(StorageKind::Local);
         let session = (provider.load)(StorageKind::Session);
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.storage_load = Some(provider.load.clone());
+            slot.storage_save = Some(provider.save.clone());
+        }
         let mut host = self.host.borrow_mut();
         host.local_storage = local.into_iter().collect();
         host.session_storage = session.into_iter().collect();
@@ -399,6 +418,10 @@ impl JsRuntime {
 
     /// Installs the host cookie jar provider used by `document.cookie`.
     pub fn set_cookie_provider(&mut self, provider: crate::host::CookieProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.cookie_get = Some(provider.get.clone());
+            slot.cookie_set = Some(provider.set.clone());
+        }
         self.host.borrow_mut().cookie_provider = Some(provider);
     }
 
@@ -699,6 +722,28 @@ fn accessor_fn(
 /// Boa error (mapped to `None` here) instead of the old `already borrowed` panic.
 fn with_host_cell<R>(context: &mut Context, f: impl FnOnce(&mut Host) -> R) -> Option<R> {
     host_cell(context).ok().map(|mut host| f(&mut host))
+}
+
+/// Clones a provider out of the context's immutable [`crate::providers::HostProviders`]
+/// slot, falling back to the legacy host mirror when no slot was installed.
+///
+/// The clone is an `Arc`, so a binding can drop its host borrow *before* invoking the
+/// callback. A provider is allowed to re-enter JavaScript; calling it while a `RefMut`
+/// of the host is alive would otherwise panic with `already borrowed`.
+fn ctx_or_mirror<T>(
+    context: &mut Context,
+    from_slot: impl FnOnce(&crate::providers::HostProviders) -> Option<T>,
+    from_mirror: impl FnOnce(&mut Host) -> Option<T>,
+) -> Option<T> {
+    {
+        let slot = crate::providers::providers(context);
+        if let Some(providers) = slot
+            && let Some(value) = from_slot(providers)
+        {
+            return Some(value);
+        }
+    }
+    with_host_cell(context, from_mirror).flatten()
 }
 
 /// Installs only non-DOM worker globals (`console` and timers).
@@ -3797,23 +3842,37 @@ fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 fn document_cookie_get(
     _this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    let cookie_str = with_host(|host| {
-        if host.opaque_origin {
-            return String::new();
-        }
-        match &host.cookie_provider {
-            Some(provider) => (provider.get)(&host.url),
-            None => host
-                .cookies_fallback
-                .iter()
-                .map(|(name, value)| format!("{name}={value}"))
-                .collect::<Vec<_>>()
-                .join("; "),
-        }
+    let (opaque, url, fallback) = with_host_cell(context, |host| {
+        (
+            host.opaque_origin,
+            host.url.clone(),
+            host.cookies_fallback.clone(),
+        )
     })
-    .unwrap_or_default();
+    .unwrap_or((true, String::new(), Vec::new()));
+    if opaque {
+        return Ok(JsValue::from(js_string!("")));
+    }
+    let getter = ctx_or_mirror(
+        context,
+        |slot| slot.cookie_get.clone(),
+        |host| {
+            host.cookie_provider
+                .as_ref()
+                .map(|provider| provider.get.clone())
+        },
+    );
+    let cookie_str = if let Some(getter) = getter {
+        getter(&url)
+    } else {
+        fallback
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
     Ok(JsValue::from(js_string!(cookie_str)))
 }
 
@@ -3823,14 +3882,25 @@ fn document_cookie_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let value = arg_string(args, 0, context).unwrap_or_default();
-    let _ = with_host(|host| {
-        if host.opaque_origin {
-            return;
-        }
-        if let Some(provider) = &host.cookie_provider {
-            (provider.set)(&host.url, &value);
-            return;
-        }
+    let setter = ctx_or_mirror(
+        context,
+        |slot| slot.cookie_set.clone(),
+        |host| {
+            host.cookie_provider
+                .as_ref()
+                .map(|provider| provider.set.clone())
+        },
+    );
+    let (opaque, url) = with_host_cell(context, |host| (host.opaque_origin, host.url.clone()))
+        .unwrap_or((true, String::new()));
+    if opaque {
+        return Ok(JsValue::undefined());
+    }
+    if let Some(setter) = setter {
+        setter(&url, &value);
+        return Ok(JsValue::undefined());
+    }
+    let _ = with_host_cell(context, |host| {
         let mut segments = value.split(';');
         let pair = segments.next().unwrap_or("").trim();
         let (name, val) = match pair.split_once('=') {
@@ -4752,18 +4822,20 @@ fn history_push_state(
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
-    let applied = with_host(|host| {
-        if let Some(provider) = &host.history_provider {
-            provider(HistoryAction::Push {
-                state: json.clone(),
-                url: resolved.clone(),
-            });
-            true
-        } else {
-            false
-        }
-    })
-    .unwrap_or(false);
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.history.clone(),
+        |host| host.history_provider.clone(),
+    );
+    let applied = if let Some(provider) = provider {
+        provider(HistoryAction::Push {
+            state: json.clone(),
+            url: resolved.clone(),
+        });
+        true
+    } else {
+        false
+    };
     if applied {
         root_set(context, "__megi_history_state", 0, state)?;
         with_host(|host| {
@@ -4801,18 +4873,20 @@ fn history_replace_state(
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
-    let applied = with_host(|host| {
-        if let Some(provider) = &host.history_provider {
-            provider(HistoryAction::Replace {
-                state: json.clone(),
-                url: resolved.clone(),
-            });
-            true
-        } else {
-            false
-        }
-    })
-    .unwrap_or(false);
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.history.clone(),
+        |host| host.history_provider.clone(),
+    );
+    let applied = if let Some(provider) = provider {
+        provider(HistoryAction::Replace {
+            state: json.clone(),
+            url: resolved.clone(),
+        });
+        true
+    } else {
+        false
+    };
     if applied {
         root_set(context, "__megi_history_state", 0, state)?;
         with_host(|host| {
@@ -4825,25 +4899,25 @@ fn history_replace_state(
     Ok(JsValue::undefined())
 }
 
-fn history_back(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    with_host(|host| {
-        if let Some(provider) = &host.history_provider {
-            provider(HistoryAction::Back);
-        }
-    });
+fn history_back(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if let Some(provider) = ctx_or_mirror(
+        context,
+        |slot| slot.history.clone(),
+        |host| host.history_provider.clone(),
+    ) {
+        provider(HistoryAction::Back);
+    }
     Ok(JsValue::undefined())
 }
 
-fn history_forward(
-    _this: &JsValue,
-    _args: &[JsValue],
-    _context: &mut Context,
-) -> JsResult<JsValue> {
-    with_host(|host| {
-        if let Some(provider) = &host.history_provider {
-            provider(HistoryAction::Forward);
-        }
-    });
+fn history_forward(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if let Some(provider) = ctx_or_mirror(
+        context,
+        |slot| slot.history.clone(),
+        |host| host.history_provider.clone(),
+    ) {
+        provider(HistoryAction::Forward);
+    }
     Ok(JsValue::undefined())
 }
 
@@ -4853,11 +4927,13 @@ fn history_go(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
         .and_then(|value| value.to_number(context).ok())
         .map(|number| number as i64)
         .unwrap_or(0);
-    with_host(|host| {
-        if let Some(provider) = &host.history_provider {
-            provider(HistoryAction::Go(delta));
-        }
-    });
+    if let Some(provider) = ctx_or_mirror(
+        context,
+        |slot| slot.history.clone(),
+        |host| host.history_provider.clone(),
+    ) {
+        provider(HistoryAction::Go(delta));
+    }
     Ok(JsValue::undefined())
 }
 
@@ -4973,16 +5049,19 @@ fn navigate_location(args: &[JsValue], context: &mut Context, replace: bool) -> 
     let Some(resolved) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
-    with_host(|host| {
-        if let Some(provider) = &host.location_provider {
-            provider(if replace {
-                LocationAction::Replace(resolved.clone())
-            } else {
-                LocationAction::Assign(resolved.clone())
-            });
-        }
-        host.url = resolved.clone();
-    });
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.location.clone(),
+        |host| host.location_provider.clone(),
+    );
+    if let Some(provider) = provider {
+        provider(if replace {
+            LocationAction::Replace(resolved.clone())
+        } else {
+            LocationAction::Assign(resolved.clone())
+        });
+    }
+    with_host_cell(context, |host| host.url = resolved);
     Ok(JsValue::undefined())
 }
 
@@ -4992,12 +5071,14 @@ fn location_assign(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
 fn location_replace(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     navigate_location(args, context, true)
 }
-fn location_reload(_t: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    with_host(|host| {
-        if let Some(provider) = &host.location_provider {
-            provider(LocationAction::Reload);
-        }
-    });
+fn location_reload(_t: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if let Some(provider) = ctx_or_mirror(
+        context,
+        |slot| slot.location.clone(),
+        |host| host.location_provider.clone(),
+    ) {
+        provider(LocationAction::Reload);
+    }
     Ok(JsValue::undefined())
 }
 fn location_href_set(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
@@ -5045,24 +5126,32 @@ fn storage_read<T>(
     .ok_or_else(|| js_error("no active JavaScript host"))
 }
 
-fn persist_storage(kind: StorageKind) {
-    with_host(|host| {
-        let snapshot: Vec<(String, String)> = match kind {
-            StorageKind::Local => host
-                .local_storage
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            StorageKind::Session => host
-                .session_storage
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        };
-        if let Some(provider) = &host.storage_provider {
-            (provider.save)(kind, &snapshot);
-        }
-    });
+fn persist_storage(kind: StorageKind, context: &mut Context) {
+    let snapshot: Vec<(String, String)> = with_host_cell(context, |host| match kind {
+        StorageKind::Local => host
+            .local_storage
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        StorageKind::Session => host
+            .session_storage
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    })
+    .unwrap_or_default();
+    let saver = ctx_or_mirror(
+        context,
+        |slot| slot.storage_save.clone(),
+        |host| {
+            host.storage_provider
+                .as_ref()
+                .map(|provider| provider.save.clone())
+        },
+    );
+    if let Some(saver) = saver {
+        saver(kind, &snapshot);
+    }
 }
 
 fn storage_get_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
@@ -5095,7 +5184,7 @@ fn storage_set_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
         StorageKind::Local => host.local_storage.insert(key, value),
         StorageKind::Session => host.session_storage.insert(key, value),
     });
-    persist_storage(kind);
+    persist_storage(kind, context);
     Ok(JsValue::undefined())
 }
 
@@ -5115,7 +5204,7 @@ fn storage_remove_item(
         StorageKind::Local => host.local_storage.remove(&key),
         StorageKind::Session => host.session_storage.remove(&key),
     });
-    persist_storage(kind);
+    persist_storage(kind, context);
     Ok(JsValue::undefined())
 }
 
@@ -5130,7 +5219,7 @@ fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
         StorageKind::Local => host.local_storage.clear(),
         StorageKind::Session => host.session_storage.clear(),
     });
-    persist_storage(kind);
+    persist_storage(kind, context);
     Ok(JsValue::undefined())
 }
 
@@ -5765,43 +5854,44 @@ fn resolve_module(
     specifier: &str,
     base: &str,
 ) -> Result<String, JsError> {
-    let resolved = {
+    // Clone the Arc provider out of the borrow before invoking it: a resolver may
+    // re-enter JavaScript, which must not borrow the host again.
+    let (import_target, resolver) = {
         let host = host.borrow();
-        if let Some(map) = host.import_map.as_ref() {
-            match map.resolve_with_base(specifier, Some(base)) {
-                Some(Some(target)) => {
-                    if !target.contains("://")
-                        && !target.starts_with("data:")
-                        && let Some(resolver) = host.module_resolver.as_ref()
-                        && let Some(abs) = resolver(&target, base)?
-                    {
-                        return Ok(abs);
-                    }
-                    return Ok(target);
-                }
-                Some(None) => {
-                    return Err(JsError::ImportMapBlocked(format!(
-                        "{specifier} (base {base})"
-                    )));
-                }
-                None => {}
-            }
+        (
+            host.import_map
+                .as_ref()
+                .and_then(|map| map.resolve_with_base(specifier, Some(base))),
+            host.module_resolver.clone(),
+        )
+    };
+    if let Some(target) = import_target {
+        let Some(target) = target else {
+            return Err(JsError::ImportMapBlocked(format!(
+                "{specifier} (base {base})"
+            )));
+        };
+        if !target.contains("://")
+            && !target.starts_with("data:")
+            && let Some(resolver) = &resolver
+            && let Some(abs) = resolver(&target, base)?
+        {
+            return Ok(abs);
         }
-        match host.module_resolver.as_ref() {
-            Some(resolver) => resolver(specifier, base)?,
-            None => None,
-        }
+        return Ok(target);
+    }
+    let resolved = match &resolver {
+        Some(resolver) => resolver(specifier, base)?,
+        None => None,
     };
     resolved.ok_or_else(|| JsError::ModuleNotFound(format!("{specifier} (base {base})")))
 }
 
 fn load_module(host: &Rc<RefCell<Host>>, url: &str) -> Result<String, JsError> {
-    let loaded = {
-        let host = host.borrow();
-        match host.module_loader.as_ref() {
-            Some(loader) => Some(loader(url)?),
-            None => None,
-        }
+    let loader = { host.borrow().module_loader.clone() };
+    let loaded = match &loader {
+        Some(loader) => Some(loader(url)?),
+        None => None,
     };
     loaded.ok_or_else(|| JsError::ModuleNotFound(url.to_string()))
 }
@@ -5991,16 +6081,25 @@ impl JsRuntime {
     /// `offsetWidth/offsetHeight` and `clientWidth/clientHeight`. Without a provider those
     /// APIs return zeros (documented gap); render installs the real layout before scripts.
     pub fn set_layout_provider(&mut self, provider: crate::host::LayoutProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.layout = Some(provider.clone());
+        }
         self.host.borrow_mut().layout_provider = Some(provider);
     }
 
     /// Installs the ES module resolver (specifier + importer URL → resolved URL).
     pub fn set_module_resolver(&mut self, resolver: crate::host::ModuleResolver) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.module_resolver = Some(resolver.clone());
+        }
         self.host.borrow_mut().module_resolver = Some(resolver);
     }
 
     /// Installs the ES module loader (`url → source text`; `js` performs no I/O itself).
     pub fn set_module_loader(&mut self, loader: crate::host::ModuleLoader) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.module_loader = Some(loader.clone());
+        }
         self.host.borrow_mut().module_loader = Some(loader);
     }
 
@@ -7870,12 +7969,12 @@ fn node_layout_rect(
     context: &mut Context,
 ) -> JsResult<Option<crate::host::LayoutRect>> {
     let node_id = this_node(this, context)?;
-    Ok(with_host(|host| {
-        host.layout_provider
-            .as_ref()
-            .and_then(|provider| provider(node_id))
-    })
-    .flatten())
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.layout.clone(),
+        |host| host.layout_provider.clone(),
+    );
+    Ok(provider.and_then(|provider| provider(node_id)))
 }
 
 fn rect_from_border(rect: &crate::host::LayoutRect) -> (f64, f64, f64, f64) {
@@ -7956,15 +8055,17 @@ fn node_client_height(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResu
 }
 
 fn viewport_metric(context: &mut Context, width: bool) -> JsResult<JsValue> {
-    let _ = context;
-    let value = with_host(|host| {
-        host.viewport_provider.as_ref().map(|provider| {
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.viewport.clone(),
+        |host| host.viewport_provider.clone(),
+    );
+    let value = provider
+        .map(|provider| {
             let info = provider();
             if width { info.width } else { info.height }
         })
-    })
-    .flatten()
-    .unwrap_or(if width { 1280 } else { 720 });
+        .unwrap_or(if width { 1280 } else { 720 });
     Ok(JsValue::from(f64::from(value)))
 }
 
@@ -7974,14 +8075,19 @@ fn window_inner_width(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult
 fn window_inner_height(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     viewport_metric(c, false)
 }
-fn window_device_pixel_ratio(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
-    let ratio = with_host(|host| {
-        host.viewport_provider
-            .as_ref()
-            .map(|provider| provider().device_pixel_ratio)
-    })
-    .flatten()
-    .unwrap_or(1.0);
+fn window_device_pixel_ratio(
+    _t: &JsValue,
+    _a: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.viewport.clone(),
+        |host| host.viewport_provider.clone(),
+    );
+    let ratio = provider
+        .map(|provider| provider().device_pixel_ratio)
+        .unwrap_or(1.0);
     Ok(JsValue::from(ratio))
 }
 
@@ -8407,78 +8513,82 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
         return Ok(found);
     }
 
-    let meta = with_host(|host| {
-        if host.frame_depth >= MAX_FRAME_DEPTH {
-            return Err("maximum iframe depth reached".to_string());
-        }
-        let active_count = host.frames.iter().filter(|s| s.is_some()).count();
-        if active_count >= MAX_FRAMES_PER_PAGE {
-            return Err("maximum iframe count per page reached".to_string());
-        }
-        let el = host
-            .document
-            .try_node(node_id)
-            .and_then(|n| n.as_element())
-            .ok_or_else(|| "node is not an element".to_string())?;
-        if !el.local_name.eq_ignore_ascii_case("iframe") {
-            return Err("node is not an iframe".to_string());
-        }
-        let sandbox = el
-            .get_attribute("sandbox")
-            .map(SandboxFlags::from_attribute)
-            .unwrap_or_default();
-        let srcdoc = el.get_attribute("srcdoc").map(str::to_owned);
-        let raw_src = el
-            .get_attribute("src")
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned);
-        let parent_url = host.url.clone();
-        let parent_depth = host.frame_depth;
-        let opaque = !sandbox.allow_same_origin;
-        let resolved_url = if srcdoc.is_some() {
-            parent_url.clone()
-        } else if let Some(src) = raw_src.as_deref() {
-            if src.eq_ignore_ascii_case("about:blank") {
-                "about:blank".to_string()
-            } else {
-                host.resolve_url(src)
+    let (sandbox, srcdoc, parent_url, parent_depth, opaque, parent_origin, resolved_url, loader) =
+        with_host(|host| {
+            if host.frame_depth >= MAX_FRAME_DEPTH {
+                return Err("maximum iframe depth reached".to_string());
             }
-        } else {
-            "about:blank".to_string()
-        };
-        let parent_origin = crate::host::origin_for_url(&parent_url, host.opaque_origin);
-        let html_result = if let Some(doc_html) = srcdoc {
-            Some((resolved_url.clone(), doc_html))
-        } else if resolved_url == "about:blank" {
-            Some((
-                "about:blank".to_string(),
-                "<html><head></head><body></body></html>".to_string(),
+            let active_count = host.frames.iter().filter(|s| s.is_some()).count();
+            if active_count >= MAX_FRAMES_PER_PAGE {
+                return Err("maximum iframe count per page reached".to_string());
+            }
+            let el = host
+                .document
+                .try_node(node_id)
+                .and_then(|n| n.as_element())
+                .ok_or_else(|| "node is not an element".to_string())?;
+            if !el.local_name.eq_ignore_ascii_case("iframe") {
+                return Err("node is not an iframe".to_string());
+            }
+            let sandbox = el
+                .get_attribute("sandbox")
+                .map(SandboxFlags::from_attribute)
+                .unwrap_or_default();
+            let srcdoc = el.get_attribute("srcdoc").map(str::to_owned);
+            let raw_src = el
+                .get_attribute("src")
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned);
+            let parent_url = host.url.clone();
+            let parent_depth = host.frame_depth;
+            let opaque = !sandbox.allow_same_origin;
+            let resolved_url: String = if srcdoc.is_some() {
+                parent_url.clone()
+            } else if let Some(src) = raw_src.as_deref() {
+                if src.eq_ignore_ascii_case("about:blank") {
+                    "about:blank".to_string()
+                } else {
+                    host.resolve_url(src)
+                }
+            } else {
+                "about:blank".to_string()
+            };
+            let parent_origin = crate::host::origin_for_url(&parent_url, host.opaque_origin);
+            let loader = host.frame_loader.clone();
+            Ok((
+                sandbox,
+                srcdoc,
+                parent_url,
+                parent_depth,
+                opaque,
+                parent_origin,
+                resolved_url,
+                loader,
             ))
-        } else if let Some(loader) = host.frame_loader.as_ref() {
-            loader(&resolved_url).ok()
-        } else {
-            None
-        };
-        let (final_url, html) = html_result.unwrap_or((
-            resolved_url,
-            "<html><head></head><body></body></html>".to_string(),
-        ));
-        let same_origin = crate::host::is_same_origin_url(&parent_url, &final_url, opaque);
-        Ok((
-            final_url,
-            html,
-            sandbox,
-            opaque,
-            same_origin,
-            parent_depth,
-            parent_origin,
-        ))
-    })
-    .ok_or_else(|| js_error("no active JavaScript host"))?
-    .map_err(js_error)?;
+        })
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
 
-    let (final_url, html, sandbox, opaque, same_origin, parent_depth, parent_origin) = meta;
+    // Invoke the frame loader outside the host borrow: a loader may re-enter JS.
+    // `&resolved_url` derefs the owned `String` to the `&str` the provider expects.
+    let html_result = if let Some(doc_html) = srcdoc {
+        Some((resolved_url.clone(), doc_html))
+    } else if resolved_url == "about:blank" {
+        Some((
+            "about:blank".to_string(),
+            "<html><head></head><body></body></html>".to_string(),
+        ))
+    } else if let Some(loader) = loader {
+        loader(&resolved_url).ok()
+    } else {
+        None
+    };
+    let (final_url, html) = html_result.unwrap_or((
+        resolved_url,
+        "<html><head></head><body></body></html>".to_string(),
+    ));
+    let same_origin = crate::host::is_same_origin_url(&parent_url, &final_url, opaque);
     let parsed_doc =
         megi_html::parse_document_with_options(&html, false, &megi_html::ParseOptions::DEFAULT)
             .document;
@@ -8976,6 +9086,9 @@ impl JsRuntime {
 
     /// Installs a host loader for `<iframe src="...">` child documents (#1544).
     pub fn set_frame_loader(&mut self, loader: crate::host::FrameLoader) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.frame_loader = Some(loader.clone());
+        }
         self.host.borrow_mut().frame_loader = Some(loader);
     }
 
@@ -9230,17 +9343,26 @@ impl JsRuntime {
 
     /// Installs the WebSocket transport provider (the host owns the socket).
     pub fn set_websocket_provider(&mut self, provider: crate::host::WebSocketProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.websocket = Some(provider.clone());
+        }
         self.host.borrow_mut().websocket_provider = Some(provider);
     }
 
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
     /// Without a provider `fetch()` rejects with a typed error (documented).
     pub fn set_fetch_provider(&mut self, provider: crate::host::FetchProvider) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.fetch = Some(provider.clone());
+        }
         self.host.borrow_mut().fetch_provider = Some(provider);
     }
 
     /// Installs the worker script loader (`url → source text`; the host owns all I/O).
     pub fn set_worker_loader(&mut self, loader: crate::host::WorkerLoader) {
+        if let Some(slot) = crate::providers::providers_mut(&mut self.context) {
+            slot.worker_loader = Some(loader.clone());
+        }
         self.host.borrow_mut().worker_loader = Some(loader);
     }
 
@@ -9494,16 +9616,15 @@ fn worker_constructor(
     let url = arg_string(args, 0, context)?;
     let parent =
         crate::host::current_host().ok_or_else(|| js_error("no active JavaScript host"))?;
-    let (resolved, source) = {
-        let host = parent.borrow();
-        let resolved = host.resolve_url(&url);
-        let loader = host
-            .worker_loader
-            .as_ref()
-            .ok_or_else(|| js_error("Worker scripts are not available in this host"))?;
-        let source = loader(&resolved).map_err(|error| js_error(error.to_string()))?;
-        (resolved, source)
-    };
+    let resolved = with_host_cell(context, |host| host.resolve_url(&url))
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let loader = ctx_or_mirror(
+        context,
+        |slot| slot.worker_loader.clone(),
+        |host| host.worker_loader.clone(),
+    )
+    .ok_or_else(|| js_error("Worker scripts are not available in this host"))?;
+    let source = loader(&resolved).map_err(|error| js_error(error.to_string()))?;
     let id = {
         let mut host = parent.borrow_mut();
         let existing = host.workers.iter().position(|worker| worker.is_none());
@@ -9885,13 +10006,13 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             .then(|| body_text.into_bytes()),
         redirect,
     };
-    let result = with_host(|host| {
-        host.fetch_provider
-            .as_ref()
-            .ok_or_else(|| js_error("fetch is not available in this host"))
-            .and_then(|provider| provider(request).map_err(|error| js_error(error.to_string())))
-    })
-    .ok_or_else(|| js_error("no active JavaScript host"))??;
+    let provider = ctx_or_mirror(
+        context,
+        |slot| slot.fetch.clone(),
+        |host| host.fetch_provider.clone(),
+    )
+    .ok_or_else(|| js_error("fetch is not available in this host"))?;
+    let result = provider(request).map_err(|error| js_error(error.to_string()))?;
     if result.body.len() > MAX_FETCH_BODY {
         return Err(js_error("fetch response body limit exceeded"));
     }
@@ -10006,6 +10127,12 @@ impl ModuleLoader for MegiModuleLoader {
             .borrow()
             .clone()
             .ok_or_else(|| js_error("no active JavaScript host"))?;
+        // Clone the Arc providers out of the host before invoking them: a resolver or
+        // loader may re-enter JavaScript and must not observe a live host borrow.
+        let (resolver, loader) = {
+            let host = host.borrow();
+            (host.module_resolver.clone(), host.module_loader.clone())
+        };
         // Consult the import map first (like resolve_module does).
         let import_map_result = {
             let host = host.borrow();
@@ -10017,27 +10144,20 @@ impl ModuleLoader for MegiModuleLoader {
             match result {
                 Some(mut target) => {
                     if !target.contains("://") && !target.starts_with("data:") {
-                        let resolved_target = {
-                            let host = host.borrow();
-                            match host.module_resolver.as_ref() {
-                                Some(resolver) => resolver(&target, &base)
-                                    .map_err(|error| js_error(error.to_string()))?,
-                                None => None,
-                            }
+                        let resolved_target = if let Some(resolver) = &resolver {
+                            resolver(&target, &base).map_err(|error| js_error(error.to_string()))?
+                        } else {
+                            None
                         };
                         if let Some(abs) = resolved_target {
                             target = abs;
                         }
                     }
                     // Load from the import-map target.
-                    let source = {
-                        let host = host.borrow();
-                        match host.module_loader.as_ref() {
-                            Some(loader) => {
-                                loader(&target).map_err(|error| js_error(error.to_string()))?
-                            }
-                            None => return Err(js_error(format!("module not found: {target}"))),
-                        }
+                    let source = if let Some(loader) = &loader {
+                        loader(&target).map_err(|error| js_error(error.to_string()))?
+                    } else {
+                        return Err(js_error(format!("module not found: {target}")));
                     };
                     let mut context = context.borrow_mut();
                     let module = Module::parse(
@@ -10061,23 +10181,17 @@ impl ModuleLoader for MegiModuleLoader {
                 }
             }
         }
-        let resolved = {
-            let host = host.borrow();
-            match host.module_resolver.as_ref() {
-                Some(resolver) => {
-                    resolver(&specifier, &base).map_err(|error| js_error(error.to_string()))?
-                }
-                None => None,
-            }
+        let resolved = if let Some(resolver) = &resolver {
+            resolver(&specifier, &base).map_err(|error| js_error(error.to_string()))?
+        } else {
+            None
         };
         let url = resolved
             .ok_or_else(|| js_error(format!("module not found: {specifier} (base {base})")))?;
-        let source = {
-            let host = host.borrow();
-            match host.module_loader.as_ref() {
-                Some(loader) => loader(&url).map_err(|error| js_error(error.to_string()))?,
-                None => return Err(js_error(format!("module not found: {url}"))),
-            }
+        let source = if let Some(loader) = &loader {
+            loader(&url).map_err(|error| js_error(error.to_string()))?
+        } else {
+            return Err(js_error(format!("module not found: {url}")));
         };
         let mut context = context.borrow_mut();
         let module = Module::parse(
@@ -10685,6 +10799,7 @@ mod markup_parse_budget_tests {
 #[cfg(test)]
 mod mutation_observer_delivery_tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn mutation_observer_records_markup_insert_normalize_and_does_not_starve_siblings() {
@@ -10824,7 +10939,7 @@ mod mutation_observer_delivery_tests {
     #[test]
     fn failing_worker_reply_does_not_starve_other_workers() {
         let mut runtime = JsRuntime::new().expect("runtime");
-        runtime.set_worker_loader(Box::new(|url| {
+        runtime.set_worker_loader(Arc::new(|url| {
             if url.ends_with("worker.js") {
                 Ok("onmessage = function(e) { postMessage(e.data); };".to_string())
             } else {
