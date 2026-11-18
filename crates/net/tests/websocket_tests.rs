@@ -47,8 +47,20 @@ fn serve() -> (u16, JoinHandle<()>) {
         assert!(request.starts_with("GET /chat HTTP/1.1"), "{request}");
         assert!(request.contains("Upgrade: websocket"), "{request}");
         assert!(request.contains("Sec-WebSocket-Version: 13"), "{request}");
+        let key = request
+            .lines()
+            .find_map(|line| {
+                line.split_once(':')
+                    .filter(|(name, _)| name.eq_ignore_ascii_case("Sec-WebSocket-Key"))
+                    .map(|(_, value)| value.trim().to_owned())
+            })
+            .expect("client key");
+        let accept = net::websocket::accept_value(&key);
+        let response = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+        );
         stream
-            .write_all(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: x\r\n\r\n")
+            .write_all(response.as_bytes())
             .expect("handshake response");
         let payload = read_frame(&mut stream);
         assert_eq!(payload, b"ping");
