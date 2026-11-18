@@ -55,7 +55,8 @@ const WEBSOCKET_PRELUDE: &str = r####"
     self._handle = __megi_ws_native(target, "open", "");
     if (typeof self._handle !== "number" || self._handle < 0) {
       self.readyState = 3;
-      var err2 = { type: "error", message: "WebSocket connection failed" };
+      var errMsg = typeof self._handle === "string" ? self._handle : "WebSocket connection failed";
+      var err2 = { type: "error", message: errMsg };
       setTimeout(function () { self._fire("error", err2); }, 0);
       return;
     }
@@ -121,19 +122,21 @@ fn ws_native(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsRes
     let payload = string(2);
 
     if op == "open" {
-        let handle = crate::host::with_host(|host| {
-            let provider = host.websocket_provider.as_ref()?;
-            let transport = provider(&url).ok()?;
+        let opened = crate::host::with_host(|host| -> Result<u32, String> {
+            let Some(provider) = host.websocket_provider.as_ref() else {
+                return Err("no WebSocket provider".to_owned());
+            };
+            let transport = provider(&url).map_err(|error| error.to_string())?;
             let handle = host.websocket_next_handle;
             host.websocket_next_handle = host.websocket_next_handle.wrapping_add(1);
             host.websockets.insert(handle, transport);
-            Some(handle)
+            Ok(handle)
         })
-        .flatten();
-        let Some(handle) = handle else {
-            return Ok(JsValue::from(-1.0));
+        .unwrap_or_else(|| Err("no active host".to_owned()));
+        return match opened {
+            Ok(handle) => Ok(JsValue::from(handle as f64)),
+            Err(message) => Ok(JsValue::from(js_string!(message))),
         };
-        return Ok(JsValue::from(handle as f64));
     }
 
     // send:/close:<handle>
