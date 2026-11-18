@@ -77,6 +77,7 @@ crates/css/tests/effects.rs	260	test	F1	waveF1	2026-11-17	covered	#1356-#1360
 crates/css/tests/font_face_tests.rs	86	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/gradients.rs	478	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/length_parse.rs	31	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
+crates/css/tests/numeric_ranges.rs	68	test	F1	wave2	2026-11-18	covered	#1670,#1671,#1676	Regression test for wave2 findings
 crates/css/tests/parser_depth.rs	68	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/proptest_css.proptest-regressions	0	generated	-			exempt		not read line by line: generated
 crates/css/tests/proptest_css.rs	178	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
@@ -451,7 +452,7 @@ crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave2	2026-11-18	covered
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/form_post_tests.rs	202	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/gradient_tests.rs	106	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
-crates/render/tests/iframe_tests.rs	146	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/render/tests/iframe_tests.rs	147	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/render/tests/image_formats_tests.rs	61	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/image_scaled_tests.rs	64	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/images_tests.rs	389	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	

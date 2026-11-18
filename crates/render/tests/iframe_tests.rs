@@ -118,6 +118,7 @@ fn iframe_without_srcdoc_paints_no_child_content() {
 }
 
 #[test]
+#[cfg(feature = "js")]
 fn iframe_sandbox_blocks_child_scripts() {
     // Child script sets a red background; it only runs when sandbox allows scripts.
     let script = "<script>document.body.setAttribute('style','margin:0;background:red')</script>";
