@@ -6307,6 +6307,55 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
   XMLHttpRequest.LOADING = 3;
   XMLHttpRequest.DONE = 4;
   define("XMLHttpRequest", XMLHttpRequest);
+
+  // Intl.NumberFormat subset (#1523): locale-aware decimal formatting with grouping and
+  // configurable fraction digits. Uses small per-locale separator tables (no ICU dependency);
+  // unsupported locales fall back to en-US. Enough for the common currency/count display case.
+  (function () {
+    var separators = {
+      'en': [',', '.'], 'en-us': [',', '.'], 'en-gb': [',', '.'],
+      'es': ['.', ','], 'es-es': ['.', ','],
+      'de': ['.', ','], 'de-de': ['.', ','],
+      'fr': ['\u202f', ','], 'fr-fr': ['\u202f', ','],
+      'pt': ['.', ','], 'pt-br': ['.', ',']
+    };
+    function NumberFormat(locale, options) {
+      locale = String(locale || 'en-US');
+      options = options || {};
+      var pair = separators[locale.toLowerCase()] || separators[locale.split('-')[0].toLowerCase()] || separators['en'];
+      this._group = pair[0];
+      this._decimal = pair[1];
+      this._minFrac = options.minimumFractionDigits === undefined ? 0 : Math.max(0, Math.min(20, options.minimumFractionDigits | 0));
+      this._maxFrac = options.maximumFractionDigits === undefined
+        ? Math.max(this._minFrac, 3)
+        : Math.max(this._minFrac, Math.min(20, options.maximumFractionDigits | 0));
+      this._grouping = options.useGrouping !== false;
+      this._locale = locale;
+    }
+    NumberFormat.prototype.resolvedOptions = function () {
+      return { locale: this._locale, minimumFractionDigits: this._minFrac, maximumFractionDigits: this._maxFrac, useGrouping: this._grouping };
+    };
+    NumberFormat.prototype.format = function (value) {
+      var n = Number(value);
+      if (!isFinite(n)) { return String(n); }
+      var negative = n < 0;
+      var fixed = Math.abs(n).toFixed(this._maxFrac);
+      var parts = fixed.split('.');
+      var integer = parts[0];
+      var frac = parts[1] || '';
+      while (frac.length > this._minFrac && frac.charAt(frac.length - 1) === '0') { frac = frac.slice(0, -1); }
+      if (this._grouping) { integer = integer.replace(/\B(?=(\d{3})+(?!\d))/g, this._group); }
+      return (negative ? '-' : '') + integer + (frac ? this._decimal + frac : '');
+    };
+    var intl = (typeof Intl === 'object' && Intl) ? Intl : {};
+    intl.NumberFormat = NumberFormat;
+    define('Intl', intl);
+    if (typeof Number === 'function' && Number.prototype) {
+      Number.prototype.toLocaleString = function (locale, options) {
+        return new NumberFormat(locale, options).format(this);
+      };
+    }
+  })();
 })();
 "####;
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
