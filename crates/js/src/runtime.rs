@@ -812,7 +812,7 @@ fn build_performance(context: &mut Context) -> JsObject {
     let mut init = ObjectInitializer::new(context);
     init.function(
         native(|_this, _args, _context| {
-            let now = with_host(|host| host.now_ms()).unwrap_or(0);
+            let now = with_host_cell(_context, |host| host.now_ms()).unwrap_or(0);
             Ok(JsValue::from(now as f64))
         }),
         js_string!("now"),
@@ -851,7 +851,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
                 .as_object()
                 .ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
             // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
+            let mut seed = with_host_cell(context, |host| host.now_ms()).unwrap_or(12345);
             let len = obj
                 .get(js_string!("length"), context)
                 .ok()
@@ -877,7 +877,7 @@ fn build_crypto(context: &mut Context) -> JsObject {
     init.function(
         native(|_this, _args, _context| {
             // Generate a v4 UUID from the same xorshift source.
-            let mut seed = with_host(|host| host.now_ms()).unwrap_or(12345);
+            let mut seed = with_host_cell(_context, |host| host.now_ms()).unwrap_or(12345);
             let mut bytes = [0u8; 16];
             for b in bytes.iter_mut() {
                 seed ^= seed << 13;
@@ -1316,7 +1316,7 @@ fn console_assert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         });
     }
     let message = parts.join(" ");
-    let _ = with_host(|host| {
+    let _ = with_host_cell(context, |host| {
         host.push_console(ConsoleEntry {
             level: "assert".to_string(),
             message,
@@ -1341,7 +1341,9 @@ fn record_console(
     }
     let message = parts.join(" ");
     let level = level.to_string();
-    let _ = with_host(|host| host.push_console(ConsoleEntry { level, message }));
+    let _ = with_host_cell(context, |host| {
+        host.push_console(ConsoleEntry { level, message })
+    });
     Ok(JsValue::undefined())
 }
 
@@ -1730,7 +1732,7 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
 
 /// Wraps a node id from the current host, if it still resolves.
 fn wrap_node(context: &mut Context, node_id: NodeId) -> JsResult<JsValue> {
-    let handle = with_host(|host| host.handle_for(node_id))
+    let handle = with_host_cell(context, |host| host.handle_for(node_id))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
     node_wrapper(context, handle)
@@ -1754,7 +1756,7 @@ fn this_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
 /// Resolves the receiver to a live node id (typed error on stale handles).
 fn this_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
     let handle = this_handle(this, context)?;
-    with_host(|host| host.node_for_handle(handle))
+    with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)
 }
@@ -1825,7 +1827,7 @@ fn wrap_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
 
 fn node_tag_name(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let name = with_host(|host| {
+    let name = with_host_cell(context, |host| {
         host.document.try_node(node_id).and_then(|node| {
             node.as_element()
                 .map(|element| element.local_name.to_ascii_uppercase())
@@ -1838,7 +1840,7 @@ fn node_tag_name(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 
 fn node_id_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let id = with_host(|host| {
+    let id = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| {
@@ -1855,7 +1857,7 @@ fn node_id_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsRe
 fn node_id_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -1869,7 +1871,7 @@ fn node_id_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
 
 fn node_class_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let class = with_host(|host| {
+    let class = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| {
@@ -1886,7 +1888,7 @@ fn node_class_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 fn node_class_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -1904,7 +1906,8 @@ fn node_text_content_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let text = with_host(|host| host.document.text_content(node_id)).unwrap_or_default();
+    let text =
+        with_host_cell(context, |host| host.document.text_content(node_id)).unwrap_or_default();
     Ok(JsValue::from(js_string!(text)))
 }
 
@@ -1915,7 +1918,9 @@ fn node_text_content_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let text = arg_string(args, 0, context)?;
-    let result = with_host(|host| host.document.set_text_content(node_id, &text));
+    let result = with_host_cell(context, |host| {
+        host.document.set_text_content(node_id, &text)
+    });
     match result {
         Some(Ok(())) => {
             note_mutation(MutationKind::CharacterData, node_id, None, None);
@@ -1932,8 +1937,10 @@ fn node_inner_html_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let html = with_host(|host| megi_html::serialize_fragment(&host.document, node_id))
-        .unwrap_or_default();
+    let html = with_host_cell(context, |host| {
+        megi_html::serialize_fragment(&host.document, node_id)
+    })
+    .unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -1944,7 +1951,7 @@ fn node_inner_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         if !charge_document_parse(host, html_text.len(), "innerHTML assignment") {
             return Ok(());
         }
@@ -1976,8 +1983,10 @@ fn node_outer_html_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let html = with_host(|host| megi_html::serialize_outer_html(&host.document, node_id))
-        .unwrap_or_default();
+    let html = with_host_cell(context, |host| {
+        megi_html::serialize_outer_html(&host.document, node_id)
+    })
+    .unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -1988,7 +1997,7 @@ fn node_outer_html_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html_text = arg_string(args, 0, context)?;
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         if !charge_document_parse(host, html_text.len(), "outerHTML assignment") {
             return Ok(());
         }
@@ -2019,7 +2028,7 @@ fn node_outer_html_set(
 
 fn node_children(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let children = with_host(|host| {
+    let children = with_host_cell(context, |host| {
         host.document
             .children(node_id)
             .filter(|child| {
@@ -2035,13 +2044,15 @@ fn node_children(this: &JsValue, _args: &[JsValue], context: &mut Context) -> Js
 
 fn node_parent_node(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let parent = with_host(|host| host.document.try_node(node_id).and_then(|node| node.parent));
+    let parent = with_host_cell(context, |host| {
+        host.document.try_node(node_id).and_then(|node| node.parent)
+    });
     wrap_optional(context, parent.flatten())
 }
 
 fn node_first_child(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let child = with_host(|host| {
+    let child = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.first_child)
@@ -2051,7 +2062,7 @@ fn node_first_child(this: &JsValue, _args: &[JsValue], context: &mut Context) ->
 
 fn node_last_child(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let child = with_host(|host| {
+    let child = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.last_child)
@@ -2065,7 +2076,7 @@ fn node_previous_sibling(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let sibling = with_host(|host| {
+    let sibling = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.prev_sibling)
@@ -2079,7 +2090,7 @@ fn node_next_sibling(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let sibling = with_host(|host| {
+    let sibling = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.next_sibling)
@@ -2096,7 +2107,7 @@ fn node_style_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     // `element.style = "color: red"` replaces the inline style attribute.
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -2142,13 +2153,14 @@ fn attribute_name(node_id: NodeId, name: &str) -> String {
 fn node_child_nodes(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let nodes: Vec<NodeId> =
-        with_host(|host| host.document.children(parent).collect()).unwrap_or_default();
+        with_host_cell(context, |host| host.document.children(parent).collect())
+            .unwrap_or_default();
     node_list(context, nodes)
 }
 
 fn node_value_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         let document = &host.document;
         let element = document
             .try_node(node_id)
@@ -2601,7 +2613,7 @@ fn test_pattern_in_context(pattern: &str, value: &str, context: &mut Context) ->
 }
 
 fn validity_flags(node_id: NodeId, context: &mut Context) -> ValidityFlags {
-    let computed = with_host(|host| {
+    let computed = with_host_cell(context, |host| {
         let document = &host.document;
         let element = document
             .try_node(node_id)
@@ -2647,7 +2659,7 @@ fn form_descendant_controls(document: &megi_core::Document, form_id: NodeId) -> 
 }
 
 fn validate_node_or_form(this: &JsValue, node_id: NodeId, context: &mut Context) -> JsResult<bool> {
-    let is_form = with_host(|host| {
+    let is_form = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|n| n.as_element())
@@ -2657,8 +2669,10 @@ fn validate_node_or_form(this: &JsValue, node_id: NodeId, context: &mut Context)
     if !is_form {
         return validate_control_and_fire_invalid(node_id, this, context);
     }
-    let controls =
-        with_host(|host| form_descendant_controls(&host.document, node_id)).unwrap_or_default();
+    let controls = with_host_cell(context, |host| {
+        form_descendant_controls(&host.document, node_id)
+    })
+    .unwrap_or_default();
     let mut all_valid = true;
     for control_id in controls {
         let wrapper = wrap_node(context, control_id)?;
@@ -2696,7 +2710,7 @@ fn node_set_custom_validity(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let message = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let document = &mut host.document;
         let Some(node) = document.try_node_mut(node_id) else {
             return;
@@ -2750,7 +2764,7 @@ fn node_request_submit(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    if !with_host(|host| host.allow_forms).unwrap_or(true) {
+    if !with_host_cell(context, |host| host.allow_forms).unwrap_or(true) {
         return Ok(JsValue::from(false));
     }
     // `requestSubmit(submitter?)` runs constraint validation unless suppressed by `novalidate`
@@ -2762,7 +2776,7 @@ fn node_request_submit(
     } else {
         None
     };
-    let skip_validation = with_host(|host| {
+    let skip_validation = with_host_cell(context, |host| {
         let document = &host.document;
         let form_novalidate = document
             .try_node(node_id)
@@ -2791,7 +2805,7 @@ fn node_request_submit(
 }
 
 fn node_submit(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    if !with_host(|host| host.allow_forms).unwrap_or(true) {
+    if !with_host_cell(context, |host| host.allow_forms).unwrap_or(true) {
         return Ok(JsValue::from(false));
     }
     // `form.submit()` bypasses constraint validation (#1505).
@@ -2801,7 +2815,7 @@ fn node_submit(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsRe
 
 fn node_reset(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let is_form = with_host(|host| {
+    let is_form = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|n| n.as_element())
@@ -2815,7 +2829,7 @@ fn node_reset(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsRes
     if !dispatched {
         return Ok(JsValue::undefined());
     }
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let descendants: Vec<NodeId> = host.document.descendants(node_id).collect();
         for child_id in descendants {
             let tag = host
@@ -2911,7 +2925,7 @@ fn node_reset(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsRes
 /// Sets/clears the `open` attribute on a dialog element (#1546).
 fn dialog_open(this: &JsValue, open: bool, context: &mut Context) -> JsResult<()> {
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let element = host
             .document
             .try_node_mut(node_id)
@@ -2943,7 +2957,7 @@ fn node_dialog_show_modal(
 ) -> JsResult<JsValue> {
     dialog_open(this, true, context)?;
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -2971,7 +2985,7 @@ fn node_dialog_close(this: &JsValue, args: &[JsValue], context: &mut Context) ->
         .unwrap_or_default();
     dialog_open(this, false, context)?;
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -2996,7 +3010,7 @@ fn node_dialog_return_value_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -3014,7 +3028,7 @@ fn node_dialog_return_value_get(
 fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         let tag = host
             .document
             .try_node(node_id)
@@ -3092,7 +3106,7 @@ fn node_value_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
 
 fn boolean_attribute_get(this: &JsValue, name: &str, context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let present = with_host(|host| {
+    let present = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -3110,7 +3124,7 @@ fn boolean_attribute_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let enabled = args.first().is_some_and(JsValue::to_boolean);
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         let element = host
             .document
             .try_node_mut(node_id)
@@ -3144,7 +3158,7 @@ fn node_checked_get(this: &JsValue, _args: &[JsValue], context: &mut Context) ->
 
 fn node_checked_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if !host.initial_control_checked.contains_key(&node_id) {
             let initial = host
                 .document
@@ -3179,7 +3193,7 @@ fn node_selected_get(
 
 fn node_selected_set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if !host.initial_control_checked.contains_key(&node_id) {
             let initial = host
                 .document
@@ -3194,7 +3208,7 @@ fn node_selected_set(this: &JsValue, args: &[JsValue], context: &mut Context) ->
 
 fn node_options(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let options: Vec<NodeId> = with_host(|host| {
+    let options: Vec<NodeId> = with_host_cell(context, |host| {
         host.document
             .descendants(node_id)
             .filter(|child| {
@@ -3217,14 +3231,14 @@ fn node_set_attribute(
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
     let value = arg_string(args, 1, context)?;
-    let old_value = with_host(|host| {
+    let old_value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
             .and_then(|element| element.get_attribute(&name).map(str::to_owned))
     })
     .flatten();
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         let element = host
             .document
             .try_node_mut(node_id)
@@ -3253,7 +3267,7 @@ fn node_get_attribute(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| {
@@ -3276,14 +3290,14 @@ fn node_remove_attribute(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
-    let old_value = with_host(|host| {
+    let old_value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
             .and_then(|element| element.get_attribute(&name).map(str::to_owned))
     })
     .flatten();
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -3308,7 +3322,7 @@ fn node_has_attribute(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = attribute_name(node_id, &arg_string(args, 0, context)?);
-    let has = with_host(|host| {
+    let has = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| {
@@ -3335,7 +3349,7 @@ fn argument_node(args: &[JsValue], index: usize, context: &mut Context) -> JsRes
         .filter(|number| *number >= 0.0 && number.fract() == 0.0)
         .map(|number| number as u32)
         .ok_or_else(|| js_error("expected a DOM node argument"))?;
-    with_host(|host| host.node_for_handle(handle))
+    with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)
 }
@@ -3345,7 +3359,7 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     let deep = args.first().and_then(JsValue::as_boolean).unwrap_or(false);
     // `cloneNode(true)` doubles the arena in one call, so the subtree size is charged before
     // the clone is allocated (#657).
-    let allowed = with_host(|host| {
+    let allowed = with_host_cell(context, |host| {
         let extra = if deep {
             host.document.descendants(node_id).count().max(1)
         } else {
@@ -3371,10 +3385,10 @@ fn node_clone_node(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
     if !allowed {
         return Err(js_error(format!(
             "QuotaExceededError: DOM node budget exceeded ({} nodes)",
-            with_host(|host| host.max_dom_nodes).unwrap_or(0)
+            with_host_cell(context, |host| host.max_dom_nodes).unwrap_or(0)
         )));
     }
-    let clone = with_host(|host| host.document.clone_node(node_id, deep))
+    let clone = with_host_cell(context, |host| host.document.clone_node(node_id, deep))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .ok_or_else(|| js_error("NotFoundError: node not found"))?;
     wrap_node(context, clone)
@@ -3385,8 +3399,10 @@ fn node_append_child(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     let child = argument_node(args, 0, context)?;
     // DOM insertion expands document fragments (their children are moved, the fragment
     // itself is never attached).
-    let appended =
-        with_host(|host| host.document.insert_node(parent, child, None).is_ok()).unwrap_or(false);
+    let appended = with_host_cell(context, |host| {
+        host.document.insert_node(parent, child, None).is_ok()
+    })
+    .unwrap_or(false);
     if !appended {
         return Err(js_error("appendChild failed (hierarchy or unknown node)"));
     }
@@ -3410,7 +3426,7 @@ fn node_insert_before(
         // DOM spec: inserting a node before itself is a no-op.
         return wrap_node(context, new_node);
     }
-    let inserted = with_host(|host| {
+    let inserted = with_host_cell(context, |host| {
         host.document
             .insert_node(parent, new_node, reference)
             .is_ok()
@@ -3426,8 +3442,10 @@ fn node_insert_before(
 fn node_remove_child(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let parent = this_node(this, context)?;
     let child = argument_node(args, 0, context)?;
-    let removed =
-        with_host(|host| host.document.remove_child(parent, child).is_ok()).unwrap_or(false);
+    let removed = with_host_cell(context, |host| {
+        host.document.remove_child(parent, child).is_ok()
+    })
+    .unwrap_or(false);
     if !removed {
         return Err(js_error("removeChild failed (node is not a child)"));
     }
@@ -3443,7 +3461,7 @@ fn node_replace_child(
     let parent = this_node(this, context)?;
     let new_node = argument_node(args, 0, context)?;
     let old_node = argument_node(args, 1, context)?;
-    let replaced = with_host(|host| {
+    let replaced = with_host_cell(context, |host| {
         host.document
             .replace_node(parent, new_node, old_node)
             .is_ok()
@@ -3467,7 +3485,8 @@ fn document_ready_state(
     _args: &[JsValue],
     _context: &mut Context,
 ) -> JsResult<JsValue> {
-    let state = with_host(|host| host.ready_state.clone()).unwrap_or_else(|| "loading".to_string());
+    let state = with_host_cell(_context, |host| host.ready_state.clone())
+        .unwrap_or_else(|| "loading".to_string());
     Ok(JsValue::from(js_string!(state)))
 }
 
@@ -3525,7 +3544,7 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             MAX_DOCUMENT_WRITE_INPUT
         )));
     }
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if !charge_document_parse(host, text.len(), "document.write") {
             return;
         }
@@ -3569,7 +3588,7 @@ fn document_get_element_by_id(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let id = arg_string(args, 0, context)?;
-    let node = with_host(|host| host.document.get_element_by_id(&id)).flatten();
+    let node = with_host_cell(context, |host| host.document.get_element_by_id(&id)).flatten();
     wrap_optional(context, node)
 }
 
@@ -3579,7 +3598,10 @@ fn document_get_elements_by_tag_name(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let name = arg_string(args, 0, context)?;
-    let nodes = with_host(|host| host.document.get_elements_by_tag_name(&name)).unwrap_or_default();
+    let nodes = with_host_cell(context, |host| {
+        host.document.get_elements_by_tag_name(&name)
+    })
+    .unwrap_or_default();
     node_list(context, nodes)
 }
 
@@ -3589,8 +3611,10 @@ fn document_get_elements_by_class_name(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let class = arg_string(args, 0, context)?;
-    let nodes =
-        with_host(|host| host.document.get_elements_by_class_name(&class)).unwrap_or_default();
+    let nodes = with_host_cell(context, |host| {
+        host.document.get_elements_by_class_name(&class)
+    })
+    .unwrap_or_default();
     wrap_list(context, nodes)
 }
 
@@ -3600,8 +3624,10 @@ fn document_query_selector(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let selector = arg_string(args, 0, context)?;
-    let node =
-        with_host(|host| megi_css::query::query_selector(&host.document, &selector)).flatten();
+    let node = with_host_cell(context, |host| {
+        megi_css::query::query_selector(&host.document, &selector)
+    })
+    .flatten();
     wrap_optional(context, node)
 }
 
@@ -3611,8 +3637,10 @@ fn document_query_selector_all(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let selector = arg_string(args, 0, context)?;
-    let nodes = with_host(|host| megi_css::query::query_selector_all(&host.document, &selector))
-        .unwrap_or_default();
+    let nodes = with_host_cell(context, |host| {
+        megi_css::query::query_selector_all(&host.document, &selector)
+    })
+    .unwrap_or_default();
     wrap_list(context, nodes)
 }
 
@@ -3621,7 +3649,7 @@ fn document_create_document_fragment(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let fragment = with_host(|host| host.document.create_document_fragment())
+    let fragment = with_host_cell(context, |host| host.document.create_document_fragment())
         .ok_or_else(|| js_error("no active JavaScript host"))?;
     wrap_node(context, fragment)
 }
@@ -3657,7 +3685,7 @@ fn custom_elements_define(
         .and_then(JsValue::as_callable)
         .ok_or_else(|| js_error("TypeError: custom element constructor must be callable"))?
         .clone();
-    let handle = with_host(|host| {
+    let handle = with_host_cell(context, |host| {
         if let Some(existing) = host.custom_elements.get(&name) {
             return *existing;
         }
@@ -3686,7 +3714,7 @@ fn custom_elements_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let name = arg_string(args, 0, context)?.to_ascii_lowercase();
-    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
+    let handle = with_host_cell(context, |host| host.custom_elements.get(&name).copied()).flatten();
     match handle {
         Some(handle) => context
             .global_object()
@@ -3710,7 +3738,7 @@ fn document_create_element(
     // DOM §4.5: `createElement` lowercases the name for an HTML document, so
     // `createElement("TEMPLATE")` still creates a template with its content fragment.
     let name = raw_name.to_ascii_lowercase();
-    let node = with_host(|host| {
+    let node = with_host_cell(context, |host| {
         host.document
             .create_element(Namespace::Html, name.clone(), Vec::new())
     });
@@ -3720,7 +3748,7 @@ fn document_create_element(
     };
     // Custom Elements upgrade (#1541): if a constructor is registered for this tag, invoke it
     // with the new element as `this` so it can attach a shadow root / set up state.
-    let handle = with_host(|host| host.custom_elements.get(&name).copied()).flatten();
+    let handle = with_host_cell(context, |host| host.custom_elements.get(&name).copied()).flatten();
     if let Some(handle) = handle {
         let constructor = context
             .global_object()
@@ -3740,7 +3768,7 @@ fn document_create_text_node(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let text = arg_string(args, 0, context)?;
-    let node = with_host(|host| host.document.create_text_node(&text));
+    let node = with_host_cell(context, |host| host.document.create_text_node(&text));
     match node {
         Some(node_id) => wrap_node(context, node_id),
         None => Err(js_error("no active JavaScript host")),
@@ -3752,17 +3780,17 @@ fn document_element(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let node = with_host(|host| host.document.document_element()).flatten();
+    let node = with_host_cell(context, |host| host.document.document_element()).flatten();
     wrap_optional(context, node)
 }
 
 fn document_body(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let node = with_host(|host| host.document.body()).flatten();
+    let node = with_host_cell(context, |host| host.document.body()).flatten();
     wrap_optional(context, node)
 }
 
 fn document_head(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    let node = with_host(|host| host.document.head()).flatten();
+    let node = with_host_cell(context, |host| host.document.head()).flatten();
     wrap_optional(context, node)
 }
 
@@ -3851,7 +3879,7 @@ fn document_title_get(
     _args: &[JsValue],
     _context: &mut Context,
 ) -> JsResult<JsValue> {
-    let title = with_host(|host| host.title.clone()).unwrap_or_default();
+    let title = with_host_cell(_context, |host| host.title.clone()).unwrap_or_default();
     Ok(JsValue::from(js_string!(title)))
 }
 
@@ -3861,7 +3889,7 @@ fn document_title_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let title = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.title = title.clone();
         // #1645: the window/tab title is composed from the DOM <title> element. Update (or
         // create) it so the assignment has an observable effect beyond the internal field.
@@ -3891,7 +3919,7 @@ fn document_title_set(
 }
 
 fn document_url(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    let url = with_host(|host| host.url.clone()).unwrap_or_default();
+    let url = with_host_cell(_context, |host| host.url.clone()).unwrap_or_default();
     Ok(JsValue::from(js_string!(url)))
 }
 
@@ -3977,8 +4005,10 @@ fn node_list_for_each(
 fn node_matches(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let matched = with_host(|host| megi_css::query::matches(&host.document, node, &selector))
-        .unwrap_or(false);
+    let matched = with_host_cell(context, |host| {
+        megi_css::query::matches(&host.document, node, &selector)
+    })
+    .unwrap_or(false);
     Ok(JsValue::from(matched))
 }
 
@@ -3987,12 +4017,14 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let selector = arg_string(args, 0, context)?;
     let mut current = Some(node);
     while let Some(candidate) = current {
-        if with_host(|host| megi_css::query::matches(&host.document, candidate, &selector))
-            .unwrap_or(false)
+        if with_host_cell(context, |host| {
+            megi_css::query::matches(&host.document, candidate, &selector)
+        })
+        .unwrap_or(false)
         {
             return wrap_node(context, candidate);
         }
-        current = with_host(|host| {
+        current = with_host_cell(context, |host| {
             host.document
                 .try_node(candidate)
                 .and_then(|node| node.parent)
@@ -4009,8 +4041,9 @@ fn node_query_selector(
 ) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let found =
-        with_host(|host| megi_css::query::query_selector_from(&host.document, node, &selector));
+    let found = with_host_cell(context, |host| {
+        megi_css::query::query_selector_from(&host.document, node, &selector)
+    });
     wrap_optional(context, found.flatten())
 }
 
@@ -4021,9 +4054,10 @@ fn node_query_selector_all(
 ) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let nodes =
-        with_host(|host| megi_css::query::query_selector_all_from(&host.document, node, &selector))
-            .unwrap_or_default();
+    let nodes = with_host_cell(context, |host| {
+        megi_css::query::query_selector_all_from(&host.document, node, &selector)
+    })
+    .unwrap_or_default();
     wrap_list(context, nodes)
 }
 
@@ -4102,7 +4136,7 @@ fn node_insert_adjacent_html(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let target = this_node(this, context)?;
-    let is_element = with_host(|host| {
+    let is_element = with_host_cell(context, |host| {
         host.document
             .try_node(target)
             .is_some_and(|node| node.as_element().is_some())
@@ -4113,7 +4147,7 @@ fn node_insert_adjacent_html(
     }
     let position = adjacent_position(args, context)?;
     let html_text = arg_string(args, 1, context)?;
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         if !charge_document_parse(host, html_text.len(), "insertAdjacentHTML") {
             return Ok(());
         }
@@ -4155,7 +4189,7 @@ fn node_insert_adjacent_text(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let target = this_node(this, context)?;
-    let is_element = with_host(|host| {
+    let is_element = with_host_cell(context, |host| {
         host.document
             .try_node(target)
             .is_some_and(|node| node.as_element().is_some())
@@ -4166,7 +4200,7 @@ fn node_insert_adjacent_text(
     }
     let position = adjacent_position(args, context)?;
     let text = arg_string(args, 1, context)?;
-    let result = with_host(|host| {
+    let result = with_host_cell(context, |host| {
         let node = host.document.create_text_node(&text);
         if let Err(err) = insert_relative(host, target, node, position) {
             host.document.remove_subtree(node);
@@ -4189,7 +4223,7 @@ macro_rules! style_prop_accessors {
         $(
             fn $get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
                 let node_id = this_node(this, context)?;
-                let value = with_host(|host| {
+                let value = with_host_cell(context, |host| {
                     inline_style_value(&host.document, node_id, $css)
                 })
                 .flatten();
@@ -4202,7 +4236,9 @@ macro_rules! style_prop_accessors {
             fn $set(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
                 let node_id = this_node(this, context)?;
                 let value = arg_string(args, 0, context)?;
-                match with_host(|host| set_inline_style(&mut host.document, node_id, $css, &value)) {
+                match with_host_cell(context, |host| {
+                    set_inline_style(&mut host.document, node_id, $css, &value)
+                }) {
                     Some(Ok(())) => Ok(JsValue::undefined()),
                     Some(Err(message)) => Err(js_error(message)),
                     None => Err(js_error("no active JavaScript host")),
@@ -4286,7 +4322,7 @@ fn style_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
         .filter(|number| *number >= 0.0)
         .map(|number| number as u32)
         .ok_or_else(|| js_error("style receiver is not an element"))?;
-    with_host(|host| host.node_for_handle(handle))
+    with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)
 }
@@ -4323,7 +4359,7 @@ fn style_css_text_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
-    let text = with_host(|host| {
+    let text = with_host_cell(context, |host| {
         inline_declarations(&host.document, node)
             .iter()
             .map(|declaration| format!("{}: {};", declaration.name, declaration.raw_value))
@@ -4342,7 +4378,9 @@ fn style_css_text_set(
     let node = style_node(this, context)?;
     let text = arg_string(args, 0, context)?;
     let declarations = megi_css::parser::parse_list_of_declarations(&text);
-    match with_host(|host| write_inline_declarations(&mut host.document, node, &declarations)) {
+    match with_host_cell(context, |host| {
+        write_inline_declarations(&mut host.document, node, &declarations)
+    }) {
         Some(Ok(())) => Ok(JsValue::undefined()),
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
@@ -4351,7 +4389,10 @@ fn style_css_text_set(
 
 fn style_length_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
-    let length = with_host(|host| inline_declarations(&host.document, node).len()).unwrap_or(0);
+    let length = with_host_cell(context, |host| {
+        inline_declarations(&host.document, node).len()
+    })
+    .unwrap_or(0);
     Ok(JsValue::from(length as f64))
 }
 
@@ -4362,7 +4403,10 @@ fn style_get_property_value(
 ) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let value = with_host(|host| inline_style_value(&host.document, node, &name)).flatten();
+    let value = with_host_cell(context, |host| {
+        inline_style_value(&host.document, node, &name)
+    })
+    .flatten();
     Ok(JsValue::from(js_string!(value.unwrap_or_default())))
 }
 
@@ -4374,7 +4418,9 @@ fn style_set_property(
     let node = style_node(this, context)?;
     let name = arg_string(args, 0, context)?;
     let value = arg_string(args, 1, context)?;
-    match with_host(|host| set_inline_style(&mut host.document, node, &name, &value)) {
+    match with_host_cell(context, |host| {
+        set_inline_style(&mut host.document, node, &name, &value)
+    }) {
         Some(Ok(())) => Ok(JsValue::undefined()),
         Some(Err(message)) => Err(js_error(message)),
         None => Err(js_error("no active JavaScript host")),
@@ -4388,7 +4434,7 @@ fn style_remove_property(
 ) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let previous = with_host(|host| {
+    let previous = with_host_cell(context, |host| {
         let mut declarations = inline_declarations(&host.document, node);
         let previous = declarations
             .iter()
@@ -4406,7 +4452,7 @@ fn style_remove_property(
 fn style_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
     let index = crate::events::webidl_uint32_index(args, context);
-    let name = with_host(|host| {
+    let name = with_host_cell(context, |host| {
         inline_declarations(&host.document, node)
             .into_iter()
             .nth(index)
@@ -4490,7 +4536,7 @@ fn class_list_object(context: &mut Context, handle: u32) -> JsValue {
 
 fn classes_of(this: &JsValue, context: &mut Context) -> JsResult<(NodeId, Vec<String>)> {
     let node_id = this_node(this, context)?;
-    let classes = with_host(|host| {
+    let classes = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| {
@@ -4822,7 +4868,7 @@ fn history_length_get(
 ) -> JsResult<JsValue> {
     let _ = context;
     Ok(JsValue::from(
-        with_host(|host| host.history_length).unwrap_or(1),
+        with_host_cell(context, |host| host.history_length).unwrap_or(1),
     ))
 }
 
@@ -4880,7 +4926,7 @@ fn current_location(
     context: &mut Context,
 ) -> JsResult<(String, String, String, String, String, String)> {
     let _ = context;
-    let (url, opaque) = with_host(|host| (host.url.clone(), host.opaque_origin))
+    let (url, opaque) = with_host_cell(context, |host| (host.url.clone(), host.opaque_origin))
         .ok_or_else(|| js_error("no active JavaScript host"))?;
     let (protocol, mut origin, host, pathname, rest) = url_parts(&url);
     if opaque {
@@ -4916,8 +4962,8 @@ fn location_hash_get(_t: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<
     Ok(JsValue::from(js_string!(current_location(c)?.5)))
 }
 fn location_href_get(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
-    let url =
-        with_host(|host| host.url.clone()).ok_or_else(|| js_error("no active JavaScript host"))?;
+    let url = with_host_cell(_c, |host| host.url.clone())
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
     Ok(JsValue::from(js_string!(url)))
 }
 
@@ -4983,13 +5029,13 @@ fn storage_read<T>(
     f: impl FnOnce(&crate::host::StorageMap) -> T,
 ) -> JsResult<T> {
     let kind = storage_kind(this, context)?;
-    let opaque = with_host(|host| host.opaque_origin).unwrap_or(false);
+    let opaque = with_host_cell(context, |host| host.opaque_origin).unwrap_or(false);
     if opaque {
         return Err(js_error(
             "SecurityError: failed to read Web Storage from an opaque origin",
         ));
     }
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let map = match kind {
             StorageKind::Local => &host.local_storage,
             StorageKind::Session => &host.session_storage,
@@ -5045,7 +5091,7 @@ fn storage_set_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
             "QuotaExceededError: Web Storage limit of 1 MiB per realm exceeded",
         ));
     }
-    with_host(|host| match kind {
+    with_host_cell(context, |host| match kind {
         StorageKind::Local => host.local_storage.insert(key, value),
         StorageKind::Session => host.session_storage.insert(key, value),
     });
@@ -5058,14 +5104,14 @@ fn storage_remove_item(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    if with_host(|host| host.opaque_origin).unwrap_or(false) {
+    if with_host_cell(context, |host| host.opaque_origin).unwrap_or(false) {
         return Err(js_error(
             "SecurityError: failed to modify Web Storage from an opaque origin",
         ));
     }
     let key = arg_string(args, 0, context)?;
     let kind = storage_kind(this, context)?;
-    with_host(|host| match kind {
+    with_host_cell(context, |host| match kind {
         StorageKind::Local => host.local_storage.remove(&key),
         StorageKind::Session => host.session_storage.remove(&key),
     });
@@ -5074,13 +5120,13 @@ fn storage_remove_item(
 }
 
 fn storage_clear(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    if with_host(|host| host.opaque_origin).unwrap_or(false) {
+    if with_host_cell(context, |host| host.opaque_origin).unwrap_or(false) {
         return Err(js_error(
             "SecurityError: failed to clear Web Storage from an opaque origin",
         ));
     }
     let kind = storage_kind(this, context)?;
-    with_host(|host| match kind {
+    with_host_cell(context, |host| match kind {
         StorageKind::Local => host.local_storage.clear(),
         StorageKind::Session => host.session_storage.clear(),
     });
@@ -6040,7 +6086,8 @@ fn node_inner_text_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let text = with_host(|host| host.document.text_content(node_id)).unwrap_or_default();
+    let text =
+        with_host_cell(context, |host| host.document.text_content(node_id)).unwrap_or_default();
     Ok(JsValue::from(js_string!(text)))
 }
 
@@ -6063,7 +6110,7 @@ fn camel_case_attribute(name: &str) -> Option<String> {
 
 fn node_dataset_get(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let entries: Vec<(String, String)> = with_host(|host| {
+    let entries: Vec<(String, String)> = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -6108,7 +6155,7 @@ fn attribute_item(context: &mut Context, name: &str, value: &str) -> JsResult<Js
 
 fn attributes_of(this: &JsValue, context: &mut Context) -> JsResult<(u32, Vec<(String, String)>)> {
     let node_id = this_node(this, context)?;
-    let attributes = with_host(|host| {
+    let attributes = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -6122,7 +6169,7 @@ fn attributes_of(this: &JsValue, context: &mut Context) -> JsResult<(u32, Vec<(S
             .unwrap_or_default()
     })
     .unwrap_or_default();
-    let handle = with_host(|host| host.handle_for(node_id))
+    let handle = with_host_cell(context, |host| host.handle_for(node_id))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
     Ok((handle, attributes))
@@ -6178,10 +6225,10 @@ fn attributes_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
 fn attributes_item(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let handle = attributes_handle(this, context)?;
     let index = crate::events::webidl_uint32_index(args, context);
-    let node_id = with_host(|host| host.node_for_handle(handle))
+    let node_id = with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
-    let attribute = with_host(|host| {
+    let attribute = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -6202,10 +6249,10 @@ fn attributes_get_named(
 ) -> JsResult<JsValue> {
     let handle = attributes_handle(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let node_id = with_host(|host| host.node_for_handle(handle))
+    let node_id = with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -6225,10 +6272,10 @@ fn attributes_remove_named(
 ) -> JsResult<JsValue> {
     let handle = attributes_handle(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let node_id = with_host(|host| host.node_for_handle(handle))
+    let node_id = with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
-    let old = with_host(|host| {
+    let old = with_host_cell(context, |host| {
         host.document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
@@ -6249,7 +6296,7 @@ fn attributes_remove_named(
 
 fn node_normalize(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let removed = host.document.normalize(node_id);
         if removed > 0 {
             host.record_mutation(MutationRecord {
@@ -6271,8 +6318,10 @@ fn node_compare_document_position(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let other = argument_node(args, 0, context)?;
-    let bits =
-        with_host(|host| host.document.compare_document_position(node_id, other)).unwrap_or(0);
+    let bits = with_host_cell(context, |host| {
+        host.document.compare_document_position(node_id, other)
+    })
+    .unwrap_or(0);
     Ok(JsValue::from(bits as f64))
 }
 
@@ -6289,7 +6338,7 @@ fn canvas_context_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId
         .filter(|n| *n >= 0.0 && *n <= u32::MAX as f64 && n.fract() == 0.0)
         .map(|n| n as u32)
         .ok_or_else(|| js_error("invalid canvas context"))?;
-    with_host(|host| host.node_for_handle(handle))
+    with_host_cell(context, |host| host.node_for_handle(handle))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)
 }
@@ -6306,7 +6355,7 @@ fn canvas_get_context(
         return Ok(JsValue::null());
     }
     let node = this_node(this, context)?;
-    let (width, height) = with_host(|host| {
+    let (width, height) = with_host_cell(context, |host| {
         let document = &host.document;
         let element = document.try_node(node).and_then(|n| n.as_element());
         let dim = |name: &str, default: u32| -> u32 {
@@ -6319,12 +6368,14 @@ fn canvas_get_context(
         (dim("width", 300), dim("height", 150))
     })
     .ok_or_else(|| js_error("no active JavaScript host"))?;
-    let surface_ok = with_host(|host| host.canvas_store.surface_for(node, width, height).is_some())
-        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let surface_ok = with_host_cell(context, |host| {
+        host.canvas_store.surface_for(node, width, height).is_some()
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
     if !surface_ok {
         return Err(js_error("canvas surface exceeds size cap"));
     }
-    let handle = with_host(|host| host.handle_for(node))
+    let handle = with_host_cell(context, |host| host.handle_for(node))
         .ok_or_else(|| js_error("no active JavaScript host"))?
         .map_err(js_error)?;
 
@@ -6369,7 +6420,7 @@ fn canvas_get_context(
 fn canvas_fill_rect(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.canvas_store
             .with_surface_mut(node, |s| s.fill_rect(rect.0, rect.1, rect.2, rect.3))
     });
@@ -6379,7 +6430,7 @@ fn canvas_fill_rect(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
 fn canvas_clear_rect(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.canvas_store
             .with_surface_mut(node, |s| s.clear_rect(rect.0, rect.1, rect.2, rect.3))
     });
@@ -6393,7 +6444,7 @@ fn canvas_stroke_rect(
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.canvas_store
             .with_surface_mut(node, |s| s.stroke_rect(rect.0, rect.1, rect.2, rect.3))
     });
@@ -6415,7 +6466,7 @@ fn canvas_fill_style_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let css = with_host(|host| {
+    let css = with_host_cell(context, |host| {
         host.canvas_store
             .get(node)
             .map(|s| crate::canvas::rgba_to_css(s.fill_style))
@@ -6433,7 +6484,7 @@ fn canvas_fill_style_set(
     let node = canvas_context_node(this, context)?;
     let value = arg_string(args, 0, context)?;
     if let Some(color) = crate::canvas::Rgba::parse(&value) {
-        with_host(|host| {
+        with_host_cell(context, |host| {
             host.canvas_store
                 .with_surface_mut(node, |s| s.fill_style = color)
         });
@@ -6447,7 +6498,7 @@ fn canvas_stroke_style_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let css = with_host(|host| {
+    let css = with_host_cell(context, |host| {
         host.canvas_store
             .get(node)
             .map(|s| crate::canvas::rgba_to_css(s.stroke_style))
@@ -6465,7 +6516,7 @@ fn canvas_stroke_style_set(
     let node = canvas_context_node(this, context)?;
     let value = arg_string(args, 0, context)?;
     if let Some(color) = crate::canvas::Rgba::parse(&value) {
-        with_host(|host| {
+        with_host_cell(context, |host| {
             host.canvas_store
                 .with_surface_mut(node, |s| s.stroke_style = color)
         });
@@ -6483,7 +6534,7 @@ fn canvas_get_image_data(
     let y = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
     let w = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
     let h = args.get(3).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
-    let data = with_host(|host| {
+    let data = with_host_cell(context, |host| {
         host.canvas_store
             .get(node)
             .and_then(|s| s.get_image_data(x, y, w, h))
@@ -6548,7 +6599,7 @@ fn canvas_put_image_data(
                 .collect()
         })
         .unwrap_or_default();
-    with_host(|host| {
+    with_host_cell(context, |host| {
         host.canvas_store.with_surface_mut(node, |s| {
             let _ = s.put_image_data(dx, dy, w, h, &bytes);
         })
@@ -6558,12 +6609,12 @@ fn canvas_put_image_data(
 
 fn node_focus(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    with_host(|host| host.active_element = Some(node_id));
+    with_host_cell(context, |host| host.active_element = Some(node_id));
     Ok(JsValue::undefined())
 }
 
 fn node_blur(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    with_host(|host| host.active_element = None);
+    with_host_cell(_context, |host| host.active_element = None);
     Ok(JsValue::undefined())
 }
 
@@ -6574,11 +6625,12 @@ fn node_attach_shadow(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let existing = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
+    let existing =
+        with_host_cell(context, |host| host.shadow_roots.get(&node_id).copied()).flatten();
     if let Some(root) = existing {
         return wrap_node(context, root);
     }
-    let root = with_host(|host| {
+    let root = with_host_cell(context, |host| {
         let root = host.document.create_document_fragment();
         host.shadow_roots.insert(node_id, root);
         host.shadow_hosts.insert(root, node_id);
@@ -6595,7 +6647,7 @@ fn node_shadow_root_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let root = with_host(|host| host.shadow_roots.get(&node_id).copied()).flatten();
+    let root = with_host_cell(context, |host| host.shadow_roots.get(&node_id).copied()).flatten();
     match root {
         Some(root) => wrap_node(context, root),
         None => Ok(JsValue::null()),
@@ -6838,7 +6890,7 @@ fn slot_assigned_nodes(
     let Some(host_node) = slot_host(slot) else {
         return wrap_list(context, Vec::new());
     };
-    let slot_name = with_host(|host| {
+    let slot_name = with_host_cell(context, |host| {
         host.document
             .try_node(slot)
             .and_then(|node| node.as_element())
@@ -6848,7 +6900,7 @@ fn slot_assigned_nodes(
     .unwrap_or_default();
     let _ = args; // `{ flatten: true }` does not change this subset's result.
 
-    let assigned = with_host(|host| {
+    let assigned = with_host_cell(context, |host| {
         let document = &host.document;
         let mut children = Vec::new();
         let mut child = document
@@ -6916,7 +6968,7 @@ fn node_get_root_node(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let shadow = with_host(|host| {
+    let shadow = with_host_cell(context, |host| {
         // A shadow host's own root is its shadow tree (per DOM §4.6 getRootNode).
         if let Some(root) = host.shadow_roots.get(&node_id) {
             return Some(*root);
@@ -6937,7 +6989,8 @@ fn node_get_root_node(
     match shadow {
         Some(root) => wrap_node(context, root),
         None => {
-            let root = with_host(|host| host.document.root()).ok_or_else(|| js_error("no host"))?;
+            let root = with_host_cell(context, |host| host.document.root())
+                .ok_or_else(|| js_error("no host"))?;
             wrap_node(context, root)
         }
     }
@@ -6957,7 +7010,7 @@ fn document_active_element(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    match with_host(|host| host.active_element) {
+    match with_host_cell(context, |host| host.active_element) {
         Some(Some(node_id)) => wrap_node(context, node_id),
         _ => Ok(JsValue::null()),
     }
@@ -6968,7 +7021,7 @@ fn document_normalize(
     _args: &[JsValue],
     _context: &mut Context,
 ) -> JsResult<JsValue> {
-    with_host(|host| {
+    with_host_cell(_context, |host| {
         if let Some(root) = host.document.document_element() {
             let removed = host.document.normalize(root);
             if removed > 0 {
@@ -6992,8 +7045,10 @@ fn document_compare_document_position(
 ) -> JsResult<JsValue> {
     let first = argument_node(args, 0, context)?;
     let second = argument_node(args, 1, context)?;
-    let bits =
-        with_host(|host| host.document.compare_document_position(first, second)).unwrap_or(0);
+    let bits = with_host_cell(context, |host| {
+        host.document.compare_document_position(first, second)
+    })
+    .unwrap_or(0);
     Ok(JsValue::from(bits as f64))
 }
 
@@ -10183,7 +10238,7 @@ impl JsRuntime {
 
 fn node_node_type(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let kind = with_host(|host| {
+    let kind = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .map(|node| match &node.kind {
@@ -10203,7 +10258,7 @@ fn node_node_type(this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 
 fn string_attribute_get(this: &JsValue, name: &str, context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -10221,7 +10276,7 @@ fn string_attribute_set(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = arg_string(args, 0, context)?;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         if let Some(element) = host
             .document
             .try_node_mut(node_id)
@@ -10263,7 +10318,7 @@ fn node_src_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsVa
 
 fn node_action_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, c)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(c, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -10279,7 +10334,7 @@ fn node_action_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<J
 
 fn node_method_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, c)?;
-    let method = with_host(|host| {
+    let method = with_host_cell(c, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -10304,7 +10359,7 @@ fn node_method_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<J
 
 fn node_enctype_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, c)?;
-    let enctype = with_host(|host| {
+    let enctype = with_host_cell(c, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -10336,7 +10391,7 @@ fn node_no_validate_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsRes
 
 fn node_elements_get(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let controls: Vec<NodeId> = with_host(|host| {
+    let controls: Vec<NodeId> = with_host_cell(context, |host| {
         let document = &host.document;
         document
             .descendants(node_id)
@@ -10376,7 +10431,7 @@ fn node_selected_index_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let index = with_host(|host| {
+    let index = with_host_cell(context, |host| {
         option_ids(&host.document, node_id)
             .iter()
             .position(|id| {
@@ -10402,7 +10457,7 @@ fn node_selected_index_set(
         .first()
         .and_then(|value| value.to_number(context).ok())
         .unwrap_or(-1.0) as i64;
-    with_host(|host| {
+    with_host_cell(context, |host| {
         let options = option_ids(&host.document, node_id);
         for (position, option) in options.iter().enumerate() {
             if !host.initial_control_checked.contains_key(option) {
@@ -10447,7 +10502,7 @@ fn node_get_attribute_node(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let name = arg_string(args, 0, context)?;
-    let value = with_host(|host| {
+    let value = with_host_cell(context, |host| {
         host.document
             .try_node(node_id)
             .and_then(|node| node.as_element())
@@ -10477,7 +10532,7 @@ fn node_remove_attribute_node(
         .map(|value| value.to_std_string_escaped())
         .unwrap_or_default();
     let name = attribute_name(node_id, &raw_name);
-    let old = with_host(|host| {
+    let old = with_host_cell(context, |host| {
         host.document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
@@ -11057,5 +11112,41 @@ mod dataset_name_tests {
         assert_eq!(camel_case_attribute("data--foo"), Some("Foo".into()));
         assert_eq!(camel_case_attribute("data-ß"), Some("ß".into()));
         assert_eq!(camel_case_attribute("role"), None);
+    }
+}
+
+#[cfg(test)]
+mod context_bridge_migration_tests {
+    use super::*;
+
+    /// A binding migrated to `host_cell` must find the host installed in the
+    /// Boa `Context` even with no legacy TLS `HostScope` active on this thread.
+    /// Reverting `document_title_get` to `with_host` makes this return the
+    /// empty-string fallback instead, so the test guards the migration.
+    #[test]
+    fn migrated_binding_reads_host_from_context_without_tls() {
+        let mut runtime = JsRuntime::new().unwrap();
+        runtime.set_title("from-context");
+        let value = document_title_get(&JsValue::undefined(), &[], &mut runtime.context).unwrap();
+        let text = value
+            .to_string(&mut runtime.context)
+            .unwrap()
+            .to_std_string_escaped();
+        assert_eq!(text, "from-context");
+    }
+
+    /// The adapter must drop its `RefMut` as soon as the closure returns:
+    /// two sequential borrows have to succeed without a typed re-entry error.
+    #[test]
+    fn context_host_borrow_is_released_when_closure_returns() {
+        let mut runtime = JsRuntime::new().unwrap();
+        let before = with_host_cell(&mut runtime.context, |host| host.title.clone()).unwrap();
+        let after = with_host_cell(&mut runtime.context, |host| {
+            host.title = "second-borrow".into();
+            host.title.clone()
+        })
+        .unwrap();
+        assert_eq!(before, "");
+        assert_eq!(after, "second-borrow");
     }
 }
