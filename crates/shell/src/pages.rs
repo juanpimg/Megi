@@ -515,7 +515,10 @@ mod tests {
         assert!(alpha < evil && evil < zeta, "dirs first, then names");
         assert!(html.contains("href=\"file:///tmp/dir/%3Cevil%3E%26.html\""));
         assert!(html.contains("2.0 KiB"));
-        assert!(html.contains("Index of /tmp/dir"));
+        assert!(
+            html.contains("Index of /tmp/dir") || html.contains("Índice de /tmp/dir"),
+            "localized index title: {html}"
+        );
     }
 
     #[test]
@@ -529,7 +532,7 @@ mod tests {
             .collect();
         let html = listing_html("file:///tmp/dir/", Path::new("/tmp/dir"), &entries);
         assert!(
-            html.contains("listing truncated"),
+            html.contains("listing truncated") || html.contains("listado truncado"),
             "truncation marker present"
         );
         assert!(

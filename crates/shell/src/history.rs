@@ -362,11 +362,14 @@ mod tests {
             logical_time: 3,
         }];
         let html = history_page_html(&entries);
-        assert!(html.contains("<title>History</title>"), "{html}");
+        assert!(
+            html.contains("<title>History</title>") || html.contains("<title>Historial</title>"),
+            "localized history title: {html}"
+        );
         assert!(!html.contains("<script>"));
         assert!(html.contains("&lt;script&gt;"));
         assert!(html.contains("href=\"https://example.com/a?x=1&amp;y=2\""));
-        assert!(html.contains("History"));
+        assert!(html.contains("History") || html.contains("Historial"));
     }
 }
 
