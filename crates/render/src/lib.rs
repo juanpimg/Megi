@@ -791,7 +791,32 @@ impl std::fmt::Debug for RenderOutput {
 }
 
 /// Loads `input` (an absolute URL: `http(s)://`, `file://` or `data:`) and renders it.
+#[cfg(all(feature = "pac", feature = "js"))]
+struct JsPacEvaluator;
+
+#[cfg(all(feature = "pac", feature = "js"))]
+impl megi_net::PacEvaluator for JsPacEvaluator {
+    fn evaluate(&self, script: &str, _url: &str, _host: &str) -> Result<String, String> {
+        megi_js::JsRuntime::new()
+            .map_err(|e| e.to_string())?
+            .eval(script, "proxy.pac")
+            .map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(all(feature = "pac", feature = "js"))]
+static INSTALL_PAC: std::sync::Once = std::sync::Once::new();
+
+/// Installs the JS-backed PAC evaluator once. Call before loading any URL when
+/// proxy auto-configuration is enabled.
+#[cfg(all(feature = "pac", feature = "js"))]
+pub fn install_pac_evaluator() {
+    INSTALL_PAC.call_once(|| megi_net::set_pac_evaluator(JsPacEvaluator));
+}
+
 pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, RenderError> {
+    #[cfg(all(feature = "pac", feature = "js"))]
+    install_pac_evaluator();
     let mut budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
     render_url_inner(input, options, None, 0, &mut budget)
 }

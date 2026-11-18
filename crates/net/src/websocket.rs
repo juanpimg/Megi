@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(feature = "tls")]
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -143,6 +144,7 @@ impl WebSocketClient {
                 Err(error) => last_error = Some(error),
             }
         }
+        #[cfg_attr(not(feature = "tls"), allow(unused_mut))]
         let mut tcp = stream.ok_or_else(|| {
             FetchError::Connect(last_error.unwrap_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address")

@@ -267,14 +267,15 @@ fn evaluate_directives(
     target: &Url,
     host: &str,
 ) -> Result<Vec<PacDirective>, String> {
-    let mut runtime = megi_js::JsRuntime::new().map_err(|error| format!("JS runtime: {error}"))?;
+    let evaluator = crate::pac_evaluator()
+        .ok_or_else(|| "PAC evaluator unavailable".to_owned())?;
     let call = format!(
         "{PAC_HELPERS_PRELUDE}\n{script}\nFindProxyForURL({}, {});",
         js_string(&target.as_str()),
         js_string(host)
     );
-    let result = runtime
-        .eval(&call, "proxy.pac")
+    let result = evaluator
+        .evaluate(&call, &target.as_str(), host)
         .map_err(|error| format!("evaluating PAC script: {error}"))?;
     parse_pac_directives(&result)
 }
