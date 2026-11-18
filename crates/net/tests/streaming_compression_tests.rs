@@ -6,6 +6,7 @@
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -95,11 +96,36 @@ fn pieces() -> Vec<Vec<u8>> {
     vec![vec![b'a'; 20_000], vec![b'b'; 20_000], vec![b'c'; 20_000]]
 }
 
+fn wait_for_calls(progress: &Arc<(Mutex<usize>, Condvar)>, n: usize) {
+    let (lock, cvar) = &**progress;
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut count = lock.lock().expect("progress lock");
+    while *count < n {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return;
+        }
+        let (guard, timeout) = cvar.wait_timeout(count, remaining).expect("progress wait");
+        count = guard;
+        if timeout.timed_out() {
+            return;
+        }
+    }
+}
+
+fn notify_calls(progress: &Arc<(Mutex<usize>, Condvar)>, calls: usize) {
+    let (lock, cvar) = &**progress;
+    *lock.lock().expect("progress lock") = calls;
+    cvar.notify_all();
+}
+
 #[test]
 fn gzip_is_delivered_incrementally_per_block() {
     let parts = pieces();
     let compressed = gzip_stored(&parts);
     let expected: Vec<u8> = parts.concat();
+    let progress = Arc::new((Mutex::new(0usize), Condvar::new()));
+    let server_progress = Arc::clone(&progress);
     let (port, server) = spawn_server(move |mut tcp| {
         read_request_head(&mut tcp);
         let _ = tcp.write_all(
@@ -114,10 +140,10 @@ fn gzip_is_delivered_incrementally_per_block() {
         let per_block = 10 + 5 + 20_000;
         let _ = tcp.write_all(&compressed[..per_block]);
         let _ = tcp.flush();
-        std::thread::sleep(Duration::from_millis(40));
+        wait_for_calls(&server_progress, 1);
         let _ = tcp.write_all(&compressed[per_block..2 * per_block]);
         let _ = tcp.flush();
-        std::thread::sleep(Duration::from_millis(40));
+        wait_for_calls(&server_progress, 2);
         let _ = tcp.write_all(&compressed[2 * per_block..]);
         let _ = tcp.flush();
     });
@@ -126,6 +152,7 @@ fn gzip_is_delivered_incrementally_per_block() {
     let response = fetch_streaming(&target(port), &options(), &mut |chunk| {
         calls += 1;
         body.extend_from_slice(chunk);
+        notify_calls(&progress, calls);
         Ok(())
     })
     .expect("gzip streamed fetch");
@@ -143,8 +170,9 @@ fn deflate_zlib_is_delivered_incrementally() {
     let parts = pieces();
     let compressed = zlib_stored(&parts);
     let expected: Vec<u8> = parts.concat();
-    let (port, server) = spawn_server(move |tcp| {
-        let mut tcp = tcp;
+    let progress = Arc::new((Mutex::new(0usize), Condvar::new()));
+    let server_progress = Arc::clone(&progress);
+    let (port, server) = spawn_server(move |mut tcp| {
         read_request_head(&mut tcp);
         let _ = tcp.write_all(
             format!(
@@ -154,10 +182,12 @@ fn deflate_zlib_is_delivered_incrementally() {
             .as_bytes(),
         );
         let per_block = 2 + 5 + 20_000;
-        for block in compressed.chunks(per_block) {
+        for (i, block) in compressed.chunks(per_block).enumerate() {
             let _ = tcp.write_all(block);
             let _ = tcp.flush();
-            std::thread::sleep(Duration::from_millis(30));
+            if i + 1 < 3 {
+                wait_for_calls(&server_progress, i + 1);
+            }
         }
     });
     let mut body = Vec::new();
@@ -165,6 +195,7 @@ fn deflate_zlib_is_delivered_incrementally() {
     let response = fetch_streaming(&target(port), &options(), &mut |chunk| {
         calls += 1;
         body.extend_from_slice(chunk);
+        notify_calls(&progress, calls);
         Ok(())
     })
     .expect("deflate streamed fetch");
@@ -189,25 +220,32 @@ fn raw_deflate_is_auto_detected() {
         raw.extend_from_slice(&(!len).to_le_bytes());
         raw.extend_from_slice(part);
     }
-    let (port, server) = spawn_server(move |tcp| {
-        let mut tcp = tcp;
+    let progress = Arc::new((Mutex::new(0usize), Condvar::new()));
+    let server_progress = Arc::clone(&progress);
+    let (port, server) = spawn_server(move |mut tcp| {
         read_request_head(&mut tcp);
         let _ = tcp.write_all(
             b"HTTP/1.1 200 OK\r\nContent-Encoding: deflate\r\nTransfer-Encoding: chunked\r\n\r\n",
         );
-        for piece in raw.chunks(3000) {
+        let chunks: Vec<_> = raw.chunks(3000).collect();
+        for (i, piece) in chunks.iter().enumerate() {
             let _ = tcp.write_all(format!("{:x}\r\n", piece.len()).as_bytes());
             let _ = tcp.write_all(piece);
             let _ = tcp.write_all(b"\r\n");
             let _ = tcp.flush();
-            std::thread::sleep(Duration::from_millis(20));
+            if i + 1 < chunks.len() {
+                wait_for_calls(&server_progress, i + 1);
+            }
         }
         let _ = tcp.write_all(b"0\r\n\r\n");
         let _ = tcp.flush();
     });
     let mut body = Vec::new();
+    let mut calls = 0usize;
     let response = fetch_streaming(&target(port), &options(), &mut |chunk| {
+        calls += 1;
         body.extend_from_slice(chunk);
+        notify_calls(&progress, calls);
         Ok(())
     })
     .expect("raw deflate streamed fetch");
