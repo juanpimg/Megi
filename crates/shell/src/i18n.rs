@@ -64,6 +64,10 @@ pub struct Strings {
     pub directory: &'static str,
     pub file: &'static str,
     pub truncated: &'static str,
+    /// Short label for an empty history menu in the chrome UI.
+    pub no_history_menu: &'static str,
+    /// Fallback title for a blank/new tab.
+    pub new_tab: &'static str,
     // Context menu / chrome labels.
     pub open_link_in_new_tab: &'static str,
     pub copy_link_address: &'static str,
@@ -72,6 +76,16 @@ pub struct Strings {
     pub reload: &'static str,
     pub save_page_as_png: &'static str,
     pub save_page_as_html: &'static str,
+    /// Marker appended to the window title when the page was clipped.
+    pub capped_marker: &'static str,
+    /// Singular warning label in the window title.
+    pub warning: &'static str,
+    /// Plural warning label in the window title.
+    pub warnings: &'static str,
+    /// Singular script-error label in the window title.
+    pub script_error: &'static str,
+    /// Plural script-error label in the window title.
+    pub script_errors: &'static str,
 }
 
 /// Returns the strings table for `locale`.
@@ -95,6 +109,8 @@ pub fn strings(locale: Locale) -> Strings {
             directory: "Directory",
             file: "File",
             truncated: "listing truncated",
+            no_history_menu: "No history yet",
+            new_tab: "New Tab",
             open_link_in_new_tab: "Open link in new tab",
             copy_link_address: "Copy link address",
             save_image: "Save image",
@@ -102,6 +118,11 @@ pub fn strings(locale: Locale) -> Strings {
             reload: "Reload",
             save_page_as_png: "Save page as PNG",
             save_page_as_html: "Save page as HTML",
+            capped_marker: " [clipped]",
+            warning: "warning",
+            warnings: "warnings",
+            script_error: "script error",
+            script_errors: "script errors",
         },
         Locale::Es => Strings {
             error_loading: "Error al cargar la página",
@@ -121,6 +142,8 @@ pub fn strings(locale: Locale) -> Strings {
             directory: "Directorio",
             file: "Archivo",
             truncated: "listado truncado",
+            no_history_menu: "Aún no hay historial",
+            new_tab: "Nueva pestaña",
             open_link_in_new_tab: "Abrir enlace en una pestaña nueva",
             copy_link_address: "Copiar dirección del enlace",
             save_image: "Guardar imagen",
@@ -128,6 +151,11 @@ pub fn strings(locale: Locale) -> Strings {
             reload: "Recargar",
             save_page_as_png: "Guardar página como PNG",
             save_page_as_html: "Guardar página como HTML",
+            capped_marker: " [recortado]",
+            warning: "aviso",
+            warnings: "avisos",
+            script_error: "error de script",
+            script_errors: "errores de script",
         },
     }
 }
@@ -158,6 +186,8 @@ mod tests {
                 s.directory,
                 s.file,
                 s.truncated,
+                s.no_history_menu,
+                s.new_tab,
                 s.open_link_in_new_tab,
                 s.copy_link_address,
                 s.save_image,
@@ -165,6 +195,11 @@ mod tests {
                 s.reload,
                 s.save_page_as_png,
                 s.save_page_as_html,
+                s.capped_marker,
+                s.warning,
+                s.warnings,
+                s.script_error,
+                s.script_errors,
             ] {
                 assert!(!value.is_empty(), "{locale:?} has an empty string");
             }
