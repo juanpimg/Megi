@@ -170,6 +170,7 @@ pub struct FetchRequest {
     pub method: String,
     pub headers: Vec<(String, String)>,
     pub body: Option<Vec<u8>>,
+    pub redirect: Option<String>,
 }
 
 /// Host result for one `fetch()` request.

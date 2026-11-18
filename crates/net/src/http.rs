@@ -90,6 +90,18 @@ pub const DEFAULT_MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 /// Default maximum response header size (64 KiB).
 pub const DEFAULT_MAX_HEADER_BYTES: usize = 64 * 1024;
 
+/// How HTTP `3xx` redirects are handled by [`fetch`] and its variants (#1536).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RedirectMode {
+    /// Follow `3xx` redirects up to [`FetchOptions::max_redirects`] (default).
+    #[default]
+    Follow,
+    /// Return the `3xx` redirect [`Response`] to the caller without following `Location`.
+    Manual,
+    /// Fail with [`FetchError::RedirectDisallowed`] on any `3xx` redirect response.
+    Error,
+}
+
 /// Configuration for [`fetch`]: timeouts and defensive limits.
 #[derive(Clone, Debug)]
 pub struct FetchOptions {
@@ -100,6 +112,10 @@ pub struct FetchOptions {
     /// Maximum number of `3xx` redirects followed before returning
     /// [`FetchError::TooManyRedirects`].
     pub max_redirects: usize,
+    /// Redirect handling mode for `3xx` responses (default [`RedirectMode::Follow`], #1536).
+    pub redirect_mode: RedirectMode,
+    /// Allow `https:` → `http:` redirects when not upgraded by HSTS (default `false`, #1536).
+    pub allow_https_downgrade: bool,
     /// Maximum response body size in bytes; larger bodies fail with
     /// [`FetchError::ResponseTooLarge`].
     pub max_response_bytes: usize,
@@ -188,6 +204,8 @@ impl Default for FetchOptions {
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
             read_timeout: DEFAULT_READ_TIMEOUT,
             max_redirects: DEFAULT_MAX_REDIRECTS,
+            redirect_mode: RedirectMode::Follow,
+            allow_https_downgrade: false,
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             max_request_body: 16 * 1024 * 1024,
             reuse_connections: true,
@@ -560,9 +578,25 @@ pub fn fetch_pooled(
                 );
             }
             if is_redirect(status) {
-                return Err(FetchError::InvalidResponse(
-                    "redirect in pooled fetch".to_owned(),
-                ));
+                match options.redirect_mode {
+                    RedirectMode::Follow => {
+                        return Err(FetchError::InvalidResponse(
+                            "redirect in pooled fetch".to_owned(),
+                        ));
+                    }
+                    RedirectMode::Error => {
+                        if let Some(req_origin) = options.origin.as_deref() {
+                            cors::validate_response(
+                                url,
+                                req_origin,
+                                &headers,
+                                options.cookie_jar.is_some(),
+                            )?;
+                        }
+                        return Err(FetchError::RedirectDisallowed(status));
+                    }
+                    RedirectMode::Manual => {}
+                }
             }
             let has_length = headers
                 .iter()
@@ -619,7 +653,9 @@ pub fn fetch_pooled(
                 }
                 return Ok(response);
             }
-            Err(error @ FetchError::Cors(_)) => return Err(error),
+            Err(error @ (FetchError::Cors(_) | FetchError::RedirectDisallowed(_))) => {
+                return Err(error);
+            }
             Err(error) => {
                 last_error = Some(error);
                 if attempt == 0 && from_pool {
@@ -651,6 +687,32 @@ pub fn fetch_pooled(
     }
 }
 
+/// Resolves a `Location` redirect target and enforces the HTTPS-to-HTTP downgrade guard
+/// after checking whether HSTS upgrades an `http://` hop back to `https://` (#1536).
+fn resolve_redirect_target(
+    current: &Url,
+    headers: &Headers,
+    allow_https_downgrade: bool,
+) -> Result<Url, FetchError> {
+    let location = headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("location"))
+        .map(|(_, value)| value.trim())
+        .filter(|value| !value.is_empty())
+        .ok_or(FetchError::RedirectWithoutLocation)?;
+    let mut next = current
+        .join(location)
+        .map_err(FetchError::InvalidRedirect)?;
+    if let Some(upgraded) = crate::hsts::upgrade_url(&next) {
+        next = upgraded;
+    }
+    if current.scheme() == Scheme::Https && next.scheme() == Scheme::Http && !allow_https_downgrade
+    {
+        return Err(FetchError::HttpsDowngradeBlocked(next.as_str().to_owned()));
+    }
+    Ok(next)
+}
+
 /// Buffered fallback streaming fetch: the response is fetched normally (redirects,
 /// cookies, cache validators and compression all respected by [`fetch`]), then the body is
 /// delivered to `on_data` in 16 KiB chunks. A callback error aborts with that error.
@@ -667,6 +729,8 @@ pub fn fetch_streaming(
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
+        // Mixed content and HSTS must be applied before any plaintext socket opens, on
+        // the initial URL and on every redirect target (#1528, #1529).
         if let Some(policy) = options.mixed_content {
             current = policy.apply(&current)?;
         }
@@ -688,6 +752,7 @@ pub fn fetch_streaming(
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
         }
+        // HSTS (#1529): learn from any trusted HTTPS response, including redirect hops.
         if current.scheme() == Scheme::Https
             && let Some(header) = raw
                 .headers
@@ -700,26 +765,22 @@ pub fn fetch_streaming(
                 &header.1,
             );
         }
+        // Per-hop CORS (#1536): a cross-origin redirect without ACAO must not slip through.
+        if let Some(origin) = options.origin.as_deref() {
+            cors::validate_response(&current, origin, &raw.headers, options.cookie_jar.is_some())?;
+        }
+        let content_range = raw
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
+            .and_then(|(_, value)| ContentRange::parse(value));
+        let accept_ranges = raw.headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("accept-ranges")
+                && value
+                    .split(',')
+                    .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
+        });
         if !is_redirect(raw.status) {
-            if let Some(origin) = options.origin.as_deref() {
-                cors::validate_response(
-                    &current,
-                    origin,
-                    &raw.headers,
-                    options.cookie_jar.is_some(),
-                )?;
-            }
-            let content_range = raw
-                .headers
-                .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
-                .and_then(|(_, value)| ContentRange::parse(value));
-            let accept_ranges = raw.headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("accept-ranges")
-                    && value
-                        .split(',')
-                        .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
-            });
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
@@ -733,29 +794,32 @@ pub fn fetch_streaming(
                 pooled_stream: None,
             });
         }
+        match options.redirect_mode {
+            RedirectMode::Error => return Err(FetchError::RedirectDisallowed(raw.status)),
+            RedirectMode::Manual => {
+                return Ok(Response {
+                    status: raw.status,
+                    reason: raw.reason,
+                    headers: raw.headers,
+                    body: raw.body,
+                    final_url: current,
+                    content_range,
+                    accept_ranges,
+                    trailers: raw.trailers,
+                    pushed: raw.pushed,
+                    pooled_stream: None,
+                });
+            }
+            RedirectMode::Follow => {}
+        }
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
         }
-        let location = raw
-            .headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("location"))
-            .map(|(_, value)| value.trim())
-            .filter(|value| !value.is_empty())
-            .ok_or(FetchError::RedirectWithoutLocation)?;
-        let next = current
-            .join(location)
-            .map_err(FetchError::InvalidRedirect)?;
-        current = next;
+        current = resolve_redirect_target(&current, &raw.headers, options.allow_https_downgrade)?;
         redirects += 1;
     }
 }
 
-/// Fetches `url` over HTTP/1.1 (or HTTPS with the `tls` feature), following redirects.
-///
-/// `file:` URLs are handled by [`crate::file::load_file_url`]; `data:` URLs by
-/// [`crate::data::decode_data_url`] (both also exposed through
-/// [`crate::ResourceLoader`]).
 pub fn fetch(url: &Url, options: &FetchOptions) -> Result<Response, FetchError> {
     fetch_with_headers(url, options, &[])
 }
@@ -912,13 +976,10 @@ pub fn fetch_with_request_body_and_trailers(
             None => None,
         };
         first_attempt = false;
-        // Mixed content (#1528): check/upgrade on the initial URL and every redirect target
-        // before HSTS or opening a plaintext TCP connection.
+        // Mixed content (#1528) and HSTS (#1529) apply on the initial URL and every hop.
         if let Some(policy) = options.mixed_content {
             current = policy.apply(&current)?;
         }
-        // HSTS (#1529): upgrade an `http://` hop to `https://` when an active policy covers the
-        // host (also applied to redirect targets, so a downgrade redirect cannot slip through).
         if let Some(upgraded) =
             crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
         {
@@ -937,8 +998,7 @@ pub fn fetch_with_request_body_and_trailers(
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
         }
-        // HSTS (#1529): remember the policy from any trusted HTTPS response (including redirects)
-        // before `raw` is moved or followed. Only secure origins may set it (RFC 6797 §8.1).
+        // HSTS (#1529): learn from any trusted HTTPS response before `raw` is moved.
         if current.scheme() == Scheme::Https
             && let Some(header) = raw
                 .headers
@@ -951,27 +1011,23 @@ pub fn fetch_with_request_body_and_trailers(
                 &header.1,
             );
         }
+        // Per-hop CORS (#1536): intermediate 3xx hops must also pass CORS when `origin` is set.
+        if let Some(origin) = options.origin.as_deref() {
+            cors::validate_response(&current, origin, &raw.headers, options.cookie_jar.is_some())?;
+        }
+        let content_range = raw
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
+            .and_then(|(_, value)| ContentRange::parse(value));
+        let accept_ranges = raw.headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("accept-ranges")
+                && value
+                    .split(',')
+                    .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
+        });
         if !is_redirect(raw.status) {
-            if let Some(origin) = options.origin.as_deref() {
-                cors::validate_response(
-                    &current,
-                    origin,
-                    &raw.headers,
-                    options.cookie_jar.is_some(),
-                )?;
-            }
             let body = decode_response_body(&raw.headers, raw.body, options)?;
-            let content_range = raw
-                .headers
-                .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
-                .and_then(|(_, value)| ContentRange::parse(value));
-            let accept_ranges = raw.headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("accept-ranges")
-                    && value
-                        .split(',')
-                        .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
-            });
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
@@ -985,6 +1041,25 @@ pub fn fetch_with_request_body_and_trailers(
                 pooled_stream: None,
             });
         }
+        match options.redirect_mode {
+            RedirectMode::Error => return Err(FetchError::RedirectDisallowed(raw.status)),
+            RedirectMode::Manual => {
+                let body = decode_response_body(&raw.headers, raw.body, options)?;
+                return Ok(Response {
+                    status: raw.status,
+                    reason: raw.reason,
+                    headers: raw.headers,
+                    body,
+                    final_url: current,
+                    content_range,
+                    accept_ranges,
+                    trailers: raw.trailers,
+                    pushed: raw.pushed,
+                    pooled_stream: None,
+                });
+            }
+            RedirectMode::Follow => {}
+        }
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
         }
@@ -996,18 +1071,8 @@ pub fn fetch_with_request_body_and_trailers(
                 "cannot replay a streaming request body on redirect".to_owned(),
             ));
         }
-        let location = raw
-            .headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("location"))
-            .map(|(_, value)| value.trim())
-            .filter(|value| !value.is_empty())
-            .ok_or(FetchError::RedirectWithoutLocation)?;
-        let next = current
-            .join(location)
-            .map_err(FetchError::InvalidRedirect)?;
-        // Strip sensitive caller headers on cross-origin redirects to prevent
-        // credential leakage (Authorization, etc.).
+        let next = resolve_redirect_target(&current, &raw.headers, options.allow_https_downgrade)?;
+        // Strip sensitive caller headers on cross-origin redirects to prevent credential leakage.
         if next.scheme() != current.scheme()
             || next.host() != current.host()
             || next.port() != current.port()
@@ -1023,8 +1088,6 @@ pub fn fetch_with_request_body_and_trailers(
     }
 }
 
-/// Sends a request body to an HTTP/1.1 socket: raw bytes, one chunked chunk, or an
-/// incremental producer (chunked, 16 KiB pulls, capped by `max_request_body`).
 fn send_request_body(
     writer: &mut dyn Write,
     body: RequestBody,
