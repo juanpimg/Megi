@@ -6,10 +6,11 @@
 //! responses. No external network, no DNS beyond loopback, no sleeps.
 
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use paint::Color;
 use render::{RenderOptions, Viewport, render_url};
@@ -116,13 +117,28 @@ fn spawn_router(
     connections: usize,
 ) -> (String, JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback listener");
+    listener
+        .set_nonblocking(true)
+        .expect("set listener nonblocking");
     let address = listener.local_addr().expect("listener address");
+    let deadline = Instant::now() + Duration::from_secs(10);
     let handle = std::thread::spawn(move || {
         let mut requests = Vec::new();
         for _ in 0..connections {
-            let Ok((mut stream, _)) = listener.accept() else {
-                break;
+            let mut stream = loop {
+                if Instant::now() >= deadline {
+                    panic!("router accept timed out waiting for connection");
+                }
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(_) => return requests,
+                }
             };
+            stream.set_nonblocking(false).ok();
+            stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
             let mut request = Vec::new();
             let mut buffer = [0u8; 1024];
             loop {
