@@ -269,6 +269,9 @@ impl JsRuntime {
     /// Accepted as a no-op in the feature-less stub.
     pub fn set_module_loader(&mut self, _loader: crate::host::ModuleLoader) {}
 
+    /// Accepted as a no-op in the feature-less stub.
+    pub fn set_allow_eval(&self, _allow: bool) {}
+
     /// Always fails: import maps are compiled out with `--no-default-features`.
     pub fn set_import_map_json(&mut self, _source: &str) -> Result<(), JsError> {
         Err(JsError::FeatureDisabled)

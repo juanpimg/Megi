@@ -124,6 +124,21 @@ pub fn load_images(
     limits: ImageLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedImages {
+    load_images_with_csp(
+        document, base_url, loader, no_network, limits, None, warnings,
+    )
+}
+
+/// Like [`load_images`] but enforces a Content Security Policy (`img-src`, #1526).
+pub fn load_images_with_csp(
+    document: &Document,
+    base_url: &Url,
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    limits: ImageLimits,
+    csp: Option<&net::csp::ContentSecurityPolicy>,
+    warnings: &mut Vec<String>,
+) -> LoadedImages {
     let mut result = LoadedImages {
         store: paint::ImageStore::new(),
         sizes: HashMap::new(),
@@ -159,6 +174,15 @@ pub fn load_images(
                 continue;
             }
         };
+        if let Some(policy) = csp
+            && !policy.allows_image(&url, base_url)
+        {
+            result.failed += 1;
+            result.warnings.push(format!(
+                "skipping image {url}: blocked by Content-Security-Policy"
+            ));
+            continue;
+        }
         if no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
             result.failed += 1;
             result

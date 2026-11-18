@@ -27,15 +27,16 @@ const MAX_STYLESHEET_SOURCES: usize = 1024;
 /// One author stylesheet source in document order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CssSource {
-    /// Inline `<style>` element contents and its `media` attribute value (empty = all).
-    Inline { text: String, media: String },
-    /// External `<link rel="stylesheet">` URL (resolved against `<base>`), its `media`
-    /// attribute value (empty = all), and whether `crossorigin` was specified.
-    External {
-        url: Url,
+    /// Inline `<style>` element contents, its `media` attribute value (empty = all),
+    /// and its optional `nonce` attribute.
+    Inline {
+        text: String,
         media: String,
-        crossorigin: bool,
+        nonce: Option<String>,
     },
+    /// External `<link rel="stylesheet">` URL (resolved against `<base>`) and its `media`
+    /// attribute value (empty = all).
+    External { url: Url, media: String },
 }
 
 /// Stylesheets collected from a document, plus non-fatal warnings.
@@ -221,9 +222,11 @@ pub fn collect_stylesheets(
             continue;
         }
         if name == "style" {
+            let nonce = attr(element, "nonce").map(str::to_owned);
             collected.sources.push(CssSource::Inline {
                 text: text_content(doc, node_id),
                 media: media_attr,
+                nonce,
             });
         } else if name == "link" {
             let rel = attr(element, "rel").unwrap_or("").to_ascii_lowercase();

@@ -128,6 +128,18 @@ pub fn load_webfonts_with_limits(
     limits: WebFontLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedWebFonts {
+    load_webfonts_with_csp(faces, loader, no_network, limits, None, warnings)
+}
+
+/// Like [`load_webfonts_with_limits`] but enforces a Content Security Policy (`font-src`, #1526).
+pub fn load_webfonts_with_csp(
+    faces: &[LocatedFontFace],
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    limits: WebFontLimits,
+    csp: Option<(&net::csp::ContentSecurityPolicy, &Url)>,
+    warnings: &mut Vec<String>,
+) -> LoadedWebFonts {
     let mut database = FontDatabase::new_with_bundled_fonts();
     let mut seen: HashSet<String> = HashSet::new();
     let mut loaded = 0usize;
@@ -166,6 +178,15 @@ pub fn load_webfonts_with_limits(
                     continue;
                 }
             };
+            if let Some((policy, document_url)) = csp
+                && !policy.allows_font(&url, document_url)
+            {
+                last_warning = Some(format!(
+                    "skipping @font-face \"{}\" source {url}: blocked by Content-Security-Policy",
+                    face.family
+                ));
+                continue;
+            }
             // Two rules may point at the same file for different descriptors (a common
             // unicode-range / weight split), so the key keeps the descriptor triple (#665).
             let key = format!(
