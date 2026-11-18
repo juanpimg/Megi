@@ -172,7 +172,10 @@ pub use http::{
     FetchOptions, Response, fetch, fetch_streaming, fetch_with_headers, fetch_with_method,
     preflight,
 };
-pub use integrity::{IntegrityError, IntegrityHash, parse_integrity, verify_integrity};
+pub use integrity::{
+    IntegrityError, IntegrityHash, matches_sha256_base64, matches_sha384_base64,
+    matches_sha512_base64, parse_integrity, sha256, sha384, sha512, verify_integrity,
+};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
 pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};

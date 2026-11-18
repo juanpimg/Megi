@@ -29,9 +29,13 @@ const MAX_STYLESHEET_SOURCES: usize = 1024;
 pub enum CssSource {
     /// Inline `<style>` element contents and its `media` attribute value (empty = all).
     Inline { text: String, media: String },
-    /// External `<link rel="stylesheet">` URL (resolved against `<base>`) and its `media`
-    /// attribute value (empty = all).
-    External { url: Url, media: String },
+    /// External `<link rel="stylesheet">` URL (resolved against `<base>`), its `media`
+    /// attribute value (empty = all), and optional Subresource Integrity attribute (#1527).
+    External {
+        url: Url,
+        media: String,
+        integrity: Option<String>,
+    },
 }
 
 /// Stylesheets collected from a document, plus non-fatal warnings.
@@ -239,6 +243,7 @@ pub fn collect_stylesheets(
                         collected.sources.push(CssSource::External {
                             url,
                             media: media_attr,
+                            integrity: attr(element, "integrity").map(str::to_owned),
                         });
                     }
                 }
