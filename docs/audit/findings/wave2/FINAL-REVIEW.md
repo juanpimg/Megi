@@ -89,3 +89,10 @@ del ledger). Detalle en §Hallazgos.
 - `test_harness --strict` con 38 diffs de parse-error y resto de limitaciones
   honestas del cierre (puntos 1–5): coherentes con las actas, sin contradicción
   encontrada.
+
+## Resolución posterior (sesión controladora)
+
+- H1: `docs/audit/findings/wave2/07-closeout.md`, `PUBLISHED.md`, `FINAL-REVIEW.md`, plan y reproducores se añadieron al ledger y se marcaron `covered`; la deriva de `crates/css/*` se refrescó con `--generate`. `--check --strict` vuelve a estar en verde (`1344 files, 842 covered, 0 pending, 0 re-read, 0 unknown`).
+- H2: el plan `docs/superpowers/plans/2026-11-18-auditoria-linea-por-linea-megi.md` se reconstruyó y commiteó.
+- H3: `f2-layout-paint.md`, `f5-break-browser.md`, los 35 repros de `docs/audit/repros/browser/` y `verifier-template.md` se restauraron y commitearon.
+- H4/H5: el cierre registra la deriva posterior y corrige el rango de issues y el recuento de descartes.
