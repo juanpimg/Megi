@@ -1,5 +1,7 @@
 //! #1545: end-to-end canvas 2D — a script paints into a `<canvas>` and the pixels appear in
 //! the rendered page.
+// Canvas painting requires the JS engine; this suite is meaningless in a no-JS build.
+#![cfg(feature = "js")]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
