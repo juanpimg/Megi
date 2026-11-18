@@ -506,15 +506,10 @@ impl ResourceLoader {
     /// later real request still goes to the network.
     fn store_pushed(&mut self, pushed: Vec<crate::http::PushedResponse>) {
         for pushed in pushed {
-            // Pushed responses are real responses: their `Set-Cookie` must land in the jar and
-            // a cross-origin push must pass the same CORS check as a normal fetch — otherwise a
-            // hostile h2 server plants entries in `push_cache` that `load()` serves without any
-            // gate ever running (#652).
-            if let Some(jar) = &self.options.cookie_jar {
-                jar.lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .store_from_response(&pushed.url, &pushed.headers);
-            }
+            // Pushed responses are real responses: a cross-origin push must pass the same
+            // CORS check as a normal fetch BEFORE its `Set-Cookie` lands in the jar —
+            // otherwise a hostile h2 server plants cookies via rejected pushes (w2-net-001).
+            // Only CORS-approved pushes reach `push_cache` served by `load()` (#652).
             if let Some(origin) = self.options.origin.as_deref()
                 // A push is a preload candidate, not a credentialed response: it is only served
                 // to a same-origin/CORS-approved consumer, so the credential flag stays false.
@@ -523,6 +518,11 @@ impl ResourceLoader {
             {
                 self.pushed_discarded += 1;
                 continue;
+            }
+            if let Some(jar) = &self.options.cookie_jar {
+                jar.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .store_from_response(&pushed.url, &pushed.headers);
             }
             let bytes = pushed.body.len();
             if pushed.body.len() > self.options.max_pushed_body
@@ -1295,6 +1295,41 @@ mod unit_tests {
         assert!(
             jar.iter().any(|cookie| cookie.name == "pushed"),
             "Set-Cookie from a push must reach the jar"
+        );
+    }
+
+    #[test]
+    fn cross_origin_push_with_set_cookie_leaves_no_cookie() {
+        // w2-net-001: a CORS-rejected push must not plant cookies in the jar.
+        use crate::cookies::CookieJar;
+        use crate::http::PushedResponse;
+        use std::sync::Mutex;
+
+        let jar = Arc::new(Mutex::new(CookieJar::new()));
+        let options = FetchOptions {
+            origin: Some("https://app.test".to_owned()),
+            cookie_jar: Some(Arc::clone(&jar)),
+            ..FetchOptions::default()
+        };
+        let mut loader = ResourceLoader::with_options(options);
+
+        let blocked = PushedResponse {
+            url: Url::parse("https://evil.test/evil.css").expect("url"),
+            headers: vec![("set-cookie".to_owned(), "evil=1; Path=/".to_owned())],
+            body: b"body{}".to_vec(),
+        };
+        let blocked_key = blocked.url.clone();
+        loader.absorb_pushed(vec![blocked]);
+
+        assert!(
+            !loader.cache_key_is_preloaded(&blocked_key),
+            "a CORS-rejected push must be dropped"
+        );
+        assert_eq!(loader.pushed_discarded(), 1);
+        let jar = jar.lock().expect("jar");
+        assert!(
+            jar.iter().next().is_none(),
+            "Set-Cookie from a CORS-rejected push must not reach the jar"
         );
     }
 }
