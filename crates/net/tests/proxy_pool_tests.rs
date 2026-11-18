@@ -123,3 +123,59 @@ fn http_proxy_pool_is_keyed_by_proxy_origin() {
     assert_eq!(second.body, b"ok");
     assert_eq!(accepts.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn socks5_proxy_connection_is_reused_across_fetch_pooled_calls() {
+    let accepts = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&accepts);
+    let (socks_port, server) = spawn(move |listener| {
+        let (mut tcp, _) = listener.accept().expect("accept");
+        seen.fetch_add(1, Ordering::SeqCst);
+        let mut greeting = [0u8; 3];
+        tcp.read_exact(&mut greeting).expect("greeting");
+        tcp.write_all(&[0x05, 0x00]).expect("method");
+        let mut hdr = [0u8; 4];
+        tcp.read_exact(&mut hdr).expect("hdr");
+        let mut dlen = [0u8; 1];
+        tcp.read_exact(&mut dlen).expect("dlen");
+        let mut dom = vec![0u8; dlen[0] as usize + 2];
+        tcp.read_exact(&mut dom).expect("dom");
+        tcp.write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+            .expect("reply");
+        for body in [b"one".as_slice(), b"two"] {
+            let head = read_head(&mut tcp);
+            assert!(head.starts_with("GET / HTTP/1.1"), "{head}");
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n", body.len());
+            let _ = tcp.write_all(response.as_bytes());
+            let _ = tcp.write_all(body);
+            let _ = tcp.flush();
+        }
+    });
+    let mut pool = H1Pool::new(4, Duration::from_secs(10));
+    let opts = FetchOptions {
+        connect_timeout: Duration::from_secs(2),
+        read_timeout: Duration::from_secs(2),
+        accept_encoding: net::compression::AcceptEncoding::Identity,
+        proxy: Some(Arc::new(ProxyConfig {
+            socks: Some(net::socks::SocksProxy {
+                host: "127.0.0.1".to_owned(),
+                port: socks_port,
+                username: None,
+                password: None,
+            }),
+            ..ProxyConfig::default()
+        })),
+        ..FetchOptions::default()
+    };
+    let target = Url::parse("http://pooled.test/").expect("target");
+    let first = fetch_pooled(&target, &opts, &mut pool).expect("first");
+    let second = fetch_pooled(&target, &opts, &mut pool).expect("second");
+    server.join().expect("server");
+    assert_eq!(first.body, b"one");
+    assert_eq!(second.body, b"two");
+    assert_eq!(
+        accepts.load(Ordering::SeqCst),
+        1,
+        "SOCKS5 tunnel must be reused from pool"
+    );
+}
