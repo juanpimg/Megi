@@ -1086,6 +1086,8 @@ fn render_url_inner(
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
+    // The canvas blit loop (js feature) mutates this; harmless in a JS-free build.
+    #[cfg_attr(not(feature = "js"), allow(unused_mut))]
     let mut loaded_images = images::load_images_with_csp(
         &document,
         &base_url,
