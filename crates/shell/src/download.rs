@@ -145,8 +145,8 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<usize, String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
     }
-    let (temporary, mut file) =
-        create_new_temp_file(path).map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    let (temporary, mut file) = create_new_temp_file(path)
+        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
     {
         use std::io::Write as _;
         if let Err(error) = file.write_all(bytes) {
@@ -180,7 +180,10 @@ pub(crate) fn unique_temporary_path(path: &Path) -> PathBuf {
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
-    path.with_file_name(format!(".{name}.{}.{nanos}.{count}.tmp", std::process::id()))
+    path.with_file_name(format!(
+        ".{name}.{}.{nanos}.{count}.tmp",
+        std::process::id()
+    ))
 }
 
 /// Creates a fresh temporary file next to `path` with `create_new` (fails when

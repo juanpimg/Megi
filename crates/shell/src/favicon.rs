@@ -341,8 +341,8 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
-        let fixture =
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../image/tests/fixtures/png/rgba8.png");
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../image/tests/fixtures/png/rgba8.png");
         let secret = dir.join("secret.ico");
         std::fs::copy(&fixture, &secret).expect("copy icon");
         let secret_url = format!("file://{}", secret.display());
@@ -369,8 +369,8 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
-        let fixture =
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../image/tests/fixtures/png/rgba8.png");
+        let fixture = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../image/tests/fixtures/png/rgba8.png");
         let icon = dir.join("icon.ico");
         std::fs::copy(&fixture, &icon).expect("copy icon");
         let icon_url = format!("file://{}", icon.display());
@@ -380,10 +380,7 @@ mod tests {
         let page = page(&format!("file://{}/page.html", dir.display()));
         let options = render::RenderOptions::default();
         let favicon = for_page(&document, &page, &options);
-        assert!(
-            favicon.pixels.is_some(),
-            "file: page may use a file: icon"
-        );
+        assert!(favicon.pixels.is_some(), "file: page may use a file: icon");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

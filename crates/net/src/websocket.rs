@@ -883,7 +883,10 @@ mod tests {
         });
         let result = WebSocketClient::connect(&url, &test_options());
         let _ = server.join();
-        assert!(result.is_err(), "missing Connection header must be rejected");
+        assert!(
+            result.is_err(),
+            "missing Connection header must be rejected"
+        );
     }
 
     #[test]
