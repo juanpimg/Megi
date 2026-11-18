@@ -587,150 +587,150 @@ docs/audit/findings/f5/net-security.md	268	docs	F3	lead	2026-11-17	covered	#1496
 docs/audit/findings/f5/shell-a11y-i18n.md	231	docs	F3	lead	2026-11-17	covered	#1496-#1547	
 docs/audit/findings/f7/00-closeout.md	109	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	#1404-#1487	written and reviewed while building the F0 ledger
-docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/07-closeout.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/FINAL-REVIEW.md	98	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/advisories/w2-st-1176-tmp-writers.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f1-tests-fuzz-fixtures.md	313	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-assets.md	334	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-core.md	257	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-js.md	288	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-layout-paint.md	338	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-net.md	389	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-render.md	293	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f2-shell-tools.md	287	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f3-tooling-ci-docs.md	194	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/f4-perf.md	183	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/07-closeout.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/FINAL-REVIEW.md	98	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/advisories/w2-st-1176-tmp-writers.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f1-tests-fuzz-fixtures.md	313	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-assets.md	334	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-core.md	257	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-js.md	288	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-layout-paint.md	338	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-net.md	389	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-render.md	293	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f2-shell-tools.md	287	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f3-tooling-ci-docs.md	194	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/f4-perf.md	183	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/f5-break-browser.md	175	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
-docs/audit/findings/wave2/issues/w2-assets-03.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-05.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-06.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-07.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-09.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-10.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-11.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-assets-C1.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-browser-02.md	51	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-browser-03.md	63	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-ci-01.md	44	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-ci-03.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-01.md	38	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-02.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-03.md	35	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-05.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-06.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-07.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-08.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-09.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-10a.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-10b.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-11.md	34	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-12.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-core-13.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-001.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-003.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-004.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-005.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-006.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-008.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-js-009.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-004.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-005.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-006.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-007.md	35	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-008.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-009.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-010.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-011.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-012.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-013.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-014.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d02.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d03.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d04.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d05.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d06.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d07.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d08.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d09.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-net-d10.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-perf-01.md	47	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-perf-02.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-perf-03.md	42	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-perf-04.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-perf-05.md	47	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-render-02.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-render-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-render-10.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-st-headless-tabs.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-st-reader-quadratic.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-st-session-doc-drift.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-01.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-02.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-03.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-04.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-05.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-06.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-07.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/issues/w2-t-08.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-assets.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-browser.md	68	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-ci.md	71	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-core.md	61	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-f1.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-js.md	45	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-lp.md	187	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-net.md	68	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-render.md	90	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/meeting-st.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-f2-js/r3b.rs	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-f2-js/r4.rs	14	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-f2-js/r_main.rs	143	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/issues/w2-assets-03.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-05.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-06.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-07.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-09.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-10.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-11.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-assets-C1.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-browser-02.md	51	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-browser-03.md	63	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-ci-01.md	44	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-ci-03.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-01.md	38	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-02.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-03.md	35	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-05.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-06.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-07.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-08.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-09.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-10a.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-10b.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-11.md	34	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-12.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-core-13.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-001.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-003.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-004.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-005.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-006.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-008.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-js-009.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-004.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-005.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-006.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-007.md	35	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-008.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-009.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-010.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-011.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-012.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-013.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-014.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d02.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d03.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d04.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d05.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d06.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d07.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d08.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d09.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-net-d10.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-perf-01.md	47	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-perf-02.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-perf-03.md	42	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-perf-04.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-perf-05.md	47	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-render-02.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-render-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-render-10.md	30	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-st-headless-tabs.md	31	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-st-reader-quadratic.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-st-session-doc-drift.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-01.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-02.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-03.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-04.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-05.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-06.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-07.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/issues/w2-t-08.md	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-assets.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-browser.md	68	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-ci.md	71	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-core.md	61	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-f1.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-js.md	45	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-lp.md	187	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-net.md	68	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-render.md	90	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/meeting-st.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-f2-js/r3b.rs	27	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-f2-js/r4.rs	14	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-f2-js/r_main.rs	143	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/repro-w2-assets/alph-f1.webp	0	binary	-			exempt		not read line by line: binary
 docs/audit/findings/wave2/repro-w2-assets/alph-f2.webp	0	binary	-			exempt		not read line by line: binary
 docs/audit/findings/wave2/repro-w2-assets/alph-f3.webp	0	binary	-			exempt		not read line by line: binary
-docs/audit/findings/wave2/repro-w2-assets/currentcolor.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/g2-16.svg	2	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/g256-16.svg	256	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/hsl.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/miter-bevel.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/miter.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/namedcolor.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/root-opacity-pct.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/switch.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/text-num.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/text-px.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-assets/vis-inherit.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-ci/blank_gate.py	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-perf/gradient-256-stops.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/repro-w2-perf/gradient-4-stops.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verifier-template.md	13	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-assets-A.md	76	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-assets-B.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-browser-A.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-browser-B.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-ci-A.md	55	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-ci-B.md	72	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-core-A.md	52	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-core-B.md	93	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-core-B2.md	53	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-f1-A.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-f1-B.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-js-A.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-js-B.md	34	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-lp-A.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-lp-B.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-net-A.md	58	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-net-B.md	54	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-render-A.md	80	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-render-B.md	56	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-st-A.md	69	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/verify-st-B.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/repro-w2-assets/currentcolor.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/g2-16.svg	2	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/g256-16.svg	256	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/hsl.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/miter-bevel.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/miter.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/namedcolor.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/root-opacity-pct.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/switch.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/text-num.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/text-px.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-assets/vis-inherit.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-ci/blank_gate.py	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-perf/gradient-256-stops.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/repro-w2-perf/gradient-4-stops.svg	1	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verifier-template.md	13	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-assets-A.md	76	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-assets-B.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-browser-A.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-browser-B.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-ci-A.md	55	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-ci-B.md	72	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-core-A.md	52	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-core-B.md	93	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-core-B2.md	53	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-f1-A.md	28	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-f1-B.md	32	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-js-A.md	39	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-js-B.md	34	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-lp-A.md	48	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-lp-B.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-net-A.md	58	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-net-B.md	54	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-render-A.md	80	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-render-B.md	56	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-st-A.md	69	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
+docs/audit/findings/wave2/verify-st-B.md	77	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/repros/browser/calc-measure.html	8	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/calc-viewport.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer
 docs/audit/repros/browser/control.html	1	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 artifact / reproducer

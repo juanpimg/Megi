@@ -2,8 +2,8 @@
 
 ## Alcance y cobertura
 
-- Ledger: `python3 tools/audit_coverage.py --report` → **1344 archivos rastreados, 842 cubiertos, 0 pendientes, 100 %** en todas las categorías auditables (`src`, `test`, `fuzz`, `fixture`, `tool`, `ci`, `manifest`, `docs`, `example`). Las categorías `binary`/`vendored`/`generated`/`exempt` están contabilizadas y exentas por construcción.
-- `python3 tools/audit_coverage.py --check --strict` → `audit ledger ok: 1344 files, 842 covered, 0 pending, 255288 lines tracked, 0 file(s) to re-read, 0 unknown file(s)`.
+- Ledger: `python3 tools/audit_coverage.py --report` → **1345 archivos rastreados, 843 cubiertos, 0 pendientes, 100 %** en todas las categorías auditables (`src`, `test`, `fuzz`, `fixture`, `tool`, `ci`, `manifest`, `docs`, `example`). Las categorías `binary`/`vendored`/`generated`/`exempt` están contabilizadas y exentas por construcción.
+- `python3 tools/audit_coverage.py --check --strict` → `audit ledger ok: 1345 files, 843 covered, 0 pending, 255487 lines tracked, 0 file(s) to re-read, 0 unknown file(s)`.
 
 ## Gates de verificación final
 
