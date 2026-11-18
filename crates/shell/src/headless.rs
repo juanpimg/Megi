@@ -33,6 +33,17 @@ pub fn render_target(
     render_target_with_options(input, width, height, &render::RenderOptions::default())
 }
 
+/// Renders `input` and returns the accessibility tree of the resulting document as JSON (#1516).
+///
+/// This is the consumable form of the shell's accessibility model: a screen-reader bridge, a
+/// test harness or a diagnostic tool can walk the returned nodes (identity, parent, role, name,
+/// states and focusability) without depending on winit/accesskit types.
+pub fn accessibility_tree(input: &str, width: u32, height: u32) -> Result<String, ShellError> {
+    let output = render_target(input, width, height)?;
+    let root = output.document.root();
+    Ok(crate::a11y::serialize(&output.document, root))
+}
+
 /// [`render_target`] with explicit render options (cookies, CORS origin, scripting, ...).
 ///
 /// The viewport is validated from `width`/`height`; every other option is taken from
