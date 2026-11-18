@@ -1,7 +1,8 @@
-//! EXIF orientation: the eight PIL-generated fixtures decode with the applied
-//! orientation (dimensions and pixels match the orientation-1 reference).
+//! EXIF orientation: each fixture stores the source *physically rotated* by the inverse
+//! of its tag, so `decode` (which applies the tag) must land on the same upright image
+//! (#1365). This exercises the real-world case, not just tag parsing.
 
-use image::{apply_orientation, decode, exif_orientation};
+use image::{decode, exif_orientation};
 
 /// Corner colours of the orientation-1 fixture, read literally from its decoded pixels.
 /// These are independent of `apply_orientation`: a no-op or transposed regression in that
@@ -56,32 +57,19 @@ fn decodes_all_orientations_to_the_same_upright_pixels() {
             _ => unreachable!(),
         };
         let decoded = decode(bytes).expect("EXIF fixture decodes");
-        // Independent oracle: the stored frames are all 12x8, and only the
-        // orientations that transpose the axes (5..=8) turn the upright image
-        // sideways. Deriving this from `apply_orientation` (the code under test)
-        // would make the assertion vacuous.
-        let expected_dims = if matches!(orientation, 5..=8) {
-            (8_u32, 12_u32)
-        } else {
-            (12_u32, 8_u32)
-        };
+        // The stored frames are 8x12 for the transposing orientations (5..=8), but the
+        // tag rotates them back: every decoded frame must be the upright 12x8 reference.
         assert_eq!(
             (decoded.width, decoded.height),
-            expected_dims,
-            "orientation {orientation} must land on {expected_dims:?}"
+            (reference.width, reference.height),
+            "orientation {orientation} must land on the upright dimensions"
         );
-        let expected = apply_orientation(
-            image::RgbaImage::new(reference.width, reference.height, reference.data.clone())
-                .expect("clone reference"),
-            Some(orientation),
-        )
-        .expect("reference transform");
         // JPEG is lossy but these fixtures use quality 95 and flat colour blocks;
         // compare with a small per-channel tolerance.
         let max_delta = decoded
             .data
             .iter()
-            .zip(expected.data.iter())
+            .zip(reference.data.iter())
             .map(|(a, b)| a.abs_diff(*b))
             .max()
             .unwrap_or(0);
@@ -99,15 +87,17 @@ fn orientation_corners_match_literal_pixels() {
     // orientations 5-8 independently of the `apply_orientation` implementation (#1364).
     // (TL, TR, BL, BR) of the decoded image, in reference-corner terms:
     type Corners = ([u8; 4], [u8; 4], [u8; 4], [u8; 4]);
+    // Every fixture now stores pixels rotated by the inverse of its tag, so the decoded
+    // image is upright in all eight cases (#1365).
     let corners: [(u8, Corners, (u32, u32)); 8] = [
-        (1, (TL, TR, BL, BR), (12, 8)), // identity
-        (2, (TR, TL, BR, BL), (12, 8)), // mirror horizontal
-        (3, (BR, BL, TR, TL), (12, 8)), // rotate 180
-        (4, (BL, BR, TL, TR), (12, 8)), // mirror vertical
-        (5, (TL, BL, TR, BR), (8, 12)), // transpose
-        (6, (BL, TL, BR, TR), (8, 12)), // rotate 90 CW
-        (7, (BR, TR, BL, TL), (8, 12)), // transverse
-        (8, (TR, BR, TL, BL), (8, 12)), // rotate 270 CW
+        (1, (TL, TR, BL, BR), (16, 16)),
+        (2, (TL, TR, BL, BR), (16, 16)),
+        (3, (TL, TR, BL, BR), (16, 16)),
+        (4, (TL, TR, BL, BR), (16, 16)),
+        (5, (TL, TR, BL, BR), (16, 16)),
+        (6, (TL, TR, BL, BR), (16, 16)),
+        (7, (TL, TR, BL, BR), (16, 16)),
+        (8, (TL, TR, BL, BR), (16, 16)),
     ];
     for (orientation, (want_tl, want_tr, want_bl, want_br), (want_w, want_h)) in corners {
         let bytes: &[u8] = match orientation {
