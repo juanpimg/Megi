@@ -818,7 +818,7 @@ fn render_url_inner(
     options: &RenderOptions,
     cache: Option<&mut RenderCache>,
     frame_depth: usize,
-    _budget: &mut frames::FrameBudget,
+    budget: &mut frames::FrameBudget,
 ) -> Result<RenderOutput, RenderError> {
     render_url_with_context(
         input,
@@ -826,6 +826,7 @@ fn render_url_inner(
         cache,
         frame_depth,
         FrameRenderContext::default(),
+        budget,
     )
 }
 
@@ -835,6 +836,7 @@ pub(crate) fn render_url_with_context(
     cache: Option<&mut RenderCache>,
     frame_depth: usize,
     frame_ctx: FrameRenderContext,
+    budget: &mut frames::FrameBudget,
 ) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
@@ -936,9 +938,10 @@ pub(crate) fn render_url_with_context(
     let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let decode_parse_time = decode_start.elapsed();
 
-    let mut frame_budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    // #1632/frame budget: reuse the shared budget threaded through the recursion instead of
+    // creating a fresh one per document (which broke the global per-page cap).
     render_parsed_document_inner(ParsedDocumentInput {
-        budget: &mut frame_budget,
+        budget,
         document: parse.document,
         document_url: loaded.url,
         document_headers: &loaded.headers,
@@ -967,6 +970,7 @@ pub(crate) fn render_pre_scripted_document(
     options: &RenderOptions,
     frame_depth: usize,
     frame_ctx: FrameRenderContext,
+    budget: &mut frames::FrameBudget,
 ) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     #[cfg(feature = "js")]
@@ -1010,9 +1014,9 @@ pub(crate) fn render_pre_scripted_document(
         referrer_policy,
     )));
 
-    let mut frame_budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    // #1632/frame budget: reuse the shared budget threaded through the recursion.
     render_parsed_document_inner(ParsedDocumentInput {
-        budget: &mut frame_budget,
+        budget,
         document,
         document_url,
         document_headers: &[],

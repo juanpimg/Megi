@@ -214,6 +214,7 @@ pub fn collect_frames_with_context(
                 &child_options,
                 depth + 1,
                 child_ctx,
+                budget, // share the global per-page frame budget (#1632)
             ) {
                 Ok(child) => {
                     let bytes = child.pixmap.to_rgba_bytes();
@@ -288,6 +289,7 @@ pub fn collect_frames_with_context(
             None,
             depth + 1,
             child_ctx,
+            budget, // share the global per-page frame budget across the recursion (#1632)
         ) {
             Ok(child) => {
                 let bytes = child.pixmap.to_rgba_bytes();
