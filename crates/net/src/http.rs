@@ -188,6 +188,9 @@ pub struct FetchOptions {
     /// a `rustls::ClientConfig` here.
     #[cfg(feature = "tls")]
     pub tls_config: Option<Arc<rustls::ClientConfig>>,
+    /// Optional session-scoped HSTS store (#1529). When `None` (default), the process-global
+    /// HSTS store is used.
+    pub hsts_store: Option<crate::hsts::SharedHstsStore>,
 }
 
 impl Default for FetchOptions {
@@ -220,6 +223,7 @@ impl Default for FetchOptions {
             proxy: None,
             #[cfg(feature = "tls")]
             tls_config: None,
+            hsts_store: None,
         }
     }
 }
@@ -424,6 +428,8 @@ pub fn fetch_pooled(
     options: &FetchOptions,
     pool: &mut H1Pool,
 ) -> Result<Response, FetchError> {
+    let upgraded_url = crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), url);
+    let url = upgraded_url.as_ref().unwrap_or(url);
     let pool_proxy = options
         .proxy
         .as_deref()
@@ -546,6 +552,17 @@ pub fn fetch_pooled(
             reader.stream.flush().map_err(map_io_error)?;
             let head = reader.read_head(options.max_header_bytes)?;
             let (version, status, reason, headers) = parse_head_verbose(&head)?;
+            if is_https
+                && let Some(header) = headers
+                    .iter()
+                    .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+            {
+                crate::hsts::observe_https_with(
+                    options.hsts_store.as_deref(),
+                    url.host(),
+                    &header.1,
+                );
+            }
             if is_redirect(status) {
                 match options.redirect_mode {
                     RedirectMode::Follow => {
@@ -687,7 +704,9 @@ pub fn fetch_streaming(
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
-        if let Some(upgraded) = crate::hsts::upgrade_url(&current) {
+        if let Some(upgraded) =
+            crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
+        {
             current = upgraded;
         }
         let raw = fetch_once(
@@ -705,6 +724,26 @@ pub fn fetch_streaming(
         }
         if current.scheme() == Scheme::Https
             && let Some(header) = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+        {
+            crate::hsts::observe_https_with(
+                options.hsts_store.as_deref(),
+                current.host(),
+                &header.1,
+            );
+        }
+        if !is_redirect(raw.status) {
+            if let Some(origin) = options.origin.as_deref() {
+                cors::validate_response(
+                    &current,
+                    origin,
+                    &raw.headers,
+                    options.cookie_jar.is_some(),
+                )?;
+            }
+            let content_range = raw
                 .headers
                 .iter()
                 .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
@@ -928,7 +967,9 @@ pub fn fetch_with_request_body_and_trailers(
         first_attempt = false;
         // HSTS (#1529): upgrade an `http://` hop to `https://` when an active policy covers the
         // host (also applied to redirect targets, so a downgrade redirect cannot slip through).
-        if let Some(upgraded) = crate::hsts::upgrade_url(&current) {
+        if let Some(upgraded) =
+            crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
+        {
             current = upgraded;
         }
         let raw = fetch_once(
@@ -944,34 +985,41 @@ pub fn fetch_with_request_body_and_trailers(
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
         }
-        // HSTS (#1529): remember policies from trusted HTTPS responses on every hop (RFC 6797 §7.2)
-        // before checking redirect targets so HSTS-protected upgrades don't fail the downgrade check.
+        // HSTS (#1529): remember the policy from any trusted HTTPS response (including redirects)
+        // before `raw` is moved or followed. Only secure origins may set it (RFC 6797 §8.1).
         if current.scheme() == Scheme::Https
             && let Some(header) = raw
                 .headers
                 .iter()
                 .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
         {
-            crate::hsts::observe_https(current.host(), &header.1);
+            crate::hsts::observe_https_with(
+                options.hsts_store.as_deref(),
+                current.host(),
+                &header.1,
+            );
         }
-        // Per-hop CORS check (#1536): intermediate 3xx hops must also pass CORS when `origin`
-        // is set so a cross-origin redirect without ACAO cannot slip through.
-        if let Some(origin) = options.origin.as_deref() {
-            cors::validate_response(&current, origin, &raw.headers, options.cookie_jar.is_some())?;
-        }
-        let content_range = raw
-            .headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
-            .and_then(|(_, value)| ContentRange::parse(value));
-        let accept_ranges = raw.headers.iter().any(|(name, value)| {
-            name.eq_ignore_ascii_case("accept-ranges")
-                && value
-                    .split(',')
-                    .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
-        });
         if !is_redirect(raw.status) {
+            if let Some(origin) = options.origin.as_deref() {
+                cors::validate_response(
+                    &current,
+                    origin,
+                    &raw.headers,
+                    options.cookie_jar.is_some(),
+                )?;
+            }
             let body = decode_response_body(&raw.headers, raw.body, options)?;
+            let content_range = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-range"))
+                .and_then(|(_, value)| ContentRange::parse(value));
+            let accept_ranges = raw.headers.iter().any(|(name, value)| {
+                name.eq_ignore_ascii_case("accept-ranges")
+                    && value
+                        .split(',')
+                        .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
+            });
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
