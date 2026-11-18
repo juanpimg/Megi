@@ -40,8 +40,7 @@ fuzz_target!(|data: &[u8]| {
     // Reuse a single dynamic table across frames (#470) so growth/eviction/indexing
     // bugs are exercised the way a real connection does.
     let mut decoder = net::h2::hpack::Decoder::new(4096);
-    let mut reader =
-        net::h2::frame::FrameReader::new(Cursor::new(data), net::h2::MAX_FRAME_SIZE);
+    let mut reader = net::h2::frame::FrameReader::new(Cursor::new(data), net::h2::MAX_FRAME_SIZE);
     for _ in 0..MAX_FRAMES {
         match reader.read_frame() {
             Ok(Some(frame)) => {

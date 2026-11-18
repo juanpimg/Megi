@@ -19,7 +19,11 @@ fuzz_target!(|data: &[u8]| {
         match op % 8 {
             0 => {
                 // create element
-                let ns = if data[i] & 1 == 0 { Namespace::Html } else { Namespace::Svg };
+                let ns = if data[i] & 1 == 0 {
+                    Namespace::Html
+                } else {
+                    Namespace::Svg
+                };
                 i += 1;
                 let el = doc.create_element(ns, "div", Vec::new());
                 nodes.push(el);

@@ -3,10 +3,11 @@
 //! range, referrer, CORS, proxy auth).
 
 use libfuzzer_sys::fuzz_target;
-use net::{base64_decode, base64_encode, decode_data_url, parse_cache_policy, parse_http_date,
-          resolve_content_type, sniff, ByteRange, ContentRange, referer_value,
-          ReferrerPolicy, proxy_authorization, proxy_authorization_for, ProxyConfig, Origin,
-          parse_set_cookie};
+use net::{
+    ByteRange, ContentRange, Origin, ProxyConfig, ReferrerPolicy, base64_decode, base64_encode,
+    decode_data_url, parse_cache_policy, parse_http_date, parse_set_cookie, proxy_authorization,
+    proxy_authorization_for, referer_value, resolve_content_type, sniff,
+};
 use std::time::SystemTime;
 
 fuzz_target!(|data: &[u8]| {
