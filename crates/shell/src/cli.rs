@@ -57,7 +57,8 @@ options:
   --save-png PATH     headless: also write the rendered PNG to PATH
   --save-html PATH    headless: also write the serialized DOM (doctype) to PATH
   --tabs URL          open URL as an extra tab (repeatable, max 32); the positional
-                      URL is the first/active tab, headless renders the active tab
+                      URL is the first tab
+  --active-tab N      headless: render tab N (0-based, default 0) instead of the first
   -h, --help          print this help
 
 window keys:
@@ -112,6 +113,8 @@ pub struct CliArgs {
     pub find: Option<String>,
     /// Initial tabs (first = positional URL, then each `--tabs` in order).
     pub tabs: Vec<String>,
+    /// Zero-based index of the tab rendered in headless screenshot mode (#1689).
+    pub active_tab: usize,
     /// Include the shell chrome in headless screenshots (`--chrome`).
     pub chrome: bool,
     /// Draw a deterministic open context menu in headless chrome screenshots.
@@ -157,6 +160,8 @@ pub struct RawArgs {
     pub find: Option<String>,
     /// `--tabs` URLs, in order (repeatable).
     pub tabs: Vec<String>,
+    /// `--active-tab` value, if provided.
+    pub active_tab: Option<usize>,
     /// `--chrome` was passed.
     pub chrome: bool,
     /// `--chrome-menu` was passed.
@@ -213,6 +218,12 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                     return Err(ShellError::Usage("--tabs count exceeds 32".to_string()));
                 }
                 raw.tabs.push(value);
+            }
+            "--active-tab" => {
+                let value = next_value(&arguments, &mut index, "--active-tab")?;
+                raw.active_tab = Some(value.parse::<usize>().map_err(|_| {
+                    ShellError::Usage(format!("invalid --active-tab value `{value}`"))
+                })?);
             }
             "--chrome" => raw.chrome = true,
             "--chrome-menu" => raw.chrome_menu = true,
@@ -402,6 +413,13 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             return Err(ShellError::Usage(format!("missing <url|file>\n{USAGE}")));
         }
     };
+    let active_tab = raw.active_tab.unwrap_or(0);
+    if active_tab >= tabs.len() {
+        return Err(ShellError::Usage(format!(
+            "--active-tab {active_tab} is out of range ({} tab(s))",
+            tabs.len()
+        )));
+    }
     let width = raw.width.unwrap_or(DEFAULT_WIDTH);
     let height = raw.height.unwrap_or(DEFAULT_HEIGHT);
     validate_dimensions(width, height)?;
@@ -448,6 +466,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             time_ms,
             find: raw.find,
             tabs,
+            active_tab,
             chrome: raw.chrome,
             chrome_menu: raw.chrome_menu,
             reader: raw.reader,
@@ -471,6 +490,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         time_ms,
         find: raw.find,
         tabs,
+        active_tab,
         chrome: raw.chrome,
         chrome_menu: raw.chrome_menu,
         reader: raw.reader,
@@ -747,6 +767,23 @@ mod unit_tests {
         let err = parse_cli(args(&["data:,x", "--chrome-menu"])).expect_err("must reject");
         assert!(matches!(err, ShellError::Usage(_)));
         assert!(parse_cli(args(&["data:,x", "--chrome", "--chrome-menu"])).is_ok());
+    }
+
+    #[test]
+    fn active_tab_selects_a_tab_and_validates_range() {
+        // #1689: --tabs must be usable from headless mode via --active-tab.
+        let cli = parse_cli(args(&[
+            "data:text/html,first",
+            "--tabs",
+            "data:text/html,second",
+            "--active-tab",
+            "1",
+        ]))
+        .expect("parse");
+        assert_eq!(cli.active_tab, 1);
+        assert_eq!(cli.tabs[cli.active_tab], "data:text/html,second");
+        assert!(parse_cli(args(&["data:,x", "--active-tab", "9"])).is_err());
+        assert!(parse_cli(args(&["data:,x", "--active-tab", "abc"])).is_err());
     }
 
     #[test]
