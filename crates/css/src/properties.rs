@@ -999,14 +999,15 @@ impl VerticalAlign {
             "text-top" => Some(Self::TextTop),
             "text-bottom" => Some(Self::TextBottom),
             other => {
+                // #1677: same |x| > 1e6 cap as Length::parse; negative offsets stay valid.
                 if let Some(val) = other.strip_suffix("px") {
                     let val: f32 = val.trim().parse().ok()?;
-                    if !val.is_finite() {
+                    if !val.is_finite() || val.abs() > 1e6 {
                         return None;
                     }
                     Some(Self::Length(val))
                 } else if let Ok(val) = other.parse::<f32>() {
-                    if !val.is_finite() {
+                    if !val.is_finite() || val.abs() > 1e6 {
                         return None;
                     }
                     Some(Self::Length(val))

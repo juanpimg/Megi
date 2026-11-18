@@ -66,3 +66,36 @@ fn font_weight_out_of_range_is_ignored() {
     let valid = computed("p { font-weight: 900 }");
     assert_eq!(valid.font_weight, 900);
 }
+
+#[test]
+fn calc_and_length_share_the_magnitude_cap() {
+    // #1669: calc() must apply the same |x| > 1e6 cap as Length::parse.
+    let plain = computed("p { width: 99999999px }");
+    let calc = computed("p { width: calc(99999999px) }");
+    assert_eq!(
+        plain.width,
+        css::Length::Auto,
+        "plain oversized length must be rejected"
+    );
+    assert_eq!(
+        calc.width,
+        css::Length::Auto,
+        "calc oversized length must be rejected too"
+    );
+
+    let calc_em = computed("p { font-size: 16px; width: calc(99999999em) }");
+    assert_eq!(
+        calc_em.width,
+        css::Length::Auto,
+        "calc oversized em must be rejected"
+    );
+}
+
+#[test]
+fn vertical_align_rejects_oversized_lengths() {
+    // #1677: same 1e6 magnitude cap; negatives remain valid.
+    let huge = computed("p { vertical-align: 999999999px }");
+    assert_eq!(huge.vertical_align, css::VerticalAlign::Baseline);
+    let valid = computed("p { vertical-align: -4px }");
+    assert_eq!(valid.vertical_align, css::VerticalAlign::Length(-4.0));
+}
