@@ -110,7 +110,7 @@ fn h1_streaming_content_length_and_callback_errors() {
         Err(FetchError::Timeout)
     })
     .expect_err("callback error");
-    let _ = server.join();
+    server.join().expect("server thread completed");
     assert!(matches!(error, FetchError::Timeout));
 }
 
@@ -185,7 +185,7 @@ fn h1_loader_reuses_one_keep_alive_connection_for_two_loads() {
         1,
         "connection returned to the pool"
     );
-    let _ = server.join();
+    server.join().expect("server thread completed");
 }
 
 fn h2_read_preface(stream: &mut TcpStream) {
@@ -358,7 +358,7 @@ fn h2_batch_reuses_one_session_for_two_requests() {
     ];
     let results =
         client::request_many_owned(&mut stream, requests, &Limits::default()).expect("batch");
-    let _ = server.join();
+    server.join().expect("server thread completed");
     assert_eq!(
         connections.load(Ordering::SeqCst),
         1,
