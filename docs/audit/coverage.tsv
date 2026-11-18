@@ -588,8 +588,8 @@ docs/audit/findings/f5/shell-a11y-i18n.md	231	docs	F3	lead	2026-11-17	covered	#1
 docs/audit/findings/f7/00-closeout.md	109	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	#1404-#1487	written and reviewed while building the F0 ledger
 docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/07-closeout.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
-docs/audit/findings/wave2/FINAL-REVIEW.md	91	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/07-closeout.md	43	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/FINAL-REVIEW.md	98	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
@@ -604,6 +604,7 @@ docs/audit/findings/wave2/f2-render.md	293	docs	F3	wave2	2026-11-18	covered	#161
 docs/audit/findings/wave2/f2-shell-tools.md	287	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/f3-tooling-ci-docs.md	194	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/f4-perf.md	183	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
+docs/audit/findings/wave2/f5-break-browser.md	175	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 artifact
 docs/audit/findings/wave2/issues/w2-assets-03.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/issues/w2-assets-04.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
 docs/audit/findings/wave2/issues/w2-assets-05.md	29	docs	F3	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 line-by-line audit
