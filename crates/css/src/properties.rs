@@ -3197,8 +3197,11 @@ impl ComputedStyle {
             })
             .unwrap_or(Overflow::Visible);
 
+        // #1670: `NaN.clamp(0,1)` stays NaN, which would poison paint/alpha blending. Reject
+        // all non-finite values before clamping.
         let opacity = find_declaration(&entries, "opacity")
             .and_then(|d| d.raw_value.trim().parse::<f32>().ok())
+            .filter(|val| val.is_finite())
             .map(|val| val.clamp(0.0, 1.0))
             .unwrap_or(1.0);
 
@@ -3400,7 +3403,12 @@ impl ComputedStyle {
             "bold" => 700,
             "bolder" => 700,
             "lighter" => 300,
-            other => other.parse().unwrap_or(400),
+            // CSS Fonts 4: numeric font-weight must be in 1..=1000 (#1676).
+            other => other
+                .parse::<u16>()
+                .ok()
+                .filter(|weight| (1..=1000).contains(weight))
+                .unwrap_or(400),
         }
     }
 
@@ -3410,7 +3418,10 @@ impl ComputedStyle {
         if val.eq_ignore_ascii_case("normal") || val.ends_with('%') {
             return None;
         }
-        val.parse::<f32>().ok().filter(|factor| *factor >= 0.0)
+        // #1671: reject NaN/infinity and negative numbers, not just `>= 0`.
+        val.parse::<f32>()
+            .ok()
+            .filter(|factor| factor.is_finite() && *factor >= 0.0)
     }
 
     fn parse_line_height(val: &str, font_size: f32) -> Option<f32> {
@@ -3418,7 +3429,12 @@ impl ComputedStyle {
         if val == "normal" {
             return Some(font_size * 1.2);
         }
-        if let Ok(factor) = val.parse::<f32>() {
+        // #1671: a numeric line-height must be finite and non-negative; otherwise CSS falls
+        // through to Length::parse, and an invalid value yields None (initial used).
+        if let Ok(factor) = val.parse::<f32>()
+            && factor.is_finite()
+            && factor >= 0.0
+        {
             return Some(factor * font_size);
         }
         match Length::parse(&val, font_size, font_size) {
