@@ -8,7 +8,9 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
+#[cfg(feature = "js")]
+use render::ScriptingMode;
+use render::{RenderOptions, Viewport, render_url};
 
 fn spawn_echo() -> (String, Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback listener");
