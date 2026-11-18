@@ -284,7 +284,7 @@ crates/layout/src/lib.rs	312	src	F2	wave1	2026-11-16	covered	#1152-#1156
 crates/layout/src/table.rs	1608	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/text.rs	310	src	F2	wave1	2026-11-16	covered	#1152-#1156	
 crates/layout/src/tree_builder.rs	650	src	F2	wave1	2026-11-16	covered	#1152-#1156	
-crates/layout/tests/adversarial_harness.rs	867	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/adversarial_harness.rs	897	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/arc_style.rs	167	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/aspect_ratio.rs	246	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/bfc_conformance.rs	793	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
