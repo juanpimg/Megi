@@ -17,8 +17,8 @@
 //! filesystem or wall-clock sleep is reachable from the realm.
 
 use libfuzzer_sys::fuzz_target;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 /// Deterministic fixture documents selected from input bytes.

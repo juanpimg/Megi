@@ -16,8 +16,8 @@
 //! exhaustion are expected to return typed `JsError`s; no network, filesystem or wall-clock
 //! access is provided. The target looks for panics/aborts/UB/Sanitizer findings/timeouts.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use libfuzzer_sys::fuzz_target;
 

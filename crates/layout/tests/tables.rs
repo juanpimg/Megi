@@ -824,8 +824,9 @@ fn a_single_character_still_gives_the_column_a_width() {
     let table_box = &tree.children[0].children[0];
     let cell_box = &table_box.children[0].children[0];
     assert!(
-        cell_box.dimensions.content.width > 0.0,
-        "a cell with text keeps a non-zero width"
+        (cell_box.dimensions.content.width - 6.0).abs() < 0.01,
+        "a single character 'x' at 10px mono should give ~6px width, got {}",
+        cell_box.dimensions.content.width
     );
 }
 

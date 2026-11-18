@@ -27,7 +27,9 @@ fuzz_target!(|data: &[u8]| {
         );
         for glyph in &run.glyphs {
             assert!(
-                glyph.x_advance.is_finite() && glyph.x_offset.is_finite() && glyph.y_offset.is_finite(),
+                glyph.x_advance.is_finite()
+                    && glyph.x_offset.is_finite()
+                    && glyph.y_offset.is_finite(),
                 "non-finite glyph placement"
             );
         }

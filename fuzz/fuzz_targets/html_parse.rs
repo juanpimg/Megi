@@ -55,16 +55,11 @@ fuzz_target!(|data: &[u8]| {
         ("annotation-xml", Namespace::MathMl),
         ("foreignObject", Namespace::Svg),
     ];
-    let selector = data
-        .iter()
-        .fold(0usize, |acc, byte| acc.wrapping_mul(31).wrapping_add(*byte as usize));
+    let selector = data.iter().fold(0usize, |acc, byte| {
+        acc.wrapping_mul(31).wrapping_add(*byte as usize)
+    });
     let (context_name, context_namespace) = CONTEXTS[selector % CONTEXTS.len()];
-    let fragment = html::parse_fragment_with_options(
-        &text,
-        context_namespace,
-        context_name,
-        false,
-        &options,
-    );
+    let fragment =
+        html::parse_fragment_with_options(&text, context_namespace, context_name, false, &options);
     let _ = html::serialize_dom_for_test(&fragment.document);
 });
