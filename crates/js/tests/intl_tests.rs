@@ -64,3 +64,25 @@ fn datetime_format_and_to_locale_date_string_use_locale_order() {
     );
     assert_eq!(out, "01/15/2024|15/01/2024|15/01/2024", "{out}");
 }
+
+#[test]
+fn date_to_locale_time_and_date_time_strings() {
+    let out = eval(
+        "var d = new Date(2024, 0, 15, 9, 5, 7); \
+         String(d.toLocaleTimeString('en-US') + '|' + d.toLocaleString('en-US') + '|' + d.toLocaleString('es-ES'));",
+    );
+    assert_eq!(
+        out, "09:05:07|01/15/2024, 09:05:07|15/01/2024 09:05:07",
+        "{out}"
+    );
+}
+
+#[test]
+fn datetime_format_time_only() {
+    let out = eval(
+        "var d = new Date(2024, 0, 15, 9, 5, 7); \
+         var t = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); \
+         String(t.format(d));",
+    );
+    assert_eq!(out, "09:05:07", "{out}");
+}

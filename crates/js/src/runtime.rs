@@ -7293,8 +7293,8 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     var intl = (typeof Intl === 'object' && Intl) ? Intl : {};
     intl.NumberFormat = NumberFormat;
 
-    // Intl.DateTimeFormat subset (#1523): locale-ordered numeric dates. Kept dependency-free
-    // (no ICU) and intentionally small: the common `toLocaleDateString` display case.
+    // Intl.DateTimeFormat subset (#1523): locale-ordered numeric dates/times. Kept
+    // dependency-free (no ICU) and intentionally small: common `toLocale*` display cases.
     var dateOrder = {
       'en': ['m', 'd', 'y'], 'en-us': ['m', 'd', 'y'], 'en-gb': ['d', 'm', 'y'],
       'es': ['d', 'm', 'y'], 'es-es': ['d', 'm', 'y'],
@@ -7302,13 +7302,22 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       'fr': ['d', 'm', 'y'], 'fr-fr': ['d', 'm', 'y'],
       'pt': ['d', 'm', 'y'], 'pt-br': ['d', 'm', 'y']
     };
-    function DateTimeFormat(locale) {
+    function DateTimeFormat(locale, options) {
       locale = String(locale || 'en-US');
+      options = options || {};
       var key = locale.toLowerCase();
       this._order = dateOrder[key] || dateOrder[locale.split('-')[0].toLowerCase()] || dateOrder['en'];
       this._locale = locale;
+      this._lang = locale.split('-')[0].toLowerCase();
+      var hasDate = options.year || options.month || options.day || options.dateStyle;
+      var hasTime = options.hour || options.minute || options.second || options.timeStyle;
+      if (!hasDate && !hasTime) { hasDate = true; }
+      this._date = !!hasDate;
+      this._time = !!hasTime;
     }
-    DateTimeFormat.prototype.resolvedOptions = function () { return { locale: this._locale }; };
+    DateTimeFormat.prototype.resolvedOptions = function () {
+      return { locale: this._locale, date: this._date, time: this._time };
+    };
     DateTimeFormat.prototype.format = function (date) {
       var d = new Date(Number(date));
       if (isNaN(d.getTime())) { return 'Invalid Date'; }
@@ -7317,7 +7326,15 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
         m: String(d.getMonth() + 1).padStart(2, '0'),
         d: String(d.getDate()).padStart(2, '0')
       };
-      return this._order.map(function (key) { return parts[key]; }).join('/');
+      var datePart = this._order.map(function (key) { return parts[key]; }).join('/');
+      var timePart = String(d.getHours()).padStart(2, '0') + ':' +
+        String(d.getMinutes()).padStart(2, '0') + ':' +
+        String(d.getSeconds()).padStart(2, '0');
+      if (this._date && this._time) {
+        return datePart + (this._lang === 'en' ? ', ' : ' ') + timePart;
+      }
+      if (this._time) { return timePart; }
+      return datePart;
     };
     intl.DateTimeFormat = DateTimeFormat;
     define('Intl', intl);
@@ -7326,8 +7343,27 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
         return new NumberFormat(locale, options).format(this);
       };
       if (typeof Date === 'function' && Date.prototype) {
-        Date.prototype.toLocaleDateString = function (locale) {
-          return new DateTimeFormat(locale).format(this);
+        Date.prototype.toLocaleDateString = function (locale, options) {
+          return new DateTimeFormat(
+            locale,
+            options && (options.year || options.month || options.day || options.dateStyle)
+              ? options : { year: 'numeric', month: '2-digit', day: '2-digit' }
+          ).format(this);
+        };
+        Date.prototype.toLocaleTimeString = function (locale, options) {
+          return new DateTimeFormat(
+            locale,
+            options || { hour: '2-digit', minute: '2-digit', second: '2-digit' }
+          ).format(this);
+        };
+        Date.prototype.toLocaleString = function (locale, options) {
+          return new DateTimeFormat(
+            locale,
+            options || {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', second: '2-digit'
+            }
+          ).format(this);
         };
       }
     }
