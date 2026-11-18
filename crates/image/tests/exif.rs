@@ -1,15 +1,8 @@
-//! EXIF orientation: the eight PIL-generated fixtures decode with the applied
-//! orientation (dimensions and pixels match the orientation-1 reference).
+//! EXIF orientation: the eight fixtures store physically transformed bitmaps
+//! with their corresponding EXIF Orientation tags, so decoding must apply the
+//! tag and yield the same upright 12x8 image for every orientation (#1365).
 
-use image::{apply_orientation, decode, exif_orientation};
-
-/// Corner colours of the orientation-1 fixture, read literally from its decoded pixels.
-/// These are independent of `apply_orientation`: a no-op or transposed regression in that
-/// function cannot make this oracle follow it (#1364).
-const TL: [u8; 4] = [255, 208, 28, 255];
-const TR: [u8; 4] = [0, 255, 121, 255];
-const BL: [u8; 4] = [0, 33, 255, 255];
-const BR: [u8; 4] = [255, 181, 0, 255];
+use image::{decode, exif_orientation};
 
 macro_rules! fixture {
     ($name:literal) => {
@@ -17,22 +10,31 @@ macro_rules! fixture {
     };
 }
 
+fn exif_fixture_bytes(orientation: u8) -> &'static [u8] {
+    match orientation {
+        1 => fixture!("exif_o1.jpg"),
+        2 => fixture!("exif_o2.jpg"),
+        3 => fixture!("exif_o3.jpg"),
+        4 => fixture!("exif_o4.jpg"),
+        5 => fixture!("exif_o5.jpg"),
+        6 => fixture!("exif_o6.jpg"),
+        7 => fixture!("exif_o7.jpg"),
+        8 => fixture!("exif_o8.jpg"),
+        _ => unreachable!(),
+    }
+}
+
+fn corner(image: &image::RgbaImage, x: u32, y: u32) -> [u8; 4] {
+    image
+        .pixel(x, y)
+        .expect("corner must be within decoded image")
+}
+
 #[test]
 fn parses_orientation_tags_from_pil_fixtures() {
     for orientation in 1..=8u8 {
-        let bytes: &[u8] = match orientation {
-            1 => fixture!("exif_o1.jpg"),
-            2 => fixture!("exif_o2.jpg"),
-            3 => fixture!("exif_o3.jpg"),
-            4 => fixture!("exif_o4.jpg"),
-            5 => fixture!("exif_o5.jpg"),
-            6 => fixture!("exif_o6.jpg"),
-            7 => fixture!("exif_o7.jpg"),
-            8 => fixture!("exif_o8.jpg"),
-            _ => unreachable!(),
-        };
         assert_eq!(
-            exif_orientation(bytes),
+            exif_orientation(exif_fixture_bytes(orientation)),
             Some(orientation),
             "tag {orientation}"
         );
@@ -43,117 +45,79 @@ fn parses_orientation_tags_from_pil_fixtures() {
 #[test]
 fn decodes_all_orientations_to_the_same_upright_pixels() {
     let reference = decode(fixture!("exif_o1.jpg")).expect("reference decodes");
+    assert_eq!(
+        (reference.width, reference.height),
+        (12, 8),
+        "reference must be upright 12x8"
+    );
     for orientation in 1..=8u8 {
-        let bytes: &[u8] = match orientation {
-            1 => fixture!("exif_o1.jpg"),
-            2 => fixture!("exif_o2.jpg"),
-            3 => fixture!("exif_o3.jpg"),
-            4 => fixture!("exif_o4.jpg"),
-            5 => fixture!("exif_o5.jpg"),
-            6 => fixture!("exif_o6.jpg"),
-            7 => fixture!("exif_o7.jpg"),
-            8 => fixture!("exif_o8.jpg"),
-            _ => unreachable!(),
-        };
-        let decoded = decode(bytes).expect("EXIF fixture decodes");
-        // Independent oracle: the stored frames are all 12x8, and only the
-        // orientations that transpose the axes (5..=8) turn the upright image
-        // sideways. Deriving this from `apply_orientation` (the code under test)
-        // would make the assertion vacuous.
-        let expected_dims = if matches!(orientation, 5..=8) {
-            (8_u32, 12_u32)
-        } else {
-            (12_u32, 8_u32)
-        };
+        let decoded = decode(exif_fixture_bytes(orientation)).expect("EXIF fixture decodes");
         assert_eq!(
             (decoded.width, decoded.height),
-            expected_dims,
-            "orientation {orientation} must land on {expected_dims:?}"
+            (reference.width, reference.height),
+            "orientation {orientation} must decode to upright dimensions"
         );
-        let expected = apply_orientation(
-            image::RgbaImage::new(reference.width, reference.height, reference.data.clone())
-                .expect("clone reference"),
-            Some(orientation),
-        )
-        .expect("reference transform");
-        // JPEG is lossy but these fixtures use quality 95 and flat colour blocks;
-        // compare with a small per-channel tolerance.
         let max_delta = decoded
             .data
             .iter()
-            .zip(expected.data.iter())
+            .zip(reference.data.iter())
             .map(|(a, b)| a.abs_diff(*b))
             .max()
             .unwrap_or(0);
-        assert!(
-            max_delta <= 8,
-            "orientation {orientation}: max delta {max_delta}"
-        );
+        if max_delta > 8 {
+            let tl = corner(&decoded, 0, 0);
+            let tr = corner(&decoded, decoded.width - 1, 0);
+            let bl = corner(&decoded, 0, decoded.height - 1);
+            let br = corner(&decoded, decoded.width - 1, decoded.height - 1);
+            let rtl = corner(&reference, 0, 0);
+            let rtr = corner(&reference, reference.width - 1, 0);
+            let rbl = corner(&reference, 0, reference.height - 1);
+            let rbr = corner(&reference, reference.width - 1, reference.height - 1);
+            panic!(
+                "orientation {orientation}: max delta {max_delta} corners got TL={tl:?} TR={tr:?} BL={bl:?} BR={br:?} ref TL={rtl:?} TR={rtr:?} BL={rbl:?} BR={rbr:?}"
+            );
+        }
     }
 }
 
 #[test]
 fn orientation_corners_match_literal_pixels() {
-    // For each EXIF orientation, the four corners of the decoded image must land on the
-    // literal reference corner colours above. This pins the transpose/inverse convention for
-    // orientations 5-8 independently of the `apply_orientation` implementation (#1364).
-    // (TL, TR, BL, BR) of the decoded image, in reference-corner terms:
-    type Corners = ([u8; 4], [u8; 4], [u8; 4], [u8; 4]);
-    let corners: [(u8, Corners, (u32, u32)); 8] = [
-        (1, (TL, TR, BL, BR), (12, 8)), // identity
-        (2, (TR, TL, BR, BL), (12, 8)), // mirror horizontal
-        (3, (BR, BL, TR, TL), (12, 8)), // rotate 180
-        (4, (BL, BR, TL, TR), (12, 8)), // mirror vertical
-        (5, (TL, BL, TR, BR), (8, 12)), // transpose
-        (6, (BL, TL, BR, TR), (8, 12)), // rotate 90 CW
-        (7, (BR, TR, BL, TL), (8, 12)), // transverse
-        (8, (TR, BR, TL, BL), (8, 12)), // rotate 270 CW
-    ];
-    for (orientation, (want_tl, want_tr, want_bl, want_br), (want_w, want_h)) in corners {
-        let bytes: &[u8] = match orientation {
-            1 => fixture!("exif_o1.jpg"),
-            2 => fixture!("exif_o2.jpg"),
-            3 => fixture!("exif_o3.jpg"),
-            4 => fixture!("exif_o4.jpg"),
-            5 => fixture!("exif_o5.jpg"),
-            6 => fixture!("exif_o6.jpg"),
-            7 => fixture!("exif_o7.jpg"),
-            8 => fixture!("exif_o8.jpg"),
-            _ => unreachable!(),
-        };
-        let img = decode(bytes).expect("EXIF fixture decodes");
+    let reference = decode(fixture!("exif_o1.jpg")).expect("reference decodes");
+    let tl = corner(&reference, 0, 0);
+    let tr = corner(&reference, reference.width - 1, 0);
+    let bl = corner(&reference, 0, reference.height - 1);
+    let br = corner(&reference, reference.width - 1, reference.height - 1);
+    for orientation in 1..=8u8 {
+        let img = decode(exif_fixture_bytes(orientation)).expect("EXIF fixture decodes");
         assert_eq!(
             (img.width, img.height),
-            (want_w, want_h),
+            (reference.width, reference.height),
             "orientation {orientation}: dimensions"
         );
-        let px = |x: u32, y: u32| -> [u8; 4] {
-            let o = ((y as usize) * (img.width as usize) + (x as usize)) * 4;
-            [
-                img.data[o],
-                img.data[o + 1],
-                img.data[o + 2],
-                img.data[o + 3],
-            ]
-        };
-        // JPEG is lossy (quality 95), so allow a small per-channel tolerance.
         let close = |got: [u8; 4], want: [u8; 4]| {
             got.iter()
                 .zip(want.iter())
                 .all(|(a, b)| a.abs_diff(*b) <= 8)
         };
-        assert!(close(px(0, 0), want_tl), "orientation {orientation}: TL");
         assert!(
-            close(px(img.width - 1, 0), want_tr),
-            "orientation {orientation}: TR"
+            close(corner(&img, 0, 0), tl),
+            "orientation {orientation}: TL got={:?} want={tl:?}",
+            corner(&img, 0, 0)
         );
         assert!(
-            close(px(0, img.height - 1), want_bl),
-            "orientation {orientation}: BL"
+            close(corner(&img, img.width - 1, 0), tr),
+            "orientation {orientation}: TR got={:?} want={tr:?}",
+            corner(&img, img.width - 1, 0)
         );
         assert!(
-            close(px(img.width - 1, img.height - 1), want_br),
-            "orientation {orientation}: BR"
+            close(corner(&img, 0, img.height - 1), bl),
+            "orientation {orientation}: BL got={:?} want={bl:?}",
+            corner(&img, 0, img.height - 1)
+        );
+        assert!(
+            close(corner(&img, img.width - 1, img.height - 1), br),
+            "orientation {orientation}: BR got={:?} want={br:?}",
+            corner(&img, img.width - 1, img.height - 1)
         );
     }
 }
@@ -179,10 +143,6 @@ fn single_component_progressive_jpeg_matches_baseline() {
 
 #[test]
 fn multi_component_progressive_refinement_matches_baseline() {
-    // Full colour progressive: DC/AC first scans plus successive-approximation refinement
-    // scans over the three components. JPEG quantizes once, so a correct decoder
-    // reconstructs the same coefficients as the sequential baseline; the documented
-    // tolerance covers the IDCT rounding/subsampling order between the two encodings.
     let progressive =
         decode(include_bytes!("fixtures/jpeg/color_progressive.jpg")).expect("colour progressive");
     let baseline =
