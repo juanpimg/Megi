@@ -10,7 +10,7 @@
 //!   `__megi_timer_callbacks`/`__megi_timer_args` arrays. The clock is injectable:
 //!   real elapsed time by default, virtual after `JsRuntime::advance`/`run_until`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -26,8 +26,9 @@ use megi_core::NodeId;
 use crate::error::JsError as CrateJsError;
 use crate::host::{
     DispatchState, Host, InlineHandler, Listener, TargetKey, TimerEntry, ViewportInfo, host_cell,
-    host_ref, with_host,
+    host_ref,
 };
+use crate::providers::providers;
 
 type NativeFn = fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>;
 
@@ -41,6 +42,37 @@ fn host_handle(context: &Context) -> JsResult<Rc<RefCell<Host>>> {
         .get_data::<Rc<RefCell<Host>>>()
         .cloned()
         .ok_or_else(|| js_error("no JavaScript host installed in this context"))
+}
+
+/// Clones a provider out of the immutable `HostProviders` slot, falling back to
+/// the legacy host mirror while the embedding runtime has not installed the slot.
+/// The returned `Arc` is owned, so callers invoke it with no active host borrow.
+fn provider_or_mirror<T>(
+    context: &mut Context,
+    from_slot: impl FnOnce(&crate::providers::HostProviders) -> Option<T>,
+    from_mirror: impl FnOnce(&mut Host) -> Option<T>,
+) -> Option<T> {
+    if let Some(slot) = providers(context)
+        && let Some(value) = from_slot(slot)
+    {
+        return Some(value);
+    }
+    host_cell(context)
+        .ok()
+        .and_then(|mut host| from_mirror(&mut host))
+}
+
+thread_local! {
+    /// Clock snapshot for the no-`Context` `now_ms()` compatibility shim. The
+    /// context-aware clock helpers below refresh it; a slightly stale value is
+    /// harmless because `run_due_timers` uses `host.now_ms().max(deadline)`.
+    static CLOCK_SNAPSHOT: Cell<u64> = const { Cell::new(0) };
+}
+
+fn refresh_clock_snapshot(context: &Context) {
+    if let Ok(host) = host_ref(context) {
+        CLOCK_SNAPSHOT.with(|cell| cell.set(host.now_ms()));
+    }
 }
 
 /// Restores the stacked dispatch state on every exit path, including `?` early returns
@@ -1353,14 +1385,18 @@ pub(crate) fn dispatch_rust_ui_event(
 // ---------------------------------------------------------------------------
 
 fn viewport_info(context: &mut Context) -> ViewportInfo {
-    // Providers must not run while the host is borrowed: they are allowed to
-    // re-enter JS. Take the boxed provider out, release the borrow, call it,
-    // then put it back for subsequent reads.
-    let (provider, scroll_x, scroll_y) = {
-        let Ok(mut host) = host_cell(context) else {
+    // Providers live in an immutable slot independent of the host cell, so cloning
+    // the Arc lets us call it with no active host borrow (it may re-enter JS).
+    let provider = provider_or_mirror(
+        context,
+        |slot| slot.viewport.clone(),
+        |host| host.viewport_provider.clone(),
+    );
+    let (scroll_x, scroll_y) = {
+        let Ok(host) = host_cell(context) else {
             return ViewportInfo::default();
         };
-        (host.viewport_provider.take(), host.scroll_x, host.scroll_y)
+        (host.scroll_x, host.scroll_y)
     };
     let mut info = provider
         .as_ref()
@@ -1368,9 +1404,6 @@ fn viewport_info(context: &mut Context) -> ViewportInfo {
         .unwrap_or_default();
     info.scroll_x = scroll_x;
     info.scroll_y = scroll_y;
-    if let Some(provider) = provider {
-        let _ = host_cell(context).map(|mut host| host.viewport_provider = Some(provider));
-    }
     info
 }
 
@@ -1408,17 +1441,16 @@ fn window_page_y(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> J
 
 fn match_media(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let query = arg_string(args, 0, context)?;
-    // Snapshot the provider out of the host so it runs with no active borrow.
-    let provider = host_cell(context)
-        .ok()
-        .and_then(|mut host| host.media_provider.take());
+    // Clone the Arc from the immutable provider slot so it runs with no host borrow.
+    let provider = provider_or_mirror(
+        context,
+        |slot| slot.media.clone(),
+        |host| host.media_provider.clone(),
+    );
     let matches = provider
         .as_ref()
         .map(|provider| provider(&query))
         .unwrap_or(false);
-    if let Some(provider) = provider {
-        let _ = host_cell(context).map(|mut host| host.media_provider = Some(provider));
-    }
     let add_listener = accessor_fn(context, noop_listener);
     let remove_listener = accessor_fn(context, noop_listener);
     let mut init = ObjectInitializer::new(context);
@@ -1547,13 +1579,18 @@ fn get_computed_style(
         })
         .ok_or_else(|| js_error("getComputedStyle expects an element"))?;
     let node_id = node_id_of(context, node)?;
-    // Take the provider out of the host so it runs with no active borrow, and
-    // snapshot the document it reads. `Document: Clone` keeps the handles valid.
-    let (provider, document) = {
-        let mut host = host_cell(context)?;
-        let provider = host.computed_style_provider.take();
-        let document = provider.as_ref().map(|_| host.document.clone());
-        (provider, document)
+    // Clone the Arc from the immutable provider slot so it runs with no host
+    // borrow, and snapshot the document it reads. `Document: Clone` keeps the
+    // handles valid.
+    let provider = provider_or_mirror(
+        context,
+        |slot| slot.computed_style.clone(),
+        |host| host.computed_style_provider.clone(),
+    );
+    let document = if provider.is_some() {
+        host_ref(context).ok().map(|host| host.document.clone())
+    } else {
+        None
     };
     let pairs = match (&provider, &document) {
         (Some(provider), Some(document)) => provider(document, node_id),
@@ -1573,9 +1610,6 @@ fn get_computed_style(
                 .unwrap_or_default()
         }
     };
-    if let Some(provider) = provider {
-        host_cell(context)?.computed_style_provider = Some(provider);
-    }
     let getter = accessor_fn(context, computed_get_property);
     let setter = accessor_fn(context, computed_set_property);
     let item = accessor_fn(context, computed_item);
@@ -1909,6 +1943,7 @@ pub(crate) fn run_due_timers(
     host_cell(context)
         .map_err(|error| CrateJsError::Runtime(error.to_string()))?
         .set_clock(deadline_ms);
+    refresh_clock_snapshot(context);
     Ok(executed)
 }
 
@@ -1926,6 +1961,7 @@ pub(crate) fn advance_clock_pumping(
     let now = host_cell(context)
         .map_err(|error| CrateJsError::Internal(error.to_string()))?
         .advance_clock(delta);
+    refresh_clock_snapshot(context);
     let executed = run_due_timers(context, now, max_steps)?;
     Ok((now, executed))
 }
@@ -1939,6 +1975,7 @@ pub(crate) fn run_until(
     let effective = host_cell(context)
         .map_err(|error| CrateJsError::Internal(error.to_string()))?
         .set_clock(deadline_ms);
+    refresh_clock_snapshot(context);
     run_due_timers(context, effective, max_steps)
 }
 
@@ -1948,7 +1985,11 @@ pub(crate) fn run_until(
 /// task pump). Event bindings themselves read the clock from the host attached
 /// to the `Context` they already receive.
 pub(crate) fn now_ms() -> u64 {
-    with_host(|host| host.now_ms()).unwrap_or(0)
+    // TLS_PENDING(crates/js/src/events.rs:1988): the no-`Context` shim reads a clock
+    // snapshot refreshed by the context-aware helpers above. The legacy thread-local
+    // host bridge is gone; the clean fix is for runtime.rs callers to pass a `Context`
+    // (or for host.rs to expose a `host_from_context` helper) and drop this shim.
+    CLOCK_SNAPSHOT.with(|cell| cell.get())
 }
 
 #[cfg(test)]

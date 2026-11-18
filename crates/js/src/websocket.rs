@@ -110,7 +110,7 @@ const WEBSOCKET_PRELUDE: &str = r####"
 })();
 "####;
 
-fn ws_native(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let string = |index: usize| -> String {
         args.get(index)
             .and_then(|value| value.as_string())
@@ -122,17 +122,30 @@ fn ws_native(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsRes
     let payload = string(2);
 
     if op == "open" {
-        let opened = crate::host::with_host(|host| -> Result<u32, String> {
-            let Some(provider) = host.websocket_provider.as_ref() else {
-                return Err("no WebSocket provider".to_owned());
-            };
-            let transport = provider(&url).map_err(|error| error.to_string())?;
-            let handle = host.websocket_next_handle;
-            host.websocket_next_handle = host.websocket_next_handle.wrapping_add(1);
-            host.websockets.insert(handle, transport);
-            Ok(handle)
-        })
-        .unwrap_or_else(|| Err("no active host".to_owned()));
+        // Clone the Arc from the immutable provider slot so the provider runs with
+        // no active host borrow (a transport factory may re-enter JavaScript).
+        let provider = crate::providers::providers(context)
+            .and_then(|slot| slot.websocket.clone())
+            .or_else(|| {
+                crate::host::host_cell(context)
+                    .ok()
+                    .and_then(|host| host.websocket_provider.clone())
+            });
+        let opened = match provider {
+            None => Err("no WebSocket provider".to_owned()),
+            Some(provider) => match provider(&url).map_err(|error| error.to_string()) {
+                Ok(transport) => match crate::host::host_cell(context) {
+                    Ok(mut host) => {
+                        let handle = host.websocket_next_handle;
+                        host.websocket_next_handle = handle.wrapping_add(1);
+                        host.websockets.insert(handle, transport);
+                        Ok(handle)
+                    }
+                    Err(error) => Err(error.to_string()),
+                },
+                Err(message) => Err(message),
+            },
+        };
         return match opened {
             Ok(handle) => Ok(JsValue::from(handle as f64)),
             Err(message) => Ok(JsValue::from(js_string!(message))),
@@ -142,7 +155,7 @@ fn ws_native(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsRes
     // send:/close:<handle>
     let (command, handle_str) = op.split_once(':').unwrap_or((&op, ""));
     let handle = handle_str.parse::<u32>().unwrap_or(0);
-    crate::host::with_host(|host| {
+    if let Ok(mut host) = crate::host::host_cell(context) {
         if let Some(transport) = host.websockets.get_mut(&handle) {
             match command {
                 "send" => {
@@ -155,7 +168,7 @@ fn ws_native(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsRes
                 _ => {}
             }
         }
-    });
+    }
     Ok(JsValue::undefined())
 }
 
@@ -187,20 +200,20 @@ pub fn poll(context: &mut Context) -> usize {
     use crate::host::WebSocketEvent;
 
     let events: Vec<(u32, Vec<WebSocketEvent>)> = {
-        crate::host::with_host(|host| {
-            let handles: Vec<u32> = host.websockets.keys().copied().collect();
-            let mut collected = Vec::new();
-            for handle in handles {
-                if let Some(transport) = host.websockets.get_mut(&handle) {
-                    let events = transport.poll();
-                    if !events.is_empty() {
-                        collected.push((handle, events));
-                    }
+        let Ok(mut host) = crate::host::host_cell(context) else {
+            return 0;
+        };
+        let handles: Vec<u32> = host.websockets.keys().copied().collect();
+        let mut collected = Vec::new();
+        for handle in handles {
+            if let Some(transport) = host.websockets.get_mut(&handle) {
+                let events = transport.poll();
+                if !events.is_empty() {
+                    collected.push((handle, events));
                 }
             }
-            collected
-        })
-        .unwrap_or_default()
+        }
+        collected
     };
 
     let mut dispatched = 0;
