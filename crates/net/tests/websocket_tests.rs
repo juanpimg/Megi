@@ -261,3 +261,64 @@ mod secure {
         let _ = server.join();
     }
 }
+
+#[test]
+fn fragmented_text_message_is_reassembled() {
+    // #1632: Text(FIN=0) + Continuation(FIN=1) must be delivered as one Text("ab").
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread::JoinHandle;
+
+    fn spawn() -> (u16, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let handle = std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                if stream.read(&mut byte).unwrap_or(0) == 0 {
+                    return;
+                }
+                head.push(byte[0]);
+            }
+            let request = String::from_utf8_lossy(&head);
+            let key = request
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(n, v)| {
+                        if n.eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(v.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .expect("key");
+            let response = format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+                net::websocket::accept_value(&key)
+            );
+            let _ = stream.write_all(response.as_bytes());
+            // Fragmented message: "a" (FIN=0), "b" (FIN=1).
+            let _ = stream.write_all(&[0x01, 0x01, b'a', 0x80, 0x01, b'b']);
+            let _ = stream.flush();
+        });
+        (port, handle)
+    }
+
+    let (port, server) = spawn();
+    let url = net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let mut client = net::websocket::WebSocketClient::connect(&url, &net::FetchOptions::default())
+        .expect("connect");
+    let frame = client.recv().expect("reassembled frame");
+    assert_eq!(frame.opcode, net::websocket::Opcode::Text);
+    assert!(frame.fin);
+    assert_eq!(
+        frame.payload, b"ab",
+        "fragmented message must be reassembled"
+    );
+    server.join().expect("server");
+}

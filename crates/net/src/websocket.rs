@@ -99,6 +99,12 @@ fn default_wss_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
 pub struct WebSocketClient {
     stream: WsTransport,
     max_message: usize,
+    /// Bytes read from the stream but not yet fully decoded into a frame (#1632).
+    pending: Vec<u8>,
+    /// Accumulated payload of an in-progress fragmented message (#1632).
+    fragments: Vec<u8>,
+    /// Opcode of the first fragment (Text or Binary) of the in-progress message.
+    fragment_opcode: Option<Opcode>,
 }
 
 impl WebSocketClient {
@@ -216,12 +222,22 @@ impl WebSocketClient {
             }
             response.extend_from_slice(&buffer[..read]);
         }
-        let head = String::from_utf8_lossy(&response);
+        // A server may send frames in the same TCP segment as the upgrade response; keep any
+        // bytes after the header terminator so they are not lost before the first `recv` (#1632).
+        let head_end = response
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .map_or(response.len(), |index| index + 4);
+        let pending = response[head_end..].to_vec();
+        let head = String::from_utf8_lossy(&response[..head_end]);
         validate_handshake_response(&head, &key)?;
 
         Ok(Self {
             stream,
             max_message: options.max_response_bytes.min(DEFAULT_MAX_MESSAGE_BYTES),
+            pending,
+            fragments: Vec::new(),
+            fragment_opcode: None,
         })
     }
 
@@ -273,24 +289,67 @@ impl WebSocketClient {
     /// Reads and decodes the next frame from the stream. Control frames (Ping/Pong/Close) are
     /// returned to the caller, which decides how to reply.
     pub fn recv(&mut self) -> Result<Frame, FetchError> {
-        let mut bytes = Vec::new();
         let mut buffer = [0u8; 4096];
         loop {
             // #1628: propagate protocol errors from a malformed buffered frame immediately
             // instead of swallowing them and blocking until the read timeout.
-            let (frames, _) = decode_frames(&bytes, self.max_message)?;
-            if let Some(frame) = frames.into_iter().next() {
-                return Ok(frame);
+            let (frames, rest) = decode_frames(&self.pending, self.max_message)?;
+            let rest_owned = rest.to_vec();
+            self.pending.clear();
+            self.pending.extend_from_slice(&rest_owned);
+            for frame in frames {
+                if let Some(complete) = self.reassemble(frame)? {
+                    return Ok(complete);
+                }
             }
             let read = self.stream.read(&mut buffer).map_err(FetchError::Io)?;
             if read == 0 {
                 return Err(protocol("connection closed"));
             }
-            bytes.extend_from_slice(&buffer[..read]);
-            if bytes.len() > self.max_response_bytes_cap() {
+            self.pending.extend_from_slice(&buffer[..read]);
+            if self.pending.len() > self.max_response_bytes_cap() {
                 return Err(protocol("buffered frame exceeds cap"));
             }
         }
+    }
+
+    /// Feeds one frame into the fragmentation state machine, returning a complete message when
+    /// the final fragment arrives. Control frames pass through unchanged (#1632).
+    fn reassemble(&mut self, frame: Frame) -> Result<Option<Frame>, FetchError> {
+        if !frame.opcode.is_data() {
+            return Ok(Some(frame)); // Ping/Pong/Close are never fragmented
+        }
+        if self.fragment_opcode.is_none() {
+            if frame.fin {
+                return Ok(Some(frame)); // unfragmented message
+            }
+            // First fragment of a fragmented message.
+            self.fragment_opcode = Some(frame.opcode);
+            self.fragments = frame.payload;
+            return Ok(None);
+        }
+        // Subsequent fragments MUST be Continuation with FIN only on the last one.
+        if frame.opcode != Opcode::Continuation {
+            return Err(protocol(
+                "expected Continuation frame in fragmented message",
+            ));
+        }
+        let accumulated = self.fragments.len().saturating_add(frame.payload.len());
+        if accumulated > self.max_message {
+            return Err(protocol("fragmented message exceeds cap"));
+        }
+        self.fragments.extend_from_slice(&frame.payload);
+        if !frame.fin {
+            return Ok(None);
+        }
+        let opcode = self.fragment_opcode.take().expect("fragment opcode");
+        let payload = std::mem::take(&mut self.fragments);
+        Ok(Some(Frame {
+            fin: true,
+            opcode,
+            masked: false,
+            payload,
+        }))
     }
 
     fn max_response_bytes_cap(&self) -> usize {
