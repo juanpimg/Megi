@@ -1,6 +1,8 @@
 //! #1528: mixed content — an HTTPS document must not execute an `http:` script.
 //!
 //! An HTTPS-served page references a script on a plaintext HTTP server; the render must skip it.
+// Script blocking is only observable when scripts can execute.
+#![cfg(feature = "js")]
 
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener};
