@@ -75,12 +75,20 @@ pub fn icon_url(document: &Document, page: &net::Url) -> Option<net::Url> {
     page.join("favicon.ico").ok()
 }
 
-/// Fetches favicon bytes for a URL: `file:` reads the filesystem, `http(s)` uses the
-/// renderer's fetch options. Returns `None` on any failure or when the payload exceeds
-/// [`MAX_FAVICON_BYTES`].
-pub fn fetch(icon_url: &net::Url, options: &render::RenderOptions) -> Option<Vec<u8>> {
+/// Fetches favicon bytes for a URL: `file:` reads the filesystem (only when the
+/// document itself is `file:`, so a remote page can never pull local files),
+/// `http(s)` uses the renderer's fetch options. Returns `None` on any failure
+/// or when the payload exceeds [`MAX_FAVICON_BYTES`].
+pub fn fetch(
+    icon_url: &net::Url,
+    document_url: &net::Url,
+    options: &render::RenderOptions,
+) -> Option<Vec<u8>> {
     match icon_url.scheme() {
         net::url::Scheme::File => {
+            if !matches!(document_url.scheme(), net::url::Scheme::File) {
+                return None;
+            }
             use std::io::Read as _;
             let path = std::path::PathBuf::from(net::url::percent_decode(icon_url.path()));
             let file = std::fs::File::open(path).ok()?;
@@ -122,7 +130,7 @@ pub fn for_page(
     let Some(icon_url) = icon_url(document, document_url) else {
         return Favicon::fallback(&key);
     };
-    let Some(bytes) = fetch(&icon_url, options) else {
+    let Some(bytes) = fetch(&icon_url, document_url, options) else {
         return Favicon::fallback(&key);
     };
     Favicon::from_bytes(&bytes, &key)
@@ -324,6 +332,62 @@ mod tests {
     }
 
     #[test]
+    fn http_page_with_file_icon_must_not_touch_disk() {
+        // w2-st-1173 RED: a remote page must never cause a local file read.
+        let dir = std::env::temp_dir().join(format!(
+            "megi-favicon-red-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let fixture =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../image/tests/fixtures/png/rgba8.png");
+        let secret = dir.join("secret.ico");
+        std::fs::copy(&fixture, &secret).expect("copy icon");
+        let secret_url = format!("file://{}", secret.display());
+        let document = document_with(&format!(
+            "<html><head><link rel=\"icon\" href=\"{secret_url}\"></head></html>"
+        ));
+        let page = page("https://example.test/page.html");
+        let options = render::RenderOptions::default();
+        let favicon = for_page(&document, &page, &options);
+        assert!(
+            favicon.pixels.is_none(),
+            "http page must not decode a file: icon"
+        );
+        assert_eq!(favicon, Favicon::fallback(&origin_key(&page)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_page_with_file_icon_reads_disk() {
+        let dir = std::env::temp_dir().join(format!(
+            "megi-favicon-red-file-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let fixture =
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../image/tests/fixtures/png/rgba8.png");
+        let icon = dir.join("icon.ico");
+        std::fs::copy(&fixture, &icon).expect("copy icon");
+        let icon_url = format!("file://{}", icon.display());
+        let document = document_with(&format!(
+            "<html><head><link rel=\"icon\" href=\"{icon_url}\"></head></html>"
+        ));
+        let page = page(&format!("file://{}/page.html", dir.display()));
+        let options = render::RenderOptions::default();
+        let favicon = for_page(&document, &page, &options);
+        assert!(
+            favicon.pixels.is_some(),
+            "file: page may use a file: icon"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn file_favicon_is_fetched_with_cap() {
         let temp = std::env::temp_dir().join("megi-favicon-test");
         let _ = std::fs::create_dir_all(&temp);
@@ -333,12 +397,14 @@ mod tests {
         let options = render::RenderOptions::default();
         let fetched = fetch(
             &icon_url(&document_with("<html></html>"), &url).unwrap(),
+            &url,
             &options,
         );
         assert_eq!(fetched.as_deref(), Some(b"icon-bytes".as_slice()));
         std::fs::write(&path, vec![0u8; MAX_FAVICON_BYTES + 1]).expect("write big");
         let fetched = fetch(
             &icon_url(&document_with("<html></html>"), &url).unwrap(),
+            &url,
             &options,
         );
         assert!(fetched.is_none());
