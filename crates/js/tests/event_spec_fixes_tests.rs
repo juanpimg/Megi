@@ -86,3 +86,34 @@ fn worker_error_does_not_leak_local_paths() {
         "worker error leaked a local path: {out}"
     );
 }
+
+#[test]
+fn only_one_xmlhttprequest_definition_is_installed() {
+    // #1624: the PRELUDE used to define XMLHttpRequest and xhr.rs overwrote it — two installs
+    // per realm with a divergence risk. Only xhr.rs must define it now.
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/runtime.rs"),
+    )
+    .expect("runtime.rs source");
+    assert!(
+        !source.contains("define(\"XMLHttpRequest\""),
+        "runtime PRELUDE must not define XMLHttpRequest (xhr.rs owns it)"
+    );
+}
+
+#[test]
+fn docs_no_longer_list_fetch_xhr_as_gaps() {
+    // #1623: fetch/XHR are implemented; the crate docs must not call them gaps.
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs"),
+    )
+    .expect("lib.rs source");
+    assert!(
+        !source.contains("`fetch`/XHR,"),
+        "docs must not list fetch/XHR as remaining gaps"
+    );
+    assert!(
+        source.contains("XMLHttpRequest"),
+        "docs should mention XHR as implemented"
+    );
+}
