@@ -76,3 +76,25 @@ fn canvas_clear_rect_removes_pixels() {
         "other pixel kept"
     );
 }
+
+#[test]
+fn oversized_fill_rect_is_clipped_to_the_surface() {
+    // #1618: fillRect(5000x5000) on a 300x150 canvas must touch 45k pixels, not 25M.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 300; c.height = 150; \
+             document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); ctx.fillRect(0, 0, 5000, 5000);",
+            "t",
+        )
+        .expect("fillRect");
+    let surfaces = runtime.canvas_surfaces();
+    let surface = surfaces.values().next().expect("surface");
+    assert_eq!(
+        surface.operations,
+        300 * 150,
+        "oversized rect must be clipped to the surface (did {} blends)",
+        surface.operations
+    );
+}

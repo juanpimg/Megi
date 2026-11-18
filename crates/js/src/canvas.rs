@@ -132,6 +132,9 @@ pub struct CanvasSurface {
     pub pixels: Vec<u8>,
     pub fill_style: Rgba,
     pub stroke_style: Rgba,
+    /// Number of pixel blends performed (bounded by the surface area after clipping). Useful
+    /// for budget accounting and regression tests (#1618).
+    pub operations: u64,
 }
 
 impl CanvasSurface {
@@ -161,11 +164,15 @@ impl CanvasSurface {
                 b: 0,
                 a: 255,
             },
+            operations: 0,
         })
     }
 
     /// Blends a pixel into the surface using straight-alpha source-over compositing.
     fn blend(&mut self, x: i64, y: i64, color: Rgba) {
+        // Count every attempted blend (before the bounds check) so `operations` measures the
+        // work the loop actually performs — this is what the DoS budget must bound (#1618).
+        self.operations += 1;
         if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
             return;
         }
@@ -194,8 +201,9 @@ impl CanvasSurface {
 
     /// Fills a rectangle with `fill_style` (CSS `fillRect`).
     pub fn fill_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
-        let (x0, y0) = (x.round() as i64, y.round() as i64);
-        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        let Some((x0, y0, x1, y1)) = self.clip_rect(x, y, w, h) else {
+            return;
+        };
         let color = self.fill_style;
         for py in y0..y1 {
             for px in x0..x1 {
@@ -204,15 +212,40 @@ impl CanvasSurface {
         }
     }
 
+    /// Clamps a requested rectangle to the surface bounds (#1618). Without this, an oversized
+    /// `fillRect` iterates the whole requested area even though `blend` discards out-of-bounds
+    /// pixels — a per-script DoS that bypasses the surface-area budget.
+    fn clip_rect(&self, x: f64, y: f64, w: f64, h: f64) -> Option<(i64, i64, i64, i64)> {
+        if !x.is_finite() || !y.is_finite() || !w.is_finite() || !h.is_finite() {
+            return None;
+        }
+        if w <= 0.0 || h <= 0.0 {
+            return None;
+        }
+        let (x0, y0) = (x.round() as i64, y.round() as i64);
+        // Saturating end computation prevents wraparound for huge (but finite) coordinates.
+        let x1 = x0.saturating_add(w.round() as i64);
+        let y1 = y0.saturating_add(h.round() as i64);
+        let width = self.width as i64;
+        let height = self.height as i64;
+        let clip_x0 = x0.clamp(0, width);
+        let clip_y0 = y0.clamp(0, height);
+        let clip_x1 = x1.clamp(0, width);
+        let clip_y1 = y1.clamp(0, height);
+        if clip_x0 >= clip_x1 || clip_y0 >= clip_y1 {
+            None
+        } else {
+            Some((clip_x0, clip_y0, clip_x1, clip_y1))
+        }
+    }
+
     /// Clears a rectangle to transparent black (CSS `clearRect`).
     pub fn clear_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
-        let (x0, y0) = (x.round() as i64, y.round() as i64);
-        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        let Some((x0, y0, x1, y1)) = self.clip_rect(x, y, w, h) else {
+            return;
+        };
         for py in y0..y1 {
             for px in x0..x1 {
-                if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
-                    continue;
-                }
                 let index = ((py as usize) * self.width as usize + px as usize) * 4;
                 self.pixels[index..index + 4].fill(0);
             }
@@ -221,8 +254,9 @@ impl CanvasSurface {
 
     /// Strokes a 1px rectangle outline with `stroke_style` (CSS `strokeRect`).
     pub fn stroke_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
-        let (x0, y0) = (x.round() as i64, y.round() as i64);
-        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        let Some((x0, y0, x1, y1)) = self.clip_rect(x, y, w, h) else {
+            return;
+        };
         let color = self.stroke_style;
         for px in x0..x1 {
             self.blend(px, y0, color);
