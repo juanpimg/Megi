@@ -2815,12 +2815,14 @@ fn build_patterns(
     Ok(specs)
 }
 
-/// First numeric value of an SVG list attribute (e.g. `x="10 20"` → 10).
+/// First numeric value of an SVG list attribute (e.g. `x="10 20"` → 10). Accepts the same
+/// `<length>` units as other SVG attributes (#1658): bare numbers default to px, and
+/// `10px`/`2px` must not collapse to 0.
 fn first_number(raw: Option<&str>) -> f32 {
     raw.and_then(|value| {
         value
             .split([',', ' ', '\t', '\n'])
-            .find_map(|part| part.trim().parse::<f32>().ok())
+            .find_map(|part| parse_length(Some(part.trim()), 1.0))
     })
     .filter(|value| value.is_finite())
     .unwrap_or(0.0)

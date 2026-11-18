@@ -99,3 +99,16 @@ fn vertical_align_rejects_oversized_lengths() {
     let valid = computed("p { vertical-align: -4px }");
     assert_eq!(valid.vertical_align, css::VerticalAlign::Length(-4.0));
 }
+
+#[test]
+fn background_repeat_invalid_list_component_rejects_declaration() {
+    // #1672: a comma-separated list with an invalid component must fall back entirely.
+    let style = computed("p { background-repeat: no-repeat, bogus }");
+    assert_eq!(
+        style.background_repeat,
+        css::BackgroundRepeat::REPEAT,
+        "invalid list component must reject the whole declaration"
+    );
+    let valid = computed("p { background-repeat: no-repeat, repeat }");
+    assert_ne!(valid.background_repeat, css::BackgroundRepeat::REPEAT);
+}

@@ -4335,11 +4335,17 @@ fn cycle_property_list<T: Clone>(
     count: usize,
     default: T,
 ) -> Vec<T> {
+    // #1672: every component of a comma-separated list must parse. Silently dropping an
+    // invalid component would cycle the valid ones and misalign multi-layer backgrounds.
     let parsed: Vec<T> = declaration
-        .map(|decl| {
-            split_top_level_commas(&decl.raw_value)
+        .and_then(|decl| {
+            let components = split_top_level_commas(&decl.raw_value);
+            if components.is_empty() {
+                return None;
+            }
+            components
                 .iter()
-                .filter_map(|component| parse(component))
+                .map(|component| parse(component))
                 .collect()
         })
         .unwrap_or_default();

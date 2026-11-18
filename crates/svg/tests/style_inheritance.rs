@@ -53,3 +53,42 @@ fn visibility_inherit_keeps_parent_visibility() {
     );
     assert_eq!(px(&hidden, 10, 10)[3], 0, "hidden must hide");
 }
+
+#[test]
+fn hsl_functional_colors_paint() {
+    // #1656: hsl()/hsla() are valid CSS Color 3 functional colors.
+    let image = render(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+             <rect width="20" height="20" fill="hsl(0, 100%, 50%)"/>
+        </svg>"##,
+    );
+    assert_eq!(px(&image, 10, 10), [255, 0, 0, 255], "hsl red must paint");
+}
+
+#[test]
+fn first_number_accepts_px_units() {
+    // #1658: x="10px" must behave like x="10" (and stdDeviation="2px" must not vanish).
+    let px_attr = render(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">
+             <text x="10px" y="15" fill="red" font-size="8">A</text>
+        </svg>"##,
+    );
+    let plain = render(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">
+             <text x="10" y="15" fill="red" font-size="8">A</text>
+        </svg>"##,
+    );
+    // Compare the red glyph's centroid region: x=10px must match x=10.
+    let mut different = 0;
+    for y in 0..20 {
+        for x in 0..40 {
+            if px(&px_attr, x, y) != px(&plain, x, y) {
+                different += 1;
+            }
+        }
+    }
+    assert_eq!(
+        different, 0,
+        "x=10px must match x=10 ({different} pixels differ)"
+    );
+}
