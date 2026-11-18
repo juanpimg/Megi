@@ -1,6 +1,7 @@
 //! Iterators over the document-owned node arena.
 
 use super::*;
+use std::collections::HashSet;
 
 /// Iterator over direct children [`NodeId`]s of a node.
 pub struct ChildrenIter<'a> {
