@@ -1581,7 +1581,23 @@ impl WindowApp {
                         if let (Some(control), Some(value)) =
                             (self.focused_control().cloned(), value)
                         {
-                            self.apply_form_patch(Some(control.form_id), Some(&value), None, false);
+                            let ui_events = vec![render::HostDomEvent {
+                                event_type: "input".to_owned(),
+                                target: render::HostEventTarget::FormControl(control.form_id),
+                                bubbles: true,
+                                cancelable: false,
+                                kind: render::HostUiEventKind::Input {
+                                    data: Some(committed),
+                                    input_type: "insertCompositionText".to_owned(),
+                                },
+                            }];
+                            self.apply_form_patch_with_events(
+                                Some(control.form_id),
+                                Some(&value),
+                                None,
+                                false,
+                                ui_events,
+                            );
                         }
                     }
                 }
@@ -1650,9 +1666,11 @@ impl WindowApp {
         let Some(focus_index) = self.focus_index_for_control(control.form_id) else {
             return;
         };
+        let prev_focus = self.focused_control().map(|c| c.form_id);
         if control.disabled || !self.focus.focus(focus_index, self.focus_targets.len()) {
             return;
         }
+        let mut ui_events = host_focus_events(prev_focus, Some(control.form_id));
         if control.kind == FormControlKind::Select {
             self.editor = None;
             if control.multiple {
@@ -1669,17 +1687,30 @@ impl WindowApp {
         }
         if control.kind.is_text_editable() {
             self.editor = Some(TextEdit::new(&control.value));
-            self.apply_form_patch(Some(control.form_id), None, None, false);
+            self.apply_form_patch_with_events(Some(control.form_id), None, None, false, ui_events);
         } else if control.kind.is_checkable() {
             self.editor = None;
-            self.apply_form_patch(Some(control.form_id), None, Some(!control.checked), false);
+            ui_events.push(render::HostDomEvent {
+                event_type: "change".to_owned(),
+                target: render::HostEventTarget::FormControl(control.form_id),
+                bubbles: true,
+                cancelable: false,
+                kind: render::HostUiEventKind::Simple,
+            });
+            self.apply_form_patch_with_events(
+                Some(control.form_id),
+                None,
+                Some(!control.checked),
+                false,
+                ui_events,
+            );
         } else if control.kind.is_button() {
             self.editor = None;
-            self.apply_form_patch(Some(control.form_id), None, None, true);
+            self.apply_form_patch_with_events(Some(control.form_id), None, None, true, ui_events);
             self.release_button = Some(control.form_id);
         } else {
             self.editor = None;
-            self.apply_form_patch(Some(control.form_id), None, None, false);
+            self.apply_form_patch_with_events(Some(control.form_id), None, None, false, ui_events);
         }
     }
 
@@ -1791,14 +1822,26 @@ impl WindowApp {
     }
 
     /// Patches the current DOM snapshot (value/checked/focus/active) and re-renders it as an
-    /// inline `data:` document with the original page URL as resource base and scripts
-    /// disabled (the snapshot already contains their effects).
+    /// inline `data:` document with the original page URL as resource base. When the active frame
+    /// executed scripts and `ui_events` is non-empty, replays those DOM/UI events into the live
+    /// JS realm (#1504); otherwise keeps scripting disabled as a pure snapshot patch.
     fn apply_form_patch(
         &mut self,
         form_id: Option<u32>,
         value: Option<&str>,
         checked: Option<bool>,
         active: bool,
+    ) {
+        self.apply_form_patch_with_events(form_id, value, checked, active, Vec::new());
+    }
+
+    fn apply_form_patch_with_events(
+        &mut self,
+        form_id: Option<u32>,
+        value: Option<&str>,
+        checked: Option<bool>,
+        active: bool,
+        ui_events: Vec<render::HostDomEvent>,
     ) {
         let Some(document) = self.document.clone() else {
             return;
@@ -1809,7 +1852,12 @@ impl WindowApp {
         let focused = self.focus.focused().is_some();
         let target = form_id.or_else(|| self.focused_control().map(|control| control.form_id));
         let focused_link = self.focused_link().and_then(|region| region.node);
-        if target.is_none() && focused_link.is_none() && value.is_none() && checked.is_none() {
+        if target.is_none()
+            && focused_link.is_none()
+            && value.is_none()
+            && checked.is_none()
+            && ui_events.is_empty()
+        {
             return;
         }
         let mut patched = (*document).clone();
@@ -1826,12 +1874,22 @@ impl WindowApp {
         }
         let snapshot = forms::snapshot_data_url(&patched);
         let base = self.nav.current_url();
-        let request = self.store.begin_patched_request(
-            &snapshot,
-            self.metrics.css_width,
-            self.metrics.css_height,
-            base.as_deref(),
-        );
+        let request = if self.frame_scripts_executed > 0 && !ui_events.is_empty() {
+            self.store.begin_ui_event_request(
+                &snapshot,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                base.as_deref(),
+                ui_events,
+            )
+        } else {
+            self.store.begin_patched_request(
+                &snapshot,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                base.as_deref(),
+            )
+        };
         if sender.send(request).is_err() {
             self.error = Some("render worker stopped unexpectedly".to_string());
             self.update_title();
@@ -1852,19 +1910,32 @@ impl WindowApp {
         shift_pressed: bool,
     ) -> bool {
         if matches!(key, Key::Named(NamedKey::Tab)) && !self.focus_targets.is_empty() {
+            let prev_focus = self.focused_control().map(|control| control.form_id);
             if shift_pressed {
                 self.focus.previous(self.focus_targets.len());
             } else {
                 self.focus.next(self.focus_targets.len());
             }
+            let new_focus = self.focused_control().map(|control| control.form_id);
             // A text editor is only opened for a focused text control, not a link.
             self.editor = self
                 .focused_control()
                 .filter(|control| control.kind.is_text_editable())
                 .map(|control| TextEdit::new(&control.value));
+            let mut ui_events = Vec::new();
+            let key_target = prev_focus.map_or(
+                render::HostEventTarget::Window,
+                render::HostEventTarget::FormControl,
+            );
+            if let Some(ev) =
+                host_keydown_event(key_target, key, ctrl_pressed, shift_pressed, alt_pressed)
+            {
+                ui_events.push(ev);
+            }
+            ui_events.extend(host_focus_events(prev_focus, new_focus));
             // Refresh the focus ring (and clear any previous control's marker).
-            if self.focus.focused().is_some() {
-                self.apply_form_patch(None, None, None, false);
+            if self.focus.focused().is_some() || !ui_events.is_empty() {
+                self.apply_form_patch_with_events(None, None, None, false, ui_events);
             }
             return true;
         }
@@ -1889,16 +1960,48 @@ impl WindowApp {
                 && !control.disabled
             {
                 if matches!(key, Key::Named(NamedKey::Space)) && control.kind.is_checkable() {
-                    self.apply_form_patch(
+                    let target = render::HostEventTarget::FormControl(control.form_id);
+                    let mut ui_events = Vec::new();
+                    if let Some(ev) = host_keydown_event(
+                        target.clone(),
+                        key,
+                        ctrl_pressed,
+                        shift_pressed,
+                        alt_pressed,
+                    ) {
+                        ui_events.push(ev);
+                    }
+                    ui_events.push(render::HostDomEvent {
+                        event_type: "change".to_owned(),
+                        target,
+                        bubbles: true,
+                        cancelable: false,
+                        kind: render::HostUiEventKind::Simple,
+                    });
+                    self.apply_form_patch_with_events(
                         Some(control.form_id),
                         None,
                         Some(!control.checked),
                         false,
+                        ui_events,
                     );
                     return true;
                 }
                 if control.kind.is_button() {
-                    self.apply_form_patch(Some(control.form_id), None, None, true);
+                    let target = render::HostEventTarget::FormControl(control.form_id);
+                    let mut ui_events = Vec::new();
+                    if let Some(ev) =
+                        host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
+                    {
+                        ui_events.push(ev);
+                    }
+                    self.apply_form_patch_with_events(
+                        Some(control.form_id),
+                        None,
+                        None,
+                        true,
+                        ui_events,
+                    );
                     self.release_button = Some(control.form_id);
                     return true;
                 }
@@ -1915,41 +2018,112 @@ impl WindowApp {
             }
         }
         if matches!(key, Key::Named(NamedKey::Escape)) && self.focus.focused().is_some() {
+            let prev_focus = self.focused_control().map(|control| control.form_id);
             self.focus.blur();
             self.editor = None;
+            let mut ui_events = Vec::new();
+            let key_target = prev_focus.map_or(
+                render::HostEventTarget::Window,
+                render::HostEventTarget::FormControl,
+            );
+            if let Some(ev) =
+                host_keydown_event(key_target, key, ctrl_pressed, shift_pressed, alt_pressed)
+            {
+                ui_events.push(ev);
+            }
+            ui_events.extend(host_focus_events(prev_focus, None));
             // Clearing focus: refresh the patch so every focus marker is removed.
-            self.apply_form_patch(None, None, None, false);
+            self.apply_form_patch_with_events(None, None, None, false, ui_events);
             return true;
         }
         if ctrl_pressed || alt_pressed {
             return false;
         }
+        let focused_id = self.focused_control().map(|control| control.form_id);
         let Some(editor) = self.editor.as_mut() else {
             return false;
         };
+        let target = focused_id.map_or(
+            render::HostEventTarget::Focused,
+            render::HostEventTarget::FormControl,
+        );
         match key {
             Key::Character(text) => {
                 if !editor.insert(text) {
                     return true;
                 }
                 let value = editor.value().to_owned();
-                self.apply_form_patch(None, Some(&value), None, false);
+                let mut ui_events = Vec::new();
+                if let Some(ev) = host_keydown_event(
+                    target.clone(),
+                    key,
+                    ctrl_pressed,
+                    shift_pressed,
+                    alt_pressed,
+                ) {
+                    ui_events.push(ev);
+                }
+                ui_events.push(render::HostDomEvent {
+                    event_type: "input".to_owned(),
+                    target,
+                    bubbles: true,
+                    cancelable: false,
+                    kind: render::HostUiEventKind::Input {
+                        data: Some(text.as_str().to_owned()),
+                        input_type: "insertText".to_owned(),
+                    },
+                });
+                self.apply_form_patch_with_events(None, Some(&value), None, false, ui_events);
                 true
             }
             Key::Named(NamedKey::Backspace) => {
+                let mut ui_events = Vec::new();
+                if let Some(ev) = host_keydown_event(
+                    target.clone(),
+                    key,
+                    ctrl_pressed,
+                    shift_pressed,
+                    alt_pressed,
+                ) {
+                    ui_events.push(ev);
+                }
                 if editor.backspace() {
                     let value = editor.value().to_owned();
-                    self.apply_form_patch(None, Some(&value), None, false);
+                    ui_events.push(render::HostDomEvent {
+                        event_type: "input".to_owned(),
+                        target,
+                        bubbles: true,
+                        cancelable: false,
+                        kind: render::HostUiEventKind::Input {
+                            data: None,
+                            input_type: "deleteContentBackward".to_owned(),
+                        },
+                    });
+                    self.apply_form_patch_with_events(None, Some(&value), None, false, ui_events);
+                } else if self.frame_scripts_executed > 0 && !ui_events.is_empty() {
+                    self.apply_form_patch_with_events(None, None, None, false, ui_events);
                 }
                 true
             }
             Key::Named(NamedKey::Enter) => true, // no backend: Enter never submits
             Key::Named(NamedKey::ArrowLeft) => {
                 editor.move_caret(false);
+                if self.frame_scripts_executed > 0
+                    && let Some(ev) =
+                        host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
+                {
+                    self.apply_form_patch_with_events(None, None, None, false, vec![ev]);
+                }
                 true
             }
             Key::Named(NamedKey::ArrowRight) => {
                 editor.move_caret(true);
+                if self.frame_scripts_executed > 0
+                    && let Some(ev) =
+                        host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
+                {
+                    self.apply_form_patch_with_events(None, None, None, false, vec![ev]);
+                }
                 true
             }
             _ => false,
@@ -2765,6 +2939,163 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         if let Some(handle) = self.worker.take() {
             let _ = handle.join();
         }
+    }
+}
+
+/// Builds `blur` / `focus` [`render::HostDomEvent`] sequence when shell focus moves (#1504).
+fn host_focus_events(
+    prev_focus: Option<u32>,
+    next_focus: Option<u32>,
+) -> Vec<render::HostDomEvent> {
+    if prev_focus == next_focus {
+        return Vec::new();
+    }
+    let mut events = Vec::new();
+    if let Some(prev) = prev_focus {
+        events.push(render::HostDomEvent {
+            event_type: "blur".to_owned(),
+            target: render::HostEventTarget::FormControl(prev),
+            bubbles: false,
+            cancelable: false,
+            kind: render::HostUiEventKind::Focus,
+        });
+    }
+    if let Some(next) = next_focus {
+        events.push(render::HostDomEvent {
+            event_type: "focus".to_owned(),
+            target: render::HostEventTarget::FormControl(next),
+            bubbles: false,
+            cancelable: false,
+            kind: render::HostUiEventKind::Focus,
+        });
+    }
+    events
+}
+
+/// Builds a bubbling, cancelable `keydown` [`render::HostDomEvent`] from a `winit` key (#1504).
+fn host_keydown_event(
+    target: render::HostEventTarget,
+    key: &Key,
+    ctrl_key: bool,
+    shift_key: bool,
+    alt_key: bool,
+) -> Option<render::HostDomEvent> {
+    let (dom_key, code) = dom_key_and_code(key)?;
+    Some(render::HostDomEvent {
+        event_type: "keydown".to_owned(),
+        target,
+        bubbles: true,
+        cancelable: true,
+        kind: render::HostUiEventKind::Keyboard {
+            key: dom_key,
+            code,
+            ctrl_key,
+            shift_key,
+            alt_key,
+            meta_key: false,
+            repeat: false,
+        },
+    })
+}
+
+/// Maps a `winit` logical [`Key`] to DOM `(KeyboardEvent.key, KeyboardEvent.code)`.
+fn dom_key_and_code(key: &Key) -> Option<(String, String)> {
+    match key {
+        Key::Named(NamedKey::Enter) => Some(("Enter".to_owned(), "Enter".to_owned())),
+        Key::Named(NamedKey::Backspace) => Some(("Backspace".to_owned(), "Backspace".to_owned())),
+        Key::Named(NamedKey::Tab) => Some(("Tab".to_owned(), "Tab".to_owned())),
+        Key::Named(NamedKey::Escape) => Some(("Escape".to_owned(), "Escape".to_owned())),
+        Key::Named(NamedKey::Space) => Some((" ".to_owned(), "Space".to_owned())),
+        Key::Named(NamedKey::ArrowLeft) => Some(("ArrowLeft".to_owned(), "ArrowLeft".to_owned())),
+        Key::Named(NamedKey::ArrowRight) => {
+            Some(("ArrowRight".to_owned(), "ArrowRight".to_owned()))
+        }
+        Key::Named(NamedKey::ArrowUp) => Some(("ArrowUp".to_owned(), "ArrowUp".to_owned())),
+        Key::Named(NamedKey::ArrowDown) => Some(("ArrowDown".to_owned(), "ArrowDown".to_owned())),
+        Key::Character(text) => {
+            let s = text.as_str();
+            if s.is_empty() {
+                return None;
+            }
+            let code = match s.chars().next() {
+                Some(' ') if s.len() == 1 => "Space".to_owned(),
+                Some(ch) if ch.is_ascii_alphabetic() && s.len() == 1 => {
+                    format!("Key{}", ch.to_ascii_uppercase())
+                }
+                Some(ch) if ch.is_ascii_digit() && s.len() == 1 => format!("Digit{ch}"),
+                _ => String::new(),
+            };
+            Some((s.to_owned(), code))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod ui_event_forwarding_tests {
+    use super::*;
+
+    #[test]
+    fn host_focus_events_orders_blur_before_focus_and_skips_same_target() {
+        assert!(host_focus_events(None, None).is_empty());
+        assert!(host_focus_events(Some(2), Some(2)).is_empty());
+
+        let moved = host_focus_events(Some(1), Some(4));
+        assert_eq!(moved.len(), 2);
+        assert_eq!(moved[0].event_type, "blur");
+        assert_eq!(moved[0].target, render::HostEventTarget::FormControl(1));
+        assert!(!moved[0].bubbles);
+        assert_eq!(moved[1].event_type, "focus");
+        assert_eq!(moved[1].target, render::HostEventTarget::FormControl(4));
+        assert!(!moved[1].bubbles);
+    }
+
+    #[test]
+    fn host_keydown_event_maps_named_and_character_keys() {
+        let enter = host_keydown_event(
+            render::HostEventTarget::FormControl(3),
+            &Key::Named(NamedKey::Enter),
+            false,
+            true,
+            false,
+        )
+        .expect("enter keydown");
+        assert_eq!(enter.event_type, "keydown");
+        assert!(enter.bubbles);
+        assert!(enter.cancelable);
+        assert_eq!(
+            enter.kind,
+            render::HostUiEventKind::Keyboard {
+                key: "Enter".to_owned(),
+                code: "Enter".to_owned(),
+                ctrl_key: false,
+                shift_key: true,
+                alt_key: false,
+                meta_key: false,
+                repeat: false,
+            }
+        );
+
+        let letter = host_keydown_event(
+            render::HostEventTarget::Focused,
+            &Key::Character("a".into()),
+            true,
+            false,
+            true,
+        )
+        .expect("letter keydown");
+        assert_eq!(
+            letter.kind,
+            render::HostUiEventKind::Keyboard {
+                key: "a".to_owned(),
+                code: "KeyA".to_owned(),
+                ctrl_key: true,
+                shift_key: false,
+                alt_key: true,
+                meta_key: false,
+                repeat: false,
+            }
+        );
     }
 }
 

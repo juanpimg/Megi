@@ -454,6 +454,9 @@ pub struct RenderOptions {
     /// `"hashchange"` or `"popstate"`. Listeners can mutate the DOM and run timers; the
     /// final styles/layout/paint pass includes their effects. Empty by default.
     pub host_events: Vec<String>,
+    /// Structured DOM/UI events (keyboard, input, focus, change, submit) forwarded from the
+    /// host shell into the page's live JS realm after `load` (#1504).
+    pub host_dom_events: Vec<HostDomEvent>,
     /// Enable deterministic cooperative Web Workers (R194). Default `true`; worker
     /// scripts are loaded from `file://` URLs only (the renderer owns all I/O).
     pub enable_workers: bool,
@@ -465,6 +468,69 @@ pub struct RenderOptions {
     /// [`RenderOutput::ensure_png`]. The pixmap, DOM, layout, stats and warnings are
     /// identical either way; only the eager PNG bytes are skipped (R201).
     pub encode_png: bool,
+}
+
+/// Target selector for a structured host-dispatched DOM/UI event (#1504).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostEventTarget {
+    /// Dispatch on `window`.
+    Window,
+    /// Dispatch on `document`.
+    Document,
+    /// Dispatch on the element with matching `data-megi-form-id`.
+    FormControl(u32),
+    /// Dispatch on the `<form>` owning the control with `data-megi-form-id`.
+    OwningForm(u32),
+    /// Dispatch on the focused element (`[data-megi-focused]`), falling back to `document`.
+    Focused,
+}
+
+/// Typed payload for a structured host-dispatched UI event (#1504).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostUiEventKind {
+    /// Standard DOM `Event` (`change`, `submit`, etc.).
+    Simple,
+    /// `KeyboardEvent` (`keydown`, `keyup`).
+    Keyboard {
+        /// Key value (`KeyboardEvent.key`).
+        key: String,
+        /// Physical/logical key code (`KeyboardEvent.code`).
+        code: String,
+        /// Control modifier state.
+        ctrl_key: bool,
+        /// Shift modifier state.
+        shift_key: bool,
+        /// Alt modifier state.
+        alt_key: bool,
+        /// Meta/Super modifier state.
+        meta_key: bool,
+        /// Auto-repeat flag.
+        repeat: bool,
+    },
+    /// `InputEvent` (`input`).
+    Input {
+        /// Inserted text data (`None` for deletions).
+        data: Option<String>,
+        /// Input operation type (`"insertText"`, `"deleteContentBackward"`, ...).
+        input_type: String,
+    },
+    /// `FocusEvent` (`focus`, `blur`).
+    Focus,
+}
+
+/// Structured host UI event queued in [`RenderOptions::host_dom_events`] (#1504).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostDomEvent {
+    /// DOM event type name (e.g. `"keydown"`, `"input"`, `"focus"`, `"blur"`, `"change"`).
+    pub event_type: String,
+    /// Target element or global object inside the rendered document.
+    pub target: HostEventTarget,
+    /// Whether the event bubbles (`focus`/`blur` are `false`; `keydown`/`input`/`change`/`submit` are `true`).
+    pub bubbles: bool,
+    /// Whether the event is cancelable.
+    pub cancelable: bool,
+    /// Typed event constructor/payload kind.
+    pub kind: HostUiEventKind,
 }
 
 impl Default for RenderOptions {
@@ -504,6 +570,7 @@ impl Default for RenderOptions {
             accept_server_push: false,
             storage: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
         }
     }
 }
@@ -952,6 +1019,7 @@ fn render_url_inner(
         host_context.storage = options.storage.clone();
         host_context.enable_workers = options.enable_workers;
         host_context.host_events = options.host_events.clone();
+        host_context.host_dom_events = options.host_dom_events.clone();
         host_context.fetch_options = loader.fetch_options().clone();
         host_context.no_network = options.no_network;
         let mut execution = scripts::execute_scripts(

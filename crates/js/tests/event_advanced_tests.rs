@@ -545,3 +545,136 @@ fn form_validity_and_submit_methods() {
         "validity and submit semantics: {out}"
     );
 }
+
+#[test]
+fn dispatch_ui_event_builds_typed_keyboard_input_focus_events() {
+    // #1504: Rust-initiated UI events construct real KeyboardEvent/InputEvent/FocusEvent instances,
+    // honor instanceof, expose event-specific properties, update document.activeElement, and
+    // respect preventDefault().
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.events = [];
+             var form = document.createElement('form');
+             var input = document.createElement('input');
+             input.id = 'q';
+             form.appendChild(input);
+             document.body.appendChild(form);
+             input.onfocus = function (e) {
+                 events.push('focus:' + (e instanceof FocusEvent) + ':' + e.bubbles + ':' + (document.activeElement === input));
+             };
+             input.onblur = function (e) {
+                 events.push('blur:' + (e instanceof FocusEvent) + ':' + e.bubbles + ':' + (document.activeElement === null));
+             };
+             input.onkeydown = function (e) {
+                 events.push('keydown:' + (e instanceof KeyboardEvent) + ':' + e.key + ':' + e.code + ':' + e.ctrlKey + ':' + e.shiftKey);
+                 if (e.key === 'Escape') { e.preventDefault(); }
+             };
+             input.oninput = function (e) {
+                 events.push('input:' + (e instanceof InputEvent) + ':' + e.data + ':' + e.inputType);
+             };
+             form.addEventListener('keydown', function (e) {
+                 events.push('bubble-keydown:' + e.key);
+             });",
+            "host_ui_events.js",
+        )
+        .expect("setup listeners");
+
+    let input_node = {
+        let doc = runtime.document();
+        doc.descendants(doc.root())
+            .find(|&id| {
+                doc.node(id)
+                    .as_element()
+                    .and_then(|el| el.get_attribute("id"))
+                    == Some("q")
+            })
+            .expect("input node")
+    };
+
+    runtime.set_active_element(Some(input_node));
+    assert!(
+        runtime
+            .dispatch_ui_event(
+                js::JsEventTarget::Node(input_node),
+                "focus",
+                false,
+                false,
+                &js::JsUiEventKind::Focus,
+            )
+            .expect("focus")
+    );
+    assert!(
+        runtime
+            .dispatch_ui_event(
+                js::JsEventTarget::Node(input_node),
+                "keydown",
+                true,
+                true,
+                &js::JsUiEventKind::Keyboard {
+                    key: "a".to_owned(),
+                    code: "KeyA".to_owned(),
+                    ctrl_key: true,
+                    shift_key: false,
+                    alt_key: false,
+                    meta_key: false,
+                    repeat: false,
+                },
+            )
+            .expect("keydown a")
+    );
+    assert!(
+        !runtime
+            .dispatch_ui_event(
+                js::JsEventTarget::Node(input_node),
+                "keydown",
+                true,
+                true,
+                &js::JsUiEventKind::Keyboard {
+                    key: "Escape".to_owned(),
+                    code: "Escape".to_owned(),
+                    ctrl_key: false,
+                    shift_key: false,
+                    alt_key: false,
+                    meta_key: false,
+                    repeat: false,
+                },
+            )
+            .expect("keydown Escape"),
+        "preventDefault() on host KeyboardEvent must return false"
+    );
+    assert!(
+        runtime
+            .dispatch_ui_event(
+                js::JsEventTarget::Node(input_node),
+                "input",
+                true,
+                false,
+                &js::JsUiEventKind::Input {
+                    data: Some("a".to_owned()),
+                    input_type: "insertText".to_owned(),
+                },
+            )
+            .expect("input")
+    );
+    runtime.set_active_element(None);
+    assert!(
+        runtime
+            .dispatch_ui_event(
+                js::JsEventTarget::Node(input_node),
+                "blur",
+                false,
+                false,
+                &js::JsUiEventKind::Focus,
+            )
+            .expect("blur")
+    );
+
+    let log = runtime
+        .eval("events.join('|')", "host_ui_events.js")
+        .expect("read events");
+    assert_eq!(
+        log,
+        "focus:true:false:true|keydown:true:a:KeyA:true:false|bubble-keydown:a|keydown:true:Escape:Escape:false:false|bubble-keydown:Escape|input:true:a:insertText|blur:true:false:true"
+    );
+}

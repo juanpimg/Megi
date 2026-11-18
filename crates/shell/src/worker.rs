@@ -64,6 +64,9 @@ pub struct RenderRequest {
     /// Host-dispatched window events (e.g. `popstate`/`hashchange` after a same-document
     /// history navigation, #1503). Applied by `view_options` to the render options.
     pub host_events: Vec<String>,
+    /// Structured UI/DOM events (keyboard/input/focus/change/submit) forwarded from the
+    /// shell into the page's live JS realm (#1504).
+    pub host_dom_events: Vec<render::HostDomEvent>,
     /// Optional form POST `(Content-Type, body)` for the main document request (#1538).
     pub form_post: Option<(String, Vec<u8>)>,
 }
@@ -206,6 +209,7 @@ impl FrameStore {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: None,
         }
     }
@@ -229,6 +233,7 @@ impl FrameStore {
             scripting: true,
             find_query: Some(query.to_owned()),
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: None,
         }
     }
@@ -254,6 +259,33 @@ impl FrameStore {
             scripting: false,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
+            form_post: None,
+        }
+    }
+
+    /// Starts a render for a **patched-DOM data: snapshot** that replays shell UI events
+    /// (`keydown`, `input`, `focus`, `blur`, `change`, `submit`) into the live JS realm (#1504).
+    pub fn begin_ui_event_request(
+        &mut self,
+        snapshot: &str,
+        css_width: u32,
+        css_height: u32,
+        base_override: Option<&str>,
+        host_dom_events: Vec<render::HostDomEvent>,
+    ) -> RenderRequest {
+        self.generation = self.generation.saturating_add(1);
+        self.pending = true;
+        RenderRequest {
+            generation: self.generation,
+            input: snapshot.to_owned(),
+            css_width,
+            css_height,
+            base_override: base_override.map(str::to_owned),
+            scripting: true,
+            find_query: None,
+            host_events: Vec::new(),
+            host_dom_events,
             form_post: None,
         }
     }
@@ -281,6 +313,7 @@ impl FrameStore {
             scripting: true,
             find_query: None,
             host_events: events.iter().map(|event| (*event).to_owned()).collect(),
+            host_dom_events: Vec::new(),
             form_post: None,
         }
     }
@@ -306,6 +339,7 @@ impl FrameStore {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: Some((content_type.to_owned(), body)),
         }
     }
@@ -610,6 +644,7 @@ fn view_options(
     }
     // Host-dispatched events run on `window` after `load`, before the final re-render (#1503).
     options.host_events = request.host_events.clone();
+    options.host_dom_events = request.host_dom_events.clone();
     options.form_post = request.form_post.clone();
     options
 }
@@ -773,11 +808,39 @@ mod unit_tests {
             scripting: true,
             find_query: None,
             host_events: vec!["popstate".to_owned()],
+            host_dom_events: Vec::new(),
             form_post: None,
         };
         let viewport = render::Viewport::new(100, 100).expect("viewport");
         let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
         assert_eq!(options.host_events, vec!["popstate".to_owned()]);
+    }
+
+    #[test]
+    fn ui_event_request_and_view_options_propagate_host_dom_events() {
+        let mut store = FrameStore::new();
+        let events = vec![render::HostDomEvent {
+            event_type: "input".to_owned(),
+            target: render::HostEventTarget::FormControl(3),
+            bubbles: true,
+            cancelable: false,
+            kind: render::HostUiEventKind::Input {
+                data: Some("x".to_owned()),
+                input_type: "insertText".to_owned(),
+            },
+        }];
+        let request = store.begin_ui_event_request(
+            "data:text/html,<input>",
+            320,
+            200,
+            Some("https://example.com/form"),
+            events.clone(),
+        );
+        assert!(request.scripting);
+        assert_eq!(request.host_dom_events, events);
+        let viewport = render::Viewport::new(320, 200).expect("viewport");
+        let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
+        assert_eq!(options.host_dom_events, events);
     }
 
     #[test]
@@ -836,6 +899,7 @@ mod unit_tests {
             scripting: false,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: None,
         };
         let frame = render_document(&request).expect("render");
@@ -988,6 +1052,7 @@ mod worker_panic_isolation_tests {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: None,
         };
         sender.send(first).expect("send first");
@@ -1016,6 +1081,7 @@ mod worker_panic_isolation_tests {
             scripting: true,
             find_query: None,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             form_post: None,
         };
         sender.send(second).expect("send second");

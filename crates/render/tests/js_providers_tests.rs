@@ -223,3 +223,105 @@ fn long_multibyte_host_event_name_does_not_panic() {
         "DOMContentLoaded + load + the (unmatched) host event"
     );
 }
+
+#[test]
+fn host_dom_events_forward_focus_keydown_input_change_blur_to_form_controls() {
+    // #1504: shell-style UI events (focus, keydown, input, change, blur, submit) resolve
+    // FormControl(id) / OwningForm(id) via data-megi-form-id, set document.activeElement,
+    // dispatch typed JS events, and mutate the DOM before the final layout + paint pass.
+    let html = "data:text/html,\
+        <form id='f'>\
+          <input id='name' data-megi-form-id='7' value='ab'>\
+          <input id='agree' type='checkbox' data-megi-form-id='8'>\
+        </form>\
+        <div id='log'></div>\
+        <script>\
+          var nameEl = document.getElementById('name');\
+          var agreeEl = document.getElementById('agree');\
+          var formEl = document.getElementById('f');\
+          var out = [];\
+          nameEl.addEventListener('focus', function (e) {\
+            out.push('focus:' + (e instanceof FocusEvent) + ':' + (document.activeElement === nameEl));\
+          });\
+          nameEl.addEventListener('keydown', function (e) {\
+            out.push('keydown:' + (e instanceof KeyboardEvent) + ':' + e.key + ':' + e.code);\
+          });\
+          nameEl.addEventListener('input', function (e) {\
+            out.push('input:' + (e instanceof InputEvent) + ':' + e.data + ':' + e.inputType);\
+          });\
+          nameEl.addEventListener('blur', function (e) {\
+            out.push('blur:' + (e instanceof FocusEvent) + ':' + (document.activeElement === null));\
+          });\
+          agreeEl.addEventListener('change', function () { out.push('change'); });\
+          formEl.addEventListener('submit', function () { out.push('submit'); document.getElementById('log').textContent = out.join(','); });\
+        </script>";
+
+    let events = vec![
+        render::HostDomEvent {
+            event_type: "focus".to_owned(),
+            target: render::HostEventTarget::FormControl(7),
+            bubbles: false,
+            cancelable: false,
+            kind: render::HostUiEventKind::Focus,
+        },
+        render::HostDomEvent {
+            event_type: "keydown".to_owned(),
+            target: render::HostEventTarget::FormControl(7),
+            bubbles: true,
+            cancelable: true,
+            kind: render::HostUiEventKind::Keyboard {
+                key: "c".to_owned(),
+                code: "KeyC".to_owned(),
+                ctrl_key: false,
+                shift_key: false,
+                alt_key: false,
+                meta_key: false,
+                repeat: false,
+            },
+        },
+        render::HostDomEvent {
+            event_type: "input".to_owned(),
+            target: render::HostEventTarget::FormControl(7),
+            bubbles: true,
+            cancelable: false,
+            kind: render::HostUiEventKind::Input {
+                data: Some("c".to_owned()),
+                input_type: "insertText".to_owned(),
+            },
+        },
+        render::HostDomEvent {
+            event_type: "blur".to_owned(),
+            target: render::HostEventTarget::FormControl(7),
+            bubbles: false,
+            cancelable: false,
+            kind: render::HostUiEventKind::Focus,
+        },
+        render::HostDomEvent {
+            event_type: "change".to_owned(),
+            target: render::HostEventTarget::FormControl(8),
+            bubbles: true,
+            cancelable: false,
+            kind: render::HostUiEventKind::Simple,
+        },
+        render::HostDomEvent {
+            event_type: "submit".to_owned(),
+            target: render::HostEventTarget::OwningForm(7),
+            bubbles: true,
+            cancelable: true,
+            kind: render::HostUiEventKind::Simple,
+        },
+    ];
+    let opts = RenderOptions {
+        host_dom_events: events,
+        ..options()
+    };
+    let output = render_url(html, &opts).expect("render with host dom events");
+    assert_eq!(
+        text_content(&output, "log"),
+        "focus:true:true,keydown:true:c:KeyC,input:true:c:insertText,blur:true:true,change,submit"
+    );
+    assert_eq!(
+        output.stats.script_events, 8,
+        "DOMContentLoaded + load + 6 UI events"
+    );
+}

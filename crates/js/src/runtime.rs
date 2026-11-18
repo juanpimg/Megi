@@ -442,6 +442,35 @@ impl JsRuntime {
         result
     }
 
+    /// Dispatches a structured UI event (`KeyboardEvent`, `InputEvent`, `FocusEvent`, or
+    /// `Event`) to `target` with the given bubbling/cancelable flags (#1504).
+    pub fn dispatch_ui_event(
+        &mut self,
+        target: crate::events::JsEventTarget,
+        event_type: &str,
+        bubbles: bool,
+        cancelable: bool,
+        kind: &crate::events::JsUiEventKind,
+    ) -> Result<bool, JsError> {
+        let _scope = HostScope::enter(&self.host);
+        self.apply_current_budget();
+        let result = crate::events::dispatch_rust_ui_event(
+            &mut self.context,
+            target,
+            event_type,
+            bubbles,
+            cancelable,
+            kind,
+        );
+        drop(_scope);
+        result
+    }
+
+    /// Updates `document.activeElement` from the host UI (e.g. shell focus changes, #1504).
+    pub fn set_active_element(&mut self, node: Option<NodeId>) {
+        self.host.borrow_mut().active_element = node;
+    }
+
     /// Pushes the runtime's configured budget into the Boa VM.
     fn apply_current_budget(&mut self) {
         let budget = self.budget;
