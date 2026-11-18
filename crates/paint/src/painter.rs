@@ -743,7 +743,7 @@ fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
     }) {
         return None;
     }
-    Some(crate::rasterizer::filter_solid_color(
+    Some(megi_raster::rasterizer::filter_solid_color(
         style.background_color,
         &style.filter,
     ))

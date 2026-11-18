@@ -6,7 +6,6 @@
     "crates/js/src/runtime.rs": 11028,
     "crates/css/src/properties.rs": 6029,
     "crates/html/src/tree_builder.rs": 5036,
-    "crates/paint/src/rasterizer.rs": 4454,
     "crates/core/src/lib.rs": 4011,
     "crates/html/src/tokenizer.rs": 3602,
     "crates/browser/src/window.rs": 3200,
@@ -53,7 +52,6 @@
     "crates/browser/src/cli.rs": 808,
     "crates/browser/src/download.rs": 735,
     "crates/css/src/animation_runtime.rs": 712,
-    "crates/paint/src/png.rs": 710,
     "crates/net/src/h2/hpack.rs": 706,
     "crates/paint/src/background.rs": 696,
     "crates/css/src/color.rs": 694,
@@ -74,11 +72,13 @@
     "crates/css/src/user_agent.rs": 578,
     "crates/css/src/tokenizer.rs": 570,
     "crates/css/src/animation.rs": 561,
-    "crates/paint/src/deflate.rs": 558,
     "crates/js/src/import_map.rs": 540,
     "crates/svg/src/css.rs": 532,
     "crates/browser/src/a11y.rs": 527,
-    "crates/test_harness/src/main.rs": 513
+    "crates/test_harness/src/main.rs": 513,
+    "crates/raster/src/rasterizer.rs": 4454,
+    "crates/raster/src/png.rs": 710,
+    "crates/raster/src/deflate.rs": 558
   },
   "forbidden_patterns": {
     "crates/js/src/host.rs:490": "pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;",
@@ -128,7 +128,8 @@
       "core",
       "fonts",
       "image",
-      "layout"
+      "layout",
+      "raster"
     ],
     "net": [
       "image",

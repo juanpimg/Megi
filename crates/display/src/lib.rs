@@ -10,9 +10,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use megi_css::{BorderRadii, BorderStyle, BoxShadow, Color};
-use megi_core::NodeId;
-use megi_core::Rect;
+pub use megi_css::{
+    BorderRadii, BorderStyle, BoxShadow, Color, FilterFunction, Gradient, GradientKind,
+    GradientStop, InterpolationSpace, Length, LinearDirection, MAX_FILTER_FUNCTIONS, MixBlendMode,
+    RadialExtent, RadialGradient, RadialShape, Radius,
+};
+pub use megi_core::NodeId;
+pub use megi_core::Rect;
 
 /// Decoded replaced-element images keyed by the DOM node that references them.
 ///
@@ -436,3 +440,6 @@ pub mod hit_test;
 pub use hit_test::{
     HitKind, HitLink, HitRegion, RegionCollector, find_link_at, hit_test, hit_test_all,
 };
+
+
+pub use megi_image::RgbaImage;
