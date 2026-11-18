@@ -2207,6 +2207,12 @@ pub struct ComputedStyle {
     pub animations: Vec<crate::animation::AnimationSpec>,
     /// Transitions declared on this element (initial: empty).
     pub transitions: Vec<crate::animation::TransitionSpec>,
+    /// `true` when `width: fit-content` was authored; layout uses shrink-to-fit sizing.
+    pub width_fit_content: bool,
+    /// `true` when `height: fit-content` was authored; layout uses intrinsic height.
+    pub height_fit_content: bool,
+    /// Resolved `::backdrop` fill color for top-layer modal elements (`dialog:modal::backdrop`).
+    pub backdrop_color: Option<Color>,
     /// Cached value fingerprint for layout's style interning (see [`StyleFingerprint`]).
     ///
     /// Excluded from `PartialEq`; `0` means "not computed" (hand-built styles), in which
@@ -2348,8 +2354,17 @@ impl ComputedStyle {
             letter_spacing: Length::Px(0.0),
             animations: Vec::new(),
             transitions: Vec::new(),
+            width_fit_content: false,
+            height_fit_content: false,
+            backdrop_color: None,
             style_fingerprint: StyleFingerprint::default(),
         }
+    }
+
+    /// Sets `backdrop_color` and refreshes the cached style fingerprint.
+    pub fn set_backdrop_color(&mut self, color: Option<Color>) {
+        self.backdrop_color = color;
+        self.style_fingerprint = StyleFingerprint::new(self.compute_fingerprint());
     }
 
     /// Returns the cached value fingerprint used by layout's style interning.
@@ -2506,6 +2521,13 @@ impl ComputedStyle {
             mix(&mut hash, transition.duration_ms.to_bits() as u64);
             mix(&mut hash, transition.delay_ms.to_bits() as u64);
             mix(&mut hash, timing_tag(&transition.timing));
+        }
+        mix(&mut hash, self.width_fit_content as u64);
+        mix(&mut hash, self.height_fit_content as u64);
+        if let Some(c) = self.backdrop_color {
+            mix(&mut hash, 1);
+            mix(&mut hash, u64::from(c.r) | (u64::from(c.g) << 8));
+            mix(&mut hash, u64::from(c.b) | (u64::from(c.a) << 8));
         }
         hash
     }
@@ -2791,11 +2813,17 @@ impl ComputedStyle {
         let list_style_image = find_declaration(&entries, "list-style-image")
             .and_then(|d| parse_image_value(&d.raw_value));
 
-        let width = find_declaration(&entries, "width")
+        let width_decl = find_declaration(&entries, "width");
+        let width_fit_content =
+            width_decl.is_some_and(|d| d.raw_value.trim().eq_ignore_ascii_case("fit-content"));
+        let width = width_decl
             .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
-        let height = find_declaration(&entries, "height")
+        let height_decl = find_declaration(&entries, "height");
+        let height_fit_content =
+            height_decl.is_some_and(|d| d.raw_value.trim().eq_ignore_ascii_case("fit-content"));
+        let height = height_decl
             .and_then(|d| mixed_length_fallback(&d.raw_value, font_size, root_font_size))
             .unwrap_or(Length::Auto);
 
@@ -2967,6 +2995,9 @@ impl ComputedStyle {
             letter_spacing,
             animations,
             transitions,
+            width_fit_content,
+            height_fit_content,
+            backdrop_color: None,
             style_fingerprint: StyleFingerprint::default(),
         };
         style.style_fingerprint = StyleFingerprint::new(style.compute_fingerprint());

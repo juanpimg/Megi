@@ -35,6 +35,7 @@ pub fn implicit_role(tag: &str) -> Option<&'static str> {
     Some(match tag {
         "a" | "area" => "link",
         "button" => "button",
+        "dialog" => "dialog",
         "input" => "textbox",
         "select" => "combobox",
         "textarea" => "textbox",
@@ -123,13 +124,54 @@ pub fn name(document: &Document, node: NodeId) -> String {
         .join(" ")
 }
 
+fn is_closed_dialog(document: &Document, node: NodeId) -> bool {
+    document
+        .try_node(node)
+        .and_then(|n| n.as_element())
+        .is_some_and(|el| {
+            el.namespace == dom::Namespace::Html
+                && el.local_name.eq_ignore_ascii_case("dialog")
+                && el.get_attribute("open").is_none()
+        })
+}
+
+fn modal_dialog_order(document: &Document, node: NodeId) -> Option<u32> {
+    let el = document.try_node(node)?.as_element()?;
+    if el.namespace == dom::Namespace::Html
+        && el.local_name.eq_ignore_ascii_case("dialog")
+        && el.get_attribute("open").is_some()
+        && let Some(order) = el.get_attribute("data-megi-modal")
+    {
+        return Some(order.trim().parse::<u32>().unwrap_or(0));
+    }
+    None
+}
+
+/// Returns the topmost visible modal `<dialog>` under `root`, if one is currently active.
+pub fn top_modal_dialog(document: &Document, root: NodeId) -> Option<NodeId> {
+    let mut best: Option<(u32, NodeId)> = None;
+    for node in document.descendants_inclusive(root) {
+        let Some(order) = modal_dialog_order(document, node) else {
+            continue;
+        };
+        if is_hidden(document, node) {
+            continue;
+        }
+        match best {
+            Some((best_order, _)) if order < best_order => {}
+            _ => best = Some((order, node)),
+        }
+    }
+    best.map(|(_, node)| node)
+}
+
 /// Whether the node or one of its ancestors is hidden from assistive tech
-/// (`aria-hidden`, `hidden` or `inert`), so hidden subtrees are excluded as a whole.
+/// (`aria-hidden`, `hidden`, `inert`, or a closed `<dialog>`), so hidden subtrees are excluded as a whole.
 pub fn is_hidden(document: &Document, node: NodeId) -> bool {
     let direct = ["aria-hidden", "hidden", "inert"].iter().any(|attr| {
         attribute(document, node, attr).is_some_and(|value| !value.eq_ignore_ascii_case("false"))
     });
-    if direct {
+    if direct || is_closed_dialog(document, node) {
         return true;
     }
     let mut parent = document.try_node(node).and_then(|node| node.parent);
@@ -137,7 +179,8 @@ pub fn is_hidden(document: &Document, node: NodeId) -> bool {
         if ["aria-hidden", "hidden", "inert"].iter().any(|attr| {
             attribute(document, ancestor, attr)
                 .is_some_and(|value| !value.eq_ignore_ascii_case("false"))
-        }) {
+        }) || is_closed_dialog(document, ancestor)
+        {
             return true;
         }
         parent = document.try_node(ancestor).and_then(|node| node.parent);
@@ -152,10 +195,15 @@ pub fn is_disabled(document: &Document, node: NodeId) -> bool {
             .is_some_and(|value| value.eq_ignore_ascii_case("true"))
 }
 
-/// Snapshot of every element under `root` with a role (excluding `aria-hidden` subtrees).
+/// Snapshot of every element under `root` with a role (excluding `aria-hidden` subtrees
+/// and background content behind an active modal `<dialog>`).
 pub fn collect(document: &Document, root: NodeId) -> Vec<AccessNode> {
     let mut out = Vec::new();
-    for node in document.descendants(root) {
+    let nodes: Vec<NodeId> = match top_modal_dialog(document, root) {
+        Some(modal) => document.descendants_inclusive(modal).collect(),
+        None => document.descendants(root).collect(),
+    };
+    for node in nodes {
         if is_hidden(document, node) {
             continue;
         }
@@ -174,9 +222,11 @@ pub fn collect(document: &Document, root: NodeId) -> Vec<AccessNode> {
 
 /// Deterministic Tab order: focusable, enabled, visible elements with a role, in document
 /// order (`tabindex` is only used through its presence; negative values are skipped).
+/// When an open modal `<dialog>` is active, focus is trapped within the topmost modal dialog.
 pub fn focus_order(document: &Document, root: NodeId) -> Vec<NodeId> {
     let mut out = Vec::new();
-    for node in document.descendants(root) {
+    let scope = top_modal_dialog(document, root).unwrap_or(root);
+    for node in document.descendants(scope) {
         if is_hidden(document, node) || is_disabled(document, node) {
             continue;
         }
@@ -317,5 +367,34 @@ mod tests {
         let nodes = collect(&document, body);
         assert!(nodes.iter().any(|node| node.name == "Shown"));
         assert!(!nodes.iter().any(|node| node.name == "Hidden"));
+    }
+
+    #[test]
+    fn closed_dialog_is_hidden_and_modal_dialog_traps_focus() {
+        let document = doc("<button>Outside</button>\
+             <dialog><button>Closed</button></dialog>\
+             <dialog open data-megi-modal=1><button>First</button><a href=/next>Next</a></dialog>");
+        let body = document.body().expect("body");
+        let order = focus_order(&document, body);
+        let names: Vec<String> = order.iter().map(|node| name(&document, *node)).collect();
+        assert_eq!(names, vec!["First", "Next"]);
+
+        let nodes = collect(&document, body);
+        assert_eq!(nodes[0].role, "dialog");
+        assert!(nodes.iter().any(|n| n.name == "First"));
+        assert!(!nodes.iter().any(|n| n.name == "Outside"));
+        assert!(!nodes.iter().any(|n| n.name == "Closed"));
+    }
+
+    #[test]
+    fn stacked_modal_dialogs_focus_topmost_modal() {
+        let document = doc(
+            "<dialog open data-megi-modal=1><button>Lower</button></dialog>\
+             <dialog open data-megi-modal=2><button>Upper</button></dialog>",
+        );
+        let body = document.body().expect("body");
+        let order = focus_order(&document, body);
+        let names: Vec<String> = order.iter().map(|node| name(&document, *node)).collect();
+        assert_eq!(names, vec!["Upper"]);
     }
 }

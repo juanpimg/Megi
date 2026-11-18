@@ -321,6 +321,7 @@ inline_handler_accessors!(
     ),
     (inline_onfocus_get, inline_onfocus_set, "onfocus", "focus"),
     (inline_onblur_get, inline_onblur_set, "onblur", "blur"),
+    (inline_onclose_get, inline_onclose_set, "onclose", "close"),
 );
 
 /// Inline handler accessor pairs shared with node/document wrappers.

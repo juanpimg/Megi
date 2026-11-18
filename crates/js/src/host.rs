@@ -436,6 +436,10 @@ pub(crate) struct Host {
     pub module_loader: Option<ModuleLoader>,
     /// Installed import map (resolution happens before the host resolver).
     pub import_map: Option<crate::import_map::ImportMap>,
+    /// Per-`<dialog>` `returnValue` strings set by `dialog.close(value)` / `.returnValue`.
+    pub dialog_return_values: HashMap<NodeId, String>,
+    /// Monotonic counter assigning `data-megi-modal` order to top-layer modal dialogs.
+    pub top_layer_order_counter: u32,
 }
 
 impl Host {
@@ -490,6 +494,8 @@ impl Host {
             module_resolver: None,
             module_loader: None,
             import_map: None,
+            dialog_return_values: HashMap::new(),
+            top_layer_order_counter: 0,
         }
     }
 

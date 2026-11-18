@@ -396,6 +396,8 @@ pub struct StyleCollection {
     pub layers: Vec<Vec<String>>,
     /// Map from layer path to its global rank; used by `@layer` registration.
     layer_index: HashMap<Vec<String>, u32>,
+    /// `::backdrop` rules compiled from stylesheets (applied to top-layer modal elements).
+    pub backdrop_rules: Vec<CompiledRule>,
     /// Rule index by rightmost-compound key. Maintained by the `add_*` methods; if the public
     /// `rules` vector is mutated directly, resolution falls back to evaluating every rule.
     index: RuleIndex,
@@ -608,6 +610,35 @@ impl StyleCollection {
         compiled.source_order = self.next_source_order;
         compiled.layer_rank = layer_rank;
         self.next_source_order += 1;
+        if compiled
+            .selectors
+            .selectors
+            .iter()
+            .any(ComplexSelector::has_backdrop)
+        {
+            let mut backdrop_selectors = Vec::new();
+            let mut normal_selectors = Vec::new();
+            for selector in compiled.selectors.selectors.drain(..) {
+                if selector.has_backdrop() {
+                    backdrop_selectors.push(selector);
+                } else {
+                    normal_selectors.push(selector);
+                }
+            }
+            self.backdrop_rules.push(CompiledRule {
+                selectors: SelectorList {
+                    selectors: backdrop_selectors,
+                },
+                declarations: compiled.declarations.clone(),
+                origin: compiled.origin,
+                source_order: compiled.source_order,
+                layer_rank: compiled.layer_rank,
+            });
+            if normal_selectors.is_empty() {
+                return;
+            }
+            compiled.selectors.selectors = normal_selectors;
+        }
         let rule_index = self.rules.len() as u32;
         self.index.insert(rule_index, &compiled.selectors);
         if compiled.declarations.iter().any(is_revert_layer) {
@@ -1116,6 +1147,58 @@ fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Declaration>) -
     u128::from(low) << 64 | u128::from(high)
 }
 
+/// Resolves the computed `background-color` for a `::backdrop` pseudo-element of `node_id`
+/// when `node_id` is a modal `<dialog>` (`crate::state::is_modal(doc, node_id)`).
+pub fn resolve_backdrop_color(
+    doc: &Document,
+    node_id: NodeId,
+    collection: &StyleCollection,
+    parent_style: Option<&crate::properties::ComputedStyle>,
+    root_style: Option<&crate::properties::ComputedStyle>,
+) -> Option<crate::properties::Color> {
+    if !crate::state::is_modal(doc, node_id) || collection.backdrop_rules.is_empty() {
+        return None;
+    }
+    let _match_scope = crate::selector::match_scope();
+    let mut best_candidates: HashMap<&str, MatchedDeclaration<'_>, FastBuildHasher> =
+        HashMap::with_hasher(FastBuildHasher);
+    for rule in &collection.backdrop_rules {
+        for selector in &rule.selectors.selectors {
+            if !selector.matches_backdrop(doc, node_id) {
+                continue;
+            }
+            let spec = selector.specificity();
+            for (declaration_order, decl) in rule.declarations.iter().enumerate() {
+                let origin_importance = CascadeOriginImportance::new(rule.origin, decl.important);
+                let candidate = MatchedDeclaration {
+                    declaration: decl,
+                    origin_importance,
+                    layer_rank: rule.layer_rank,
+                    specificity: spec,
+                    source_order: rule.source_order,
+                    declaration_order: declaration_order as u32,
+                };
+                match best_candidates.entry(decl.name.as_str()) {
+                    std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                        if candidate > *occupied.get() {
+                            occupied.insert(candidate);
+                        }
+                    }
+                    std::collections::hash_map::Entry::Vacant(vacant) => {
+                        vacant.insert(candidate);
+                    }
+                }
+            }
+        }
+    }
+    if best_candidates.is_empty() {
+        return None;
+    }
+    let cascaded = owned_declarations(best_candidates);
+    let computed = crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
+    Some(computed.background_color)
+}
+
 /// Resolves computed styles with a fully specified [`MediaContext`] for `@media` evaluation.
 pub fn resolve_document_styles_with_media(
     doc: &Document,
@@ -1170,7 +1253,8 @@ pub fn resolve_document_styles_with_media(
             // could be reused by the next element, so they are excluded from the
             // pointer-keyed cache (they are also rare); everything else lives in the
             // immutable StyleCollection, where declaration addresses are stable.
-            let cacheable = inline_decls.is_none();
+            let is_modal = crate::state::is_modal(doc, node_id);
+            let cacheable = inline_decls.is_none() && !is_modal;
             let parent_key = doc
                 .node(node_id)
                 .parent
@@ -1181,8 +1265,17 @@ pub fn resolve_document_styles_with_media(
                 styles.insert(node_id, cached.clone());
                 style_keys.insert(node_id, cache_key);
             } else {
-                let computed =
+                let mut computed =
                     crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
+                if is_modal {
+                    computed.set_backdrop_color(resolve_backdrop_color(
+                        doc,
+                        node_id,
+                        &collection,
+                        parent_style,
+                        root_style,
+                    ));
+                }
                 if cacheable {
                     // Only repeated declaration sets are cached; unique elements pay a
                     // cheap hash/counter instead of a full ComputedStyle clone, and the

@@ -229,3 +229,14 @@ pub(crate) fn is_required(doc: &Document, node: NodeId) -> bool {
 pub(crate) fn is_placeholder_shown(doc: &Document, node: NodeId) -> bool {
     placeholder_shown(doc, node)
 }
+
+/// `:modal` — HTML `<dialog open>` opened in the top layer via `showModal()` (`data-megi-modal`).
+pub(crate) fn is_modal(doc: &Document, node: NodeId) -> bool {
+    let Some(el) = doc.node(node).as_element() else {
+        return false;
+    };
+    el.namespace == dom::Namespace::Html
+        && el.local_name.eq_ignore_ascii_case("dialog")
+        && el.get_attribute("open").is_some()
+        && el.get_attribute("data-megi-modal").is_some()
+}

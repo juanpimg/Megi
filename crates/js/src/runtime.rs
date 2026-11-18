@@ -1358,7 +1358,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 34] = [
+    let accessors: [(&str, AccessorKind); 36] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -1393,6 +1393,8 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("src", AccessorKind::Src),
         ("selectedIndex", AccessorKind::SelectedIndex),
         ("validity", AccessorKind::Validity),
+        ("open", AccessorKind::Open),
+        ("returnValue", AccessorKind::ReturnValue),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -1463,6 +1465,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("setCustomValidity", 1, node_set_custom_validity),
         ("requestSubmit", 0, node_request_submit),
         ("submit", 0, node_submit),
+        ("show", 0, node_dialog_show),
+        ("showModal", 0, node_dialog_show_modal),
+        ("close", 1, node_dialog_close),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -1517,6 +1522,8 @@ enum AccessorKind {
     Src,
     SelectedIndex,
     Validity,
+    Open,
+    ReturnValue,
 }
 
 fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -1555,6 +1562,11 @@ fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Src => (node_src_get, Some(node_src_set)),
         AccessorKind::SelectedIndex => (node_selected_index_get, Some(node_selected_index_set)),
         AccessorKind::Validity => (node_validity_get, None),
+        AccessorKind::Open => (node_dialog_open_get, Some(node_dialog_open_set)),
+        AccessorKind::ReturnValue => (
+            node_dialog_return_value_get,
+            Some(node_dialog_return_value_set),
+        ),
     }
 }
 
@@ -2304,6 +2316,304 @@ fn node_options(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsR
     node_list(context, options)
 }
 
+/// `DOMException` (`InvalidStateError`) for invalid `<dialog>` state transitions (#1546).
+fn invalid_state_error(message: &str, context: &mut Context) -> BoaError {
+    if let Ok(ctor_val) = context
+        .global_object()
+        .get(js_string!("DOMException"), context)
+        && let Some(ctor) = ctor_val.as_object()
+        && let Ok(instance) = ctor.construct(
+            &[
+                JsValue::from(js_string!(message)),
+                JsValue::from(js_string!("InvalidStateError")),
+            ],
+            None,
+            context,
+        )
+    {
+        return BoaError::from_opaque(JsValue::from(instance));
+    }
+    js_error(format!("InvalidStateError: {message}"))
+}
+
+fn is_connected_to_document(document: &dom::Document, node_id: NodeId) -> bool {
+    let root = document.root();
+    let mut curr = Some(node_id);
+    while let Some(id) = curr {
+        if id == root {
+            return true;
+        }
+        curr = document.try_node(id).and_then(|node| node.parent);
+    }
+    false
+}
+
+fn dialog_focus_target(document: &dom::Document, dialog_id: NodeId) -> NodeId {
+    let mut autofocus = None;
+    let mut first_control = None;
+    for child in document.descendants(dialog_id) {
+        if child == dialog_id {
+            continue;
+        }
+        let Some(element) = document.try_node(child).and_then(|node| node.as_element()) else {
+            continue;
+        };
+        if element.get_attribute("disabled").is_some() || element.get_attribute("inert").is_some() {
+            continue;
+        }
+        if autofocus.is_none() && element.get_attribute("autofocus").is_some() {
+            autofocus = Some(child);
+            break;
+        }
+        if first_control.is_none()
+            && (matches!(
+                element.local_name.as_str(),
+                "button" | "input" | "select" | "textarea"
+            ) || (element.local_name == "a" && element.get_attribute("href").is_some()))
+        {
+            first_control = Some(child);
+        }
+    }
+    autofocus.or(first_control).unwrap_or(dialog_id)
+}
+
+fn node_dialog_open_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    boolean_attribute_get(this, "open", context)
+}
+
+fn node_dialog_open_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let enabled = args.first().is_some_and(JsValue::to_boolean);
+    let old_value = with_host(|host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("open").map(str::to_owned))
+    })
+    .flatten();
+    let result = with_host(|host| {
+        let element = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        if enabled {
+            element.set_attribute(DomAttribute::new("open", ""), true);
+        } else {
+            element.remove_attribute("open");
+            element.remove_attribute("data-megi-modal");
+        }
+        Ok::<(), String>(())
+    });
+    match result {
+        Some(Ok(())) => {
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some("open".to_string()),
+                old_value,
+            );
+            Ok(JsValue::undefined())
+        }
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn node_dialog_return_value_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_host(|host| host.dialog_return_values.get(&node_id).cloned())
+        .flatten()
+        .unwrap_or_default();
+    Ok(JsValue::from(js_string!(value)))
+}
+
+fn node_dialog_return_value_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    with_host(|host| {
+        host.dialog_return_values.insert(node_id, value);
+    });
+    Ok(JsValue::undefined())
+}
+
+fn node_dialog_show(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    enum ShowOutcome {
+        NoOp,
+        ModalConflict,
+        Opened,
+    }
+    let result = with_host(|host| {
+        let already_open = host
+            .document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|el| el.get_attribute("open").is_some());
+        let is_modal = host
+            .document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|el| el.get_attribute("data-megi-modal").is_some());
+        if already_open {
+            if is_modal {
+                return Ok::<ShowOutcome, String>(ShowOutcome::ModalConflict);
+            }
+            return Ok(ShowOutcome::NoOp);
+        }
+        let element = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        element.remove_attribute("data-megi-modal");
+        element.set_attribute(DomAttribute::new("open", ""), true);
+        let target = dialog_focus_target(&host.document, node_id);
+        host.active_element = Some(target);
+        Ok(ShowOutcome::Opened)
+    });
+    match result {
+        Some(Ok(ShowOutcome::NoOp)) => Ok(JsValue::undefined()),
+        Some(Ok(ShowOutcome::ModalConflict)) => Err(invalid_state_error(
+            "Cannot call show() on an already open modal dialog.",
+            context,
+        )),
+        Some(Ok(ShowOutcome::Opened)) => {
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some("open".to_string()),
+                None,
+            );
+            Ok(JsValue::undefined())
+        }
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn node_dialog_show_modal(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    enum ModalOutcome {
+        Disconnected,
+        AlreadyOpen,
+        Opened,
+    }
+    let result = with_host(|host| {
+        if !is_connected_to_document(&host.document, node_id) {
+            return Ok::<ModalOutcome, String>(ModalOutcome::Disconnected);
+        }
+        let already_open = host
+            .document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|el| el.get_attribute("open").is_some());
+        if already_open {
+            return Ok(ModalOutcome::AlreadyOpen);
+        }
+        host.top_layer_order_counter = host.top_layer_order_counter.saturating_add(1);
+        let order = host.top_layer_order_counter;
+        let element = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+            .ok_or_else(|| "node is not an element".to_string())?;
+        element.set_attribute(DomAttribute::new("open", ""), true);
+        element.set_attribute(
+            DomAttribute::new("data-megi-modal", order.to_string()),
+            true,
+        );
+        let target = dialog_focus_target(&host.document, node_id);
+        host.active_element = Some(target);
+        Ok(ModalOutcome::Opened)
+    });
+    match result {
+        Some(Ok(ModalOutcome::Disconnected)) => Err(invalid_state_error(
+            "Cannot call showModal() on a disconnected dialog.",
+            context,
+        )),
+        Some(Ok(ModalOutcome::AlreadyOpen)) => Err(invalid_state_error(
+            "Cannot call showModal() on an already open dialog.",
+            context,
+        )),
+        Some(Ok(ModalOutcome::Opened)) => {
+            note_mutation(
+                MutationKind::Attributes,
+                node_id,
+                Some("open".to_string()),
+                None,
+            );
+            Ok(JsValue::undefined())
+        }
+        Some(Err(message)) => Err(js_error(message)),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
+fn node_dialog_close(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let return_arg = match args.first() {
+        Some(val) if !val.is_undefined() => Some(
+            val.to_string(context)
+                .map(|text| text.to_std_string_escaped())
+                .map_err(|error| js_error(error.to_string()))?,
+        ),
+        _ => None,
+    };
+    let old_value = with_host(|host| {
+        let was_open = host
+            .document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("open").map(str::to_owned));
+        let old = was_open?;
+        if let Some(ret) = return_arg {
+            host.dialog_return_values.insert(node_id, ret);
+        }
+        if let Some(element) = host
+            .document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+        {
+            element.remove_attribute("open");
+            element.remove_attribute("data-megi-modal");
+        }
+        Some(old)
+    })
+    .flatten();
+    let Some(old_open) = old_value else {
+        return Ok(JsValue::undefined());
+    };
+    note_mutation(
+        MutationKind::Attributes,
+        node_id,
+        Some("open".to_string()),
+        Some(old_open),
+    );
+    let _ = crate::events::dispatch_event_type(this, "close", false, false, context)?;
+    Ok(JsValue::undefined())
+}
+
 fn node_set_attribute(
     this: &JsValue,
     args: &[JsValue],
@@ -2384,6 +2694,11 @@ fn node_remove_attribute(
             element
                 .attributes
                 .retain(|attribute| attribute.local_name != name);
+            if name == "open" {
+                element
+                    .attributes
+                    .retain(|attribute| attribute.local_name != "data-megi-modal");
+            }
         }
     });
     note_mutation(MutationKind::Attributes, node_id, Some(name), old_value);
@@ -5289,6 +5604,14 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     const PRELUDE: &str = r####"
 (function () {
   function define(name, value) { window[name] = value; }
+  function DOMException(message, name) {
+    this.message = message === undefined ? "" : String(message);
+    this.name = name === undefined ? "Error" : String(name);
+  }
+  DOMException.prototype = Object.create(Error.prototype);
+  DOMException.prototype.constructor = DOMException;
+  DOMException.prototype.name = "DOMException";
+  define("DOMException", DOMException);
   function urlNormalizePath(path) {
     var segments = String(path).split("/");
     var out = [];

@@ -384,6 +384,17 @@ fn build_box_for_node(
                 || style.opacity < 1.0
                 || matches!(style.position, Position::Fixed)
                 || (style.position != Position::Static && style.z_index.is_some());
+            if let Some(element) = node.as_element()
+                && element.namespace == Namespace::Html
+                && element.local_name.eq_ignore_ascii_case("dialog")
+                && element.get_attribute("open").is_some()
+                && let Some(modal_attr) = element.get_attribute("data-megi-modal")
+            {
+                layout_box.is_top_layer = true;
+                layout_box.top_layer_order = modal_attr.trim().parse::<u32>().unwrap_or(0);
+                layout_box.backdrop_color = style.backdrop_color;
+                layout_box.establishes_stacking_context = true;
+            }
             if !matches!(style.overflow, Overflow::Visible) {
                 *has_overflow_clip = true;
             }

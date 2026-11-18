@@ -2069,7 +2069,20 @@ fn resolve_styles_with_collection(
                 .parent
                 .and_then(|parent| styles.get(&parent));
             let root_style = styles.get(&root);
-            let computed = css::ComputedStyle::compute(&cascaded, parent_style, root_style);
+            let mut computed = css::ComputedStyle::compute(&cascaded, parent_style, root_style);
+            if element.namespace == dom::Namespace::Html
+                && element.local_name.eq_ignore_ascii_case("dialog")
+                && element.get_attribute("open").is_some()
+                && element.get_attribute("data-megi-modal").is_some()
+            {
+                computed.set_backdrop_color(css::resolve_backdrop_color(
+                    doc,
+                    node_id,
+                    collection,
+                    parent_style,
+                    root_style,
+                ));
+            }
             styles.insert(node_id, computed);
         }
         let mut child = doc.node(node_id).last_child;

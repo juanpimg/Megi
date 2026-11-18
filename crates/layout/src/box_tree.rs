@@ -113,6 +113,14 @@ pub struct LayoutBox {
     pub is_float: bool,
     /// Used `float` side (`Float::None` for non-floated boxes).
     pub float_side: Float,
+    /// `true` when this element participates in the HTML top layer (e.g. `<dialog>` opened
+    /// via `showModal()`).
+    pub is_top_layer: bool,
+    /// Insertion order in the top-layer stack (`data-megi-modal`), used by paint to sort
+    /// stacked modal dialogs deterministically.
+    pub top_layer_order: u32,
+    /// Resolved `::backdrop` background color for top-layer modal dialogs.
+    pub backdrop_color: Option<css::Color>,
     /// Child boxes in layout order.
     pub children: Vec<LayoutBox>,
 }
@@ -164,6 +172,9 @@ impl LayoutBox {
             clip: None,
             is_float: false,
             float_side: Float::None,
+            is_top_layer: false,
+            top_layer_order: 0,
+            backdrop_color: None,
             children: Vec::new(),
         }
     }
