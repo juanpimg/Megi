@@ -24,6 +24,16 @@ use std::time::{Duration, Instant};
 
 use megi_core::{Document, NodeId};
 
+// Provider aliases now live in [`crate::providers`] as immutable `Arc<dyn Fn…>` closures.
+// They are re-exported here to type the legacy host-side mirror fields (and so downstream
+// `use crate::host::…` paths keep working); the authoritative slot is the `HostProviders`
+// installed in the Boa context.
+pub use crate::providers::{
+    ComputedStyleProvider, CookieGetFn, CookieSetFn, FetchProvider, FrameLoader, HistoryProvider,
+    LayoutProvider, LocationProvider, MediaProvider, ModuleLoader, ModuleResolver, StorageLoadFn,
+    StorageSaveFn, ViewportProvider, WebSocketProvider, WorkerLoader,
+};
+
 /// One captured `console.*` call.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConsoleEntry {
@@ -108,16 +118,6 @@ impl Default for ViewportInfo {
     }
 }
 
-/// `matchMedia` provider injected by the host (evaluates a CSS media query string).
-pub type MediaProvider = Box<dyn Fn(&str) -> bool + Send + Sync>;
-
-/// Viewport provider injected by the host (inner dimensions / DPR / scroll base).
-pub type ViewportProvider = Box<dyn Fn() -> ViewportInfo + Send + Sync>;
-
-/// Computed-style provider injected by the host (`window.getComputedStyle`).
-pub type ComputedStyleProvider =
-    Box<dyn Fn(&Document, NodeId) -> Vec<(String, String)> + Send + Sync>;
-
 /// History API action forwarded to the host provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HistoryAction {
@@ -133,9 +133,6 @@ pub enum HistoryAction {
     Go(i64),
 }
 
-/// Provider invoked by the History API (no provider ⇒ documented no-op).
-pub type HistoryProvider = Box<dyn Fn(HistoryAction) + Send + Sync>;
-
 /// `location.assign/replace/reload` action forwarded to the host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocationAction {
@@ -143,9 +140,6 @@ pub enum LocationAction {
     Replace(String),
     Reload,
 }
-
-/// Provider invoked by `location.*` navigation methods.
-pub type LocationProvider = Box<dyn Fn(LocationAction) + Send + Sync>;
 
 /// Which Web Storage area an operation refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,10 +177,6 @@ pub struct FetchResult {
     pub body: Vec<u8>,
 }
 
-/// Injectable `fetch()` provider; without one `fetch()` rejects with a typed error.
-pub type FetchProvider =
-    Box<dyn Fn(FetchRequest) -> Result<FetchResult, crate::error::JsError> + Send + Sync>;
-
 /// An event delivered by a WebSocket transport (#1534).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WebSocketEvent {
@@ -207,13 +197,6 @@ pub trait WebSocketTransport: Send {
     fn poll(&mut self) -> Vec<WebSocketEvent>;
     fn close(&mut self);
 }
-
-/// Injectable WebSocket provider; without one `new WebSocket(url)` throws a typed error.
-pub type WebSocketProvider =
-    Box<dyn Fn(&str) -> Result<Box<dyn WebSocketTransport>, crate::error::JsError> + Send + Sync>;
-
-/// Loads the source text of a worker script URL (the host owns I/O).
-pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
 
 /// Parsed `<iframe sandbox="...">` permission flags (#1544).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -268,9 +251,6 @@ impl SandboxFlags {
     }
 }
 
-/// Loads HTML content for an external `<iframe src="...">` (`resolved_url`, `html`).
-pub type FrameLoader = Box<dyn Fn(&str) -> Result<(String, String), String> + Send + Sync>;
-
 /// Computes the serialized origin (`"scheme://host[:port]"` or `"null"` when opaque/non-network).
 pub fn origin_for_url(url: &str, opaque: bool) -> String {
     if opaque {
@@ -324,35 +304,11 @@ pub fn is_same_origin_url(parent_url: &str, child_url: &str, opaque: bool) -> bo
     }
 }
 
-/// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
-/// (e.g. `display: none` or a node outside the laid-out document).
-pub type LayoutProvider = Box<dyn Fn(megi_core::NodeId) -> Option<LayoutRect> + Send + Sync>;
-
-/// Resolves an ES module specifier against the importing module's URL.
-///
-/// Returns `Ok(None)` when the specifier cannot be resolved; the runtime then reports a
-/// typed `ModuleNotFound` error. The host owns all I/O (files/network); `js` never reads.
-pub type ModuleResolver =
-    Box<dyn Fn(&str, &str) -> Result<Option<String>, crate::error::JsError> + Send + Sync>;
-
-/// Loads the source text of an already-resolved module URL.
-pub type ModuleLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
-
-/// Loads the persisted entries for one storage area.
-pub type StorageLoadFn = Box<dyn Fn(StorageKind) -> Vec<(String, String)> + Send + Sync>;
-/// Saves the current entries of one storage area (called after writes).
-pub type StorageSaveFn = Box<dyn Fn(StorageKind, &[(String, String)]) + Send + Sync>;
-
 /// Optional persistence provider: load is called once when installed, save after writes.
 pub struct StorageProvider {
     pub load: StorageLoadFn,
     pub save: StorageSaveFn,
 }
-
-/// Reads the `document.cookie` header string for the given document URL.
-pub type CookieGetFn = Box<dyn Fn(&str) -> String + Send + Sync>;
-/// Writes one `Set-Cookie`-style string from `document.cookie = ...` for the document URL.
-pub type CookieSetFn = Box<dyn Fn(&str, &str) + Send + Sync>;
 
 /// Injectable host cookie store backing `document.cookie`.
 pub struct CookieProvider {

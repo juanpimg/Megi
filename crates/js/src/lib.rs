@@ -200,6 +200,8 @@ pub mod events;
 pub mod host;
 pub mod import_map;
 #[cfg(feature = "js")]
+pub mod providers;
+#[cfg(feature = "js")]
 pub mod runtime;
 #[cfg(feature = "js")]
 pub mod websocket;
@@ -221,8 +223,14 @@ pub use events::{JsEventTarget, JsUiEventKind};
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]
-pub use host::{CookieProvider, MediaProvider, SandboxFlags, ViewportInfo, ViewportProvider};
+pub use host::{CookieProvider, SandboxFlags, ViewportInfo};
 pub use import_map::ImportMap;
+#[cfg(feature = "js")]
+pub use providers::{
+    ComputedStyleProvider, CookieGetFn, CookieSetFn, FetchProvider, FrameLoader, HistoryProvider,
+    LayoutProvider, LocationProvider, MediaProvider, ModuleLoader, ModuleResolver, StorageLoadFn,
+    StorageSaveFn, ViewportProvider, WebSocketProvider, WorkerLoader,
+};
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome};
 

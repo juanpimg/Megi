@@ -85,6 +85,9 @@ pub type CookieSetFn = Arc<dyn Fn(&str, &str) + Send + Sync>;
 /// Every field is optional: a missing provider leaves the corresponding web API at its
 /// documented fallback/no-op behaviour. All callbacks are immutable `Arc` closures so they
 /// can be read from a shared [`providers`] borrow and safely re-entered outside a host borrow.
+// NOTE: the provider slot becomes live once `runtime.rs` routes its setters through
+// `install_providers`/`providers_mut`; keep these warning-free until that migration lands.
+#[allow(dead_code)]
 #[derive(Default)]
 pub(crate) struct HostProviders {
     pub(crate) computed_style: Option<ComputedStyleProvider>,
@@ -109,6 +112,7 @@ pub(crate) struct HostProviders {
 ///
 /// Called once while setting up a realm, before any script runs. Installing again replaces
 /// the previous slot; the old providers are dropped.
+#[allow(dead_code)]
 pub(crate) fn install_providers(context: &mut boa_engine::Context, providers: HostProviders) {
     let _ = context.insert_data(providers);
 }
@@ -117,6 +121,16 @@ pub(crate) fn install_providers(context: &mut boa_engine::Context, providers: Ho
 ///
 /// The returned reference is independent of the mutable host cell, so a binding can read a
 /// provider, drop any host borrow it holds, and only then invoke the callback.
+#[allow(dead_code)]
 pub(crate) fn providers(context: &boa_engine::Context) -> Option<&HostProviders> {
     context.get_data::<HostProviders>()
+}
+
+/// Mutably borrows the installed provider slot from `context`.
+///
+/// Used only by `JsRuntime`'s setters to install or replace one provider after realm
+/// construction. The callbacks themselves stay immutable for the lifetime of the realm.
+#[allow(dead_code)]
+pub(crate) fn providers_mut(context: &mut boa_engine::Context) -> Option<&mut HostProviders> {
+    context.host_defined_mut().get_mut::<HostProviders>()
 }
