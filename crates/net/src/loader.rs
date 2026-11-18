@@ -283,20 +283,45 @@ impl ResourceLoader {
     /// document) and `false` for images/media (upgraded to `https:`). Redirects are covered
     /// because the upgraded/blocked decision happens before the network request.
     pub fn load_checked(&mut self, url: &Url, active: bool) -> Result<Arc<Resource>, LoadError> {
+        self.load_with_mode_checked(url, active, true)
+    }
+
+    /// Loads a subresource in `no-cors` mode while still enforcing the mixed-content policy
+    /// (#1528, #1537).
+    pub fn load_no_cors_checked(
+        &mut self,
+        url: &Url,
+        active: bool,
+    ) -> Result<Arc<Resource>, LoadError> {
+        self.load_with_mode_checked(url, active, false)
+    }
+
+    /// Loads a subresource, enforcing the mixed-content policy (#1528) and selecting CORS
+    /// (`use_cors = true`) or `no-cors` (`use_cors = false`) mode (#1537).
+    pub fn load_with_mode_checked(
+        &mut self,
+        url: &Url,
+        active: bool,
+        use_cors: bool,
+    ) -> Result<Arc<Resource>, LoadError> {
         use crate::mixed_content::{MixedContentAction, decide};
-        match decide(
+        let target = match decide(
             self.mixed_content_context.unwrap_or(Scheme::Http),
             url,
             active,
         ) {
-            MixedContentAction::Allow => self.load(url),
+            MixedContentAction::Allow => url.clone(),
             MixedContentAction::Block => {
-                Err(FetchError::MixedContentBlocked(url.as_str().to_owned()).into())
+                return Err(FetchError::MixedContentBlocked(url.as_str().to_owned()).into());
             }
             MixedContentAction::Upgrade(upgraded) => {
-                let url = Url::parse(&upgraded).map_err(LoadError::Url)?;
-                self.load(&url)
+                Url::parse(&upgraded).map_err(LoadError::Url)?
             }
+        };
+        if use_cors {
+            self.load(&target)
+        } else {
+            self.load_no_cors(&target)
         }
     }
 
