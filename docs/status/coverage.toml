@@ -482,31 +482,31 @@ evidence = "none"
 id = "F7-WINDOW"
 area = "F7"
 name = "Ventana winit+softbuffer y render en worker"
-source = "crates/shell"
+source = "crates/browser"
 state = "done"
-evidence = "test:crates/shell/tests/shell_tests.rs::headless_screenshot_of_fixture_writes_a_valid_png"
+evidence = "test:crates/browser/tests/shell_tests.rs::headless_screenshot_of_fixture_writes_a_valid_png"
 
 [[capability]]
 id = "F7-NAVIGATION"
 area = "F7"
 name = "Navegación (clic, historial, back/forward)"
-source = "crates/shell"
+source = "crates/browser"
 state = "done"
-evidence = "test:crates/shell/tests/shell_tests.rs::click_navigation_sequence_pushes_and_back_returns"
+evidence = "test:crates/browser/tests/shell_tests.rs::click_navigation_sequence_pushes_and_back_returns"
 
 [[capability]]
 id = "F7-SCROLL-ZOOM"
 area = "F7"
 name = "Scroll, HiDPI y zoom"
-source = "crates/shell"
+source = "crates/browser"
 state = "done"
-evidence = "test:crates/shell/tests/shell_tests.rs::scroll_state_is_clamped_and_usable"
+evidence = "test:crates/browser/tests/shell_tests.rs::scroll_state_is_clamped_and_usable"
 
 [[capability]]
 id = "F7-BACKGROUNDS"
 area = "F7"
 name = "Backgrounds multicapa y overlays de chrome"
-source = "crates/render / crates/shell"
+source = "crates/render / crates/browser"
 state = "done"
 evidence = "test:crates/render/tests/background_layers_tests.rs::multi_layer_background_order_origin_and_clip"
 
@@ -514,9 +514,9 @@ evidence = "test:crates/render/tests/background_layers_tests.rs::multi_layer_bac
 id = "F7-SCRIPTING-UI"
 area = "F7"
 name = "Find-in-page, pestañas y chrome del shell"
-source = "crates/shell"
+source = "crates/browser"
 state = "done"
-evidence = "test:crates/shell/tests/shell_tests.rs::find_request_reports_hits_and_highlight_rects"
+evidence = "test:crates/browser/tests/shell_tests.rs::find_request_reports_hits_and_highlight_rects"
 
 [[capability]]
 id = "F7-CHROME-OVERLAY"

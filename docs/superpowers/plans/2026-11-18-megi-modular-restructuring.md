@@ -27,7 +27,11 @@
 | 6.1 thin `megi-browser` | ✅ complete | browser deps = webview + winit + softbuffer; 60 shell tests pass |
 | 7.1 feature matrix + CI | ✅ complete | `megi-test-harness/js` optional; CI checks light WebView |
 | 8.1 `megi-core` split | ✅ complete | `lib.rs` 1755 / `query.rs` 857 / `iter.rs` 88 / `unit_tests.rs` 1331 lines; 62 core tests pass |
-| 8.2–8.6 remaining god-file splits | ⏳ deferred | 111 legacy items tracked in the baseline |
+| 8.2 `megi-css` split | ✅ complete | `properties.rs` 6029 → 155 lines; 371 css tests pass |
+| 8.3 `megi-html` split | ✅ complete | `tree_builder.rs` 5036 → 406 lines; gate 3904/3904 tree PASS |
+| 8.4 `megi-browser` window split | ✅ complete | `window.rs` 3218 → 456 lines; 338 browser tests pass |
+| 8.5 `megi-browser` chrome split | ✅ complete | `chrome.rs` 3191 → 361 lines; 38/38 chrome tests preserved |
+| 8.6 `megi-net` split | ✅ complete | `http.rs` 2888 → 358 lines; net suite green |
 
 The two deferred items are independent of the completed work and are tracked in
 `.superpowers/sdd/2026-11-18-megi-modular-restructuring/progress.md` with their
