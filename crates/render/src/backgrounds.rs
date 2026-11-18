@@ -280,7 +280,7 @@ pub fn load_backgrounds(
         let Some(url) = resolved.get(&cache_key) else {
             continue;
         };
-        let resource = match loader.load_checked(url, false) {
+        let resource = match loader.load_no_cors_checked(url, false) {
             Ok(resource) => resource,
             Err(error) => {
                 result.failed += 1;

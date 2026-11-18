@@ -208,6 +208,8 @@ pub struct ScriptCandidate {
     pub integrity: Option<String>,
     /// `nonce` attribute, used by CSP `script-src 'nonce-…'` (#1526).
     pub nonce: Option<String>,
+    /// `crossorigin` attribute; classic scripts without it fetch in `no-cors` mode (#1537).
+    pub crossorigin: bool,
 }
 
 /// A script ready to be evaluated.
@@ -465,6 +467,7 @@ pub fn discover_scripts(
             is_module,
             integrity: data.get_attribute("integrity").map(str::to_owned),
             nonce: data.get_attribute("nonce").map(str::to_owned),
+            crossorigin: data.has_attribute("crossorigin"),
         });
     }
     candidates
@@ -558,7 +561,8 @@ pub fn load_scripts_with_csp(
                 break;
             }
             attempts += 1;
-            let resource = match loader.load_checked(&url, true) {
+            let use_cors = candidate.is_module || candidate.crossorigin;
+            let resource = match loader.load_with_mode_checked(&url, true, use_cors) {
                 Ok(resource) => resource,
                 Err(error) => {
                     report.skipped += 1;

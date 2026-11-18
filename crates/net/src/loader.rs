@@ -292,20 +292,47 @@ impl ResourceLoader {
         self
     }
 
-    /// Loads a subresource, applying the mixed-content policy (#1528).
-    ///
-    /// `active` is `true` for scripts/styles/fonts/XHR (blocked over `http:` on an HTTPS
-    /// document) and `false` for images/media (upgraded to `https:`). The policy is installed on
-    /// [`FetchOptions::mixed_content`] for the duration of the fetch so every HTTP redirect hop is
-    /// also checked/upgraded before any plaintext connection opens.
+    /// Loads a subresource in CORS mode while enforcing the mixed-content policy (#1528).
     pub fn load_checked(&mut self, url: &Url, active: bool) -> Result<Arc<Resource>, LoadError> {
+        self.load_with_mode_checked(url, active, true)
+    }
+
+    /// Loads a subresource in `no-cors` mode while enforcing the mixed-content policy
+    /// (#1528, #1537). Used for style sheets, backgrounds and classic scripts.
+    pub fn load_no_cors_checked(
+        &mut self,
+        url: &Url,
+        active: bool,
+    ) -> Result<Arc<Resource>, LoadError> {
+        self.load_with_mode_checked(url, active, false)
+    }
+
+    /// Loads a subresource, enforcing the mixed-content policy (#1528) and selecting CORS
+    /// (`use_cors = true`) or `no-cors` (`use_cors = false`) mode (#1537).
+    ///
+    /// The policy is installed on [`FetchOptions::mixed_content`] for the duration of the
+    /// fetch so every HTTP redirect hop is checked/upgraded before a plaintext socket opens.
+    pub fn load_with_mode_checked(
+        &mut self,
+        url: &Url,
+        active: bool,
+        use_cors: bool,
+    ) -> Result<Arc<Resource>, LoadError> {
         let Some(doc_scheme) = self.mixed_content_context else {
-            return self.load(url);
+            return if use_cors {
+                self.load(url)
+            } else {
+                self.load_no_cors(url)
+            };
         };
         let policy = crate::mixed_content::MixedContentPolicy::new(doc_scheme, active);
         let checked_url = policy.apply(url)?;
         let saved = self.options.mixed_content.replace(policy);
-        let result = self.load(&checked_url);
+        let result = if use_cors {
+            self.load(&checked_url)
+        } else {
+            self.load_no_cors(&checked_url)
+        };
         self.options.mixed_content = saved;
         let resource = result?;
         // Also guard against a cached resource whose final URL was plaintext HTTP.

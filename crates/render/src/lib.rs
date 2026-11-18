@@ -1699,7 +1699,7 @@ fn stylesheet_signature(document: &Document) -> u64 {
             }
         } else if local.eq_ignore_ascii_case("link") {
             mix(&mut hash, b"L");
-            for attr_name in ["rel", "href", "media", "type", "disabled"] {
+            for attr_name in ["rel", "href", "media", "type", "disabled", "crossorigin"] {
                 if let Some(val) = element.get_attribute(attr_name) {
                     mix(&mut hash, attr_name.as_bytes());
                     mix(&mut hash, val.as_bytes());
@@ -1782,12 +1782,15 @@ fn build_author_stylesheet_collection(
                     base_url,
                     0,
                     options.max_stylesheets,
+                    false,
                     &mut walk,
                     &mut font_faces,
                 )?;
                 collection.add_stylesheet(&sheet, css::Origin::Author);
             }
-            stylesheets::CssSource::External { url, .. } => {
+            stylesheets::CssSource::External {
+                url, crossorigin, ..
+            } => {
                 summary.external_stylesheets += 1;
                 let total_sheets = summary.external_stylesheets + walk.loaded;
                 if total_sheets > options.max_stylesheets {
@@ -1801,8 +1804,13 @@ fn build_author_stylesheet_collection(
                     }
                     continue;
                 }
-                let Some(text) =
-                    load_stylesheet_text(url, &mut *walk.loader, options, &mut *walk.warnings)?
+                let Some(text) = load_stylesheet_text(
+                    url,
+                    &mut *walk.loader,
+                    options,
+                    &mut *walk.warnings,
+                    *crossorigin,
+                )?
                 else {
                     continue;
                 };
@@ -1832,6 +1840,7 @@ fn build_author_stylesheet_collection(
                     url,
                     0,
                     options.max_stylesheets,
+                    *crossorigin,
                     &mut walk,
                     &mut font_faces,
                 )?;
@@ -1851,12 +1860,14 @@ fn build_author_stylesheet_collection(
 /// Ordering per CSS: for each import in document order, first the imported sheet's own
 /// imports, then the imported sheet's rules (via
 /// [`css::StyleCollection::add_import_stylesheet`], which also re-checks the media gate).
+#[allow(clippy::too_many_arguments)]
 fn walk_imports(
     collection: &mut css::StyleCollection,
     sheet: &css::Stylesheet,
     sheet_url: &Url,
     depth: usize,
     max_total_sheets: usize,
+    use_cors: bool,
     walk: &mut ImportWalk<'_>,
     font_faces: &mut Vec<webfonts::LocatedFontFace>,
 ) -> Result<(), RenderError> {
@@ -1933,8 +1944,13 @@ fn walk_imports(
             continue;
         }
         walk.attempts += 1;
-        let Some(text) =
-            load_stylesheet_text(&url, &mut *walk.loader, walk.options, &mut *walk.warnings)?
+        let Some(text) = load_stylesheet_text(
+            &url,
+            &mut *walk.loader,
+            walk.options,
+            &mut *walk.warnings,
+            use_cors,
+        )?
         else {
             continue;
         };
@@ -1966,6 +1982,7 @@ fn walk_imports(
             &url,
             depth + 1,
             max_total_sheets,
+            use_cors,
             walk,
             font_faces,
         )?;
@@ -1982,6 +1999,7 @@ fn load_stylesheet_text(
     loader: &mut ResourceLoader,
     options: &RenderOptions,
     warnings: &mut Vec<String>,
+    use_cors: bool,
 ) -> Result<Option<String>, RenderError> {
     if options.no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
         warnings.push(format!(
@@ -1989,7 +2007,7 @@ fn load_stylesheet_text(
         ));
         return Ok(None);
     }
-    match loader.load_checked(url, true) {
+    match loader.load_with_mode_checked(url, true, use_cors) {
         Ok(resource) => {
             if resource.bytes.len() > options.max_css_bytes_per_sheet {
                 // #654: skip the sheet with a warning instead of failing the render.
