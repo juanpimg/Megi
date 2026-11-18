@@ -9,6 +9,13 @@ use crate::{HistoryAction, LocationAction};
 use super::modules::file_fetch_allowed;
 use super::types::ScriptingHostContext;
 
+/// Shared queue of `location.*` actions requested by page scripts.
+pub(crate) type LocationActionQueue = Arc<Mutex<Vec<LocationAction>>>;
+/// Shared queue of `history.*` actions requested by page scripts.
+pub(crate) type HistoryActionQueue = Arc<Mutex<Vec<HistoryAction>>>;
+/// The pair of queues returned by the navigation provider installer.
+pub(crate) type NavigationActionQueues = (LocationActionQueue, HistoryActionQueue);
+
 #[cfg(feature = "js")]
 /// Serialized tuple origin used as the localStorage namespace key. `None` for
 /// non-HTTP(S) documents, which keep the legacy flat storage (#1476).
@@ -135,15 +142,12 @@ pub(crate) fn install_layout_provider(
 /// Installs the History/Location queue providers and returns the shared action queues.
 pub(crate) fn install_navigation_providers(
     runtime: &mut megi_js::JsRuntime,
-) -> (
-    Arc<Mutex<Vec<LocationAction>>>,
-    Arc<Mutex<Vec<HistoryAction>>>,
-) {
+) -> NavigationActionQueues {
     // Browser-facing host providers (R155): History/location actions are queued for the
     // host (the shell decides whether to navigate/reload after the render) and Web Storage
     // is persisted for `localStorage` when the caller shares `RenderOptions::storage`;
     // `sessionStorage` is always a fresh per-render in-memory area.
-    let location_actions: Arc<Mutex<Vec<LocationAction>>> = Arc::new(Mutex::new(Vec::new()));
+    let location_actions: LocationActionQueue = Arc::new(Mutex::new(Vec::new()));
     {
         let queue = Arc::clone(&location_actions);
         runtime.set_location_provider(Arc::new(move |action| {
@@ -157,7 +161,7 @@ pub(crate) fn install_navigation_providers(
                 });
         }));
     }
-    let history_actions: Arc<Mutex<Vec<HistoryAction>>> = Arc::new(Mutex::new(Vec::new()));
+    let history_actions: HistoryActionQueue = Arc::new(Mutex::new(Vec::new()));
     {
         let queue = Arc::clone(&history_actions);
         runtime.set_history_provider(Arc::new(move |action| {

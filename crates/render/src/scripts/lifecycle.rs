@@ -1,16 +1,15 @@
 //! Lifecycle/host event dispatch and finalization after the script evaluation loop.
 
-use std::sync::{Arc, Mutex};
-
-use crate::{HistoryAction, LocationAction};
-
 use super::VIRTUAL_EPOCH_MS;
 use super::event_loop::{
     EventLoopState, drain_microtasks, resolve_host_dom_target, run_event_loop, truncate_utf8,
 };
+use super::providers::{HistoryActionQueue, LocationActionQueue};
 use super::types::{ConsoleMessage, ScriptExecution, ScriptingHostContext, ScriptingLimits};
 
-/// Drives lifecycle/host events, timers, workers and frames, then finalizes the result.
+// Verbatim move of the finalization stage out of `execute_scripts`: keeping the original
+// argument list avoids reshaping the moved code and preserves its call ordering exactly.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_lifecycle_events(
     runtime: &mut megi_js::JsRuntime,
     limits: &ScriptingLimits,
@@ -18,8 +17,8 @@ pub(crate) fn run_lifecycle_events(
     module_tasks: usize,
     module_virtual_ms: u64,
     execution: &mut ScriptExecution,
-    location_actions: &Arc<Mutex<Vec<LocationAction>>>,
-    history_actions: &Arc<Mutex<Vec<HistoryAction>>>,
+    location_actions: &LocationActionQueue,
+    history_actions: &HistoryActionQueue,
     warnings: &mut Vec<String>,
 ) {
     let event_loop_start = std::time::Instant::now();
@@ -51,7 +50,7 @@ pub(crate) fn run_lifecycle_events(
     drain_microtasks(runtime, warnings);
 
     // 2. Timers (delays included) on the virtual clock, bounded by max_tasks/max_virtual_time.
-    run_event_loop(runtime, &limits, &mut loop_state, warnings);
+    run_event_loop(runtime, limits, &mut loop_state, warnings);
 
     runtime.set_ready_state("complete");
     // 3. `load` on `window`, then timers scheduled by `load` listeners (same budget).
@@ -60,7 +59,7 @@ pub(crate) fn run_lifecycle_events(
         Err(error) => warnings.push(format!("dispatching load failed: {error}")),
     }
     drain_microtasks(runtime, warnings);
-    run_event_loop(runtime, &limits, &mut loop_state, warnings);
+    run_event_loop(runtime, limits, &mut loop_state, warnings);
 
     // 4. Host-dispatched events (e.g. `hashchange`/`popstate` after a shell navigation).
     // Listeners run on `window`, may mutate the DOM and schedule timers; microtasks and the
@@ -86,7 +85,7 @@ pub(crate) fn run_lifecycle_events(
             Err(error) => warnings.push(format!("dispatching host event {event} failed: {error}")),
         }
         drain_microtasks(runtime, warnings);
-        run_event_loop(runtime, &limits, &mut loop_state, warnings);
+        run_event_loop(runtime, limits, &mut loop_state, warnings);
     }
     for dom_event in host.host_dom_events.iter().take(MAX_HOST_EVENTS) {
         let resolved_target = {
@@ -139,7 +138,7 @@ pub(crate) fn run_lifecycle_events(
             )),
         }
         drain_microtasks(runtime, warnings);
-        run_event_loop(runtime, &limits, &mut loop_state, warnings);
+        run_event_loop(runtime, limits, &mut loop_state, warnings);
     }
     // 5. Deterministic cooperative workers and cross-frame postMessage delivery (#1544):
     // drain main<->worker and parent<->child iframe queues, then pump timers/microtasks.
@@ -153,7 +152,7 @@ pub(crate) fn run_lifecycle_events(
             Err(error) => warnings.push(format!("worker tasks failed: {error}")),
         }
         drain_microtasks(runtime, warnings);
-        run_event_loop(runtime, &limits, &mut loop_state, warnings);
+        run_event_loop(runtime, limits, &mut loop_state, warnings);
     }
     runtime.init_connected_frames();
     let frame_budget = limits.max_tasks.saturating_sub(loop_state.tasks).min(256);
@@ -161,7 +160,7 @@ pub(crate) fn run_lifecycle_events(
         warnings.push(format!("frame tasks failed: {error}"));
     }
     drain_microtasks(runtime, warnings);
-    run_event_loop(runtime, &limits, &mut loop_state, warnings);
+    run_event_loop(runtime, limits, &mut loop_state, warnings);
     // Final microtask checkpoint: MutationObserver records queued by the last timer/host
     // callback callbacks are delivered **before** the document is handed back, so their
     // own DOM mutations are included in the re-render.
