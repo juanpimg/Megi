@@ -130,3 +130,10 @@ Assets in `assets/` that also exist under `crates/image/tests/fixtures/` (or
 fixture path used by the HTML pages working while storing each byte sequence once.
 `tools/check_fixture_hashes.py` (CI: *Fixture hash uniqueness*) rejects new duplicated
 regular files.
+
+## Execution coverage (#1431)
+
+Every `.html` fixture in this directory is rendered by
+`crates/render/tests/fixture_smoke.rs::every_render_html_fixture_renders_without_fatal_error`,
+so the demo pages for flex/grid/calc/container queries/gradients can no longer rot unnoticed.
+Feature-specific pixel assertions remain in their dedicated suites.
