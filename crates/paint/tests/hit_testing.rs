@@ -1,6 +1,6 @@
 //! Hit-testing tests (Phase 7 WP-7.5).
 //!
-//! The painter can optionally emit a parallel list of [`paint::HitRegion`]s
+//! The painter can optionally emit a parallel list of [`megi_paint::HitRegion`]s
 //! (painting order, already clipped) used by the shell for clicks/hover.
 //! These tests pin: last-painted-wins ordering, clip awareness, node identity
 //! for backgrounds/borders/text/images/markers/decorations, `<a href>` lookup
@@ -8,11 +8,11 @@
 
 use std::sync::Arc;
 
-use css::{BorderStyle, Color, ComputedStyle, Display, TextDecoration};
+use megi_css::{BorderStyle, Color, ComputedStyle, Display, TextDecoration};
 use megi_core::{Document, Namespace};
 use megi_image::RgbaImage;
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     HitKind, HitLink, ImageStore, build_display_list_and_hit_regions,
     build_display_list_with_hit_regions, find_link_at, hit_test, hit_test_all,
 };
@@ -62,12 +62,12 @@ fn transparent_root(id: megi_core::NodeId) -> LayoutBox {
 
 /// Renders an HTML document to (display list, hit regions) with the bundled
 /// deterministic fonts, mirroring the real render pipeline's layout call.
-fn html_regions(source: &str) -> (Document, paint::DisplayList, Vec<paint::HitRegion>) {
-    let document = html::parse_document(source, false);
-    let styles = paint::resolve_embedded_styles(&document);
-    let measurer = layout::FontTextMeasurer::bundled().expect("bundled fonts");
+fn html_regions(source: &str) -> (Document, megi_paint::DisplayList, Vec<megi_paint::HitRegion>) {
+    let document = megi_html::parse_document(source, false);
+    let styles = megi_paint::resolve_embedded_styles(&document);
+    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts");
     let layout_root =
-        layout::layout_document_with_measurer(&document, &styles, VIEWPORT, &measurer)
+        megi_layout::layout_document_with_measurer(&document, &styles, VIEWPORT, &measurer)
             .expect("layout root");
     let (display_list, regions) = build_display_list_and_hit_regions(&layout_root, VIEWPORT);
     (document, display_list, regions)
@@ -181,9 +181,9 @@ fn test_image_and_border_regions_have_node_ids() {
     let (_document, ids) = node_ids(2);
     let mut root = transparent_root(ids[0]);
     let mut box_style = block_style();
-    box_style.border_width = css::RectEdges::all(2.0);
-    box_style.border_color = css::RectEdges::all(Color::RED);
-    box_style.border_style = css::RectEdges::all(BorderStyle::Solid);
+    box_style.border_width = megi_css::RectEdges::all(2.0);
+    box_style.border_color = megi_css::RectEdges::all(Color::RED);
+    box_style.border_style = megi_css::RectEdges::all(BorderStyle::Solid);
     let mut container = box_with_rect(ids[1], box_style, Rect::new(0.0, 0.0, 50.0, 50.0));
     container.dimensions.border = EdgeSizes::all(2.0);
     root.children.push(container);
@@ -201,7 +201,7 @@ fn test_image_and_border_regions_have_node_ids() {
         &root,
         VIEWPORT,
         &store,
-        &paint::BackgroundImages::new(),
+        &megi_paint::BackgroundImages::new(),
     );
     assert!(
         regions
@@ -294,7 +294,7 @@ fn test_hit_regions_are_deterministic_and_do_not_change_display_list() {
     assert_eq!(first, second, "regions must be deterministic");
 
     // Plain entry point stays available and identical in item count.
-    let plain = paint::build_display_list(&root, VIEWPORT);
+    let plain = megi_paint::build_display_list(&root, VIEWPORT);
     assert_eq!(plain.items, list_with.items);
 }
 
@@ -304,15 +304,15 @@ fn test_rounded_overflow_clip_clips_child_hit_regions() {
     let mut root = transparent_root(ids[0]);
 
     let mut parent_style = block_style();
-    parent_style.overflow = css::Overflow::Hidden;
+    parent_style.overflow = megi_css::Overflow::Hidden;
     for corner in [
         &mut parent_style.border_radius.top_left,
         &mut parent_style.border_radius.top_right,
         &mut parent_style.border_radius.bottom_right,
         &mut parent_style.border_radius.bottom_left,
     ] {
-        corner.x = css::Length::Px(8.0);
-        corner.y = css::Length::Px(8.0);
+        corner.x = megi_css::Length::Px(8.0);
+        corner.y = megi_css::Length::Px(8.0);
     }
     let mut parent = box_with_rect(ids[1], parent_style, Rect::new(0.0, 0.0, 50.0, 50.0));
 

@@ -2,7 +2,7 @@
 
 //! `normalize()` must keep removed text nodes usable for existing JS references.
 
-use js::{Budget, JsRuntime};
+use megi_js::{Budget, JsRuntime};
 
 #[test]
 fn normalize_keeps_js_handles_usable() {

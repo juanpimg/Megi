@@ -10,7 +10,7 @@
 //! renders but `form_id` does not, so focus and edits survive re-rendering.
 //!
 //! Editing path: the window patches the snapshot (`value`/`checked`/`data-megi-focused`/
-//! `data-megi-active`), serializes it with `html::serialize_html`, renders it as an inline
+//! `data-megi-active`), serializes it with `megi_html::serialize_html`, renders it as an inline
 //! `data:` document with `base_override` = the original page URL (so relative stylesheets/
 //! images still resolve) and scripts disabled (the DOM snapshot already contains their
 //! effects; page timers pause while editing — documented limit).
@@ -23,7 +23,7 @@
 //! pattern).
 
 use megi_core::{Attribute, Document, NodeId};
-use layout::LayoutBox;
+use megi_layout::LayoutBox;
 
 use crate::links::CssRect;
 
@@ -893,10 +893,10 @@ fn set_text_content(document: &mut Document, node_id: NodeId, text: &str) -> boo
 
 /// Serializes a patched DOM snapshot as an inline `data:` document.
 pub fn snapshot_data_url(document: &Document) -> String {
-    let html = html::serialize_html(document);
+    let html = megi_html::serialize_html(document);
     format!(
         "data:text/html;base64,{}",
-        net::base64_encode(html.as_bytes())
+        megi_net::base64_encode(html.as_bytes())
     )
 }
 
@@ -978,7 +978,7 @@ impl FormSubmission {
 
 /// Resolves a form action against the document URL (absolute URLs pass through; `Url::join`
 /// covers the relative forms the shell already supports for links).
-fn resolve_action(base: &net::Url, action: &str) -> Option<String> {
+fn resolve_action(base: &megi_net::Url, action: &str) -> Option<String> {
     let action = action.trim();
     if action.is_empty() {
         return Some(base.as_str());
@@ -986,7 +986,7 @@ fn resolve_action(base: &net::Url, action: &str) -> Option<String> {
     base.join(action)
         .map(|url| url.as_str())
         .ok()
-        .or_else(|| net::Url::parse(action).ok().map(|url| url.as_str()))
+        .or_else(|| megi_net::Url::parse(action).ok().map(|url| url.as_str()))
 }
 
 /// Builds the submission parameters for a form from its controls (#1538).
@@ -996,7 +996,7 @@ fn resolve_action(base: &net::Url, action: &str) -> Option<String> {
 /// used, matching browser behaviour.
 pub fn form_submission(
     document: &Document,
-    base: &net::Url,
+    base: &megi_net::Url,
     form_node: NodeId,
     controls: &[FormControl],
 ) -> Option<FormSubmission> {
@@ -1041,11 +1041,11 @@ pub fn form_get_target(submission: &FormSubmission) -> Option<String> {
     if submission.method != "get" || submission.body.is_empty() {
         return Some(submission.action.clone());
     }
-    let separator = net::Url::parse(&submission.action)
+    let separator = megi_net::Url::parse(&submission.action)
         .ok()
         .and_then(|url| url.query().map(|_| '&'))
         .unwrap_or('?');
-    net::Url::parse(&format!(
+    megi_net::Url::parse(&format!(
         "{}{}{}",
         submission.action, separator, submission.body
     ))
@@ -1178,7 +1178,7 @@ mod tests {
         let mut user_control = control(1, FormControlKind::TextInput, "alice");
         user_control.node_id = user;
         user_control.name = "user".to_owned();
-        let base = net::Url::parse("https://example.com/page").expect("base");
+        let base = megi_net::Url::parse("https://example.com/page").expect("base");
         let submission =
             form_submission(&document, &base, form, &[user_control]).expect("submission");
         assert_eq!(submission.action, "https://example.com/login");
@@ -1461,7 +1461,7 @@ mod tests {
 
     #[test]
     fn multi_select_extraction_and_click_semantics() {
-        let mut document = html::parse_document(
+        let mut document = megi_html::parse_document(
             "<select multiple data-megi-form-id=\"7\"><option>One</option><option selected>Two</option><option>Three</option><option>Four</option></select>",
             true,
         );
@@ -1504,19 +1504,19 @@ mod tests {
         assert_eq!(super::multi_option_at(&control, 25.0), Some(1));
         assert_eq!(super::multi_option_at(&control, 200.0), None);
         assert!(super::patch_multi_select(&mut document, 7, &[0, 2]));
-        let text = html::serialize_html(&document);
+        let text = megi_html::serialize_html(&document);
         assert!(text.contains("selected"));
     }
 
     #[test]
     fn multi_select_visual_state_reaches_the_dom() {
-        let mut document = html::parse_document(
+        let mut document = megi_html::parse_document(
             "<select multiple data-megi-form-id=\"3\"><option>A</option><option>B</option><option>C</option></select>",
             true,
         );
         crate::forms::assign_form_ids(&mut document);
         assert!(super::patch_multi_select(&mut document, 3, &[2]));
-        let serialized = html::serialize_html(&document);
+        let serialized = megi_html::serialize_html(&document);
         assert!(serialized.contains("selected"), "{serialized}");
         let options = super::select_options(&document, document.body().expect("body"));
         assert!(!options.is_empty());
@@ -1555,7 +1555,7 @@ mod tests {
     fn form_ids_survive_hostile_page_values() {
         // `u32::MAX` used to panic on `id + 1`; duplicates and duplicates of the counter
         // made several controls share an id.
-        let mut document = html::parse_document(
+        let mut document = megi_html::parse_document(
             "<body><input data-megi-form-id='4294967295'>\
              <input data-megi-form-id='4294967294'>\
              <input data-megi-form-id='7'><input data-megi-form-id='7'>\

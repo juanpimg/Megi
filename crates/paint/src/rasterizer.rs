@@ -44,9 +44,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-use css::{BorderRadii, BoxShadow, Color};
+use megi_css::{BorderRadii, BoxShadow, Color};
 use megi_fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
-use layout::Rect;
+use megi_layout::Rect;
 
 use crate::display_list::{
     BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR,
@@ -598,25 +598,25 @@ impl Pixmap {
         x_end: f32,
         y: f32,
         thickness: f32,
-        style: css::BorderStyle,
+        style: megi_css::BorderStyle,
         color: Color,
         x_origin: f32,
     ) {
         match style {
-            css::BorderStyle::Dashed => {
+            megi_css::BorderStyle::Dashed => {
                 let unit = thickness.max(1.0);
                 for (start, end) in dash_segments(x_start, x_end, unit * 3.0, unit * 3.0, x_origin)
                 {
                     self.fill_rect(Rect::new(start, y, end - start, thickness), color);
                 }
             }
-            css::BorderStyle::Dotted => {
+            megi_css::BorderStyle::Dotted => {
                 let unit = thickness.max(1.0);
                 for (start, end) in dash_segments(x_start, x_end, unit, unit * 2.0, x_origin) {
                     self.fill_rect(Rect::new(start, y, end - start, thickness), color);
                 }
             }
-            css::BorderStyle::Double => {
+            megi_css::BorderStyle::Double => {
                 let line = thickness / 3.0;
                 self.fill_rect(Rect::new(x_start, y, x_end - x_start, line), color);
                 self.fill_rect(
@@ -637,25 +637,25 @@ impl Pixmap {
         y_end: f32,
         x: f32,
         thickness: f32,
-        style: css::BorderStyle,
+        style: megi_css::BorderStyle,
         color: Color,
         y_origin: f32,
     ) {
         match style {
-            css::BorderStyle::Dashed => {
+            megi_css::BorderStyle::Dashed => {
                 let unit = thickness.max(1.0);
                 for (start, end) in dash_segments(y_start, y_end, unit * 3.0, unit * 3.0, y_origin)
                 {
                     self.fill_rect(Rect::new(x, start, thickness, end - start), color);
                 }
             }
-            css::BorderStyle::Dotted => {
+            megi_css::BorderStyle::Dotted => {
                 let unit = thickness.max(1.0);
                 for (start, end) in dash_segments(y_start, y_end, unit, unit * 2.0, y_origin) {
                     self.fill_rect(Rect::new(x, start, thickness, end - start), color);
                 }
             }
-            css::BorderStyle::Double => {
+            megi_css::BorderStyle::Double => {
                 let line = thickness / 3.0;
                 self.fill_rect(Rect::new(x, y_start, line, y_end - y_start), color);
                 self.fill_rect(
@@ -2212,11 +2212,11 @@ fn get_glyph_bitmap(ch: char) -> [u8; 8] {
 /// Resolved per-corner radii in px: `[(x, y); 4]` in top-left, top-right,
 /// bottom-right, bottom-left order.
 fn resolve_corner_radii(rect: Rect, radii: BorderRadii) -> [(f32, f32); 4] {
-    let resolve = |length: css::Length, area: f32| -> f32 {
+    let resolve = |length: megi_css::Length, area: f32| -> f32 {
         match length {
-            css::Length::Px(px) => px.max(0.0),
-            css::Length::Percent(pct) => (area * pct / 100.0).max(0.0),
-            css::Length::Auto => 0.0,
+            megi_css::Length::Px(px) => px.max(0.0),
+            megi_css::Length::Percent(pct) => (area * pct / 100.0).max(0.0),
+            megi_css::Length::Auto => 0.0,
         }
     };
     let mut corners = [
@@ -2437,13 +2437,13 @@ fn blur_mask(mask: &mut [f32], width: usize, height: usize, blur: f32) {
 
 /// Expands (or shrinks) every corner radius by `spread` for box-shadow silhouettes.
 fn expand_radii(radii: BorderRadii, spread: f32) -> BorderRadii {
-    let expand = |radius: css::Radius| css::Radius {
+    let expand = |radius: megi_css::Radius| megi_css::Radius {
         x: match radius.x {
-            css::Length::Px(px) => css::Length::Px((px + spread).max(0.0)),
+            megi_css::Length::Px(px) => megi_css::Length::Px((px + spread).max(0.0)),
             other => other,
         },
         y: match radius.y {
-            css::Length::Px(px) => css::Length::Px((px + spread).max(0.0)),
+            megi_css::Length::Px(px) => megi_css::Length::Px((px + spread).max(0.0)),
             other => other,
         },
     };
@@ -2548,19 +2548,19 @@ impl Pixmap {
         // Percent radii must be resolved against the OUTER box before subtracting the
         // border; re-resolving them against the padding box changes the curve (#audit).
         let inner_radii = BorderRadii {
-            top_left: css::Radius {
+            top_left: megi_css::Radius {
                 x: shrink_radius(radii.top_left.x, left.width, rect.width),
                 y: shrink_radius(radii.top_left.y, top.width, rect.height),
             },
-            top_right: css::Radius {
+            top_right: megi_css::Radius {
                 x: shrink_radius(radii.top_right.x, right.width, rect.width),
                 y: shrink_radius(radii.top_right.y, top.width, rect.height),
             },
-            bottom_right: css::Radius {
+            bottom_right: megi_css::Radius {
                 x: shrink_radius(radii.bottom_right.x, right.width, rect.width),
                 y: shrink_radius(radii.bottom_right.y, bottom.width, rect.height),
             },
-            bottom_left: css::Radius {
+            bottom_left: megi_css::Radius {
                 x: shrink_radius(radii.bottom_left.x, left.width, rect.width),
                 y: shrink_radius(radii.bottom_left.y, bottom.width, rect.height),
             },
@@ -2748,13 +2748,13 @@ impl Pixmap {
 }
 
 /// Shrinks a radius by a border width, resolving percentages against the outer box first.
-fn shrink_radius(radius: css::Length, width: f32, outer: f32) -> css::Length {
+fn shrink_radius(radius: megi_css::Length, width: f32, outer: f32) -> megi_css::Length {
     let px = match radius {
-        css::Length::Px(px) => px,
-        css::Length::Percent(pct) => outer * pct / 100.0,
-        css::Length::Auto => 0.0,
+        megi_css::Length::Px(px) => px,
+        megi_css::Length::Percent(pct) => outer * pct / 100.0,
+        megi_css::Length::Auto => 0.0,
     };
-    css::Length::Px((px - width).max(0.0))
+    megi_css::Length::Px((px - width).max(0.0))
 }
 
 /// Paints a rounded clip group's nested items through its rounded mask.
@@ -3074,14 +3074,14 @@ fn interpolate_color(
     start: Color,
     end: Color,
     factor: f32,
-    space: css::InterpolationSpace,
+    space: megi_css::InterpolationSpace,
 ) -> Color {
     let factor = factor.clamp(0.0, 1.0);
     let alpha = (f32::from(start.a) + (f32::from(end.a) - f32::from(start.a)) * factor)
         .round()
         .clamp(0.0, 255.0) as u8;
     match space {
-        css::InterpolationSpace::Srgb => {
+        megi_css::InterpolationSpace::Srgb => {
             let channel = |a: u8, b: u8| -> u8 {
                 (f32::from(a) + (f32::from(b) - f32::from(a)) * factor)
                     .round()
@@ -3094,7 +3094,7 @@ fn interpolate_color(
                 alpha,
             )
         }
-        css::InterpolationSpace::SrgbLinear => {
+        megi_css::InterpolationSpace::SrgbLinear => {
             let channel = |a: u8, b: u8| -> u8 {
                 let start = srgb_to_linear(a);
                 let end = srgb_to_linear(b);
@@ -3107,7 +3107,7 @@ fn interpolate_color(
                 alpha,
             )
         }
-        css::InterpolationSpace::Oklab => {
+        megi_css::InterpolationSpace::Oklab => {
             let start_lab = srgb_to_oklab(start);
             let end_lab = srgb_to_oklab(end);
             let mixed = [
@@ -3123,20 +3123,20 @@ fn interpolate_color(
 }
 
 /// Resolves color-hint positions to normalized `0..=1` values.
-fn resolve_gradient_hints(hints: &[Option<css::Length>], line_length: f32) -> Vec<Option<f32>> {
+fn resolve_gradient_hints(hints: &[Option<megi_css::Length>], line_length: f32) -> Vec<Option<f32>> {
     hints
         .iter()
         .map(|hint| {
             hint.map(|length| match length {
-                css::Length::Percent(pct) => pct / 100.0,
-                css::Length::Px(px) => {
+                megi_css::Length::Percent(pct) => pct / 100.0,
+                megi_css::Length::Px(px) => {
                     if line_length > 0.0 {
                         px / line_length
                     } else {
                         0.0
                     }
                 }
-                css::Length::Auto => 0.0,
+                megi_css::Length::Auto => 0.0,
             })
         })
         .collect()
@@ -3144,20 +3144,20 @@ fn resolve_gradient_hints(hints: &[Option<css::Length>], line_length: f32) -> Ve
 
 /// Resolves stop positions to normalized `0..=1` values, filling implicit
 /// positions and clamping to a non-decreasing sequence (CSS Images 3 §3.4.1).
-fn resolve_gradient_stops(stops: &[css::GradientStop], line_length: f32) -> Vec<(f32, Color)> {
+fn resolve_gradient_stops(stops: &[megi_css::GradientStop], line_length: f32) -> Vec<(f32, Color)> {
     let mut positions: Vec<Option<f32>> = stops
         .iter()
         .map(|stop| {
             stop.position.map(|length| match length {
-                css::Length::Percent(pct) => pct / 100.0,
-                css::Length::Px(px) => {
+                megi_css::Length::Percent(pct) => pct / 100.0,
+                megi_css::Length::Px(px) => {
                     if line_length > 0.0 {
                         px / line_length
                     } else {
                         0.0
                     }
                 }
-                css::Length::Auto => 0.0,
+                megi_css::Length::Auto => 0.0,
             })
         })
         .collect();
@@ -3209,7 +3209,7 @@ fn sample_gradient(
     hints: &[Option<f32>],
     repeating: bool,
     mut t: f32,
-    interpolation: css::InterpolationSpace,
+    interpolation: megi_css::InterpolationSpace,
 ) -> Color {
     let Some((first, first_color)) = stops.first().copied() else {
         return Color::TRANSPARENT;
@@ -3273,20 +3273,20 @@ fn sample_gradient(
 }
 
 /// Linear gradient geometry: `(center_x, center_y, dir_x, dir_y, line_length)`.
-fn linear_gradient_axis(rect: Rect, direction: css::LinearDirection) -> (f32, f32, f32, f32, f32) {
+fn linear_gradient_axis(rect: Rect, direction: megi_css::LinearDirection) -> (f32, f32, f32, f32, f32) {
     let (mut dx, mut dy) = match direction {
-        css::LinearDirection::Angle(degrees) => {
+        megi_css::LinearDirection::Angle(degrees) => {
             let radians = degrees.to_radians();
             (radians.sin(), -radians.cos())
         }
-        css::LinearDirection::ToTop => (0.0, -1.0),
-        css::LinearDirection::ToRight => (1.0, 0.0),
-        css::LinearDirection::ToBottom => (0.0, 1.0),
-        css::LinearDirection::ToLeft => (-1.0, 0.0),
-        css::LinearDirection::ToTopRight => (1.0, -1.0),
-        css::LinearDirection::ToTopLeft => (-1.0, -1.0),
-        css::LinearDirection::ToBottomRight => (1.0, 1.0),
-        css::LinearDirection::ToBottomLeft => (-1.0, 1.0),
+        megi_css::LinearDirection::ToTop => (0.0, -1.0),
+        megi_css::LinearDirection::ToRight => (1.0, 0.0),
+        megi_css::LinearDirection::ToBottom => (0.0, 1.0),
+        megi_css::LinearDirection::ToLeft => (-1.0, 0.0),
+        megi_css::LinearDirection::ToTopRight => (1.0, -1.0),
+        megi_css::LinearDirection::ToTopLeft => (-1.0, -1.0),
+        megi_css::LinearDirection::ToBottomRight => (1.0, 1.0),
+        megi_css::LinearDirection::ToBottomLeft => (-1.0, 1.0),
     };
     let magnitude = (dx * dx + dy * dy).sqrt();
     if magnitude > 1e-6 {
@@ -3306,18 +3306,18 @@ fn linear_gradient_axis(rect: Rect, direction: css::LinearDirection) -> (f32, f3
     )
 }
 
-fn resolve_gradient_position(value: css::Length, origin: f32, area: f32) -> f32 {
+fn resolve_gradient_position(value: megi_css::Length, origin: f32, area: f32) -> f32 {
     match value {
-        css::Length::Px(px) => origin + px,
-        css::Length::Percent(pct) => origin + area * pct / 100.0,
-        css::Length::Auto => origin + area / 2.0,
+        megi_css::Length::Px(px) => origin + px,
+        megi_css::Length::Percent(pct) => origin + area * pct / 100.0,
+        megi_css::Length::Auto => origin + area / 2.0,
     }
 }
 
 /// Radial gradient geometry: `(center_x, center_y, radius_x, radius_y)`.
 fn radial_gradient_geometry(
     rect: Rect,
-    radial: &css::RadialGradient,
+    radial: &megi_css::RadialGradient,
 ) -> Option<(f32, f32, f32, f32)> {
     let center_x = resolve_gradient_position(radial.position.x, rect.x, rect.width);
     let center_y = resolve_gradient_position(radial.position.y, rect.y, rect.height);
@@ -3332,43 +3332,43 @@ fn radial_gradient_geometry(
         (rect.x + rect.width, rect.y + rect.height),
     ];
     let distance = |(x, y): (f32, f32)| ((x - center_x).powi(2) + (y - center_y).powi(2)).sqrt();
-    let extent = radial.extent.unwrap_or(css::RadialExtent::FarthestCorner);
+    let extent = radial.extent.unwrap_or(megi_css::RadialExtent::FarthestCorner);
     let shape = match radial.shape {
         Some(shape) => shape,
         None => match extent {
-            css::RadialExtent::Explicit(rx, ry) if (rx - ry).abs() < 0.01 => {
-                css::RadialShape::Circle
+            megi_css::RadialExtent::Explicit(rx, ry) if (rx - ry).abs() < 0.01 => {
+                megi_css::RadialShape::Circle
             }
-            _ => css::RadialShape::Ellipse,
+            _ => megi_css::RadialShape::Ellipse,
         },
     };
     let (rx, ry) = match shape {
-        css::RadialShape::Circle => {
+        megi_css::RadialShape::Circle => {
             let radius = match extent {
-                css::RadialExtent::ClosestSide => left.min(right).min(top).min(bottom),
-                css::RadialExtent::FarthestSide => left.max(right).max(top).max(bottom),
-                css::RadialExtent::ClosestCorner => corners
+                megi_css::RadialExtent::ClosestSide => left.min(right).min(top).min(bottom),
+                megi_css::RadialExtent::FarthestSide => left.max(right).max(top).max(bottom),
+                megi_css::RadialExtent::ClosestCorner => corners
                     .iter()
                     .map(|corner| distance(*corner))
                     .fold(f32::INFINITY, f32::min),
-                css::RadialExtent::FarthestCorner => corners
+                megi_css::RadialExtent::FarthestCorner => corners
                     .iter()
                     .map(|corner| distance(*corner))
                     .fold(0.0, f32::max),
-                css::RadialExtent::Explicit(rx, _) => rx,
+                megi_css::RadialExtent::Explicit(rx, _) => rx,
             };
             (radius, radius)
         }
-        css::RadialShape::Ellipse => match extent {
-            css::RadialExtent::ClosestSide => (left.min(right), top.min(bottom)),
-            css::RadialExtent::FarthestSide => (left.max(right), top.max(bottom)),
-            css::RadialExtent::ClosestCorner | css::RadialExtent::FarthestCorner => {
+        megi_css::RadialShape::Ellipse => match extent {
+            megi_css::RadialExtent::ClosestSide => (left.min(right), top.min(bottom)),
+            megi_css::RadialExtent::FarthestSide => (left.max(right), top.max(bottom)),
+            megi_css::RadialExtent::ClosestCorner | megi_css::RadialExtent::FarthestCorner => {
                 let mut chosen = corners[0];
                 let mut best = distance(corners[0]);
                 for corner in corners.iter().skip(1) {
                     let candidate = distance(*corner);
                     let better = match extent {
-                        css::RadialExtent::ClosestCorner => candidate < best,
+                        megi_css::RadialExtent::ClosestCorner => candidate < best,
                         _ => candidate > best,
                     };
                     if better {
@@ -3380,7 +3380,7 @@ fn radial_gradient_geometry(
                 let dy = (chosen.1 - center_y).abs();
                 (dx.max(left.min(right)), dy.max(top.min(bottom)))
             }
-            css::RadialExtent::Explicit(rx, ry) => (rx, ry),
+            megi_css::RadialExtent::Explicit(rx, ry) => (rx, ry),
         },
     };
     if !rx.is_finite() || !ry.is_finite() || rx <= 0.0 || ry <= 0.0 {
@@ -3395,7 +3395,7 @@ impl Pixmap {
     /// Colors are interpolated in straight sRGB (documented limitation: no
     /// color-space interpolation), `repeating-*` gradients wrap between their
     /// first and last resolved stop, and the active clip stack is honoured.
-    pub fn draw_gradient(&mut self, rect: Rect, gradient: &css::Gradient) {
+    pub fn draw_gradient(&mut self, rect: Rect, gradient: &megi_css::Gradient) {
         if gradient.stops.len() < 2
             || rect.width <= 0.0
             || rect.height <= 0.0
@@ -3412,15 +3412,15 @@ impl Pixmap {
         }
         let stops = &gradient.stops[..gradient.stops.len().min(MAX_GRADIENT_STOPS)];
         let (linear_axis, radial, conic) = match &gradient.kind {
-            css::GradientKind::Linear(linear) => (
+            megi_css::GradientKind::Linear(linear) => (
                 Some(linear_gradient_axis(rect, linear.direction)),
                 None,
                 None,
             ),
-            css::GradientKind::Radial(radial) => {
+            megi_css::GradientKind::Radial(radial) => {
                 (None, Some(radial_gradient_geometry(rect, radial)), None)
             }
-            css::GradientKind::Conic(conic) => {
+            megi_css::GradientKind::Conic(conic) => {
                 let center_x = resolve_gradient_position(conic.position.x, rect.x, rect.width);
                 let center_y = resolve_gradient_position(conic.position.y, rect.y, rect.height);
                 (None, None, Some((center_x, center_y, conic.from_angle)))
@@ -3516,52 +3516,52 @@ fn mix(a: f32, b: f32, amount: f32) -> f32 {
 }
 
 /// Mix-blend-mode channel blend function (Compositing 1 §5): `B(Cb, Cs)`.
-fn blend_channel(mode: css::MixBlendMode, backdrop: f32, source: f32) -> f32 {
+fn blend_channel(mode: megi_css::MixBlendMode, backdrop: f32, source: f32) -> f32 {
     match mode {
-        css::MixBlendMode::Normal => source,
-        css::MixBlendMode::Multiply => backdrop * source,
-        css::MixBlendMode::Screen => 1.0 - (1.0 - backdrop) * (1.0 - source),
-        css::MixBlendMode::Overlay => {
+        megi_css::MixBlendMode::Normal => source,
+        megi_css::MixBlendMode::Multiply => backdrop * source,
+        megi_css::MixBlendMode::Screen => 1.0 - (1.0 - backdrop) * (1.0 - source),
+        megi_css::MixBlendMode::Overlay => {
             if backdrop <= 0.5 {
                 2.0 * backdrop * source
             } else {
                 1.0 - 2.0 * (1.0 - backdrop) * (1.0 - source)
             }
         }
-        css::MixBlendMode::Darken => backdrop.min(source),
-        css::MixBlendMode::Lighten => backdrop.max(source),
+        megi_css::MixBlendMode::Darken => backdrop.min(source),
+        megi_css::MixBlendMode::Lighten => backdrop.max(source),
     }
 }
 
 /// Whether the filter only changes color/alpha per pixel (no spatial kernel).
-fn is_color_filter(filter: &css::FilterFunction) -> bool {
+fn is_color_filter(filter: &megi_css::FilterFunction) -> bool {
     !matches!(
         filter,
-        css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. }
+        megi_css::FilterFunction::Blur(_) | megi_css::FilterFunction::DropShadow { .. }
     )
 }
 
-fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
+fn apply_color_filter(pixel: &mut Color, filter: &megi_css::FilterFunction) {
     match *filter {
-        css::FilterFunction::Brightness(k) => {
+        megi_css::FilterFunction::Brightness(k) => {
             pixel.r = clamp_channel(f32::from(pixel.r) / 255.0 * k);
             pixel.g = clamp_channel(f32::from(pixel.g) / 255.0 * k);
             pixel.b = clamp_channel(f32::from(pixel.b) / 255.0 * k);
         }
-        css::FilterFunction::Contrast(k) => {
+        megi_css::FilterFunction::Contrast(k) => {
             let apply = |channel: u8| clamp_channel((f32::from(channel) / 255.0 - 0.5) * k + 0.5);
             pixel.r = apply(pixel.r);
             pixel.g = apply(pixel.g);
             pixel.b = apply(pixel.b);
         }
-        css::FilterFunction::Grayscale(amount) => {
+        megi_css::FilterFunction::Grayscale(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             let gray = luma(*pixel);
             pixel.r = clamp_channel(mix(f32::from(pixel.r) / 255.0, gray, amount));
             pixel.g = clamp_channel(mix(f32::from(pixel.g) / 255.0, gray, amount));
             pixel.b = clamp_channel(mix(f32::from(pixel.b) / 255.0, gray, amount));
         }
-        css::FilterFunction::Invert(amount) => {
+        megi_css::FilterFunction::Invert(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             let invert = |channel: u8| {
                 clamp_channel(mix(
@@ -3574,11 +3574,11 @@ fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
             pixel.g = invert(pixel.g);
             pixel.b = invert(pixel.b);
         }
-        css::FilterFunction::Opacity(amount) => {
+        megi_css::FilterFunction::Opacity(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             pixel.a = (f32::from(pixel.a) * amount).round().clamp(0.0, 255.0) as u8;
         }
-        css::FilterFunction::Sepia(amount) => {
+        megi_css::FilterFunction::Sepia(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             let (r, g, b) = (
                 f32::from(pixel.r) / 255.0,
@@ -3592,7 +3592,7 @@ fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
             pixel.g = clamp_channel(mix(g, sepia_g, amount));
             pixel.b = clamp_channel(mix(b, sepia_b, amount));
         }
-        css::FilterFunction::Saturate(amount) => {
+        megi_css::FilterFunction::Saturate(amount) => {
             let amount = amount.max(0.0);
             let (r, g, b) = (
                 f32::from(pixel.r) / 255.0,
@@ -3605,7 +3605,7 @@ fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
             pixel.g = clamp_channel(matrix(g));
             pixel.b = clamp_channel(matrix(b));
         }
-        css::FilterFunction::HueRotate(degrees) => {
+        megi_css::FilterFunction::HueRotate(degrees) => {
             let radians = degrees.to_radians();
             let cos = radians.cos();
             let sin = radians.sin();
@@ -3635,7 +3635,7 @@ fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
             pixel.g = clamp_channel(matrix[1][0] * r + matrix[1][1] * g + matrix[1][2] * b);
             pixel.b = clamp_channel(matrix[2][0] * r + matrix[2][1] * g + matrix[2][2] * b);
         }
-        css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. } => {}
+        megi_css::FilterFunction::Blur(_) | megi_css::FilterFunction::DropShadow { .. } => {}
     }
 }
 
@@ -3643,26 +3643,26 @@ fn apply_color_filter(pixel: &mut Color, filter: &css::FilterFunction) {
 ///
 /// Used by the painter's inline fast path for boxes whose filtered subtree is
 /// just a solid background (avoids an offscreen `EffectGroup`, R166).
-pub(crate) fn filter_solid_color(color: Color, filters: &[css::FilterFunction]) -> Color {
+pub(crate) fn filter_solid_color(color: Color, filters: &[megi_css::FilterFunction]) -> Color {
     let mut color = color;
-    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+    for filter in filters.iter().take(megi_css::MAX_FILTER_FUNCTIONS) {
         apply_color_filter(&mut color, filter);
     }
     color
 }
 
 /// Applies one `filter` function to every pixel of the offscreen buffer.
-fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
+fn apply_filter(buf: &mut Pixmap, filter: &megi_css::FilterFunction) {
     match *filter {
-        css::FilterFunction::Blur(radius) => blur_rgba(buf, radius),
-        css::FilterFunction::Brightness(k) => {
+        megi_css::FilterFunction::Blur(radius) => blur_rgba(buf, radius),
+        megi_css::FilterFunction::Brightness(k) => {
             for pixel in &mut buf.pixels {
                 pixel.r = clamp_channel(f32::from(pixel.r) / 255.0 * k);
                 pixel.g = clamp_channel(f32::from(pixel.g) / 255.0 * k);
                 pixel.b = clamp_channel(f32::from(pixel.b) / 255.0 * k);
             }
         }
-        css::FilterFunction::Contrast(k) => {
+        megi_css::FilterFunction::Contrast(k) => {
             for pixel in &mut buf.pixels {
                 let apply =
                     |channel: u8| clamp_channel((f32::from(channel) / 255.0 - 0.5) * k + 0.5);
@@ -3671,7 +3671,7 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = apply(pixel.b);
             }
         }
-        css::FilterFunction::Grayscale(amount) => {
+        megi_css::FilterFunction::Grayscale(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             for pixel in &mut buf.pixels {
                 let gray = luma(*pixel);
@@ -3680,7 +3680,7 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = clamp_channel(mix(f32::from(pixel.b) / 255.0, gray, amount));
             }
         }
-        css::FilterFunction::Invert(amount) => {
+        megi_css::FilterFunction::Invert(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             for pixel in &mut buf.pixels {
                 let invert = |channel: u8| {
@@ -3695,13 +3695,13 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = invert(pixel.b);
             }
         }
-        css::FilterFunction::Opacity(amount) => {
+        megi_css::FilterFunction::Opacity(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             for pixel in &mut buf.pixels {
                 pixel.a = (f32::from(pixel.a) * amount).round().clamp(0.0, 255.0) as u8;
             }
         }
-        css::FilterFunction::Sepia(amount) => {
+        megi_css::FilterFunction::Sepia(amount) => {
             let amount = amount.clamp(0.0, 1.0);
             for pixel in &mut buf.pixels {
                 let (r, g, b) = (
@@ -3717,7 +3717,7 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = clamp_channel(mix(b, sepia_b, amount));
             }
         }
-        css::FilterFunction::Saturate(amount) => {
+        megi_css::FilterFunction::Saturate(amount) => {
             let amount = amount.max(0.0);
             for pixel in &mut buf.pixels {
                 let (r, g, b) = (
@@ -3732,7 +3732,7 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = clamp_channel(matrix(b));
             }
         }
-        css::FilterFunction::HueRotate(degrees) => {
+        megi_css::FilterFunction::HueRotate(degrees) => {
             let radians = degrees.to_radians();
             let cos = radians.cos();
             let sin = radians.sin();
@@ -3765,7 +3765,7 @@ fn apply_filter(buf: &mut Pixmap, filter: &css::FilterFunction) {
                 pixel.b = clamp_channel(matrix[2][0] * r + matrix[2][1] * g + matrix[2][2] * b);
             }
         }
-        css::FilterFunction::DropShadow {
+        megi_css::FilterFunction::DropShadow {
             offset_x,
             offset_y,
             blur,
@@ -3904,7 +3904,7 @@ fn composite_effect(
     buffer: &Pixmap,
     bx0: i64,
     by0: i64,
-    blend: css::MixBlendMode,
+    blend: megi_css::MixBlendMode,
 ) {
     let stride = pixmap.width as usize;
     for y in 0..buffer.height {
@@ -3962,8 +3962,8 @@ fn composite_effect(
 fn paint_effect_group(
     pixmap: &mut Pixmap,
     rect: Rect,
-    filters: &[css::FilterFunction],
-    blend: css::MixBlendMode,
+    filters: &[megi_css::FilterFunction],
+    blend: megi_css::MixBlendMode,
     items: &[DisplayItem],
     cache: &mut TextCache,
     font_database: &FontDatabase,
@@ -4010,9 +4010,9 @@ fn paint_effect_group(
         dy - y0 as f32,
         budget,
     );
-    let filters: Vec<css::FilterFunction> = filters
+    let filters: Vec<megi_css::FilterFunction> = filters
         .iter()
-        .take(css::MAX_FILTER_FUNCTIONS)
+        .take(megi_css::MAX_FILTER_FUNCTIONS)
         .copied()
         .collect();
     for filter in &filters {
@@ -4032,7 +4032,7 @@ fn paint_effect_group(
 /// buffer); spatial filters (blur/drop-shadow) use a reused thread-local pixmap
 /// for the intersected region only (R166). Groups larger than the documented
 /// area cap are left untouched (DoS bound).
-fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::FilterFunction]) {
+fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[megi_css::FilterFunction]) {
     if filters.is_empty() {
         return;
     }
@@ -4059,9 +4059,9 @@ fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[css::Filter
     if (width as usize).saturating_mul(height as usize) > MAX_ROUNDED_GROUP_PIXELS {
         return;
     }
-    let filters: Vec<css::FilterFunction> = filters
+    let filters: Vec<megi_css::FilterFunction> = filters
         .iter()
-        .take(css::MAX_FILTER_FUNCTIONS)
+        .take(megi_css::MAX_FILTER_FUNCTIONS)
         .copied()
         .collect();
     let stride = pixmap.width as usize;
@@ -4130,7 +4130,7 @@ mod composite_tests {
         let mut dest = Pixmap::new(1, 1);
         let mut src = Pixmap::new(1, 1);
         src.pixels[0] = Color::new(255, 0, 0, 128);
-        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        composite_effect(&mut dest, &src, 0, 0, megi_css::MixBlendMode::Normal);
         let pixel = dest.pixels[0];
         assert_eq!(
             (pixel.r, pixel.g, pixel.b, pixel.a),
@@ -4147,7 +4147,7 @@ mod composite_tests {
         dest.pixels[0] = Color::new(0, 0, 255, 64);
         let mut src = Pixmap::new(1, 1);
         src.pixels[0] = Color::new(255, 0, 0, 128);
-        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        composite_effect(&mut dest, &src, 0, 0, megi_css::MixBlendMode::Normal);
         let pixel = dest.pixels[0];
         assert_eq!(
             (pixel.r, pixel.g, pixel.b, pixel.a),
@@ -4162,7 +4162,7 @@ mod composite_tests {
         dest.pixels[0] = Color::new(128, 128, 128, 128);
         let mut src = Pixmap::new(1, 1);
         src.pixels[0] = Color::new(255, 0, 0, 128);
-        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Multiply);
+        composite_effect(&mut dest, &src, 0, 0, megi_css::MixBlendMode::Multiply);
         let pixel = dest.pixels[0];
         assert_eq!((pixel.r, pixel.g, pixel.b, pixel.a), (170, 43, 43, 192));
     }
@@ -4173,7 +4173,7 @@ mod composite_tests {
         dest.pixels[0] = Color::new(0, 0, 255, 255);
         let mut src = Pixmap::new(1, 1);
         src.pixels[0] = Color::new(255, 0, 0, 128);
-        composite_effect(&mut dest, &src, 0, 0, css::MixBlendMode::Normal);
+        composite_effect(&mut dest, &src, 0, 0, megi_css::MixBlendMode::Normal);
         let pixel = dest.pixels[0];
         assert_eq!(pixel.a, 255);
         assert_eq!(pixel.r, 128);
@@ -4321,10 +4321,10 @@ mod paint_budget_tests {
 mod geometry_sanity_tests {
     use super::*;
 
-    fn radius(px: f32) -> css::Radius {
-        css::Radius {
-            x: css::Length::Px(px),
-            y: css::Length::Px(px),
+    fn radius(px: f32) -> megi_css::Radius {
+        megi_css::Radius {
+            x: megi_css::Length::Px(px),
+            y: megi_css::Length::Px(px),
         }
     }
 
@@ -4343,11 +4343,11 @@ mod geometry_sanity_tests {
     #[test]
     fn legal_asymmetric_radii_are_not_clamped() {
         let rect = Rect::new(0.0, 0.0, 100.0, 100.0);
-        let radii = css::BorderRadii {
+        let radii = megi_css::BorderRadii {
             top_left: radius(80.0),
             top_right: radius(20.0),
-            bottom_right: css::Radius::ZERO,
-            bottom_left: css::Radius::ZERO,
+            bottom_right: megi_css::Radius::ZERO,
+            bottom_left: megi_css::Radius::ZERO,
         };
         let corners = resolve_corner_radii(rect, radii);
         assert_eq!(corners[0], (80.0, 80.0), "80+20 <= 100 needs no scaling");
@@ -4358,12 +4358,12 @@ mod geometry_sanity_tests {
         // border-radius: 20% on a 100px box with a 10px border gives an inner
         // radius of 10px, not 20% of the 80px padding box (16px).
         assert_eq!(
-            shrink_radius(css::Length::Percent(20.0), 10.0, 100.0),
-            css::Length::Px(10.0)
+            shrink_radius(megi_css::Length::Percent(20.0), 10.0, 100.0),
+            megi_css::Length::Px(10.0)
         );
         assert_eq!(
-            shrink_radius(css::Length::Px(20.0), 10.0, 100.0),
-            css::Length::Px(10.0)
+            shrink_radius(megi_css::Length::Px(20.0), 10.0, 100.0),
+            megi_css::Length::Px(10.0)
         );
     }
 
@@ -4378,7 +4378,7 @@ mod geometry_sanity_tests {
             (1.0, Color::WHITE),
         ];
         assert_eq!(
-            sample_gradient(&stops, &[], false, 0.5, css::InterpolationSpace::Srgb),
+            sample_gradient(&stops, &[], false, 0.5, megi_css::InterpolationSpace::Srgb),
             Color::GREEN
         );
     }
@@ -4386,8 +4386,8 @@ mod geometry_sanity_tests {
     #[test]
     fn repeating_gradient_wraps_below_the_first_stop() {
         let stops = [(0.2, Color::RED), (0.8, Color::BLUE)];
-        let wrapped = sample_gradient(&stops, &[], true, 0.0, css::InterpolationSpace::Srgb);
-        let middle = sample_gradient(&stops, &[], true, 0.6, css::InterpolationSpace::Srgb);
+        let wrapped = sample_gradient(&stops, &[], true, 0.0, megi_css::InterpolationSpace::Srgb);
+        let middle = sample_gradient(&stops, &[], true, 0.6, megi_css::InterpolationSpace::Srgb);
         assert_eq!(wrapped, middle, "t=0 must wrap into the repeated interval");
     }
 }

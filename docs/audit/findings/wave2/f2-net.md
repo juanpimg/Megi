@@ -80,7 +80,7 @@ Archivos leídos (`crates/net/src/`):
   laterales persistentes (juzgado ya defecto en #1252 para esta ruta).
 - `fix`: validar CORS **antes** de `store_from_response`, o guardar cookies sólo
   para pushes que pasen el gate (igual que la rama permitida).
-- `repro`: `docs/audit/findings/wave2/repro-f2-net/src/main.rs` (R7) + `cargo test -p net`.
+- `repro`: `docs/audit/findings/wave2/repro-f2-net/src/main.rs` (R7) + `cargo test -p megi-net`.
 - `dedup`: **#1252** (evidencia nueva: el test existente no cubre cookie-en-bloqueado;
   el jar sí se contamina en HEAD). `security` + `advisory`: NO publicar como issue.
 
@@ -207,7 +207,7 @@ Archivos leídos (`crates/net/src/`):
   timeout de lectura.
 - `expected`: campo `write_timeout` propio o misma semántica documentada.
 - `fix`: añadir `FetchOptions::write_timeout` o documentar el acoplamiento.
-- `repro`: inspección + `cargo test -p net` (ningún test distingue ambos).
+- `repro`: inspección + `cargo test -p megi-net` (ningún test distingue ambos).
 - `dedup`: new.
 
 ### w2-net-011 — credenciales con origen sin puerto nunca hacen match
@@ -247,7 +247,7 @@ Archivos leídos (`crates/net/src/`):
 - `title`: el rechazo de upgrade nunca tipa el status (siempre `InvalidResponse`
   genérico) y el GUID existe dos veces.
 - `evidence`: `grep -rn UpgradeRejected crates/ --include=*.rs` → sólo def+Display;
-  `cargo test -p net` pasa sin cubrirla.
+  `cargo test -p megi-net` pasa sin cubrirla.
 - `fix`: construir `UpgradeRejected(status)` en el handshake + deduplicar GUID.
 - `repro`: inspección. `dedup`: new.
 
@@ -330,7 +330,7 @@ Archivos leídos (`crates/net/src/`):
 
 ## Comandos ejecutados
 
-- `cargo test -p net` → **todo verde** (157 unit + 33 suites de integración, 0
+- `cargo test -p megi-net` → **todo verde** (157 unit + 33 suites de integración, 0
   fallos; websocket 2/2, auth 2/2). Salida completa en el log de sesión.
   Re-ejecutado desde `/tmp/opencode/megi-verify` (HEAD `3c06db8` limpio): mismos
   conteos, 0 fallos.
@@ -365,7 +365,7 @@ R10 fragmented-ping-rejected: true
   diferencias**. El WIP del usuario sólo toca `crates/js` y `crates/render`;
   ningún hallazgo depende de cambios sin commitear → **ningún hallazgo marcado
   `excluir: WIP del usuario`**.
-- `cargo test -p net` en limpio: todo verde (157 unit + suites, 0 fallos;
+- `cargo test -p megi-net` en limpio: todo verde (157 unit + suites, 0 fallos;
   mismos conteos que en el árbol principal).
 - Repros `R1–R10` contra el árbol limpio (crate en
   `/tmp/opencode/w2net-repro-verify`, path-dep al worktree): salida idéntica a

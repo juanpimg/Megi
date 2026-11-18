@@ -1,7 +1,7 @@
 # F5 gap matrix — networking + security (Megi, upstream `main` @ 9c94e86)
 
 Read-only static review of `crates/net/src/**` plus the call sites in `crates/render`, `crates/js`,
-`crates/html`, `crates/shell` that decide what a page can do over the network. No cargo was run and
+`crates/html`, `crates/browser` that decide what a page can do over the network. No cargo was run and
 nothing under upstream `main` (9c94e86) was modified.
 
 Method: read every module header of `net` (they document scope and deliberate limits), then verified
@@ -147,11 +147,11 @@ transport quality.
 5. **`fetch()` is same-origin only (`partial`, high compat).** Every cross-origin API call fails with
    "CORS: cross-origin fetch denied"; the CORS code in `net` is unreachable from page script, so
    almost every real site that talks to its backend on `api.` or a SaaS endpoint breaks. → *sketch:*
-   `render/src/scripts.rs` fetch provider: stop pre-rejecting; build a `net::FetchOptions` with the
-   document origin and mode (cors/no-cors/same-origin), run simple requests, run `net::http::preflight`
+   `render/src/scripts.rs` fetch provider: stop pre-rejecting; build a `megi_net::FetchOptions` with the
+   document origin and mode (cors/no-cors/same-origin), run simple requests, run `megi_net::http::preflight`
    for non-simple ones, validate responses via `cors::validate_response`, map to Fetch terms
    (`type: "cors"|"opaque"`, `redirected`), expose `Access-Control-Expose-Headers`; extend
-   `js::host::FetchRequest` with `mode`/`credentials`/`redirect`. Est. 500–800 lines.
+   `megi_js::host::FetchRequest` with `mode`/`credentials`/`redirect`. Est. 500–800 lines.
 6. **No XMLHttpRequest (`absent`, high compat).** Countless libraries and legacy sites feature-detect
    XHR as their only transport; no XHR means those pages render but their data never loads. →
    *sketch:* `js/src/xhr.rs` (~600–900 lines) as a thin shim over the (fixed) fetch provider:

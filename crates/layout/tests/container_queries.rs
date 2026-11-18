@@ -3,9 +3,9 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
+use megi_css::ComputedStyle;
 use megi_core::{Attribute, Document, Namespace, NodeId};
-use layout::{LayoutBox, Rect, layout_document};
+use megi_layout::{LayoutBox, Rect, layout_document};
 
 struct Page {
     doc: Document,
@@ -27,7 +27,7 @@ fn page(css: &str) -> Page {
     doc.append_child(html, body);
     doc.append_child(body, container);
     doc.append_child(container, child);
-    let styles = css::resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+    let styles = megi_css::resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
     Page { doc, styles, child }
 }
 
@@ -140,7 +140,7 @@ fn nested_containers_use_the_nearest_eligible_one() {
     doc.append_child(body, outer);
     doc.append_child(outer, inner);
     doc.append_child(inner, child);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some(
             ".outer { width: 500px; container-type: inline-size; container-name: outer; }

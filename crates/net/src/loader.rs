@@ -142,7 +142,7 @@ impl CachedEntry {
 /// Loads resources by URL with a single-user HTTP cache.
 ///
 /// ```no_run
-/// use net::{ResourceLoader, Url};
+/// use megi_net::{ResourceLoader, Url};
 ///
 /// let mut loader = ResourceLoader::new();
 /// let url = Url::parse("http://127.0.0.1:8080/index.html")?;

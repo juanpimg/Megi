@@ -4,7 +4,7 @@
 //! (`WS`, `ON`) resolution, implicit embedding levels (I1–I2), line-level visual
 //! reordering (L2), and bracket mirroring (L4) with `#![forbid(unsafe_code)]`.
 
-use css::{Direction, UnicodeBidi};
+use megi_css::{Direction, UnicodeBidi};
 
 /// Simplified UAX #9 directional character classes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

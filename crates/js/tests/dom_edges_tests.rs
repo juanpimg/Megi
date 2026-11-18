@@ -3,7 +3,7 @@
 //! DOM edge cases surfaced by the audit: `createElement` casing and
 //! `insertAdjacent*` on non-element nodes.
 
-use js::{Budget, JsRuntime};
+use megi_js::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");

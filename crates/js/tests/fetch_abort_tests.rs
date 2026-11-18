@@ -2,8 +2,8 @@
 
 #![cfg(feature = "js")]
 
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 use std::sync::{Arc, Mutex};
 
 fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
@@ -160,7 +160,7 @@ fn array_buffer_exposes_raw_bytes() {
 fn network_error_is_type_error_like() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime.set_fetch_provider(Box::new(|_| {
-        Err(js::JsError::Runtime("network down".into()))
+        Err(megi_js::JsError::Runtime("network down".into()))
     }));
     runtime.eval("window.__name = ''; window.__msg = ''; fetch('/x').catch(function (e) { __name = e.name; __msg = String(e); });", "t").expect("fetch");
     runtime.run_microtasks().expect("microtasks");

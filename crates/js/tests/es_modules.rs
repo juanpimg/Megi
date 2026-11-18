@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 
-use js::JsError;
-use js::runtime::{Budget, JsRuntime};
+use megi_js::JsError;
+use megi_js::runtime::{Budget, JsRuntime};
 
 struct Modules {
     resolver: HashMap<String, String>,

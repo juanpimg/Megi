@@ -21,7 +21,7 @@ Only regenerate after an intentional rendering change (layout/paint/CSS/fonts), 
 review the PNG diff in the commit:
 
 ```bash
-cargo run -q -p render -- \
+cargo run -q -p megi-render -- \
     tests/fixtures/render/showcase/index.html \
     tests/fixtures/render/showcase/golden.png \
     --width 1024 --height 768

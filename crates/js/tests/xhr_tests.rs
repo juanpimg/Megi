@@ -5,9 +5,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use js::error::JsError;
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::error::JsError;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 
 fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));

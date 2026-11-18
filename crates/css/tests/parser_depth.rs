@@ -2,7 +2,7 @@
 //! ~100 KB stylesheet of `(` used to overflow the host stack before any declaration was
 //! validated.
 
-use css::parse_stylesheet;
+use megi_css::parse_stylesheet;
 
 #[test]
 fn deeply_nested_parentheses_do_not_overflow_the_stack() {
@@ -50,7 +50,7 @@ fn balanced_selector_nesting_is_capped_not_recursed() {
 
 #[test]
 fn selector_nesting_below_the_cap_still_parses() {
-    let depth = css::MAX_SELECTOR_NESTING.min(8);
+    let depth = megi_css::MAX_SELECTOR_NESTING.min(8);
     let css = format!(
         "{}a{}{{color:red}}",
         ":is(".repeat(depth),

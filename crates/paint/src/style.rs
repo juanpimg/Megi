@@ -1,7 +1,7 @@
 //! # `<style>` Extraction Helper
 //!
 //! CSS 2.2 §4.1 lets a document embed author style sheets in `<style>`
-//! elements. [`css::resolve_document_styles`] takes the concatenated author
+//! elements. [`megi_css::resolve_document_styles`] takes the concatenated author
 //! CSS as a string, but the DOM layer intentionally has no "collect stylesheet
 //! text" helper, so every driver would otherwise re-implement this traversal.
 //!
@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
+use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
 
 /// Resolves the computed styles of `doc`, applying the embedded `<style>`
@@ -31,7 +31,7 @@ use megi_core::{Document, NodeId};
 /// (`examples/html_to_png.rs`) and by the end-to-end tests:
 ///
 /// ```text
-/// collect_style_text(doc) -> Option<&str> -> css::resolve_document_styles
+/// collect_style_text(doc) -> Option<&str> -> megi_css::resolve_document_styles
 /// ```
 ///
 /// It is a distinct helper (instead of inlining it in each caller) so the
@@ -44,7 +44,7 @@ pub fn resolve_embedded_styles(doc: &Document) -> HashMap<NodeId, ComputedStyle>
     } else {
         Some(style_text.as_str())
     };
-    css::resolve_document_styles(doc, author_css)
+    megi_css::resolve_document_styles(doc, author_css)
 }
 
 /// Concatenates the text content of every `<style>` element, in document order.
@@ -182,9 +182,9 @@ mod tests {
 
         let styles = resolve_embedded_styles(&doc);
         let body_style = styles.get(&body).expect("body computed style");
-        assert_eq!(body_style.color, css::Color::new(1, 2, 3, 255));
+        assert_eq!(body_style.color, megi_css::Color::new(1, 2, 3, 255));
         // The user-agent stylesheet is still applied.
-        assert_eq!(body_style.display, css::Display::Block);
+        assert_eq!(body_style.display, megi_css::Display::Block);
     }
 
     #[test]

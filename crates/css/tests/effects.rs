@@ -1,9 +1,9 @@
 //! `filter`, `mix-blend-mode` and `image-set()` parsing (R137).
 
-use css::{FilterFunction, MAX_FILTER_FUNCTIONS, MixBlendMode, resolve_document_styles};
+use megi_css::{FilterFunction, MAX_FILTER_FUNCTIONS, MixBlendMode, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
 
-fn computed_style(css_text: &str, inline: &str) -> css::ComputedStyle {
+fn computed_style(css_text: &str, inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -19,7 +19,7 @@ fn computed_style(css_text: &str, inline: &str) -> css::ComputedStyle {
 
 #[test]
 fn test_filter_defaults_to_none() {
-    let style = css::ComputedStyle::initial();
+    let style = megi_css::ComputedStyle::initial();
     assert!(style.filter.is_empty());
     assert_eq!(style.mix_blend_mode, MixBlendMode::Normal);
     assert!(computed_style("", "filter: none;").filter.is_empty());
@@ -67,7 +67,7 @@ fn test_filter_drop_shadow() {
             offset_x: 2.0,
             offset_y: 3.0,
             blur: 4.0,
-            color: css::Color::new(0, 0, 0, 128),
+            color: megi_css::Color::new(0, 0, 0, 128),
         }]
     );
     let current = computed_style(
@@ -80,7 +80,7 @@ fn test_filter_drop_shadow() {
             offset_x: 1.0,
             offset_y: 1.0,
             blur: 0.0,
-            color: css::Color::new(0x33, 0x66, 0x99, 255),
+            color: megi_css::Color::new(0x33, 0x66, 0x99, 255),
         }]
     );
 }

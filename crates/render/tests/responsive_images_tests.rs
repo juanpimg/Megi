@@ -1,10 +1,10 @@
 //! Responsive images integration tests (`srcset` / `sizes` / `<picture>` / `<source>`, #1543).
 
-use css::Color;
-use render::images::{
+use megi_css::Color;
+use megi_render::images::{
     SrcsetCandidate, SrcsetDescriptor, parse_srcset, resolve_sizes, select_image_candidate,
 };
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn encode_base64(input: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -35,7 +35,7 @@ fn solid_png_data_url(width: u32, height: u32, rgb: [u8; 3]) -> String {
     for _ in 0..(width * height) {
         rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
     }
-    let png = paint::encode_rgba(width, height, &rgba);
+    let png = megi_paint::encode_rgba(width, height, &rgba);
     format!("data:image/png;base64,{}", encode_base64(&png))
 }
 
@@ -56,12 +56,12 @@ fn html_data_url(html: &str) -> String {
     format!("data:text/html;charset=utf-8,{encoded}")
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: Color) -> usize {
     pixmap.pixels.iter().filter(|p| **p == color).count()
 }
 
-fn find_img_box(layout: &layout::LayoutBox) -> Option<&layout::LayoutBox> {
-    if matches!(layout.box_type, layout::BoxType::Replaced(_)) {
+fn find_img_box(layout: &megi_layout::LayoutBox) -> Option<&megi_layout::LayoutBox> {
+    if matches!(layout.box_type, megi_layout::BoxType::Replaced(_)) {
         return Some(layout);
     }
     for child in &layout.children {
@@ -108,8 +108,8 @@ fn srcset_parser_handles_data_urls_with_commas_and_mixed_descriptors() {
 
 #[test]
 fn sizes_and_width_descriptors_select_according_to_viewport_and_dpr() {
-    let narrow = css::MediaContext::with_viewport(400.0, 300.0);
-    let wide = css::MediaContext::with_viewport(1000.0, 600.0);
+    let narrow = megi_css::MediaContext::with_viewport(400.0, 300.0);
+    let wide = megi_css::MediaContext::with_viewport(1000.0, 600.0);
     let sizes = "(max-width: 500px) 200px, 50vw";
 
     assert!((resolve_sizes(Some(sizes), &narrow) - 200.0).abs() < 0.1);

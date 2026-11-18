@@ -4,7 +4,7 @@
 //! The input bytes are decoded lossily, base64-encoded into an inline
 //! `data:text/html;base64,…` URL (a `data:` document never touches the network, so flipping
 //! `no_network` only changes which loader branch runs) and rendered through
-//! [`render::render_url`].
+//! [`megi_render::render_url`].
 //!
 //! Earlier revisions pinned the whole option space — 96×96 viewport, scripting disabled,
 //! `no_network: true` and one tiny cap set — so the budget arithmetic and the scripted
@@ -13,7 +13,7 @@
 //! - the viewport is derived from the input (`32..=256` per side, with 96×96 as one of the
 //!   reachable outcomes), keeping each iteration cheap while varying layout wrapping;
 //! - the cap set alternates between the harness's tight profile and
-//!   [`render::RenderOptions::default`] for small inputs, so both the defensive caps and the
+//!   [`megi_render::RenderOptions::default`] for small inputs, so both the defensive caps and the
 //!   production budgets are covered;
 //! - scripting is enabled for small inputs (the JS engine has its own target, but the
 //!   *integration* — parser-inserted scripts, re-render, budgets — is what this target adds);
@@ -36,29 +36,29 @@ fuzz_target!(|data: &[u8]| {
     let html = String::from_utf8_lossy(data);
     let url = format!(
         "data:text/html;base64,{}",
-        net::base64_encode(html.as_bytes())
+        megi_net::base64_encode(html.as_bytes())
     );
 
     let flag = |index: usize| data.get(index).copied().unwrap_or(0);
     let width = 32 + u32::from(flag(0) % 225); // 32..=256
     let height = 32 + u32::from(flag(1) % 225);
-    let Ok(viewport) = render::Viewport::new(width, height) else {
+    let Ok(viewport) = megi_render::Viewport::new(width, height) else {
         return;
     };
 
     let cheap = data.len() <= CHEAP_INPUT;
     let mut options = if cheap && flag(4) & 1 == 0 {
         // Production defaults: maximal budgets, real scripting mode.
-        render::RenderOptions {
+        megi_render::RenderOptions {
             viewport,
-            ..render::RenderOptions::default()
+            ..megi_render::RenderOptions::default()
         }
     } else {
-        let mut options = render::RenderOptions {
+        let mut options = megi_render::RenderOptions {
             viewport,
             no_network: flag(4) & 2 == 0,
-            scripting: render::ScriptingMode::Disabled,
-            ..render::RenderOptions::default()
+            scripting: megi_render::ScriptingMode::Disabled,
+            ..megi_render::RenderOptions::default()
         };
         options.max_document_bytes = MAX_FUZZ_INPUT;
         options.max_total_css_bytes = 256 * 1024;
@@ -77,11 +77,11 @@ fuzz_target!(|data: &[u8]| {
     // Scripting integration only for cheap documents: Boa is the expensive part and
     // `js_eval`/`js_module` already fuzz the engine itself.
     if cheap && flag(2) & 1 == 1 {
-        options.scripting = render::ScriptingMode::Enabled;
+        options.scripting = megi_render::ScriptingMode::Enabled;
     }
     if flag(3) & 1 == 1 {
         options.max_image_dim = Some(16 + u32::from(flag(5) % 64));
     }
 
-    let _ = render::render_url(&url, &options);
+    let _ = megi_render::render_url(&url, &options);
 });

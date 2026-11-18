@@ -79,7 +79,7 @@ impl Tab {
     /// Creates a tab for `url`, which must be an absolute URL the window can render.
     pub fn new(url: impl Into<String>) -> Option<Self> {
         let url = url.into();
-        let parsed = net::Url::parse(&url).ok()?;
+        let parsed = megi_net::Url::parse(&url).ok()?;
         let mut navigation = NavigationState::new();
         navigation.navigate_to(parsed);
         Some(Self {
@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(state.active_index(), 0);
         assert_eq!(state.active().url, "https://example.com/");
         assert_eq!(
-            state.active().navigation.current().map(net::Url::as_str),
+            state.active().navigation.current().map(megi_net::Url::as_str),
             Some("https://example.com/".to_string())
         );
     }
@@ -330,7 +330,7 @@ mod tests {
         let expected = crate::i18n::strings(crate::i18n::Locale::current()).new_tab;
         assert_eq!(tab.url, BLANK_TAB_URL);
         assert_eq!(tab.display_title(), expected);
-        assert!(net::Url::parse(BLANK_TAB_URL).is_ok());
+        assert!(megi_net::Url::parse(BLANK_TAB_URL).is_ok());
     }
 
     #[test]

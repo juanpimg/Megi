@@ -4,8 +4,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 
 fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
@@ -124,7 +124,7 @@ fn fetch_without_provider_rejects_typed() {
 fn fetch_provider_error_rejects() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime.set_fetch_provider(Box::new(|_| {
-        Err(js::JsError::Runtime("network down".into()))
+        Err(megi_js::JsError::Runtime("network down".into()))
     }));
     runtime
         .eval(

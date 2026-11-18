@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 #[test]
 fn frame_fanout_global_budget() {
@@ -75,9 +75,9 @@ fn frame_fanout_global_budget() {
     // `total` includes the top-level document; frames are everything else.
     let frames = total.saturating_sub(1);
     assert!(
-        frames <= render::frames::MAX_FRAMES_PER_PAGE,
+        frames <= megi_render::frames::MAX_FRAMES_PER_PAGE,
         "global frame budget exceeded: {frames} frame renders ({total} document loads) for a 4-wide self-nested page (cap {})",
-        render::frames::MAX_FRAMES_PER_PAGE
+        megi_render::frames::MAX_FRAMES_PER_PAGE
     );
     // The cap must surface as a warning on the top-level page.
     assert!(

@@ -8,7 +8,7 @@ P2 — bug de corrección: SVGs válidos con `hsl()` quedan invisibles en silenc
 
 ## Pasos para reproducir
 1. `docs/audit/findings/wave2/repro-w2-assets/hsl.svg` (`hsl(0, 100%, 50%)`).
-2. `cargo run -p svg --example svg_to_png -- hsl.svg out.png` + conteo de píxeles (o sonda Mesa A `render`).
+2. `cargo run -p megi-svg --example svg_to_png -- hsl.svg out.png` + conteo de píxeles (o sonda Mesa A `render`).
 
 ## Esperado vs observado
 Esperado: rojo opaco `(255, 0, 0, 255)`.

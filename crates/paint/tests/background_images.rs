@@ -1,7 +1,7 @@
 //! CSS `background-image` and `list-style-image` painting tests (R51).
 //!
 //! `paint` receives decoded bitmaps keyed by the **raw CSS URL string** in
-//! [`paint::BackgroundImages`] (resolved/fetched by the `render` crate) and
+//! [`megi_paint::BackgroundImages`] (resolved/fetched by the `render` crate) and
 //! paints:
 //!
 //! - `background-image` stretched over the **padding box**, on top of
@@ -13,11 +13,11 @@
 
 use std::sync::Arc;
 
-use css::{Color, ComputedStyle, Display, ListStyleType};
+use megi_css::{Color, ComputedStyle, Display, ListStyleType};
 use megi_core::{Document, Namespace};
 use megi_image::RgbaImage;
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, ImageStore, Pixmap, build_display_list_with_images,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -91,7 +91,7 @@ fn empty_images() -> ImageStore {
     ImageStore::new()
 }
 
-fn render(display_list: &paint::DisplayList) -> Pixmap {
+fn render(display_list: &megi_paint::DisplayList) -> Pixmap {
     rasterize_display_list(display_list, 100, 100)
 }
 

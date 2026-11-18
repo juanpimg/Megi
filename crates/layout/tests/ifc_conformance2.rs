@@ -14,9 +14,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
+use megi_css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
 use megi_core::{Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -572,7 +572,7 @@ fn setup_justify_document(width: f32, text: &str) -> (Document, HashMap<NodeId, 
         let span = make_element(&mut doc, p, "span");
         doc.append_text(span, word);
         let mut span_style = mono_style(false, Length::Auto);
-        span_style.color = css::Color::new(0, 0, (index as u8 + 1) * 40, 255);
+        span_style.color = megi_css::Color::new(0, 0, (index as u8 + 1) * 40, 255);
         styles.insert(span, span_style);
     }
     let mut p_style = mono_style(true, Length::Px(width));

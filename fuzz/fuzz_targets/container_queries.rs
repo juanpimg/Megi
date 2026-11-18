@@ -3,14 +3,14 @@
 //!
 //! Drives the CSS parser with `@container`/`@layer` rules and the parsed query evaluator:
 //!
-//! - `css::parse_stylesheet`, `css::parse_list_of_declarations`, `css::tokenize`;
-//! - `css::container::parse_query` on the input and on its lines (multi-line seeds);
-//! - `css::container::evaluate` against **input-derived** container sizes, including the
+//! - `megi_css::parse_stylesheet`, `megi_css::parse_list_of_declarations`, `megi_css::tokenize`;
+//! - `megi_css::container::parse_query` on the input and on its lines (multi-line seeds);
+//! - `megi_css::container::evaluate` against **input-derived** container sizes, including the
 //!   degenerate values a real page can produce: `0`, negative, `NaN`, `+∞` and values far
 //!   above any viewport. Earlier revisions used five fixed pairs (#710), so the
 //!   comparison/threshold arithmetic never saw those.
 //!
-//! Style/container scroll-state queries are not implemented in `css::container`, so this
+//! Style/container scroll-state queries are not implemented in `megi_css::container`, so this
 //! target exercises the size-query surface only.
 //!
 //! Everything is bounded by the CSS parser's own depth/count caps; no network, filesystem or
@@ -20,11 +20,11 @@ use libfuzzer_sys::fuzz_target;
 
 /// Container sizes worth probing on every query: the unit range plus the degenerate cases
 /// (`NaN`, `±∞`, negative, zero, huge) that broke threshold comparisons before.
-fn candidate_sizes(data: &[u8]) -> Vec<css::container::ContainerSize> {
+fn candidate_sizes(data: &[u8]) -> Vec<megi_css::container::ContainerSize> {
     let mut sizes = Vec::with_capacity(16);
     let at = |index: usize| -> u32 { u32::from(data.get(index).copied().unwrap_or(0)) };
     // Input-derived finite values (0..=4096 in quarter steps) for both axes.
-    sizes.push(css::container::ContainerSize {
+    sizes.push(megi_css::container::ContainerSize {
         inline_size: Some(at(0) as f32 * 16.0),
         block_size: Some(at(1) as f32 * 16.0),
     });
@@ -38,21 +38,21 @@ fn candidate_sizes(data: &[u8]) -> Vec<css::container::ContainerSize> {
         f32::MIN_POSITIVE,
         f32::MAX,
     ] {
-        sizes.push(css::container::ContainerSize {
+        sizes.push(megi_css::container::ContainerSize {
             inline_size: Some(value),
             block_size: Some(value),
         });
     }
     // Mixed presence: inline only, block only, neither.
-    sizes.push(css::container::ContainerSize {
+    sizes.push(megi_css::container::ContainerSize {
         inline_size: Some(at(2) as f32),
         block_size: None,
     });
-    sizes.push(css::container::ContainerSize {
+    sizes.push(megi_css::container::ContainerSize {
         inline_size: None,
         block_size: Some(at(3) as f32),
     });
-    sizes.push(css::container::ContainerSize {
+    sizes.push(megi_css::container::ContainerSize {
         inline_size: None,
         block_size: None,
     });
@@ -62,18 +62,18 @@ fn candidate_sizes(data: &[u8]) -> Vec<css::container::ContainerSize> {
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
-    let stylesheet = css::parse_stylesheet(&text);
+    let stylesheet = megi_css::parse_stylesheet(&text);
     let _ = stylesheet.rules.len();
-    let declarations = css::parse_list_of_declarations(&text);
+    let declarations = megi_css::parse_list_of_declarations(&text);
     let _ = declarations.len();
-    let tokens = css::tokenize(&text);
+    let tokens = megi_css::tokenize(&text);
     let _ = tokens.len();
 
     let sizes = candidate_sizes(data);
-    let style = css::ComputedStyle::default();
+    let style = megi_css::ComputedStyle::default();
 
     let mut queries = Vec::new();
-    if let Some(query) = css::container::parse_query(&text) {
+    if let Some(query) = megi_css::container::parse_query(&text) {
         queries.push(query);
     }
     // Line-shaped preludes: CSS seeds are multi-line, so this reaches many more grammars.
@@ -81,14 +81,14 @@ fuzz_target!(|data: &[u8]| {
         if line.len() > 256 {
             continue;
         }
-        if let Some(query) = css::container::parse_query(line) {
+        if let Some(query) = megi_css::container::parse_query(line) {
             queries.push(query);
         }
     }
 
     for query in &queries {
         for size in &sizes {
-            let _ = css::container::evaluate(query, size, &style);
+            let _ = megi_css::container::evaluate(query, size, &style);
         }
     }
 });

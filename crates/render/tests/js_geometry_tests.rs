@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn options() -> RenderOptions {
     RenderOptions {
@@ -14,10 +14,10 @@ fn fixture(name: &str) -> String {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render");
     format!("file://{}", dir.join(name).display())
 }
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture(name), &options()).unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
-fn text(output: &render::RenderOutput, id: &str) -> String {
+fn text(output: &megi_render::RenderOutput, id: &str) -> String {
     let document = &output.document;
     let node = document
         .descendants(document.root())

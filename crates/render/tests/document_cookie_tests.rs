@@ -1,4 +1,4 @@
-//! End-to-end offline tests for `document.cookie` wired through `net::CookieJar` in `render`.
+//! End-to-end offline tests for `document.cookie` wired through `megi_net::CookieJar` in `render`.
 
 #![cfg(feature = "js")]
 
@@ -7,7 +7,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 #[test]
 fn document_cookie_shares_jar_with_http_and_hides_http_only() {
@@ -67,7 +67,7 @@ fn document_cookie_shares_jar_with_http_and_hides_http_only() {
         }
     });
 
-    let jar = Arc::new(Mutex::new(net::CookieJar::new()));
+    let jar = Arc::new(Mutex::new(megi_net::CookieJar::new()));
     let page_url = format!("http://{addr}/app/page");
     let output = render_url(
         &page_url,
@@ -96,7 +96,7 @@ fn document_cookie_shares_jar_with_http_and_hides_http_only() {
     assert!(after.contains("sub=app_only"), "expected sub in {after}");
 
     // Path scoping: `/other` must not see `Path=/app` cookies.
-    let other_url = net::Url::parse(&format!("http://{addr}/other")).expect("other url");
+    let other_url = megi_net::Url::parse(&format!("http://{addr}/other")).expect("other url");
     let other_doc_cookies = jar.lock().unwrap().document_cookie_string(&other_url);
     assert_eq!(other_doc_cookies, "consent=yes");
 

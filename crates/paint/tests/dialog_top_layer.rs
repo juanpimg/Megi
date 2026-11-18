@@ -1,9 +1,9 @@
 //! Paint and hit-test ordering tests for top-layer `<dialog>` and `::backdrop`.
 
-use css::{Color, ComputedStyle, Display, Position};
+use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_core::{Document, Namespace};
-use layout::{BoxType, Dimensions, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, LayoutBox, Rect};
+use megi_paint::{
     DisplayItem, HitKind, RenderConfig, build_display_list_and_hit_regions, hit_test,
     rasterize_display_list_with_font_database,
 };
@@ -92,7 +92,7 @@ fn top_layer_dialog_and_backdrop_paint_above_high_z_index_and_block_hits() {
         100,
         100,
         RenderConfig::OPAQUE_WHITE,
-        paint::bundled_font_database(),
+        megi_paint::bundled_font_database(),
     );
 
     // Center pixel inside dialog is red (dialog paints over the z-index: 99999 green overlay).

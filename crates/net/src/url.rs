@@ -29,7 +29,7 @@
 //! `data:` URLs are parseable and decodable, but opaque (no host, port or relative resolution):
 //!
 //! ```
-//! use net::{Url, decode_data_url};
+//! use megi_net::{Url, decode_data_url};
 //!
 //! let url = Url::parse("data:text/plain,hello%20world")?;
 //! assert_eq!(url.scheme().as_str(), "data");

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use net::http::{FetchOptions, fetch_with_method, fetch_with_request_body};
-use net::{FetchError, RequestBody, Url};
+use megi_net::http::{FetchOptions, fetch_with_method, fetch_with_request_body};
+use megi_net::{FetchError, RequestBody, Url};
 
 fn listener() -> (TcpListener, String) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -288,7 +288,7 @@ fn loader_streaming_upload_returns_resource() {
         }
     });
     let url = Url::parse(&format!("http://{authority}/loader")).expect("url");
-    let mut loader = net::ResourceLoader::new();
+    let mut loader = megi_net::ResourceLoader::new();
     let resource = loader
         .fetch_with_request_body(&url, "PUT", &[], Some(body))
         .expect("loader streaming");
@@ -307,10 +307,10 @@ mod h2 {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
-    use net::h2::client::{H2Request, Limits, request_many_owned};
-    use net::h2::frame::{CONNECTION_PREFACE, Frame, FrameReader, flags, kind};
-    use net::h2::hpack::Encoder;
-    use net::{FetchError, RequestBody};
+    use megi_net::h2::client::{H2Request, Limits, request_many_owned};
+    use megi_net::h2::frame::{CONNECTION_PREFACE, Frame, FrameReader, flags, kind};
+    use megi_net::h2::hpack::Encoder;
+    use megi_net::{FetchError, RequestBody};
 
     fn listener() -> (TcpListener, String) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -365,7 +365,7 @@ mod h2 {
         request: H2Request,
         limits: Limits,
         authority: &str,
-    ) -> Vec<Result<net::h2::client::H2Response, FetchError>> {
+    ) -> Vec<Result<megi_net::h2::client::H2Response, FetchError>> {
         let mut stream = TcpStream::connect(authority).expect("connect");
         stream
             .set_read_timeout(Some(Duration::from_secs(5)))

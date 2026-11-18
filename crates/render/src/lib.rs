@@ -9,7 +9,7 @@
 //! `render` binary adds a CLI (`--width/--height/--base/--no-network/--json`).
 //!
 //! ```no_run
-//! use render::{RenderOptions, Viewport, render_url};
+//! use megi_render::{RenderOptions, Viewport, render_url};
 //!
 //! let options = RenderOptions { viewport: Viewport::new(800, 600)?, ..RenderOptions::default() };
 //! let output = render_url("data:text/html,<h1>Hello Megi</h1>", &options)?;
@@ -30,12 +30,12 @@
 //!
 //! ## Hit-testing (WP-7.5b)
 //!
-//! [`RenderOutput::hit_regions`] carries `paint`'s additive [`paint::HitRegion`] list
+//! [`RenderOutput::hit_regions`] carries `paint`'s additive [`megi_paint::HitRegion`] list
 //! produced by the same paint pass as [`RenderOutput::display_list`]: element
 //! backgrounds/borders, text runs (inheriting their owner element's DOM node), decorations,
 //! replaced images and list markers in painting order, clipped at emission time. The PNG
 //! bytes are **identical** with or without regions (verified by the golden tests); hosts
-//! resolve links with `paint::find_link_at(&output.document, &output.hit_regions, x, y)`.
+//! resolve links with `megi_paint::find_link_at(&output.document, &output.hit_regions, x, y)`.
 //!
 //! ## Cookies, CORS and compression (Phase 5 advanced networking)
 //!
@@ -52,9 +52,9 @@
 //! When [`RenderOptions::scripting`] is [`ScriptingMode::Enabled`] (the default when the
 //! crate is built with its default `js` feature) the page's classic `<script>` elements
 //! are discovered in document order after parsing, external sources are fetched with the
-//! shared `net` loader (honoring `--no-network`) and executed through `js::JsRuntime` with
+//! shared `net` loader (honoring `--no-network`) and executed through `megi_js::JsRuntime` with
 //! per-script and total budgets ([`ScriptingLimits`], defaults aligned with
-//! `js::Budget::SMALL`). After the scripts, promise microtasks and a bounded number of
+//! `megi_js::Budget::SMALL`). After the scripts, promise microtasks and a bounded number of
 //! timer callbacks are pumped, `console.*` output is captured in
 //! [`RenderStats::console`] (warn/error also become warnings) and the **mutated DOM** is
 //! re-processed by the styles → layout → paint stages, so DOM/CSS changes reach the PNG.
@@ -81,7 +81,7 @@
 //!   border-*-width/color/style and opacity) serialized as CSS values. The snapshot
 //!   describes the **pre-script** DOM: later `getComputedStyle` calls keep returning it
 //!   even after script mutations (layout/paint *are* recomputed from the mutated DOM).
-//! - `window.matchMedia(query).matches` is evaluated with the same [`css::MediaContext`]
+//! - `window.matchMedia(query).matches` is evaluated with the same [`megi_css::MediaContext`]
 //!   (render viewport, screen medium) as the stylesheet cascade, and
 //!   `innerWidth`/`innerHeight`/`devicePixelRatio` (fixed 1.0) come from the render
 //!   viewport, so scripts and layout agree.
@@ -102,16 +102,16 @@
 //! - After the main document is loaded (and decoded), render derives its **referrer policy**
 //!   from the response `Referrer-Policy` header, else `<meta name="referrer">`, else the
 //!   browser default `strict-origin-when-cross-origin`, and installs it on the shared
-//!   [`net::ResourceLoader`] before any subresource fetch. Every CSS/script/image/font
+//!   [`megi_net::ResourceLoader`] before any subresource fetch. Every CSS/script/image/font
 //!   request therefore carries a policy-computed `Referer` (same-origin full URL,
 //!   cross-origin origin, downgrades blocked where the policy requires it), and the same
 //!   source URL lets `net` auto-classify cookie `SameSite` (Strict/Lax are withheld from
 //!   cross-site subresources; None requires `Secure`). Recorded in
 //!   [`RenderStats::referrer_policy`] and the CLI `--json` output. Render loads subresources
 //!   only, so the approximate top-level model never sends Lax cookies on "navigation".
-//! - Styles are resolved with an explicit **empty** [`css::StateContext`]: render owns no
+//! - Styles are resolved with an explicit **empty** [`megi_css::StateContext`]: render owns no
 //!   focus/pointer state. `:checked`/`:disabled`/`:enabled`/`:read-only`/`:required`/
-//!   `:placeholder-shown` are derived from DOM attributes by `css::state` (so `<input
+//!   `:placeholder-shown` are derived from DOM attributes by `megi_css::state` (so `<input
 //!   checked>`/`disabled`/`placeholder` work in static documents), and dynamic states can be
 //!   modelled with the documented `data-megi-*` attributes: the shell injects
 //!   `data-megi-focused` (and optionally hover/active) after an interaction and re-renders.
@@ -154,7 +154,7 @@
 //!   collected from the computed styles, resolved against the **document** base URL,
 //!   deduplicated, fetched with the shared loader (honoring `--no-network`) and decoded
 //!   with the in-tree PNG decoder. They are handed to `paint` as
-//!   [`paint::BackgroundImages`] (keyed by the raw CSS URL string): a background bitmap is
+//!   [`megi_paint::BackgroundImages`] (keyed by the raw CSS URL string): a background bitmap is
 //!   stretched into the element's padding box (no `background-repeat`/`size`/`position`
 //!   yet), a `list-style-image` replaces the default marker, and the background color
 //!   paints behind the bitmap. Caps: [`DEFAULT_MAX_BACKGROUNDS`] distinct images,
@@ -168,8 +168,8 @@
 //!   fetched with the shared loader (honoring `--no-network`) and decoded from WOFF2 into
 //!   sfnt with pure-Rust `woff2` (Apache-2.0). Faces are registered under their CSS family
 //!   alias in a per-render [`megi_fonts::FontDatabase`] (bundled faces + web faces) that is used
-//!   by **both** layout ([`layout::FontTextMeasurer`]) and paint
-//!   ([`paint::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
+//!   by **both** layout ([`megi_layout::FontTextMeasurer`]) and paint
+//!   ([`megi_paint::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
 //!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
 //!   plus `timings.fonts` are reported (`--json` includes them).
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
@@ -185,12 +185,12 @@
 //!   the CSS engine does not model (`resolution`, `prefers-*`, `hover`, ...) never match.
 //! - No forms, no iframes, no web fonts, no `srcset`.
 //! - Cookies: one jar per render (or one shared jar per shell session), no cross-process
-//!   persistence, `SameSite` ignored and no Public Suffix List (`net::cookies` subset).
+//!   persistence, `SameSite` ignored and no Public Suffix List (`megi_net::cookies` subset).
 //!   CORS is the `net` subset (no preflight cache/`Expose-Headers`); subresource denials are
 //!   warnings, and the top-level navigation never sends `Origin` (no navigation CORS).
 //! - Compression is transparent: the decoded body is used, the `Content-Encoding` header is
 //!   not exposed on `RenderOutput` beyond [`RenderStats::content_encoding`] (main document),
-//!   and subresource decoding counts are not observable through `net::Resource` yet.
+//!   and subresource decoding counts are not observable through `megi_net::Resource` yet.
 //! - Encodings: UTF-8 (with BOM) and Windows-1252/Latin-1 only; other declared encodings
 //!   fail with a typed error (see [`charset`]).
 //! - HTTP cache is the shared `net` loader cache (freshness/revalidation apply per
@@ -219,9 +219,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use css::ComputedStyle;
+use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
-use net::{FetchOptions, ResourceLoader, Scheme, Url};
+use megi_net::{FetchOptions, ResourceLoader, Scheme, Url};
 
 use images::{
     DEFAULT_MAX_IMAGE_BYTES, DEFAULT_MAX_IMAGES, DEFAULT_MAX_TOTAL_DECODED_PIXELS,
@@ -415,7 +415,7 @@ pub struct RenderOptions {
     /// Script discovery/loading caps and execution budgets.
     pub scripting_limits: ScriptingLimits,
     /// HTML parser anti-DoS limits (depth/nodes/attributes/input size).
-    pub parse_options: html::ParseOptions,
+    pub parse_options: megi_html::ParseOptions,
     /// Networking options (timeouts, caps, TLS configuration, user agent).
     pub fetch_options: FetchOptions,
     /// Enable a **per-render cookie jar** (`--cookies`): the document's `Set-Cookie`
@@ -424,7 +424,7 @@ pub struct RenderOptions {
     pub cookies: bool,
     /// Optional caller-owned cookie jar shared across renders (desktop shell session).
     /// Implies cookies are enabled; the jar also switches CORS to credentialed mode.
-    pub cookie_jar: Option<Arc<Mutex<net::CookieJar>>>,
+    pub cookie_jar: Option<Arc<Mutex<megi_net::CookieJar>>>,
     /// Optional explicit CORS `Origin` override for subresource fetches (`--origin`).
     ///
     /// When `None`, an `http(s)` document's own origin is used automatically; `file:`/
@@ -432,13 +432,13 @@ pub struct RenderOptions {
     /// non-fatal warnings (the resource is skipped, the page still renders).
     pub origin: Option<String>,
     /// Opt-in streaming response path (R185): when enabled, the main `http(s)` document is
-    /// fetched through [`net::fetch_streaming`] (the body is delivered in chunks and
+    /// fetched through [`megi_net::fetch_streaming`] (the body is delivered in chunks and
     /// accumulated), while subresources keep using the buffered path. Both paths produce
     /// byte-identical renders; future phases can stream large images/fonts here too.
     pub stream_responses: bool,
     /// Optional form POST body for the main document request (#1538): `(Content-Type, body)`.
     ///
-    /// When set, the `http(s)` document is fetched with `net::fetch_with_method("POST", …)` instead
+    /// When set, the `http(s)` document is fetched with `megi_net::fetch_with_method("POST", …)` instead
     /// of `GET`. `None` (default) keeps the ordinary GET navigation unchanged.
     pub form_post: Option<(String, Vec<u8>)>,
     /// Accept HTTP/2 server pushes and preload images/stylesheets/scripts from the
@@ -565,7 +565,7 @@ impl Default for RenderOptions {
             scripting_limits: ScriptingLimits::default(),
             enable_workers: true,
             encode_png: true,
-            parse_options: html::ParseOptions::DEFAULT,
+            parse_options: megi_html::ParseOptions::DEFAULT,
             fetch_options: FetchOptions::default(),
             cookies: false,
             cookie_jar: None,
@@ -710,8 +710,8 @@ pub struct RenderStats {
     /// default `strict-origin-when-cross-origin`), e.g. `Some("origin")`.
     pub referrer_policy: Option<String>,
     /// HTML parser anti-DoS limits that fired (should be empty for normal pages).
-    pub limit_violations: html::LimitViolations,
-    /// `true` when [`render_url_cached`] reused a cached [`layout::LayoutBox`].
+    pub limit_violations: megi_html::LimitViolations,
+    /// `true` when [`render_url_cached`] reused a cached [`megi_layout::LayoutBox`].
     pub cache_layout_hit: bool,
     /// Per-stage timings.
     pub timings: RenderTimings,
@@ -727,18 +727,18 @@ pub struct RenderOutput {
     /// pixmap to encode lazily exactly once.
     pub png: Vec<u8>,
     /// Rasterized pixel buffer (opaque white canvas).
-    pub pixmap: paint::Pixmap,
+    pub pixmap: megi_paint::Pixmap,
     /// Parsed DOM document.
     pub document: Document,
     /// Computed styles per element.
     pub styles: HashMap<NodeId, ComputedStyle>,
     /// Laid-out root box.
-    pub layout: layout::LayoutBox,
+    pub layout: megi_layout::LayoutBox,
     /// Flat display list consumed by the rasterizer.
-    pub display_list: paint::DisplayList,
+    pub display_list: megi_paint::DisplayList,
     /// Additive hit-testing regions (paint order) produced by the same paint pass as
     /// [`Self::display_list`]; the PNG is byte-identical with or without them.
-    pub hit_regions: Vec<paint::HitRegion>,
+    pub hit_regions: Vec<megi_paint::HitRegion>,
     /// Final document URL (after HTTP redirects).
     pub document_url: Url,
     /// `location.assign/replace/reload` requests made by page scripts, in execution
@@ -809,7 +809,7 @@ pub fn render_url_cached(
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct FrameRenderContext {
     #[cfg(feature = "js")]
-    pub sandbox_flags: Option<js::SandboxFlags>,
+    pub sandbox_flags: Option<megi_js::SandboxFlags>,
     pub skip_scripts: bool,
 }
 
@@ -862,7 +862,7 @@ pub(crate) fn render_url_with_context(
         options.cookie_jar.clone().or_else(|| {
             options
                 .cookies
-                .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
+                .then(|| Arc::new(Mutex::new(megi_net::CookieJar::new())))
         })
     };
     let mut document_fetch_options = options.fetch_options.clone();
@@ -887,7 +887,7 @@ pub(crate) fn render_url_with_context(
             .clone()
             .or_else(|| match loaded.url.scheme() {
                 Scheme::Http | Scheme::Https => {
-                    net::Origin::from_url(&loaded.url).map(|o| o.as_str())
+                    megi_net::Origin::from_url(&loaded.url).map(|o| o.as_str())
                 }
                 Scheme::File | Scheme::Data => None,
             })
@@ -926,15 +926,15 @@ pub(crate) fn render_url_with_context(
     }
     // Referrer policy for every subresource: HTTP header > `<meta name="referrer">` >
     // browser default. Installing it on the shared loader also enables the automatic
-    // cookie `SameSite` classification for subresources (see `net::FetchOptions`).
-    let referrer_policy = net::ReferrerPolicy::from_headers(&loaded.headers)
-        .or_else(|| net::ReferrerPolicy::from_meta_html(&decoded.text))
+    // cookie `SameSite` classification for subresources (see `megi_net::FetchOptions`).
+    let referrer_policy = megi_net::ReferrerPolicy::from_headers(&loaded.headers)
+        .or_else(|| megi_net::ReferrerPolicy::from_meta_html(&decoded.text))
         .unwrap_or_default();
-    loader.set_referrer(Some(net::ReferrerConfig::with_policy(
+    loader.set_referrer(Some(megi_net::ReferrerConfig::with_policy(
         loaded.url.clone(),
         referrer_policy,
     )));
-    let parse = html::parse_document_with_options(&decoded.text, false, &options.parse_options);
+    let parse = megi_html::parse_document_with_options(&decoded.text, false, &options.parse_options);
     let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let decode_parse_time = decode_start.elapsed();
 
@@ -986,7 +986,7 @@ pub(crate) fn render_pre_scripted_document(
         options.cookie_jar.clone().or_else(|| {
             options
                 .cookies
-                .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
+                .then(|| Arc::new(Mutex::new(megi_net::CookieJar::new())))
         })
     };
     let subresource_origin = if opaque_origin {
@@ -997,7 +997,7 @@ pub(crate) fn render_pre_scripted_document(
             .clone()
             .or_else(|| match document_url.scheme() {
                 Scheme::Http | Scheme::Https => {
-                    net::Origin::from_url(&document_url).map(|o| o.as_str())
+                    megi_net::Origin::from_url(&document_url).map(|o| o.as_str())
                 }
                 Scheme::File | Scheme::Data => None,
             })
@@ -1008,8 +1008,8 @@ pub(crate) fn render_pre_scripted_document(
     let mut loader = ResourceLoader::with_options(subresource_fetch_options);
     loader.set_allow_file(document_url.is_file());
     loader.set_mixed_content_context(Some(document_url.scheme()));
-    let referrer_policy = net::ReferrerPolicy::default();
-    loader.set_referrer(Some(net::ReferrerConfig::with_policy(
+    let referrer_policy = megi_net::ReferrerPolicy::default();
+    loader.set_referrer(Some(megi_net::ReferrerConfig::with_policy(
         document_url.clone(),
         referrer_policy,
     )));
@@ -1029,7 +1029,7 @@ pub(crate) fn render_pre_scripted_document(
         charset: "utf-8".to_owned(),
         status: None,
         content_encoding: None,
-        limit_violations: html::LimitViolations::default(),
+        limit_violations: megi_html::LimitViolations::default(),
         cache: None,
         frame_depth,
         frame_ctx,
@@ -1045,14 +1045,14 @@ struct ParsedDocumentInput<'a> {
     document_headers: &'a [(String, String)],
     options: &'a RenderOptions,
     loader: ResourceLoader,
-    cookie_jar: Option<Arc<Mutex<net::CookieJar>>>,
-    referrer_policy: net::ReferrerPolicy,
+    cookie_jar: Option<Arc<Mutex<megi_net::CookieJar>>>,
+    referrer_policy: megi_net::ReferrerPolicy,
     source_mentions_svg: bool,
     document_bytes: usize,
     charset: String,
     status: Option<u16>,
     content_encoding: Option<String>,
-    limit_violations: html::LimitViolations,
+    limit_violations: megi_html::LimitViolations,
     cache: Option<&'a mut RenderCache>,
     frame_depth: usize,
     frame_ctx: FrameRenderContext,
@@ -1113,7 +1113,7 @@ fn render_parsed_document_inner(
 
     // Media context shared by the stylesheet cascade, the pre-script style snapshot and
     // the script `matchMedia`/viewport providers (same viewport as layout).
-    let media_context = css::MediaContext::with_viewport(
+    let media_context = megi_css::MediaContext::with_viewport(
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
@@ -1140,9 +1140,9 @@ fn render_parsed_document_inner(
     let mut styles_pre_script = Duration::ZERO;
     let mut pre_script_styles: Option<Arc<HashMap<NodeId, ComputedStyle>>> = None;
     #[cfg(feature = "js")]
-    let mut pre_script_pseudos: Option<Arc<css::PseudoStyles>> = None;
+    let mut pre_script_pseudos: Option<Arc<megi_css::PseudoStyles>> = None;
     let mut reusable_stylesheets: Option<(
-        css::StyleCollection,
+        megi_css::StyleCollection,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
         u64,
@@ -1163,7 +1163,7 @@ fn render_parsed_document_inner(
             let (resolved, resolved_pseudos) = resolve_styles_with_state(
                 &document,
                 &collection,
-                css::StateContext::new(),
+                megi_css::StateContext::new(),
                 options.time_ms,
                 (
                     options.viewport.width as f32,
@@ -1188,7 +1188,7 @@ fn render_parsed_document_inner(
     // Canvas 2D surfaces painted by scripts (#1545); inserted into the image store after images load.
     // The map is only meaningful with the `js` feature: without scripts there is no canvas.
     #[cfg(feature = "js")]
-    let mut canvas_surfaces: std::collections::HashMap<megi_core::NodeId, js::canvas::CanvasSurface> =
+    let mut canvas_surfaces: std::collections::HashMap<megi_core::NodeId, megi_js::canvas::CanvasSurface> =
         std::collections::HashMap::new();
     if script_requested && !cfg!(feature = "js") {
         warnings.push(
@@ -1227,14 +1227,14 @@ fn render_parsed_document_inner(
             if let Some(srcdoc) = data.get_attribute("srcdoc") {
                 host_context
                     .frame_documents
-                    .push((iframe, html::parse_document(srcdoc, false)));
+                    .push((iframe, megi_html::parse_document(srcdoc, false)));
             }
         }
         #[cfg(feature = "js")]
         {
             if let Some(styles) = pre_script_styles.clone() {
                 let pre_pseudos = pre_script_pseudos.clone();
-                let pre_layout_viewport = layout::Rect::new(
+                let pre_layout_viewport = megi_layout::Rect::new(
                     0.0,
                     0.0,
                     options.viewport.width as f32,
@@ -1243,9 +1243,9 @@ fn render_parsed_document_inner(
                 let doc_snapshot = document.clone();
                 host_context.layout_provider = Some(Arc::new(move || {
                     let mut rects = std::collections::HashMap::new();
-                    let empty_pseudos = css::PseudoStyles::new();
+                    let empty_pseudos = megi_css::PseudoStyles::new();
                     let pseudos_ref = pre_pseudos.as_deref().unwrap_or(&empty_pseudos);
-                    if let Some(layout_root) = layout::layout_document_with_pseudos(
+                    if let Some(layout_root) = megi_layout::layout_document_with_pseudos(
                         &doc_snapshot,
                         &styles,
                         pseudos_ref,
@@ -1389,7 +1389,7 @@ fn render_parsed_document_inner(
     let (styles, pseudo_styles) = resolve_styles_with_state(
         &document,
         &stylesheet_collection,
-        css::StateContext::new(),
+        megi_css::StateContext::new(),
         options.time_ms,
         (
             options.viewport.width as f32,
@@ -1493,8 +1493,8 @@ fn render_parsed_document_inner(
     // Mix font identities (not just the count) so a caller-shared cache cannot reuse
     // metrics computed with a different font file (#1218).
     let font_digest = loaded_webfonts.database.identity_digest();
-    let measurer = layout::FontTextMeasurer::from_database(loaded_webfonts.database);
-    let viewport = layout::Rect::new(
+    let measurer = megi_layout::FontTextMeasurer::from_database(loaded_webfonts.database);
+    let viewport = megi_layout::Rect::new(
         0.0,
         0.0,
         options.viewport.width as f32,
@@ -1513,7 +1513,7 @@ fn render_parsed_document_inner(
             )
             .ok_or(RenderError::LayoutFailed)?
     } else {
-        let root = layout::layout_document_with_measurer_and_pseudos(
+        let root = megi_layout::layout_document_with_measurer_and_pseudos(
             &document,
             &styles,
             &pseudo_styles,
@@ -1529,7 +1529,7 @@ fn render_parsed_document_inner(
     let paint_start = Instant::now();
     // Additive hit-testing: the painter records `HitRegion`s while emitting the same
     // display-list items, so the rasterized pixels/PNG are byte-identical.
-    let (display_list, hit_regions) = paint::build_display_list_with_hit_regions(
+    let (display_list, hit_regions) = megi_paint::build_display_list_with_hit_regions(
         &layout_root,
         viewport,
         &loaded_images.store,
@@ -1539,11 +1539,11 @@ fn render_parsed_document_inner(
     let paint_time = paint_start.elapsed();
 
     let raster_start = Instant::now();
-    let pixmap = paint::rasterize_display_list_with_font_database(
+    let pixmap = megi_paint::rasterize_display_list_with_font_database(
         &display_list,
         options.viewport.width,
         options.viewport.height,
-        paint::RenderConfig::default(),
+        megi_paint::RenderConfig::default(),
         measurer.database(),
     );
     let raster_time = raster_start.elapsed();
@@ -1666,7 +1666,7 @@ fn render_svg_document(
     fetch_time: Duration,
     total_start: Instant,
 ) -> Result<RenderOutput, RenderError> {
-    let parse = html::parse_document_with_options(
+    let parse = megi_html::parse_document_with_options(
         "<!doctype html><html><head><style>html,body{margin:0;padding:0;background-color:#ffffff}img{display:block}</style></head><body><img alt=\"\"></body></html>",
         false,
         &options.parse_options,
@@ -1674,7 +1674,7 @@ fn render_svg_document(
     let document = parse.document;
     let img_node = document.get_elements_by_tag_name("img").into_iter().next();
 
-    let media_context = css::MediaContext::with_viewport(
+    let media_context = megi_css::MediaContext::with_viewport(
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
@@ -1692,7 +1692,7 @@ fn render_svg_document(
     let (styles, pseudo_styles) = resolve_styles_with_state(
         &document,
         &stylesheet_collection,
-        css::StateContext::new(),
+        megi_css::StateContext::new(),
         options.time_ms,
         (
             options.viewport.width as f32,
@@ -1700,7 +1700,7 @@ fn render_svg_document(
         ),
     );
 
-    let mut image_store = paint::ImageStore::new();
+    let mut image_store = megi_paint::ImageStore::new();
     let mut image_sizes: HashMap<NodeId, (f32, f32)> = HashMap::new();
     let (mut images_loaded, mut images_failed, mut svgs_rendered) = (0usize, 0usize, 0usize);
     if let Some(node_id) = img_node {
@@ -1734,14 +1734,14 @@ fn render_svg_document(
     // #1665: use only the bundled (deterministic) fonts, matching the normal render path in
     // `webfonts.rs`. System fonts vary per host and made the same SVG produce different PNGs.
     let font_db = megi_fonts::FontDatabase::new_with_bundled_fonts();
-    let measurer = layout::FontTextMeasurer::from_database(font_db);
-    let viewport = layout::Rect::new(
+    let measurer = megi_layout::FontTextMeasurer::from_database(font_db);
+    let viewport = megi_layout::Rect::new(
         0.0,
         0.0,
         options.viewport.width as f32,
         options.viewport.height as f32,
     );
-    let layout_root = layout::layout_document_with_measurer_and_pseudos(
+    let layout_root = megi_layout::layout_document_with_measurer_and_pseudos(
         &document,
         &styles,
         &pseudo_styles,
@@ -1751,8 +1751,8 @@ fn render_svg_document(
     )
     .ok_or(RenderError::LayoutFailed)?;
 
-    let empty_backgrounds = paint::BackgroundImages::new();
-    let (display_list, hit_regions) = paint::build_display_list_with_hit_regions(
+    let empty_backgrounds = megi_paint::BackgroundImages::new();
+    let (display_list, hit_regions) = megi_paint::build_display_list_with_hit_regions(
         &layout_root,
         viewport,
         &image_store,
@@ -1761,11 +1761,11 @@ fn render_svg_document(
     let display_items = display_list.items.len();
     let hit_region_count = hit_regions.len();
 
-    let pixmap = paint::rasterize_display_list_with_font_database(
+    let pixmap = megi_paint::rasterize_display_list_with_font_database(
         &display_list,
         options.viewport.width,
         options.viewport.height,
-        paint::RenderConfig::default(),
+        megi_paint::RenderConfig::default(),
         measurer.database(),
     );
     let png = if options.encode_png {
@@ -1831,7 +1831,7 @@ fn render_svg_document(
             cookies_stored: 0,
             content_encoding: loaded.content_encoding.clone(),
             referrer_policy: Some(
-                net::ReferrerPolicy::from_headers(&loaded.headers)
+                megi_net::ReferrerPolicy::from_headers(&loaded.headers)
                     .unwrap_or_default()
                     .as_str()
                     .to_owned(),
@@ -1860,7 +1860,7 @@ struct LoadedDocument {
     content_encoding: Option<String>,
 }
 
-/// Loads the main document, using `net::fetch` for `http(s)` (to observe the HTTP status)
+/// Loads the main document, using `megi_net::fetch` for `http(s)` (to observe the HTTP status)
 /// and the cached [`ResourceLoader`] for `file:`/`data:` URLs.
 fn load_document(
     url: &Url,
@@ -1879,7 +1879,7 @@ fn load_document(
             let mut streamed_body = Vec::new();
             let mut response = if let Some((content_type, body)) = form_post {
                 // Form POST navigation (#1538): send the urlencoded body with its content type.
-                net::fetch_with_method(
+                megi_net::fetch_with_method(
                     url,
                     fetch_options,
                     "POST",
@@ -1887,12 +1887,12 @@ fn load_document(
                     Some(body.as_slice()),
                 )?
             } else if stream {
-                net::fetch_streaming(url, fetch_options, &mut |chunk| {
+                megi_net::fetch_streaming(url, fetch_options, &mut |chunk| {
                     streamed_body.extend_from_slice(chunk);
                     Ok(())
                 })?
             } else {
-                net::fetch(url, fetch_options)?
+                megi_net::fetch(url, fetch_options)?
             };
             // HTTP/2 server pushes received while fetching the document are part of the
             // same load session: cache them for subresource loads (R177).
@@ -1909,7 +1909,7 @@ fn load_document(
             } else {
                 std::mem::take(&mut response.body)
             };
-            let content_type = net::resolve_content_type(&response.headers, &bytes);
+            let content_type = megi_net::resolve_content_type(&response.headers, &bytes);
             Ok(LoadedDocument {
                 headers: response.headers,
                 bytes,
@@ -1956,7 +1956,7 @@ fn content_looks_like_html(content_type: &str, bytes: &[u8]) -> bool {
     if lower.starts_with("text/html") || lower.starts_with("application/xhtml+xml") {
         return true;
     }
-    net::sniff(bytes) == net::MimeHint::Html
+    megi_net::sniff(bytes) == megi_net::MimeHint::Html
 }
 
 /// Author stylesheet summary for [`RenderStats`].
@@ -1976,9 +1976,9 @@ struct StyleSummary {
 struct ImportWalk<'a> {
     loader: &'a mut ResourceLoader,
     options: &'a RenderOptions,
-    media: &'a css::MediaContext,
+    media: &'a megi_css::MediaContext,
     base_url: &'a Url,
-    csp: Option<&'a net::csp::ContentSecurityPolicy>,
+    csp: Option<&'a megi_net::csp::ContentSecurityPolicy>,
     warnings: &'a mut Vec<String>,
     visited: std::collections::HashSet<String>,
     loaded: usize,
@@ -2001,8 +2001,8 @@ struct ImportWalk<'a> {
 fn document_csp(
     headers: &[(String, String)],
     document: &Document,
-) -> Option<net::csp::ContentSecurityPolicy> {
-    let mut combined = net::csp::ContentSecurityPolicy::from_headers(headers).unwrap_or_default();
+) -> Option<megi_net::csp::ContentSecurityPolicy> {
+    let mut combined = megi_net::csp::ContentSecurityPolicy::from_headers(headers).unwrap_or_default();
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -2019,7 +2019,7 @@ fn document_csp(
             continue;
         }
         if let Some(content) = element.get_attribute("content") {
-            let parsed = net::csp::ContentSecurityPolicy::parse(content);
+            let parsed = megi_net::csp::ContentSecurityPolicy::parse(content);
             if !parsed.is_empty() {
                 combined.merge(parsed);
             }
@@ -2028,7 +2028,7 @@ fn document_csp(
     (!combined.is_empty()).then_some(combined)
 }
 
-/// Builds the author [`css::StyleCollection`] in cascade order, resolving `@import`
+/// Builds the author [`megi_css::StyleCollection`] in cascade order, resolving `@import`
 /// directives recursively (depth-limited, deduplicated, media-gated, non-fatal errors).
 /// Collects the author stylesheets and builds the cascade collection for `document`.
 ///
@@ -2039,19 +2039,19 @@ fn collect_styles(
     base_url: &Url,
     loader: &mut ResourceLoader,
     options: &RenderOptions,
-    media: &css::MediaContext,
-    csp: Option<&net::csp::ContentSecurityPolicy>,
+    media: &megi_css::MediaContext,
+    csp: Option<&megi_net::csp::ContentSecurityPolicy>,
     warnings: &mut Vec<String>,
 ) -> Result<
     (
-        css::StyleCollection,
+        megi_css::StyleCollection,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
     ),
     RenderError,
 > {
     let (vw, vh) = media.viewport.unwrap_or((1280.0, 720.0));
-    let collected = css::with_calc_viewport(vw, vh, || {
+    let collected = megi_css::with_calc_viewport(vw, vh, || {
         stylesheets::collect_stylesheets(document, base_url, media)
     });
     warnings.extend(collected.warnings.iter().cloned());
@@ -2128,18 +2128,18 @@ fn build_author_stylesheet_collection(
     base_url: &Url,
     loader: &mut ResourceLoader,
     options: &RenderOptions,
-    media: &css::MediaContext,
-    csp: Option<&net::csp::ContentSecurityPolicy>,
+    media: &megi_css::MediaContext,
+    csp: Option<&megi_net::csp::ContentSecurityPolicy>,
     warnings: &mut Vec<String>,
 ) -> Result<
     (
-        css::StyleCollection,
+        megi_css::StyleCollection,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
     ),
     RenderError,
 > {
-    let mut collection = css::create_user_agent_style_collection();
+    let mut collection = megi_css::create_user_agent_style_collection();
     collection.media = media.clone();
     let mut font_faces: Vec<webfonts::LocatedFontFace> = Vec::new();
     let mut summary = StyleSummary {
@@ -2192,7 +2192,7 @@ fn build_author_stylesheet_collection(
                     }
                     continue;
                 }
-                let sheet = css::parse_stylesheet(text);
+                let sheet = megi_css::parse_stylesheet(text);
                 font_faces.extend(
                     sheet
                         .font_faces
@@ -2210,7 +2210,7 @@ fn build_author_stylesheet_collection(
                     &mut walk,
                     &mut font_faces,
                 )?;
-                collection.add_stylesheet(&sheet, css::Origin::Author);
+                collection.add_stylesheet(&sheet, megi_css::Origin::Author);
             }
             stylesheets::CssSource::External {
                 url,
@@ -2262,7 +2262,7 @@ fn build_author_stylesheet_collection(
                 }
                 // Register the top-level URL so an import cycle back to it is detected.
                 walk.visited.insert(url.cache_key());
-                let sheet = css::parse_stylesheet(&text);
+                let sheet = megi_css::parse_stylesheet(&text);
                 font_faces.extend(
                     sheet
                         .font_faces
@@ -2280,7 +2280,7 @@ fn build_author_stylesheet_collection(
                     &mut walk,
                     &mut font_faces,
                 )?;
-                collection.add_stylesheet(&sheet, css::Origin::Author);
+                collection.add_stylesheet(&sheet, megi_css::Origin::Author);
             }
         }
     }
@@ -2295,11 +2295,11 @@ fn build_author_stylesheet_collection(
 ///
 /// Ordering per CSS: for each import in document order, first the imported sheet's own
 /// imports, then the imported sheet's rules (via
-/// [`css::StyleCollection::add_import_stylesheet`], which also re-checks the media gate).
+/// [`megi_css::StyleCollection::add_import_stylesheet`], which also re-checks the media gate).
 #[allow(clippy::too_many_arguments)]
 fn walk_imports(
-    collection: &mut css::StyleCollection,
-    sheet: &css::Stylesheet,
+    collection: &mut megi_css::StyleCollection,
+    sheet: &megi_css::Stylesheet,
     sheet_url: &Url,
     depth: usize,
     max_total_sheets: usize,
@@ -2356,7 +2356,7 @@ fn walk_imports(
                 .push(format!("skipping @import {url}: unsupported URL scheme"));
             continue;
         }
-        if !css::evaluate_media(&import.media, walk.media) {
+        if !megi_css::evaluate_media(&import.media, walk.media) {
             walk.skipped += 1;
             continue;
         }
@@ -2411,7 +2411,7 @@ fn walk_imports(
             }
             continue;
         }
-        let imported = css::parse_stylesheet(&text);
+        let imported = megi_css::parse_stylesheet(&text);
         walk.loaded += 1;
         walk.max_depth = walk.max_depth.max(depth + 1);
         font_faces.extend(
@@ -2432,7 +2432,7 @@ fn walk_imports(
             walk,
             font_faces,
         )?;
-        collection.add_import_stylesheet(import, &imported, css::Origin::Author);
+        collection.add_import_stylesheet(import, &imported, megi_css::Origin::Author);
     }
     Ok(())
 }
@@ -2466,7 +2466,7 @@ fn load_stylesheet_text(
                 return Ok(None);
             }
             if let Some(integrity) = integrity
-                && let Err(error) = net::integrity::verify_integrity(&resource.bytes, integrity)
+                && let Err(error) = megi_net::integrity::verify_integrity(&resource.bytes, integrity)
             {
                 warnings.push(format!(
                     "skipping stylesheet {url}: integrity check failed: {error}"
@@ -2520,28 +2520,28 @@ fn account_css_bytes(total: &mut usize, additional: usize, options: &RenderOptio
     true
 }
 
-/// Resolves computed styles for every element with a prebuilt [`css::StyleCollection`].
+/// Resolves computed styles for every element with a prebuilt [`megi_css::StyleCollection`].
 ///
-/// Mirrors `css::resolve_document_styles_with_media` but accepts a collection that already
+/// Mirrors `megi_css::resolve_document_styles_with_media` but accepts a collection that already
 /// contains the author sheets (including recursively imported ones in cascade order).
 /// Resolves the cascade with an explicit interaction state.
 ///
-/// Render uses an empty [`css::StateContext`] (no pointer, no focus ownership): dynamic
+/// Render uses an empty [`megi_css::StateContext`] (no pointer, no focus ownership): dynamic
 /// `:checked`/`:disabled`/`:read-only`/`:required`/`:placeholder-shown` are derived from
-/// the DOM attributes by `css::state`, and `:focus`-style states can be modelled statically
+/// the DOM attributes by `megi_css::state`, and `:focus`-style states can be modelled statically
 /// with the documented `data-megi-*` attributes (`data-megi-focused`, ...). The shell can
 /// inject those attributes after a user interaction and re-render.
 fn resolve_styles_with_state(
     doc: &Document,
-    collection: &css::StyleCollection,
-    state: css::StateContext,
+    collection: &megi_css::StyleCollection,
+    state: megi_css::StateContext,
     time_ms: f64,
     viewport: (f32, f32),
-) -> (HashMap<NodeId, ComputedStyle>, css::PseudoStyles) {
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
     // `calc()` uses a thread-local viewport for vw/vh; install the real one so
     // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
-    css::with_calc_viewport(viewport.0, viewport.1, || {
-        css::state::with_state(state, || {
+    megi_css::with_calc_viewport(viewport.0, viewport.1, || {
+        megi_css::state::with_state(state, || {
             resolve_styles_with_collection(doc, collection, time_ms)
         })
     })
@@ -2549,18 +2549,18 @@ fn resolve_styles_with_state(
 
 fn resolve_styles_with_collection(
     doc: &Document,
-    collection: &css::StyleCollection,
+    collection: &megi_css::StyleCollection,
     time_ms: f64,
-) -> (HashMap<NodeId, ComputedStyle>, css::PseudoStyles) {
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
     // One shared selector-matching budget for the whole document: a per-element budget would
     // grow the total cost with the element count (#1413).
-    let _pass = css::style_pass_scope();
+    let _pass = megi_css::style_pass_scope();
     let (mut styles, mut pseudo_styles) =
-        css::resolve_document_styles_from_collection(doc, collection);
+        megi_css::resolve_document_styles_from_collection(doc, collection);
     // `#1546`: resolve the `::backdrop` color for modal dialogs after the main cascade, since
     // the generic collector does not know about the HTML top layer.
     let root = doc.root();
-    let backdrop_updates: Vec<(NodeId, Option<css::Color>)> = styles
+    let backdrop_updates: Vec<(NodeId, Option<megi_css::Color>)> = styles
         .keys()
         .filter_map(|node_id| {
             let element = doc.node(*node_id).as_element()?;
@@ -2575,7 +2575,7 @@ fn resolve_styles_with_collection(
             let root_style = styles.get(&root);
             Some((
                 *node_id,
-                css::resolve_backdrop_color(doc, *node_id, collection, parent_style, root_style),
+                megi_css::resolve_backdrop_color(doc, *node_id, collection, parent_style, root_style),
             ))
         })
         .collect();
@@ -2584,16 +2584,16 @@ fn resolve_styles_with_collection(
             computed.set_backdrop_color(color);
         }
     }
-    css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
-    css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);
+    megi_css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
+    megi_css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);
     (styles, pseudo_styles)
 }
 
 /// Collects viewport-space border/content rects for every laid-out DOM node (round 28).
 #[cfg(feature = "js")]
 fn collect_layout_rects(
-    layout_box: &layout::LayoutBox,
-    rects: &mut std::collections::HashMap<NodeId, js::host::LayoutRect>,
+    layout_box: &megi_layout::LayoutBox,
+    rects: &mut std::collections::HashMap<NodeId, megi_js::host::LayoutRect>,
 ) {
     // Iterative traversal to avoid stack overflow on deep trees.
     let mut stack = vec![layout_box];
@@ -2608,7 +2608,7 @@ fn collect_layout_rects(
         {
             let border = current.dimensions.border_box();
             let content = current.dimensions.content;
-            rects.entry(node_id).or_insert(js::host::LayoutRect {
+            rects.entry(node_id).or_insert(megi_js::host::LayoutRect {
                 border_box: (border.x, border.y, border.width, border.height),
                 content_box: (content.x, content.y, content.width, content.height),
             });
@@ -2625,16 +2625,16 @@ mod calc_viewport_tests {
 
     #[test]
     fn styles_use_the_render_viewport_for_calc_vw() {
-        let doc = html::parse_document(
+        let doc = megi_html::parse_document(
             "<!doctype html><html><head></head><body><div>x</div></body></html>",
             false,
         );
-        let mut collection = css::StyleCollection::new();
-        collection.add_css("div{width:calc(50vw)}", css::Origin::Author);
+        let mut collection = megi_css::StyleCollection::new();
+        collection.add_css("div{width:calc(50vw)}", megi_css::Origin::Author);
         let (styles, _pseudos) = resolve_styles_with_state(
             &doc,
             &collection,
-            css::StateContext::new(),
+            megi_css::StateContext::new(),
             0.0,
             (400.0, 300.0),
         );
@@ -2642,9 +2642,9 @@ mod calc_viewport_tests {
         let width = styles
             .get(&div)
             .map(|style| style.width)
-            .unwrap_or(css::Length::Px(0.0));
+            .unwrap_or(megi_css::Length::Px(0.0));
         assert!(
-            matches!(width, css::Length::Px(px) if (px - 200.0).abs() < 1.0),
+            matches!(width, megi_css::Length::Px(px) if (px - 200.0).abs() < 1.0),
             "calc(50vw) must resolve against the 400px viewport, got {width:?}"
         );
     }

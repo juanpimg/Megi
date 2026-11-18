@@ -2,14 +2,14 @@
 //!
 //! ## Pipeline
 //!
-//! 1. The CSS layer exposes [`css::FontFaceRule`]s per stylesheet (no I/O there).
+//! 1. The CSS layer exposes [`megi_css::FontFaceRule`]s per stylesheet (no I/O there).
 //! 2. This module deduplicates sources by final URL, fetches them with the shared
-//!    [`net::ResourceLoader`] (so `--no-network` and the HTTP cache apply), decodes WOFF2
+//!    [`megi_net::ResourceLoader`] (so `--no-network` and the HTTP cache apply), decodes WOFF2
 //!    into sfnt bytes with [`megi_fonts::decode_web_font`] and registers each face under its CSS
 //!    `font-family` alias with [`megi_fonts::FontDatabase::load_font_data_family`].
 //! 3. The resulting database starts from the deterministic bundled faces and is used by
-//!    **both** layout (`layout::FontTextMeasurer`) and paint
-//!    (`paint::rasterize_display_list_with_font_database`).
+//!    **both** layout (`megi_layout::FontTextMeasurer`) and paint
+//!    (`megi_paint::rasterize_display_list_with_font_database`).
 //!
 //! ## Limits (fixed, non-fatal warnings)
 //!
@@ -21,9 +21,9 @@
 
 use std::collections::HashSet;
 
-use css::FontFaceRule;
+use megi_css::FontFaceRule;
 use megi_fonts::FontDatabase;
-use net::{ResourceLoader, Scheme, Url};
+use megi_net::{ResourceLoader, Scheme, Url};
 
 /// Maximum number of `@font-face` sources attempted per render.
 pub const MAX_WEB_FONTS: usize = 32;
@@ -137,7 +137,7 @@ pub fn load_webfonts_with_csp(
     loader: &mut ResourceLoader,
     no_network: bool,
     limits: WebFontLimits,
-    csp: Option<(&net::csp::ContentSecurityPolicy, &Url)>,
+    csp: Option<(&megi_net::csp::ContentSecurityPolicy, &Url)>,
     warnings: &mut Vec<String>,
 ) -> LoadedWebFonts {
     let mut database = FontDatabase::new_with_bundled_fonts();

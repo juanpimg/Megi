@@ -3,9 +3,9 @@
 //!
 //! Drives every public CSS entry point that consumes untrusted text:
 //!
-//! - `css::parse_stylesheet` (full rule list, at-rules, nested blocks);
-//! - `css::parse_list_of_declarations` (declaration blocks, e.g. `style="..."`);
-//! - `css::tokenize` (raw tokenizer, including escapes and URL tokens).
+//! - `megi_css::parse_stylesheet` (full rule list, at-rules, nested blocks);
+//! - `megi_css::parse_list_of_declarations` (declaration blocks, e.g. `style="..."`);
+//! - `megi_css::tokenize` (raw tokenizer, including escapes and URL tokens).
 //!
 //! The CSS parser is recursive-descent over component values and was the cause of the
 //! audit finding F5 (stack overflow on deeply nested blocks); the depth caps that fixed it
@@ -16,13 +16,13 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
-    let stylesheet = css::parse_stylesheet(&text);
+    let stylesheet = megi_css::parse_stylesheet(&text);
     let _ = stylesheet.rules.len();
 
-    let declarations = css::parse_list_of_declarations(&text);
+    let declarations = megi_css::parse_list_of_declarations(&text);
     let _ = declarations.len();
 
-    let tokens = css::tokenize(&text);
+    let tokens = megi_css::tokenize(&text);
     let _ = tokens.len();
 
     // Exercise cascade, calc(), var(), and color resolution on a tiny DOM (#858).
@@ -37,5 +37,5 @@ fuzz_target!(|data: &[u8]| {
     doc.append_child(doc.root(), html);
     doc.append_child(html, body);
     doc.append_child(body, div);
-    let _ = css::resolve_document_styles_with_viewport(&doc, Some(&text), 800.0, 600.0);
+    let _ = megi_css::resolve_document_styles_with_viewport(&doc, Some(&text), 800.0, 600.0);
 });

@@ -5,8 +5,8 @@
 use std::sync::{Arc, Mutex};
 
 use megi_core::Document;
-use js::host::{HistoryAction, LocationAction, StorageKind, StorageProvider};
-use js::runtime::JsRuntime;
+use megi_js::host::{HistoryAction, LocationAction, StorageKind, StorageProvider};
+use megi_js::runtime::JsRuntime;
 
 #[test]
 fn history_provider_push_replace_back_forward_go() {

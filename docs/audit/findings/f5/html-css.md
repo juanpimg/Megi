@@ -26,22 +26,22 @@ semantics on top of a correct parse.
 |---|---|---|---|
 | `html`, `head`, `body`, `title`, `meta`, `link`, `style`, `base` | full | `crates/css/src/user_agent.rs:37-42`; `crates/render/src/stylesheets.rs:1` | — (charset via `crates/render/src/charset.rs`; `<meta name=viewport>` has no effect, desktop-only viewport) |
 | `div`, `p`, `h1-h6`, `ul/ol/li`, `dl/dt/dd`, `blockquote`, `pre`, `hr`, `address`, `figure/figcaption`, sectioning tags | full | `crates/css/src/user_agent.rs:23-32` | — |
-| `a` | full (render) / partial (nav) | `crates/shell/src/links.rs:119`; `crates/shell/src/window.rs:65` | `target`, `download`, `rel`, `ping` ignored; `javascript:`/`mailto:` explicitly non-navigable (`window.rs:65`) |
+| `a` | full (render) / partial (nav) | `crates/browser/src/links.rs:119`; `crates/browser/src/window.rs:65` | `target`, `download`, `rel`, `ping` ignored; `javascript:`/`mailto:` explicitly non-navigable (`window.rs:65`) |
 | inline semantics `em/strong/i/b/code/small/sub/sup/abbr/cite/q` | partial | `crates/css/src/user_agent.rs:45-70` | `q` quotes, `abbr` titles, `sub/sup` vertical raise all absent |
 | `ruby/rt/rp`, `bdi/bdo`, `wbr`, `mark`, `time` | absent | `crates/css/src/user_agent.rs` has no rule; `rg '"ruby"|"bdo"|"mark"' crates/render/src crates/user_agent` finds none | parsed as plain inline; no ruby annotation layout, no `bdi` isolation, no `mark` highlight |
 | `img` (`src`, `width`/`height`, `alt`) | partial | `crates/render/src/images.rs:90-113`; `crates/layout/src/tree_builder.rs:421` | `srcset`, `sizes`, `loading=lazy`, `decoding`, `fetchpriority` ignored; failed images paint a gray placeholder (`crates/paint/src/painter.rs:268`), `alt` text is not painted |
 | `picture` + `source` (art direction / formats) | absent | `images.rs:90-113` only walks `img[src]`; `rg '"source"|"picture"' crates/render/src` → none | responsive/format negotiation never happens: `<picture>` children are parsed but the chosen `srcset` candidate is never applied |
-| `srcset` / `sizes` | absent | `crates/shell/src/images.rs:6-8` documents "no lazily loaded/`srcset` selection" | DPR/size-appropriate image selection missing; `<img srcset>` without `src` renders **no image at all** |
+| `srcset` / `sizes` | absent | `crates/browser/src/images.rs:6-8` documents "no lazily loaded/`srcset` selection" | DPR/size-appropriate image selection missing; `<img srcset>` without `src` renders **no image at all** |
 | `video`, `audio`, `track` | absent | `crates/layout/src/tree_builder.rs:228-244` (replaced box only); `rg 'HTMLMediaElement|currentTime|play\(' crates/js/src crates/render/src` → 0 | no playback, no controls, no poster, no captions; element paints as a fixed placeholder/aspect box |
 | `canvas` | absent | `tree_builder.rs:228-244` (replaced box, default 300×150 at `:511`); `rg 'getContext|CanvasRenderingContext' crates` → 0 | no 2D context, no bitmap; every chart/game/canvas app renders an empty box |
 | `iframe` | absent | `tree_builder.rs:228-244`; `rg 'top layer|frame tree|nested browsing' crates/render/src crates/html/src` → 0 | no nested browsing context, no `srcdoc`/`sandbox`/`allow`; embeds (maps, video, payment) are blank boxes |
 | `object`, `embed` | absent | `tree_builder.rs:228-244` | replaced/fallback semantics unimplemented |
-| `form`, `fieldset`, `legend`, `label`, `button`, `input`, `select`, `textarea`, `output` | partial | `crates/shell/src/forms.rs:82-108` (kind mapping), `:55` (`select` renders first option, no dropdown) | **no submission**: `crates/shell/src/lib.rs:134`, `crates/shell/src/forms.rs:20` — "`Enter` never submits (no backend)"; no `action`/`method`/`enctype`/`FormData`/validation API; `input type=hidden` is only observed by the tree builder (`crates/html/src/tree_builder.rs:3214`) and still laid out as a box |
-| `input` types beyond text-like | partial | `crates/shell/src/forms.rs:82-108`: checkbox/radio/submit/reset/button have real kinds, everything else (date, color, range, number, file, email, password, search) collapses to `TextInput` | no pickers, no spinners, no file chooser, no type validation; `pattern`/`min`/`max` ignored |
+| `form`, `fieldset`, `legend`, `label`, `button`, `input`, `select`, `textarea`, `output` | partial | `crates/browser/src/forms.rs:82-108` (kind mapping), `:55` (`select` renders first option, no dropdown) | **no submission**: `crates/browser/src/lib.rs:134`, `crates/browser/src/forms.rs:20` — "`Enter` never submits (no backend)"; no `action`/`method`/`enctype`/`FormData`/validation API; `input type=hidden` is only observed by the tree builder (`crates/html/src/tree_builder.rs:3214`) and still laid out as a box |
+| `input` types beyond text-like | partial | `crates/browser/src/forms.rs:82-108`: checkbox/radio/submit/reset/button have real kinds, everything else (date, color, range, number, file, email, password, search) collapses to `TextInput` | no pickers, no spinners, no file chooser, no type validation; `pattern`/`min`/`max` ignored |
 | `progress`, `meter`, `datalist` | absent | `rg '"progress"|"meter"|"datalist"' crates/render/src crates/layout/src` → 0 UA rules; only tokenizer/tree-builder name lists | no native rendering; `datalist` suggestions never appear |
 | `details` / `summary` | absent | `crates/css/src/user_agent.rs` has no rule; `rg 'details|summary' crates/render/src crates/layout/src` → 0 | closed `<details>` **renders all children** (no toggle, no marker, no `open` semantics) |
-| `dialog` | absent | `rg 'showModal|top layer|dialog' crates/render/src crates/shell/src` → 0; no `[open]`/`<dialog>` UA rule in `user_agent.rs` | no top layer, no backdrop, no modality: `<dialog open>` is just an in-flow block |
-| `contenteditable`, `draggable`, `inert`, `popover`, `autofocus` | absent | `rg 'contenteditable|draggable|popover|autofocus|inert' crates/*/src` → only `a11y.rs` reading `inert` for focus order (`crates/shell/src/a11y.rs:20`) | no editing, no drag, no popovers; `autofocus` never focuses |
+| `dialog` | absent | `rg 'showModal|top layer|dialog' crates/render/src crates/browser/src` → 0; no `[open]`/`<dialog>` UA rule in `user_agent.rs` | no top layer, no backdrop, no modality: `<dialog open>` is just an in-flow block |
+| `contenteditable`, `draggable`, `inert`, `popover`, `autofocus` | absent | `rg 'contenteditable|draggable|popover|autofocus|inert' crates/*/src` → only `a11y.rs` reading `inert` for focus order (`crates/browser/src/a11y.rs:20`) | no editing, no drag, no popovers; `autofocus` never focuses |
 | `table`, `thead/tbody/tfoot`, `tr`, `td/th`, `caption`, `colgroup/col` | full | `crates/layout/src/table.rs:13-17`; `crates/css/src/user_agent.rs:122-160` | good CSS 2.1 tables incl. `colspan`/`rowspan` distribution; presentational attrs missing (below) |
 | obsolete `center`, `font`, `big`, `strike`, `tt`, `nobr`, `marquee`, `frameset`, `applet`, `basefont`, `bgsound`, `plaintext`, `xmp` | partial (parse) / absent (render) | parser handles them (`crates/html/src/tree_builder.rs`, obsolete tag list) but `rg 'bgcolor|cellpadding|cellspacing|"valign"|"face"|"color"' crates/css/src/lib.rs crates/layout/src/tree_builder.rs` → no presentational-hint mapping | legacy presentation attributes (`align`, `valign`, `bgcolor`, `cellpadding`, `cellspacing`, `border`, `font size/face/color`, `<center>`) are ignored by the cascade; old pages lose their entire visual intent |
 | `svg` (inline), `svg` as image | partial | `crates/render/src/inline_svg.rs:1-20`: inline SVG is serialized to a `data:image/svg+xml` **`<img>`** | CSS from the document does not reach inside the `data:` image (no `fill: currentColor`, no inherited `font-family`, no `:hover` on SVG children); external `<use href>`, CSS-in-SVG interactions limited to what `crates/svg` implements |
@@ -53,13 +53,13 @@ semantics on top of a correct parse.
 
 | Attribute | Status | Evidence | Note |
 |---|---|---|---|
-| `id`, `class`, `style`, `title`, `data-*`, `aria-*`, `role` | full | `crates/core/src/lib.rs`; `crates/shell/src/a11y.rs:12-25` (role/name/disabled/hidden) | a11y is a minimal model (no computed name algorithm, no live regions) |
+| `id`, `class`, `style`, `title`, `data-*`, `aria-*`, `role` | full | `crates/core/src/lib.rs`; `crates/browser/src/a11y.rs:12-25` (role/name/disabled/hidden) | a11y is a minimal model (no computed name algorithm, no live regions) |
 | `lang` | partial | parsed/stored; `:lang()` selector unimplemented — `crates/css/src/selector.rs:18-20` lists it as pending | language-dependent typography/quotes unavailable |
 | `dir` | **absent** | `rg 'get_attribute\("dir"\)|"dir"\)' crates --glob '!*/tests/*'` → only tree-builder attribute tables; `crates/layout/src/bidi.rs:1-6` runs UAX#9 from *computed* `direction` | `<html dir="rtl">`/`dir="auto"` never sets the paragraph direction: RTL pages render LTR unless the page also sets `direction` in CSS |
-| `hidden` | **absent** | no `[hidden]` rule in `crates/css/src/user_agent.rs`; `rg '"hidden"' crates/layout/src crates/css/src crates/render/src` → only `overflow:hidden`/`border-style:hidden` values | `<div hidden>`, `<section hidden>` etc. stay **visible and occupy layout**; `crates/shell/src/a11y.rs:20` does exclude them from the focus order, so a11y and rendering disagree |
-| `tabindex` | partial | `crates/shell/src/a11y.rs` deterministic Tab order; `rg 'tabindex' crates/*/src` → no attribute read | tab order is document order; `tabindex` values/`-1` ignored |
+| `hidden` | **absent** | no `[hidden]` rule in `crates/css/src/user_agent.rs`; `rg '"hidden"' crates/layout/src crates/css/src crates/render/src` → only `overflow:hidden`/`border-style:hidden` values | `<div hidden>`, `<section hidden>` etc. stay **visible and occupy layout**; `crates/browser/src/a11y.rs:20` does exclude them from the focus order, so a11y and rendering disagree |
+| `tabindex` | partial | `crates/browser/src/a11y.rs` deterministic Tab order; `rg 'tabindex' crates/*/src` → no attribute read | tab order is document order; `tabindex` values/`-1` ignored |
 | `width`/`height` on `img`/`canvas`/`video` | full | `crates/layout/src/tree_builder.rs:421` (`attribute_number`), `:511` defaults | — |
-| `href` URL parsing (`<base>` too) | full | `crates/render/src/stylesheets.rs:1`, `crates/shell/src/links.rs:119` | — |
+| `href` URL parsing (`<base>` too) | full | `crates/render/src/stylesheets.rs:1`, `crates/browser/src/links.rs:119` | — |
 | `colspan`/`rowspan` | full | `crates/layout/src/table.rs:13-17` | `rowspan=0` handled as 1, overrun clamped |
 | presentational table attrs (`border`, `cellpadding`, `cellspacing`, `align`, `valign`, `bgcolor`, `width` on `td`) | absent | see obsolete row above | — |
 
@@ -112,7 +112,7 @@ semantics on top of a correct parse.
 
 Format: **missing → what the user sees → what a real page expected**.
 
-1. **Form submission absent** (`crates/shell/src/lib.rs:134`, `crates/shell/src/forms.rs:20`) → pressing Enter or clicking a submit button does nothing, no navigation, no `FormData`, no validation → every login/search/checkout flow is dead on arrival; real pages rely on the browser to POST/GET and navigate.
+1. **Form submission absent** (`crates/browser/src/lib.rs:134`, `crates/browser/src/forms.rs:20`) → pressing Enter or clicking a submit button does nothing, no navigation, no `FormData`, no validation → every login/search/checkout flow is dead on arrival; real pages rely on the browser to POST/GET and navigate.
 2. **No `::before`/`::after` + no `content`** (`selector.rs:18-20`) → icon fonts drop, decorative underlines/badges disappear, `clearfix` hacks collapse layouts → most Bootstrap/Tailwind-era pages lose visual structure.
 3. **No CSS transforms** (`properties.rs` has no transform field; `rg '"transform"' crates/css/src` → 0) → carousels, rotated icons, centered modals (`translate(-50%,-50%)`), scale-on-hover all static and positionally wrong → modern layouts visibly broken.
 4. **No Shadow DOM / custom elements** (`crates/html/src/tree_builder.rs:322` is the only `shadow` hit, `feDropShadow`) → `<my-widget>` renders as an empty inline element; frameworks (Lit, Stencil, many design systems) show blank regions.
@@ -125,18 +125,18 @@ Format: **missing → what the user sees → what a real page expected**.
 11. **`video`/`audio` playback absent** → media elements are inert boxes → video sites and audio players unusable.
 12. **`@supports` blocks dropped entirely** (`parser.rs:235`+no `"supports"` handler) → pages that guard modern CSS in `@supports (display:grid)` lose the whole rule block (not just the unsupported half) → fallback layouts regress.
 13. **`@media` features limited to width/height/orientation** (`crates/css/src/media.rs:402`) → `prefers-color-scheme` dark modes, `hover`/`pointer` touch adaptations and `prefers-reduced-motion` blocks vanish → dark-mode users get the light theme, touch layouts get desktop sizing.
-14. **`position: sticky` cannot stick** — `crates/layout/src/block.rs:1379-1385` documents "no scroll container; sticky modelled as stays in normal-flow slot", while the shell **does** scroll vertically (`crates/shell/src/window.rs:15`) → sticky headers/toolbars scroll away → classic sticky-nav pages break while scrolling.
+14. **`position: sticky` cannot stick** — `crates/layout/src/block.rs:1379-1385` documents "no scroll container; sticky modelled as stays in normal-flow slot", while the shell **does** scroll vertically (`crates/browser/src/window.rs:15`) → sticky headers/toolbars scroll away → classic sticky-nav pages break while scrolling.
 15. **`float` layout is block-granular** (`crates/layout/src/block.rs:10-11`: "a full float-aware inline layout is out of scope") → text does not wrap around floated images → legacy magazine/news layouts, thumbnail+text cards and `float:right` sidebars overlap or leave gaps.
 16. **RTL driven only by CSS `direction`** (`bidi.rs:1-6` uses computed style; no `dir` attribute mapping) → `<html dir="rtl">` pages lay out LTR → Arabic/Hebrew pages read in the wrong order/punctuation placement.
 17. **Legacy presentational attributes ignored** (`bgcolor`, `align`, `valign`, `font`, `center`, `cellpadding/cellspacing`, `border`) → old intranet/legacy pages lose their entire visual intent.
 18. **`overflow: auto/scroll` has no scroll container** (`crates/paint/src/painter.rs:49,528-532` clips only `hidden|clip`) → scrollable panes either overflow visibly or get clipped with no way to scroll.
 19. **Inline SVG is flattened to `<img>`** (`crates/render/src/inline_svg.rs:1-20`) → `currentColor` fills, CSS hover, inherited fonts never reach SVG children → themable icons render in their authored colors (often black).
 20. **No `text-overflow`/`text-indent`/`writing-mode`/`word-break`** → single-line truncation with ellipsis, indented paragraphs, vertical text and CJK wrapping behave wrong (CJK fonts separately tracked as #1015).
-21. **`input` types collapse to text** (`crates/shell/src/forms.rs:82-108`) → date/color/range/file/number controls look and behave like text boxes → booking forms etc. unreadable.
+21. **`input` types collapse to text** (`crates/browser/src/forms.rs:82-108`) → date/color/range/file/number controls look and behave like text boxes → booking forms etc. unreadable.
 22. **`<select>` renders first option only, no dropdown** (`forms.rs:55`) → choice UIs are unusable.
 23. **`mix-blend-mode` only 6 of 16 modes; no `border-image`, `clip-path`, `outline`, `mask`, `@font-face` descriptors** (properties.rs:1615, parser.rs:544) → decorative effects degrade (lower severity, cosmetic).
 
-Non-gaps worth recording (don't regress): HTML/CSS parsing conformance (html5lib + CSS-Syntax WPT pass), flexbox/grid/tables/container-queries/bidi/`color-mix`/gradients all real implementations, `@layer` cascade, image decoders (PNG/JPEG/WebP/GIF) with EXIF, section 508-ish a11y focus order (`crates/shell/src/a11y.rs`), form *rendering* of checkboxes/radios/buttons.
+Non-gaps worth recording (don't regress): HTML/CSS parsing conformance (html5lib + CSS-Syntax WPT pass), flexbox/grid/tables/container-queries/bidi/`color-mix`/gradients all real implementations, `@layer` cascade, image decoders (PNG/JPEG/WebP/GIF) with EXIF, section 508-ish a11y focus order (`crates/browser/src/a11y.rs`), form *rendering* of checkboxes/radios/buttons.
 
 ---
 
@@ -144,7 +144,7 @@ Non-gaps worth recording (don't regress): HTML/CSS parsing conformance (html5lib
 
 | # | Gap | Why it ranks here | Cite |
 |---|---|---|---|
-| 1 | Form submission absent | kills login/search/checkout; no workaround inside the page | `crates/shell/src/lib.rs:134`, `crates/shell/src/forms.rs:20` |
+| 1 | Form submission absent | kills login/search/checkout; no workaround inside the page | `crates/browser/src/lib.rs:134`, `crates/browser/src/forms.rs:20` |
 | 2 | CSS transforms absent | layout/position breakage on most modern pages | `crates/css/src/properties.rs` (no field; grep 0) |
 | 3 | `::before`/`::after` + `content` absent | icon systems, clearfix, decorations gone | `crates/css/src/selector.rs:18-20` |
 | 4 | Shadow DOM / custom elements absent | component-driven sites render blank | `crates/html/src/tree_builder.rs:322` |
@@ -157,7 +157,7 @@ Non-gaps worth recording (don't regress): HTML/CSS parsing conformance (html5lib
 | 11 | `video`/`audio` playback absent | media sites unusable | grep `HTMLMediaElement` → 0 |
 | 12 | `@supports` blocks dropped | fallback CSS lost wholesale | `crates/css/src/parser.rs:235` (only listed at-rules interpreted) |
 | 13 | `@media` feature set (color-scheme/hover/pointer/reduced-motion) | dark mode and touch layouts lost | `crates/css/src/media.rs:402,445-446` |
-| 14 | `position: sticky` inert while shell scrolls | sticky headers fail exactly when scrolling | `crates/layout/src/block.rs:1379-1385` vs `crates/shell/src/window.rs:15` |
+| 14 | `position: sticky` inert while shell scrolls | sticky headers fail exactly when scrolling | `crates/layout/src/block.rs:1379-1385` vs `crates/browser/src/window.rs:15` |
 | 15 | `dir` attribute / RTL propagation absent | RTL pages render LTR | `crates/layout/src/bidi.rs:1-6` (computed `direction` only) |
 
 Next tier (16-23): float block-granularity, RTL/Arabic shaping (#987 filed), presentational

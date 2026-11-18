@@ -53,7 +53,7 @@
 //! * The baseline of an `inline-table` is the baseline of its **first** row box
 //!   (CSS 2.2 §10.8.1), falling back to the bottom margin edge when there are no rows.
 
-use css::{BorderCollapse, BorderStyle, CaptionSide, Length, Position, TableLayout, VerticalAlign};
+use megi_css::{BorderCollapse, BorderStyle, CaptionSide, Length, Position, TableLayout, VerticalAlign};
 
 use crate::block::{
     PositioningContext, intrinsic_content_widths, layout_box_contents, resolve_horizontal_edges,
@@ -167,7 +167,7 @@ fn layout_table_advanced(
     let style = table
         .style
         .clone()
-        .unwrap_or_else(|| std::sync::Arc::new(css::ComputedStyle::initial()));
+        .unwrap_or_else(|| std::sync::Arc::new(megi_css::ComputedStyle::initial()));
     let collapse = style.border_collapse == BorderCollapse::Collapse;
     let (spacing_h, spacing_v) = if collapse {
         (0.0, 0.0)
@@ -565,7 +565,7 @@ fn decompose_children(
 }
 
 /// Resolves the used `border-spacing` of a table box.
-fn border_spacing(style: &css::ComputedStyle) -> (f32, f32) {
+fn border_spacing(style: &megi_css::ComputedStyle) -> (f32, f32) {
     let (mut horizontal, mut vertical) = style.border_spacing;
     if horizontal.is_nan() || vertical.is_nan() || style.border_spacing == (0.0, 0.0) {
         horizontal = DEFAULT_BORDER_SPACING;
@@ -621,7 +621,7 @@ fn auto_column_widths(
     available_width: f32,
     spacing_h: f32,
     measurer: &dyn TextMeasurer,
-    style: &css::ComputedStyle,
+    style: &megi_css::ComputedStyle,
 ) -> (f32, Vec<f32>) {
     let collapse = style.border_collapse == BorderCollapse::Collapse;
     let mut columns: Vec<(f32, f32)> = vec![(0.0, 0.0); column_count];
@@ -714,7 +714,7 @@ fn auto_column_widths(
 /// first row's cells; remaining space is shared equally. Content never affects widths.
 #[allow(clippy::too_many_arguments)]
 fn fixed_column_widths(
-    style: &css::ComputedStyle,
+    style: &megi_css::ComputedStyle,
     cells: &[GridCell],
     flat_cells: &[Option<LayoutBox>],
     column_hints: &[Option<f32>],
@@ -1085,7 +1085,7 @@ mod legacy {
     use crate::box_tree::{BoxType, LayoutBox};
     use crate::geometry::EdgeSizes;
     use crate::inline::TextMeasurer;
-    use css::{BorderCollapse, CaptionSide, Length, Position, VerticalAlign};
+    use megi_css::{BorderCollapse, CaptionSide, Length, Position, VerticalAlign};
 
     use super::DEFAULT_BORDER_SPACING;
 
@@ -1136,7 +1136,7 @@ mod legacy {
                     )
                 }
                 None => {
-                    let initial = css::ComputedStyle::initial();
+                    let initial = megi_css::ComputedStyle::initial();
                     let (horizontal, vertical) = border_spacing(&initial);
                     (
                         horizontal,
@@ -1260,7 +1260,7 @@ mod legacy {
     }
 
     /// Resolves the used `border-spacing` of a table box.
-    fn border_spacing(style: &css::ComputedStyle) -> (f32, f32) {
+    fn border_spacing(style: &megi_css::ComputedStyle) -> (f32, f32) {
         let (mut horizontal, mut vertical) = style.border_spacing;
         if horizontal.is_nan() || vertical.is_nan() || style.border_spacing == (0.0, 0.0) {
             // The HTML UA default is 2px; hand-built test styles often leave the initial

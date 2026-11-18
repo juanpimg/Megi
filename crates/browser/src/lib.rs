@@ -43,11 +43,11 @@
 //!   and renders the new URL on the worker (generation-based cancellation). `Alt+←` /
 //!   `Backspace` / `b` go back, `Alt+→` / `n` go forward (`r` reloads); history is bounded
 //!   by [`MAX_HISTORY`] and navigating from the past truncates forward entries. Link
-//!   clickability comes from `render::RenderOutput::hit_regions` (the additive paint
+//!   clickability comes from `megi_render::RenderOutput::hit_regions` (the additive paint
 //!   hit-testing layer of the same render pass as the pixels) resolved through
-//!   `paint::find_link_at`; a documented layout-tree fallback covers outputs without
+//!   `megi_paint::find_link_at`; a documented layout-tree fallback covers outputs without
 //!   regions.
-//! - **Browser networking**: `--cookies` enables a session [`net::CookieJar`] shared by
+//! - **Browser networking**: `--cookies` enables a session [`megi_net::CookieJar`] shared by
 //!   the document, its subresources, redirects and later navigations; `--origin` overrides
 //!   the CORS `Origin` used for subresource fetches. `render` derives it from the document
 //!   URL by default; CORS denials are non-fatal warnings. `gzip`/`deflate` responses are
@@ -159,7 +159,7 @@
 //!   images inside `<a href>`): `<area>`, CSS `pointer-events`, transforms and hover
 //!   states remain out of scope.
 //! - Cookies: one session jar per process (`--cookies`), no persistence across processes,
-//!   `SameSite` ignored and no Public Suffix List (documented in `net::cookies`). CORS is
+//!   `SameSite` ignored and no Public Suffix List (documented in `megi_net::cookies`). CORS is
 //!   the `net` subset (no preflight cache/Expose-Headers); `Origin` only affects
 //!   subresource fetches, never the top-level navigation.
 //! - Window-mode code is not exercised by tests (no display server in CI); all navigation,
@@ -168,7 +168,7 @@
 //! ## Headless mode
 //!
 //! `megi <url|file> --screenshot out.png` never touches winit: it calls
-//! [`render::render_url`] with the requested viewport and writes a deterministic PNG. The
+//! [`megi_render::render_url`] with the requested viewport and writes a deterministic PNG. The
 //! pure logic (argument parsing, URL normalization, viewport, pixmap→framebuffer
 //! conversion, screenshot writing) is unit-tested without a display server.
 

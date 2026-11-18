@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use css::{
+use megi_css::{
     CalcContext, StateContext, evaluate_calc, matches_with_state, resolve_document_styles,
     with_calc_viewport, with_state,
 };
@@ -26,7 +26,7 @@ fn document() -> (Document, NodeId) {
     (doc, body)
 }
 
-fn computed(doc: &Document, css_text: &str) -> HashMap<NodeId, css::ComputedStyle> {
+fn computed(doc: &Document, css_text: &str) -> HashMap<NodeId, megi_css::ComputedStyle> {
     resolve_document_styles(doc, Some(css_text))
 }
 
@@ -42,10 +42,10 @@ fn find_id(doc: &Document, id: &str) -> NodeId {
 }
 
 fn style_of<'a>(
-    styles: &'a HashMap<NodeId, css::ComputedStyle>,
+    styles: &'a HashMap<NodeId, megi_css::ComputedStyle>,
     doc: &Document,
     id: &str,
-) -> &'a css::ComputedStyle {
+) -> &'a megi_css::ComputedStyle {
     styles.get(&find_id(doc, id)).expect("computed style")
 }
 
@@ -268,7 +268,7 @@ fn state_pseudo_classes_drive_the_cascade() {
     let plain = computed(&doc, css);
     assert_eq!(
         style_of(&plain, &doc, "i").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 0,
             b: 0,
@@ -282,7 +282,7 @@ fn state_pseudo_classes_drive_the_cascade() {
     let styles = with_state(focused, || computed(&doc, css));
     assert_eq!(
         style_of(&styles, &doc, "i").color,
-        css::Color {
+        megi_css::Color {
             r: 255,
             g: 0,
             b: 0,
@@ -331,7 +331,7 @@ fn root_custom_property_is_inherited() {
     );
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 255,
             g: 0,
             b: 0,
@@ -350,7 +350,7 @@ fn element_override_and_initial_reset() {
     );
     assert_eq!(
         style_of(&styles, &doc, "parent").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 0,
             b: 255,
@@ -365,7 +365,7 @@ fn element_override_and_initial_reset() {
     );
     assert_eq!(
         style_of(&styles2, &doc2, "reset").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 0,
             b: 0,
@@ -384,7 +384,7 @@ fn var_fallback_cycle_and_undefined() {
     );
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 0xab,
             g: 0xcd,
             b: 0xef,
@@ -396,7 +396,7 @@ fn var_fallback_cycle_and_undefined() {
     let styles2 = computed(&doc2, "div { color: var(--missing) }");
     assert_eq!(
         style_of(&styles2, &doc2, "d").color,
-        css::Color::BLACK,
+        megi_css::Color::BLACK,
         "undefined var without fallback is invalid at computed-value time"
     );
 }
@@ -410,9 +410,9 @@ fn nested_variables_and_lengths() {
         ":root { --base: 10px; --double: calc(var(--base) * 2) } div { width: var(--double); margin: var(--base) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.width, css::Length::Px(20.0));
-    assert_eq!(style.margin.top, css::Length::Px(10.0));
-    assert_eq!(style.margin.left, css::Length::Px(10.0));
+    assert_eq!(style.width, megi_css::Length::Px(20.0));
+    assert_eq!(style.margin.top, megi_css::Length::Px(10.0));
+    assert_eq!(style.margin.left, megi_css::Length::Px(10.0));
 }
 
 #[test]
@@ -425,8 +425,8 @@ fn var_in_shorthand_and_font_family() {
          div { margin: var(--spacing) var(--spacing); font-family: var(--fonts) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.margin.top, css::Length::Px(4.0));
-    assert_eq!(style.margin.right, css::Length::Px(4.0));
+    assert_eq!(style.margin.top, megi_css::Length::Px(4.0));
+    assert_eq!(style.margin.right, megi_css::Length::Px(4.0));
     assert!(
         style.font_family.contains("DejaVu Sans"),
         "{}",
@@ -447,7 +447,7 @@ fn var_in_inline_style() {
     let styles = computed(&doc, "div { color: #000000 }");
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 0x12,
             g: 0x34,
             b: 0x56,
@@ -469,9 +469,9 @@ fn calc_absolute_arithmetic() {
         "div { margin: calc(10px + 2 * 5px); width: calc(100px / 4); height: calc((10px + 5px) * 2) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.margin.top, css::Length::Px(20.0));
-    assert_eq!(style.width, css::Length::Px(25.0));
-    assert_eq!(style.height, css::Length::Px(30.0));
+    assert_eq!(style.margin.top, megi_css::Length::Px(20.0));
+    assert_eq!(style.width, megi_css::Length::Px(25.0));
+    assert_eq!(style.height, megi_css::Length::Px(30.0));
 }
 
 #[test]
@@ -483,9 +483,9 @@ fn calc_em_rem_and_percent() {
         "div { font-size: 20px; margin: calc(1em + 2px); width: calc(2rem); height: calc(50%) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.margin.top, css::Length::Px(22.0));
-    assert_eq!(style.width, css::Length::Px(32.0));
-    assert_eq!(style.height, css::Length::Percent(50.0));
+    assert_eq!(style.margin.top, megi_css::Length::Px(22.0));
+    assert_eq!(style.width, megi_css::Length::Px(32.0));
+    assert_eq!(style.height, megi_css::Length::Percent(50.0));
 }
 
 #[test]
@@ -495,7 +495,7 @@ fn calc_vw_vh_use_the_injected_viewport() {
     let styles = with_calc_viewport(1000.0, 500.0, || {
         computed(&doc, "div { width: calc(10vw + 2vh) }")
     });
-    assert_eq!(style_of(&styles, &doc, "d").width, css::Length::Px(110.0));
+    assert_eq!(style_of(&styles, &doc, "d").width, megi_css::Length::Px(110.0));
 }
 
 #[test]
@@ -512,9 +512,9 @@ fn calc_mixed_stores_components_and_invalid_falls_back_to_auto() {
     let width = style.calc_lengths.width.expect("mixed width components");
     assert_eq!(width.percent, 100.0);
     assert_eq!(width.px, -20.0);
-    assert_eq!(style.width, css::Length::Px(-20.0));
+    assert_eq!(style.width, megi_css::Length::Px(-20.0));
     // Invalid expression → initial `auto` and no calc components.
-    assert_eq!(style.height, css::Length::Auto);
+    assert_eq!(style.height, megi_css::Length::Auto);
     assert!(style.calc_lengths.height.is_none());
 }
 
@@ -558,7 +558,7 @@ fn calc_and_var_combined() {
     );
     assert_eq!(
         style_of(&styles, &doc, "d").padding.top,
-        css::Length::Px(6.0)
+        megi_css::Length::Px(6.0)
     );
 }
 
@@ -603,7 +603,7 @@ fn custom_property_names_are_case_sensitive() {
     );
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 255,
             b: 0,
@@ -618,7 +618,7 @@ fn custom_property_names_are_case_sensitive() {
     );
     assert_eq!(
         style_of(&styles2, &doc2, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 255,
             g: 0,
             b: 0,
@@ -637,7 +637,7 @@ fn var_fallback_can_reference_another_variable() {
     );
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 0,
             b: 255,
@@ -655,7 +655,7 @@ fn calc_negative_and_integer_division() {
         "div { margin: calc(10px - 20px); padding: calc(9px / 2) }",
     );
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.margin.top, css::Length::Px(-10.0));
+    assert_eq!(style.margin.top, megi_css::Length::Px(-10.0));
     assert!((style.padding.top.top_px() - 4.5).abs() < 0.001);
 }
 
@@ -665,8 +665,8 @@ fn calc_in_background_position() {
     append(&mut doc, body, "div", &[("id", "d")]);
     let styles = computed(&doc, "div { background-position: calc(10px + 5px) 20px }");
     let style = style_of(&styles, &doc, "d");
-    assert_eq!(style.background_position.x, css::Length::Px(15.0));
-    assert_eq!(style.background_position.y, css::Length::Px(20.0));
+    assert_eq!(style.background_position.x, megi_css::Length::Px(15.0));
+    assert_eq!(style.background_position.y, megi_css::Length::Px(20.0));
 }
 
 #[test]
@@ -696,10 +696,10 @@ fn data_megi_disabled_maps_to_disabled_pseudo_class() {
 trait LengthPx {
     fn top_px(&self) -> f32;
 }
-impl LengthPx for css::Length {
+impl LengthPx for megi_css::Length {
     fn top_px(&self) -> f32 {
         match self {
-            css::Length::Px(value) => *value,
+            megi_css::Length::Px(value) => *value,
             _ => f32::NAN,
         }
     }
@@ -720,7 +720,7 @@ fn class_selectors_are_case_sensitive_in_the_cascade() {
     let styles = computed(&doc, css);
     assert_eq!(
         style_of(&styles, &doc, "lower").color,
-        css::Color {
+        megi_css::Color {
             r: 0,
             g: 0,
             b: 255,
@@ -730,7 +730,7 @@ fn class_selectors_are_case_sensitive_in_the_cascade() {
     );
     assert_eq!(
         style_of(&styles, &doc, "upper").color,
-        css::Color {
+        megi_css::Color {
             r: 255,
             g: 0,
             b: 0,
@@ -758,7 +758,7 @@ fn class_matching_does_not_fold_case_when_the_index_is_used() {
         &[("id", "down"), ("class", "button primary")],
     );
     let styles = computed(&doc, ".Button { color: #00ff00 }");
-    let green = css::Color {
+    let green = megi_css::Color {
         r: 0,
         g: 255,
         b: 0,
@@ -784,7 +784,7 @@ fn type_selectors_stay_ascii_case_insensitive_for_html() {
     let styles = computed(&doc, "DIV { color: #123456 }");
     assert_eq!(
         style_of(&styles, &doc, "d").color,
-        css::Color {
+        megi_css::Color {
             r: 0x12,
             g: 0x34,
             b: 0x56,

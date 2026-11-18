@@ -3,18 +3,18 @@
 //! First *real* HTML → PNG pipeline of the Megi engine (WP-4.1):
 //!
 //! ```text
-//! HTML bytes ──html::parse_document──► DOM
-//!            ──paint::collect_style_text + css::resolve_document_styles──► styles
-//!            ──layout::layout_document──► box tree
-//!            ──paint::build_display_list──► display list
-//!            ──paint::rasterize_display_list──► Pixmap
+//! HTML bytes ──megi_html::parse_document──► DOM
+//!            ──megi_paint::collect_style_text + megi_css::resolve_document_styles──► styles
+//!            ──megi_layout::layout_document──► box tree
+//!            ──megi_paint::build_display_list──► display list
+//!            ──megi_paint::rasterize_display_list──► Pixmap
 //!            ──Pixmap::to_png──► PNG file
 //! ```
 //!
 //! ## Usage
 //!
 //! ```text
-//! cargo run -p paint --example html_to_png -- <input.html> <output.png> [width] [height] [--rgba <dump.rgba>]
+//! cargo run -p megi-paint --example html_to_png -- <input.html> <output.png> [width] [height] [--rgba <dump.rgba>]
 //! ```
 //!
 //! - `width`/`height` default to 800×600 (the Phase 4 fixture viewport).
@@ -25,7 +25,7 @@
 //! gain an `html` dependency (audit decision D8), so the orchestration lives in
 //! this example (and in the integration tests).
 //!
-//! The canvas is painted by `paint::build_display_list` following CSS 2.2
+//! The canvas is painted by `megi_paint::build_display_list` following CSS 2.2
 //! §14.2; the rasterizer starts from an opaque white canvas, so pages without
 //! any root/`body` background still produce a white PNG instead of a
 //! transparent one.
@@ -35,7 +35,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
+use megi_layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
 
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -73,8 +73,8 @@ fn run() -> Result<(), String> {
     let source = fs::read_to_string(&options.input)
         .map_err(|error| format!("cannot read {}: {error}", options.input.display()))?;
 
-    let doc = html::parse_document(&source, false);
-    let styles = paint::resolve_embedded_styles(&doc);
+    let doc = megi_html::parse_document(&source, false);
+    let styles = megi_paint::resolve_embedded_styles(&doc);
 
     let viewport = Rect::new(0.0, 0.0, options.width as f32, options.height as f32);
     // Deterministic real typography: bundled DejaVu Sans, no system fonts.
@@ -88,8 +88,8 @@ fn run() -> Result<(), String> {
             )
         })?;
 
-    let display_list = paint::build_display_list(&layout_root, viewport);
-    let pixmap = paint::rasterize_display_list(&display_list, options.width, options.height);
+    let display_list = megi_paint::build_display_list(&layout_root, viewport);
+    let pixmap = megi_paint::rasterize_display_list(&display_list, options.width, options.height);
     let png = pixmap.to_png();
     if png.is_empty() {
         return Err("PNG encoding failed (empty output)".to_string());

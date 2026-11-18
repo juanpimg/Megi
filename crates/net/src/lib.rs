@@ -87,7 +87,7 @@
 //! The test suite is **fully offline**: every HTTP test starts its own
 //! `TcpListener` on `127.0.0.1:0` and serves hand-written HTTP responses, and `file://`
 //! tests use temporary files. There are no sleeps (beyond short socket timeouts used as a
-//! safety net) and no external connections, so `cargo test -p net` passes in CI without
+//! safety net) and no external connections, so `cargo test -p megi-net` passes in CI without
 //! network access.
 //!
 //! ## Browser features (R109)

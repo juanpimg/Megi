@@ -354,7 +354,7 @@ mod tests {
     use super::*;
 
     fn doc(html: &str) -> Document {
-        html::parse_document(html, true)
+        megi_html::parse_document(html, true)
     }
 
     #[test]

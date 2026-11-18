@@ -4,7 +4,7 @@
 //! (<https://url.spec.whatwg.org/>) and WPT `url/resources/urltestdata.json` cases that
 //! fall inside the supported subset (http/https/file, no IDNA/legacy forms).
 
-use net::{Scheme, Url, UrlError};
+use megi_net::{Scheme, Url, UrlError};
 
 fn parse(input: &str) -> Url {
     Url::parse(input).unwrap_or_else(|error| panic!("expected `{input}` to parse: {error}"))

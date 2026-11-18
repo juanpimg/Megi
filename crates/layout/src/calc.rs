@@ -1,6 +1,6 @@
 //! Resolution of CSS `calc()` mixed values (`percentage + absolute length`).
 //!
-//! `css::Length` is intentionally kept as `Px`/`Percent`/`Auto` so exhaustive
+//! `megi_css::Length` is intentionally kept as `Px`/`Percent`/`Auto` so exhaustive
 //! matches in other crates (paint/render) stay stable. Mixed `calc()` results are
 //! carried alongside the plain length in `ComputedStyle::calc_lengths` and resolved
 //! here once the percentage basis is known:
@@ -11,8 +11,8 @@
 //! contributes `0`, i.e. only the absolute part is used (documented CSS
 //! approximation; CSS would need a second layout pass).
 
-use css::Length;
-use css::calc::CalcValue;
+use megi_css::Length;
+use megi_css::calc::CalcValue;
 
 /// Upper bound for a single used length before it reaches box geometry (#693).
 ///
@@ -36,7 +36,7 @@ pub(crate) fn sanitize(px: f32) -> f32 {
 /// Resolves a mixed `calc()` side value against `reference` (the percentage basis).
 #[inline]
 pub(crate) fn resolve(value: CalcValue, reference: Option<f32>) -> f32 {
-    sanitize(css::calc::resolve_calc(value, reference))
+    sanitize(megi_css::calc::resolve_calc(value, reference))
 }
 
 /// Resolves a plain length: `Px`/`Percent` behave as usual, `Auto` contributes 0.

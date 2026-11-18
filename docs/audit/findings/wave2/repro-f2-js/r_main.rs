@@ -1,4 +1,4 @@
-use js::{Budget, JsRuntime};
+use megi_js::{Budget, JsRuntime};
 use std::time::Instant;
 
 fn rt() -> JsRuntime {
@@ -96,7 +96,7 @@ fn main() {
             if url.ends_with("w.js") {
                 Ok("1;".to_string())
             } else {
-                Err(js::JsError::Runtime("nf".into()))
+                Err(megi_js::JsError::Runtime("nf".into()))
             }
         }));
         let out = r.eval(

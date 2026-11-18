@@ -1,7 +1,7 @@
 #![no_main]
 //! Fuzz target: HTML byte-stream decoding (CSS/HTML Encoding §13.2, #1427).
 //!
-//! `render::charset::decode_html` handles a UTF-8 BOM, a `charset=` parameter in the
+//! `megi_render::charset::decode_html` handles a UTF-8 BOM, a `charset=` parameter in the
 //! `Content-Type` header, a `<meta charset>` prescan and an UTF-8 fallback over untrusted
 //! bytes. The other text targets only ever feed valid UTF-8, so the non-UTF-8 branches were
 //! effectively unreachable. This target passes the raw bytes plus an input-derived content
@@ -32,7 +32,7 @@ fuzz_target!(|data: &[u8]| {
         .map_or(0, |b| usize::from(*b) % CONTENT_TYPES.len());
     let content_type = CONTENT_TYPES[index];
 
-    match render::charset::decode_html(data, content_type) {
+    match megi_render::charset::decode_html(data, content_type) {
         Ok(decoded) => {
             // The decoder only ever reports these two normalized labels.
             assert!(
@@ -57,5 +57,5 @@ fuzz_target!(|data: &[u8]| {
 
     // A fixed UTF-8 content type on the same bytes exercises the declared-charset path
     // independently of the derived one.
-    let _ = render::charset::decode_html(data, "text/html; charset=utf-8");
+    let _ = megi_render::charset::decode_html(data, "text/html; charset=utf-8");
 });

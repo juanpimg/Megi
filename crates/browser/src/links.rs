@@ -1,12 +1,12 @@
 //! Link hit-testing and URL resolution (pure, display-free).
 //!
-//! The render worker extracts, from a finished [`render::RenderOutput`], one
+//! The render worker extracts, from a finished [`megi_render::RenderOutput`], one
 //! [`LinkRegion`] per painted primitive that resolves to an `<a href>`: its page
 //! rectangle in CSS pixels (origin = top-left of the full document, no scroll) and the raw
 //! `href` attribute. The primary source is the additive hit-testing layer of `paint`
 //! (`RenderOutput::hit_regions` produced by the same paint pass as the pixels): for every
-//! [`paint::HitRegion`] the nearest HTML `<a href>` ancestor is resolved with
-//! [`paint::find_link_at`]. When the render output carries no hit regions (e.g. a
+//! [`megi_paint::HitRegion`] the nearest HTML `<a href>` ancestor is resolved with
+//! [`megi_paint::find_link_at`]. When the render output carries no hit regions (e.g. a
 //! hand-built `RenderOutput` in a test, or a page with no painted content) a documented
 //! fallback walks the layout tree (`LayoutBox::node_id()` → DOM `<a href>`) instead.
 //!
@@ -19,7 +19,7 @@
 //!
 //! - Topmost wins: regions are searched in reverse paint order.
 //! - Empty/`href`-less anchors are not regions; anchors with zero-area boxes are skipped.
-//! - The raw `href` is resolved against the page URL with [`net::Url::join`]; `javascript:`
+//! - The raw `href` is resolved against the page URL with [`megi_net::Url::join`]; `javascript:`
 //!   and unknown schemes are not navigable (documented no-op), while `http(s)`, `file:`
 //!   and `data:` are.
 //! - Fragment-only links (`#section`) resolve to the same document URL with a fragment and
@@ -27,7 +27,7 @@
 //! - No forms, no `<area>`, no `javascript:` execution, no downloads.
 
 use megi_core::Namespace;
-use layout::LayoutBox;
+use megi_layout::LayoutBox;
 
 /// Rectangle in CSS page coordinates (CSS px, document origin, no scroll applied).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,7 +91,7 @@ pub enum LinkError {
     /// The `href` exceeded [`MAX_HREF_LEN`] characters.
     TooLong,
     /// The URL resolver rejected the `href` (malformed or unsupported).
-    Invalid(net::UrlError),
+    Invalid(megi_net::UrlError),
 }
 
 impl std::fmt::Display for LinkError {
@@ -110,10 +110,10 @@ impl std::error::Error for LinkError {}
 pub const MAX_HREF_LEN: usize = 4096;
 
 /// Returns `true` for the schemes the shell is allowed to navigate to.
-pub fn is_navigable(url: &net::Url) -> bool {
+pub fn is_navigable(url: &megi_net::Url) -> bool {
     matches!(
         url.scheme(),
-        net::Scheme::Http | net::Scheme::Https | net::Scheme::File | net::Scheme::Data
+        megi_net::Scheme::Http | megi_net::Scheme::Https | megi_net::Scheme::File | megi_net::Scheme::Data
     )
 }
 
@@ -121,7 +121,7 @@ pub fn is_navigable(url: &net::Url) -> bool {
 ///
 /// Whitespace around the attribute value is trimmed (HTML attribute semantics); an empty
 /// `href` is rejected.
-pub fn resolve_href(base: &net::Url, href: &str) -> Result<net::Url, LinkError> {
+pub fn resolve_href(base: &megi_net::Url, href: &str) -> Result<megi_net::Url, LinkError> {
     let href = href.trim();
     if href.is_empty() {
         return Err(LinkError::Empty);
@@ -134,7 +134,7 @@ pub fn resolve_href(base: &net::Url, href: &str) -> Result<net::Url, LinkError> 
         // `Url::join` only resolves relative references against `http(s)`/`file` bases and
         // rejects absolute references with a non-special scheme; accept a standalone
         // absolute URL (`data:`, or a scheme the shell will treat as non-navigable).
-        Err(join_error) => net::Url::parse(href).map_err(|parse_error| {
+        Err(join_error) => megi_net::Url::parse(href).map_err(|parse_error| {
             let _ = join_error;
             LinkError::Invalid(parse_error)
         }),
@@ -176,11 +176,11 @@ pub fn physical_to_page(
 /// `Ok(None)` means "no action": no link under the cursor, an unresolvable `href`, or a
 /// non-navigable scheme (`javascript:`, `mailto:`, ...).
 pub fn link_url_at(
-    page_url: Option<&net::Url>,
+    page_url: Option<&megi_net::Url>,
     regions: &[LinkRegion],
     x: f32,
     y: f32,
-) -> Result<Option<net::Url>, LinkError> {
+) -> Result<Option<megi_net::Url>, LinkError> {
     let Some(region) = find_link_at(regions, x, y) else {
         return Ok(None);
     };
@@ -200,8 +200,8 @@ pub fn link_url_at(
 /// Extracts one [`LinkRegion`] per painted primitive that resolves to an `<a href>`.
 ///
 /// Primary path: uses the additive `paint` hit regions from the render output
-/// ([`render::RenderOutput::hit_regions`]) and resolves the nearest HTML `<a href>`
-/// ancestor with [`paint::find_link_at`] for each region. This reuses the exact painted
+/// ([`megi_render::RenderOutput::hit_regions`]) and resolves the nearest HTML `<a href>`
+/// ancestor with [`megi_paint::find_link_at`] for each region. This reuses the exact painted
 /// geometry of the frame (clipped regions, text runs inheriting the anchor's DOM node,
 /// images and decorations inside links).
 ///
@@ -209,7 +209,7 @@ pub fn link_url_at(
 /// walked iteratively and element boxes are matched against the parsed DOM through
 /// [`LayoutBox::node_id`]. Anchors with an empty/absent `href` or a zero-area border box do
 /// not produce a region.
-pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
+pub fn collect_link_regions(output: &megi_render::RenderOutput) -> Vec<LinkRegion> {
     if output.hit_regions.is_empty() {
         return collect_link_regions_from_layout(output);
     }
@@ -218,7 +218,7 @@ pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
         let rect = hit_region.rect;
         let center_x = rect.x + rect.width / 2.0;
         let center_y = rect.y + rect.height / 2.0;
-        if let Some(link) = paint::find_link_at(
+        if let Some(link) = megi_paint::find_link_at(
             &output.document,
             std::slice::from_ref(hit_region),
             center_x,
@@ -251,7 +251,7 @@ pub fn collect_link_regions(output: &render::RenderOutput) -> Vec<LinkRegion> {
 
 /// Documented fallback for [`collect_link_regions`]: walks the layout tree and matches
 /// element boxes to DOM `<a href>` nodes (`LayoutBox::node_id`).
-fn collect_link_regions_from_layout(output: &render::RenderOutput) -> Vec<LinkRegion> {
+fn collect_link_regions_from_layout(output: &megi_render::RenderOutput) -> Vec<LinkRegion> {
     let mut regions = Vec::new();
     let mut stack: Vec<&LayoutBox> = vec![&output.layout];
     while let Some(layout_box) = stack.pop() {
@@ -282,8 +282,8 @@ fn collect_link_regions_from_layout(output: &render::RenderOutput) -> Vec<LinkRe
 mod tests {
     use super::*;
 
-    fn url(raw: &str) -> net::Url {
-        net::Url::parse(raw).expect("test URL parses")
+    fn url(raw: &str) -> megi_net::Url {
+        megi_net::Url::parse(raw).expect("test URL parses")
     }
 
     fn region(x: f32, y: f32, width: f32, height: f32, href: &str) -> LinkRegion {
@@ -370,7 +370,7 @@ mod tests {
             "file:///tmp/other.html"
         );
         let data = resolve_href(&url("https://example.com/"), "data:text/html,x").unwrap();
-        assert!(matches!(data.scheme(), net::Scheme::Data));
+        assert!(matches!(data.scheme(), megi_net::Scheme::Data));
     }
 
     #[test]
@@ -384,11 +384,11 @@ mod tests {
         let base = url("https://example.com/");
         assert!(matches!(
             resolve_href(&base, "mailto:a@example.com"),
-            Err(LinkError::Invalid(net::UrlError::UnsupportedScheme(_)))
+            Err(LinkError::Invalid(megi_net::UrlError::UnsupportedScheme(_)))
         ));
         assert!(matches!(
             resolve_href(&base, "javascript:alert(1)"),
-            Err(LinkError::Invalid(net::UrlError::UnsupportedScheme(_)))
+            Err(LinkError::Invalid(megi_net::UrlError::UnsupportedScheme(_)))
         ));
     }
 
@@ -469,7 +469,7 @@ mod tests {
         assert!(regions[0].rect.height > 0.0);
         let center_x = regions[0].rect.x + regions[0].rect.width / 2.0;
         let center_y = regions[0].rect.y + regions[0].rect.height / 2.0;
-        let page = net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+        let page = megi_net::Url::parse("https://example.com/docs/page.html").expect("page URL");
         let resolved = link_url_at(Some(&page), &regions, center_x, center_y)
             .expect("resolution")
             .expect("navigable");

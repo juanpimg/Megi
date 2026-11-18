@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use js::{Budget, ImportMap, JsError, JsRuntime};
+use megi_js::{Budget, ImportMap, JsError, JsRuntime};
 
 fn runtime_with_modules() -> (JsRuntime, Arc<Mutex<HashMap<String, String>>>) {
     let mut runtime = JsRuntime::new().expect("runtime");

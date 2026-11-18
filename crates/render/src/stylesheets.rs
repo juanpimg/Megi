@@ -9,15 +9,15 @@
 //!   attribute.
 //! - `<link>` is collected only when `rel` contains the `stylesheet` keyword (alternate
 //!   style sheets are ignored); `media` is evaluated against the real viewport with
-//!   [`css::parse_media_query_list`] + [`css::evaluate_media`] and non-matching sheets are
+//!   [`megi_css::parse_media_query_list`] + [`megi_css::evaluate_media`] and non-matching sheets are
 //!   skipped (counted as media-skipped, not as external sheets).
 //! - `@import` inside author CSS is handled by `crate::lib`'s style collection (this
 //!   module only returns the top-level sources).
 //! - `style=""` attributes are handled later by the CSS cascade, not here.
 
-use css::{MediaContext, evaluate_media, parse_media_query_list};
+use megi_css::{MediaContext, evaluate_media, parse_media_query_list};
 use megi_core::{Document, Namespace, NodeId, NodeKind};
-use net::Url;
+use megi_net::Url;
 
 use crate::error::RenderError;
 
@@ -269,7 +269,7 @@ pub fn collect_stylesheets(
 /// Validates that a URL scheme is fetchable by the render pipeline.
 pub fn ensure_supported_scheme(url: &Url) -> Result<(), RenderError> {
     match url.scheme() {
-        net::Scheme::Http | net::Scheme::Https | net::Scheme::File | net::Scheme::Data => Ok(()),
+        megi_net::Scheme::Http | megi_net::Scheme::Https | megi_net::Scheme::File | megi_net::Scheme::Data => Ok(()),
     }
 }
 

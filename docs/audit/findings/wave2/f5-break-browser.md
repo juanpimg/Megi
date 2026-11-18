@@ -2,9 +2,9 @@
 
 ## Alcance
 
-Batería de rotura del engine vía shell headless + inspección de `crates/js`/`crates/render`/`crates/shell`.
-Leídos (línea por línea, extractos relevantes): `crates/shell/src/main.rs:60-183`,
-`crates/shell/src/cli.rs` (límites `--find`/tabs/dimensiones), `crates/shell/src/title.rs`
+Batería de rotura del engine vía shell headless + inspección de `crates/js`/`crates/render`/`crates/browser`.
+Leídos (línea por línea, extractos relevantes): `crates/browser/src/main.rs:60-183`,
+`crates/browser/src/cli.rs` (límites `--find`/tabs/dimensiones), `crates/browser/src/title.rs`
 (fuente del título de ventana = elemento `<title>` del DOM), `crates/js/src/runtime.rs`
 `document_title_get/set:3776-3793`, `node_layout_rect:7801-7811`,
 `node_get_bounding_client_rect:7824-7856`, `worker_handle:8217-8228`,
@@ -30,7 +30,7 @@ Repros (ruta absoluta `/home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/brow
 
 ## Cobertura (leído — sin hallazgo, con evidencia)
 
-- **Control sano**: `cargo run --release -p shell -- <RP>/control.html --screenshot
+- **Control sano**: `cargo run --release -p megi-browser -- <RP>/control.html --screenshot
   /tmp/v-control.png --width 1024 --height 768 --no-session` → `exit=0`,
   `wrote /tmp/v-control.png (1024x768, 23655 bytes…)`, `png_check.py: OK`.
 - **100k selectores**: `exit=0`, PNG válido. **`@font-face` flood (2000 reglas)**:
@@ -76,7 +76,7 @@ Repros (ruta absoluta `/home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/brow
 - `lente`: contrato vs spec · `categoría`: contract · `severidad`: **P2**
 - `title`: layout cache pre-script nunca se invalida; la mutación de estilo es invisible a la geometría
 - `evidence` (3/3 en HEAD limpio, comando exacto):
-  `cargo run --release -p shell -- <RP>/gbr-mutate.html --screenshot … --save-html … --no-session`
+  `cargo run --release -p megi-browser -- <RP>/gbr-mutate.html --screenshot … --save-html … --no-session`
   (`gbr-mutate.html`: lee rect, `el.style.width="300px"`, añade nodo, relee):
   `<p id="r">{"x":8,…,"width":100,…}|{"x":8,…,"width":100,…}</p>` — el segundo
   rect sigue en 100 (esperado 300). Runs 1–3 idénticos, `exit=0`.
@@ -93,13 +93,13 @@ Repros (ruta absoluta `/home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/brow
 
 ### w2-browser-02 — `document.title=` no llega al DOM ni al título de ventana
 - `id`: `w2-browser-02` · `archivo:línea`: `crates/js/src/runtime.rs:3785-3793`
-  (setter escribe solo `host.title`) + `crates/shell/src/title.rs:8-12` (ventana lee el
+  (setter escribe solo `host.title`) + `crates/browser/src/title.rs:8-12` (ventana lee el
   elemento `<title>` del DOM); `host.title` no tiene más lectores (`grep host\.title`
   solo `runtime.rs:634,3781,3791`).
 - `lente`: contrato vs spec · `categoría`: contract · `severidad`: **P2**
 - `title`: el setter de `document.title` es un no-op visible (solo round-trip en el host)
 - `evidence` (3/3 en HEAD limpio):
-  `cargo run --release -p shell -- <RP>/title-roundtrip.html --screenshot … --save-html … --no-session`
+  `cargo run --release -p megi-browser -- <RP>/title-roundtrip.html --screenshot … --save-html … --no-session`
   (`document.title="CHANGED123";…get…`): getter → `<p id="out">CHANGED123</p>` pero el
   DOM conserva `<title>orig</title>`. Runs 1–3 idénticos, `exit=0`.
   Publicado también en `docs/audit/findings/wave2/issues/w2-browser-02.md`.
@@ -118,7 +118,7 @@ Repros (ruta absoluta `/home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/brow
   publicable; **no** `advisory`: no es remoto ni bypass) · `severidad`: **P3**
 - `title`: `new Worker("data:…")`/`"nonexistent.js"` vuelca `file:///<abs-path>/…` al script
 - `evidence` (HEAD limpio):
-  `cargo run --release -p shell -- <RP>/worker-tamper.html --screenshot … --save-html …`
+  `cargo run --release -p megi-browser -- <RP>/worker-tamper.html --screenshot … --save-html …`
   → `<p id="done">worker-err:TypeError: JavaScript error: worker script
   file:///home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/browser/data:text/javascript,postMessage(1):
   file not found: /home/jp/…/browser/data:text/javascript,postMessage(1)</p>`.
@@ -151,7 +151,7 @@ Repros (ruta absoluta `/home/jp/Escritorio/Proyectos/Megi/docs/audit/repros/brow
 ## Comandos ejecutados
 
 Todos desde `/tmp/opencode/megi-verify` (`export CARGO_TARGET_DIR=…`,
-`timeout 60s cargo run --release -p shell -- <ruta-abs-repro> … --no-session`):
+`timeout 60s cargo run --release -p megi-browser -- <ruta-abs-repro> … --no-session`):
 control `exit=0` PNG OK · nest-50k `exit=1` 45906 violations (×3: idéntico) ·
 selectors/fontface/svguse/imgcorrupt/utf8/docwrite/worker/sandbox/ws/calc `exit=0`
 PNG OK · find `0` / long `2` / vacío `0` · sesión-corrupta ×2 `0` · ws-anti-handshake

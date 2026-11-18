@@ -1,6 +1,6 @@
 //! Property-based tests for `html` parser, tokenizer, fragment parser, and serializer (#961).
 
-use html::{
+use megi_html::{
     Namespace, ParseOptions, Token, Tokenizer, TokenizerConfig, parse_document,
     parse_document_with_options, parse_fragment, serialize_dom_for_test, serialize_fragment,
     serialize_html,

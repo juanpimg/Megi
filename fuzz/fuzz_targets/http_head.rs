@@ -8,5 +8,5 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = net::http::parse_head_is_valid(data);
+    let _ = megi_net::http::parse_head_is_valid(data);
 });

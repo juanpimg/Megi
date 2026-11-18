@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use megi_js::runtime::JsRuntime;
 
 fn runtime() -> JsRuntime {
     JsRuntime::new().expect("runtime")

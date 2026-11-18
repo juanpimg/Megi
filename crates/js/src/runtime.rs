@@ -338,7 +338,7 @@ impl JsRuntime {
     /// Installs the computed-style provider used by `window.getComputedStyle(element)`.
     ///
     /// The provider receives the live `Document` and the element `NodeId` and returns
-    /// CSS property/value pairs (e.g. from `css::ComputedStyle`). Without a provider,
+    /// CSS property/value pairs (e.g. from `megi_css::ComputedStyle`). Without a provider,
     /// `getComputedStyle` falls back to the element's inline declarations (read-only).
     pub fn set_computed_style_provider(&mut self, provider: crate::host::ComputedStyleProvider) {
         self.host.borrow_mut().computed_style_provider = Some(provider);
@@ -1904,7 +1904,7 @@ fn node_inner_html_get(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html =
-        with_host(|host| html::serialize_fragment(&host.document, node_id)).unwrap_or_default();
+        with_host(|host| megi_html::serialize_fragment(&host.document, node_id)).unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -1919,11 +1919,11 @@ fn node_inner_html_set(
         if !charge_document_parse(host, html_text.len(), "innerHTML assignment") {
             return Ok(());
         }
-        let options = html::ParseOptions {
+        let options = megi_html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
-            ..html::ParseOptions::default()
+            ..megi_html::ParseOptions::default()
         };
-        html::set_inner_html_with_options(&mut host.document, node_id, &html_text, &options)
+        megi_html::set_inner_html_with_options(&mut host.document, node_id, &html_text, &options)
             .map(|_| {
                 host.record_mutation(MutationRecord {
                     kind: MutationKind::ChildList,
@@ -1948,7 +1948,7 @@ fn node_outer_html_get(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let html =
-        with_host(|host| html::serialize_outer_html(&host.document, node_id)).unwrap_or_default();
+        with_host(|host| megi_html::serialize_outer_html(&host.document, node_id)).unwrap_or_default();
     Ok(JsValue::from(js_string!(html)))
 }
 
@@ -1964,11 +1964,11 @@ fn node_outer_html_set(
             return Ok(());
         }
         let parent = host.document.try_node(node_id).and_then(|node| node.parent);
-        let options = html::ParseOptions {
+        let options = megi_html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
-            ..html::ParseOptions::default()
+            ..megi_html::ParseOptions::default()
         };
-        html::set_outer_html_with_options(&mut host.document, node_id, &html_text, &options)
+        megi_html::set_outer_html_with_options(&mut host.document, node_id, &html_text, &options)
             .map(|_| {
                 if let Some(parent) = parent {
                     host.record_mutation(MutationRecord {
@@ -3500,12 +3500,12 @@ fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         if !charge_document_parse(host, text.len(), "document.write") {
             return;
         }
-        let options = html::ParseOptions {
+        let options = megi_html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
-            ..html::ParseOptions::default()
+            ..megi_html::ParseOptions::default()
         };
         let violations =
-            html::document_write_with_options(&mut host.document, &text, false, &options);
+            megi_html::document_write_with_options(&mut host.document, &text, false, &options);
         // Surface parser truncation to script instead of silently discarding it (#431).
         if !violations.is_empty() {
             host.console.push_back(ConsoleEntry {
@@ -3571,7 +3571,7 @@ fn document_query_selector(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let selector = arg_string(args, 0, context)?;
-    let node = with_host(|host| css::query::query_selector(&host.document, &selector)).flatten();
+    let node = with_host(|host| megi_css::query::query_selector(&host.document, &selector)).flatten();
     wrap_optional(context, node)
 }
 
@@ -3581,7 +3581,7 @@ fn document_query_selector_all(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let selector = arg_string(args, 0, context)?;
-    let nodes = with_host(|host| css::query::query_selector_all(&host.document, &selector))
+    let nodes = with_host(|host| megi_css::query::query_selector_all(&host.document, &selector))
         .unwrap_or_default();
     wrap_list(context, nodes)
 }
@@ -3948,7 +3948,7 @@ fn node_matches(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
     let matched =
-        with_host(|host| css::query::matches(&host.document, node, &selector)).unwrap_or(false);
+        with_host(|host| megi_css::query::matches(&host.document, node, &selector)).unwrap_or(false);
     Ok(JsValue::from(matched))
 }
 
@@ -3957,7 +3957,7 @@ fn node_closest(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let selector = arg_string(args, 0, context)?;
     let mut current = Some(node);
     while let Some(candidate) = current {
-        if with_host(|host| css::query::matches(&host.document, candidate, &selector))
+        if with_host(|host| megi_css::query::matches(&host.document, candidate, &selector))
             .unwrap_or(false)
         {
             return wrap_node(context, candidate);
@@ -3979,7 +3979,7 @@ fn node_query_selector(
 ) -> JsResult<JsValue> {
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
-    let found = with_host(|host| css::query::query_selector_from(&host.document, node, &selector));
+    let found = with_host(|host| megi_css::query::query_selector_from(&host.document, node, &selector));
     wrap_optional(context, found.flatten())
 }
 
@@ -3991,7 +3991,7 @@ fn node_query_selector_all(
     let node = this_node(this, context)?;
     let selector = arg_string(args, 0, context)?;
     let nodes =
-        with_host(|host| css::query::query_selector_all_from(&host.document, node, &selector))
+        with_host(|host| megi_css::query::query_selector_all_from(&host.document, node, &selector))
             .unwrap_or_default();
     wrap_list(context, nodes)
 }
@@ -4089,12 +4089,12 @@ fn node_insert_adjacent_html(
         let temp = host
             .document
             .create_element(Namespace::Html, "div", Vec::new());
-        let options = html::ParseOptions {
+        let options = megi_html::ParseOptions {
             max_nodes: host.max_document_write_nodes,
-            ..html::ParseOptions::default()
+            ..megi_html::ParseOptions::default()
         };
         let parsed =
-            html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options);
+            megi_html::set_inner_html_with_options(&mut host.document, temp, &html_text, &options);
         if let Err(err) = parsed {
             host.document.remove_subtree(temp);
             return Err(err.to_string());
@@ -4260,18 +4260,18 @@ fn style_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
         .map_err(js_error)
 }
 
-fn inline_declarations(doc: &Document, node_id: NodeId) -> Vec<css::Declaration> {
+fn inline_declarations(doc: &Document, node_id: NodeId) -> Vec<megi_css::Declaration> {
     doc.try_node(node_id)
         .and_then(|node| node.as_element())
         .and_then(|element| element.get_attribute("style"))
-        .map(css::parser::parse_list_of_declarations)
+        .map(megi_css::parser::parse_list_of_declarations)
         .unwrap_or_default()
 }
 
 fn write_inline_declarations(
     doc: &mut Document,
     node_id: NodeId,
-    declarations: &[css::Declaration],
+    declarations: &[megi_css::Declaration],
 ) -> Result<(), String> {
     let text = declarations
         .iter()
@@ -4310,7 +4310,7 @@ fn style_css_text_set(
 ) -> JsResult<JsValue> {
     let node = style_node(this, context)?;
     let text = arg_string(args, 0, context)?;
-    let declarations = css::parser::parse_list_of_declarations(&text);
+    let declarations = megi_css::parser::parse_list_of_declarations(&text);
     match with_host(|host| write_inline_declarations(&mut host.document, node, &declarations)) {
         Some(Ok(())) => Ok(JsValue::undefined()),
         Some(Err(message)) => Err(js_error(message)),
@@ -4391,7 +4391,7 @@ fn inline_style_value(doc: &Document, node_id: NodeId, property: &str) -> Option
         node.as_element()
             .and_then(|element| element.get_attribute("style"))
     })?;
-    let declarations = css::parser::parse_list_of_declarations(style_text);
+    let declarations = megi_css::parser::parse_list_of_declarations(style_text);
     declarations
         .iter()
         .find(|declaration| declaration.name.eq_ignore_ascii_case(property))
@@ -4410,9 +4410,9 @@ fn set_inline_style(
         .map(|element| element.get_attribute("style").map(str::to_owned))
         .ok_or_else(|| "node is not an element".to_string())?
         .unwrap_or_default();
-    let mut declarations = css::parser::parse_list_of_declarations(&style_text);
+    let mut declarations = megi_css::parser::parse_list_of_declarations(&style_text);
     declarations.retain(|declaration| !declaration.name.eq_ignore_ascii_case(property));
-    declarations.push(css::Declaration {
+    declarations.push(megi_css::Declaration {
         name: property.to_ascii_lowercase(),
         value: Vec::new(),
         important: false,
@@ -8394,7 +8394,7 @@ fn ensure_iframe_state(node_id: NodeId) -> Result<(u32, Rc<RefCell<IframeState>>
 
     let (final_url, html, sandbox, opaque, same_origin, parent_depth, parent_origin) = meta;
     let parsed_doc =
-        html::parse_document_with_options(&html, false, &html::ParseOptions::DEFAULT).document;
+        megi_html::parse_document_with_options(&html, false, &megi_html::ParseOptions::DEFAULT).document;
 
     let inline_scripts: Vec<String> = if sandbox.allow_scripts {
         parsed_doc

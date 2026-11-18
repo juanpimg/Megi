@@ -1,10 +1,10 @@
 #![no_main]
-//! Fuzz target: streaming request bodies (`net::RequestBody`/`BodyProducer`).
+//! Fuzz target: streaming request bodies (`megi_net::RequestBody`/`BodyProducer`).
 //!
 //! Round 28 added pull-based request bodies with backpressure: producers return
 //! at most the requested `max` bytes and the transport pulls only when it can
 //! write. This target builds chunk plans from the input and drives a
-//! [`net::RequestBody::Stream`] with bounded pull sizes, checking the public
+//! [`megi_net::RequestBody::Stream`] with bounded pull sizes, checking the public
 //! contract (never more than `max` bytes per pull, bounded total consumption,
 //! typed errors abort cleanly) and the `Bytes` helpers (`len`/`is_empty`/`Debug`).
 //! It never opens a socket; the target looks for panics/aborts/UB, not semantic
@@ -27,12 +27,12 @@ fuzz_target!(|data: &[u8]| {
     }
 
     // In-memory body helpers.
-    let bytes = net::RequestBody::bytes(data);
+    let bytes = megi_net::RequestBody::bytes(data);
     if bytes.len() != Some(data.len()) || bytes.is_empty() != data.is_empty() {
         return;
     }
     let _ = format!("{bytes:?}");
-    let from_slice = net::RequestBody::from(data);
+    let from_slice = megi_net::RequestBody::from(data);
     if from_slice.len() != Some(data.len()) {
         return;
     }
@@ -52,7 +52,7 @@ fuzz_target!(|data: &[u8]| {
     let index = Arc::new(AtomicUsize::new(0));
     let loaded = Arc::new(AtomicUsize::new(0));
     let chunks_for_stream = Arc::new(chunks);
-    let mut stream = net::RequestBody::stream({
+    let mut stream = megi_net::RequestBody::stream({
         let index = Arc::clone(&index);
         let chunks = Arc::clone(&chunks_for_stream);
         move |max: usize| {
@@ -105,8 +105,8 @@ fuzz_target!(|data: &[u8]| {
             usize::from(data[pulls % data.len()]).saturating_mul(3)
         };
         let pull = match &mut stream {
-            net::RequestBody::Stream(producer) => producer.next_chunk(max),
-            net::RequestBody::Bytes(bytes) => Ok(Some(std::mem::take(bytes))),
+            megi_net::RequestBody::Stream(producer) => producer.next_chunk(max),
+            megi_net::RequestBody::Bytes(bytes) => Ok(Some(std::mem::take(bytes))),
         };
         let Ok(Some(chunk)) = pull else {
             break;
@@ -133,10 +133,10 @@ fuzz_target!(|data: &[u8]| {
 
     // Error path: a producer returning a typed error must abort the upload
     // without panicking.
-    let mut failing = net::RequestBody::stream({
-        move |_max: usize| Err(net::FetchError::RequestBody("fuzz".to_string()))
+    let mut failing = megi_net::RequestBody::stream({
+        move |_max: usize| Err(megi_net::FetchError::RequestBody("fuzz".to_string()))
     });
-    if let net::RequestBody::Stream(producer) = &mut failing {
+    if let megi_net::RequestBody::Stream(producer) = &mut failing {
         let _ = producer.next_chunk(16);
     }
 });

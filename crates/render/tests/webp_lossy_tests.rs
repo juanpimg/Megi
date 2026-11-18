@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn render_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -15,7 +15,7 @@ fn image_fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests/fixtures/webp")
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     let options = RenderOptions {
         viewport: Viewport::new(200, 300).expect("viewport"),
         ..RenderOptions::default()
@@ -27,7 +27,7 @@ fn render_fixture(name: &str) -> render::RenderOutput {
     .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
+fn count_where(pixmap: &megi_paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
     pixmap
         .pixels
         .iter()

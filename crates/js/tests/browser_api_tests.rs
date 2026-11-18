@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use js::{Budget, JsError, JsRuntime, ViewportInfo};
+use megi_js::{Budget, JsError, JsRuntime, ViewportInfo};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");

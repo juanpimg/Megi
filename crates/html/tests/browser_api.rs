@@ -3,7 +3,7 @@
 //!
 //! Everything runs on parser-produced documents; no JS engine, network or filesystem.
 
-use html::{
+use megi_html::{
     Document, DomError, LimitViolations, ParseOptions, document_write, document_write_with_options,
     parse_document, set_inner_html, set_inner_html_with_options, set_outer_html,
 };
@@ -12,7 +12,7 @@ fn parse(markup: &str) -> Document {
     parse_document(markup, false)
 }
 
-fn element_names(doc: &Document, parent: html::NodeId) -> Vec<String> {
+fn element_names(doc: &Document, parent: megi_html::NodeId) -> Vec<String> {
     doc.children(parent)
         .filter_map(|child| {
             doc.node(child)
@@ -22,7 +22,7 @@ fn element_names(doc: &Document, parent: html::NodeId) -> Vec<String> {
         .collect()
 }
 
-fn text(doc: &Document, node: html::NodeId) -> String {
+fn text(doc: &Document, node: megi_html::NodeId) -> String {
     doc.text_content(node)
 }
 

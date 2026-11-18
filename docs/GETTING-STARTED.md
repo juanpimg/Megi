@@ -36,25 +36,25 @@ cd Megi
 cargo check --workspace
 
 # Build release binaries (recommended for rendering/shell)
-cargo build --release -p render -p shell -p test_harness
+cargo build --release -p megi-render -p megi-browser -p megi-test-harness
 ```
 
 ## Run the browser shell
 
 ```bash
 # Open a URL or local HTML file in the desktop window
-cargo run --release -p shell -- https://example.com
-cargo run --release -p shell -- tests/fixtures/render/showcase/index.html
+cargo run --release -p megi-browser -- https://example.com
+cargo run --release -p megi-browser -- tests/fixtures/render/showcase/index.html
 
 # Headless screenshot (no window server required)
-cargo run --release -p shell -- https://example.com --screenshot output.png --width 1024 --height 768
+cargo run --release -p megi-browser -- https://example.com --screenshot output.png --width 1024 --height 768
 ```
 
 ## Render HTML to PNG (pipeline)
 
 ```bash
-cargo run --release -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 800 --height 600
-cargo run --release -p render -- tests/fixtures/render/basic.html /tmp/render.png --json
+cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --width 800 --height 600
+cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --json
 ```
 
 ## Test
@@ -67,12 +67,12 @@ cargo test --workspace
 ./tools/dev.sh all
 
 # Conformance gate only
-cargo run -p test_harness -- --summary
-cargo run -p test_harness -- --summary --strict
+cargo run -p megi-test-harness -- --summary
+cargo run -p megi-test-harness -- --summary --strict
 
 # JS-free builds (minimal engine/renderer)
-cargo test -p js --no-default-features
-cargo test -p render --no-default-features
+cargo test -p megi-js --no-default-features
+cargo test -p megi-render --no-default-features
 ```
 
 ## Performance and fuzzing

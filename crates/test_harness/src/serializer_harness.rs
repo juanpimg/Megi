@@ -9,7 +9,7 @@
 //! (`StartTag`/`EndTag`/`EmptyTag`/`Characters`/`Comment`/`Doctype`) and the expected value is one
 //! of possibly several acceptable serialized strings. This module implements that legacy
 //! option-driven serializer faithfully so the suites become part of the conformance gate; the
-//! WHATWG §13.3 implementation used by `innerHTML`/`outerHTML` lives in `html::serializer`
+//! WHATWG §13.3 implementation used by `innerHTML`/`outerHTML` lives in `megi_html::serializer`
 //! (`serialize_html`, `serialize_fragment`, `serialize_outer_html`).
 //!
 //! The XHTML alternatives (`test.xhtml`) are not exercised because Megi implements the HTML

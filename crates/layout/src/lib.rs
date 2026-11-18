@@ -19,7 +19,7 @@ pub mod tree_builder;
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Overflow, Position, PseudoStyles};
+use megi_css::{ComputedStyle, Overflow, Position, PseudoStyles};
 use megi_core::{Document, NodeId};
 
 use block::layout_block_with_viewport;
@@ -230,7 +230,7 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use css::{Display, Length};
+    use megi_css::{Display, Length};
     use megi_core::{Document, Namespace};
 
     fn make_style(display: Display, width: Length, height: Length) -> ComputedStyle {

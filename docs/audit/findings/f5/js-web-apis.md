@@ -2,7 +2,7 @@
 
 Repo: upstream `main` (9c94e86) @ `9c94e86` ("Merge pull request #1491 … fix/issue-1373-normalize"), read-only.
 Subject: `crates/js/` (Boa 0.22 embedded runtime) and the host wiring in `crates/render/src/scripts.rs` and
-`crates/shell/`.
+`crates/browser/`.
 Method: read `crates/js/src/{runtime,host,events,import_map,error,lib}.rs` (10,175 lines; there is no
 `module.rs` — module loading lives in `runtime.rs` + `import_map.rs`), the 20 files in `crates/js/tests/`,
 the render script host providers, and the shell worker. No cargo was run; every claim below is a code
@@ -89,9 +89,9 @@ installed.
 
 | # | Bucket | Status | Evidence | What is missing | Real-site class that breaks | Effort (LOC, crate) |
 |---|---|---|---|---|---|---|
-| 1 | Live DOM event loop / interactivity | absent | shell deps (`crates/shell/Cargo.toml`) contain no `js`; input is handled in Rust (`crates/shell/src/forms.rs`); JS runs only inside `render::render_url` (`crates/shell/src/worker.rs:517,520`), which drops the realm | no persistent runtime, no bridging of click/input/key events into JS, no microtask turns after load | every interactive site: menus, tabs, validation, SPA routing | 1,500–3,000 (render + shell + js) |
+| 1 | Live DOM event loop / interactivity | absent | shell deps (`crates/browser/Cargo.toml`) contain no `js`; input is handled in Rust (`crates/browser/src/forms.rs`); JS runs only inside `megi_render::render_url` (`crates/browser/src/worker.rs:517,520`), which drops the realm | no persistent runtime, no bridging of click/input/key events into JS, no microtask turns after load | every interactive site: menus, tabs, validation, SPA routing | 1,500–3,000 (render + shell + js) |
 | 2 | `navigator` | absent | no install site in `crates/js/src` | userAgent, language(s), platform, onLine, hardwareConcurrency, plugins, sendBeacon, permissions | UA/feature gates, analytics bootstraps, "unsupported browser" walls | 120 (js) |
-| 3 | `document.cookie` | absent | `runtime.rs:5798` only lists `cookie` as a forbidden fetch header | get/set with SameSite/Path/Domain semantics bridging `net::cookies` | consent banners, sessions, A/B bucketing | 180 (js + net) |
+| 3 | `document.cookie` | absent | `runtime.rs:5798` only lists `cookie` as a forbidden fetch header | get/set with SameSite/Path/Domain semantics bridging `megi_net::cookies` | consent banners, sessions, A/B bucketing | 180 (js + net) |
 | 4 | Scroll geometry | partial | window accessors end at `pageXOffset`/`pageYOffset` (`events.rs:174-180`); no `scrollTop`/`scrollHeight` in `runtime.rs` | `window.scrollX/scrollY`, `Element.scrollTop/scrollLeft/scrollHeight/scrollWidth`, `offsetTop/offsetLeft/offsetParent`, `clientTop`, `DOMRect` | sticky headers, scroll-spy nav, infinite scroll, carousels | 120 (js) |
 | 5 | `performance` | absent | no install site | `now()`, `timeOrigin`, `mark/measure`, `PerformanceObserver` | analytics, React/Vue devtools, animation timing | 80 (js) |
 | 6 | `TextEncoder` / `TextDecoder` | absent | no install site | UTF-8 encode/decode (+ stream forms) | every modern bundle polyfill, binary fetch handling | 200 (js) |
@@ -100,7 +100,7 @@ installed.
 | 9 | Programmatic activation | absent | no `click` in the element method list (`runtime.rs:1120-1150`) | `Element.click()`, `HTMLElement.tabIndex` | custom buttons/links, test harnesses, mobile menus | 30 (js) |
 | 10 | History events / SPA routing | partial | `history` queues `HistoryAction` to the host (`runtime.rs:702`); no `popstate` dispatch anywhere | `popstate`, `hashchange`, `navigation` events; pushState does not change the live URL for scripts | React Router/Vue Router/Turbo/HTMX | 120 (js + render) |
 | 11 | Keyboard/input/focus events | partial | only `Event`, `CustomEvent`, `MouseEvent`, `PointerEvent` (`events.rs:152-160`, `runtime.rs:4903-4916`); inline handlers limited to click/load/error (`events.rs:280-284`) | `KeyboardEvent`, `InputEvent`, `FocusEvent`, `WheelEvent`, `SubmitEvent`, `DragEvent`, real key/input dispatch from the shell | autocomplete, menus, form UX, hotkeys | 200 (js + shell) |
-| 12 | Form validity / submission | partial | `value`/`checked`/`disabled`/`selected`/`options`/`selectedIndex` accessors (`runtime.rs:1630-1798`); shell notes "Enter never submits" (`crates/shell/src/forms.rs:20`, `cli.rs:73`) | `HTMLFormElement.submit/requestSubmit/elements`, `validity`/`checkValidity`/`reportValidity`, `setCustomValidity`, `input.files`, `setSelectionRange` | login/search/newsletter forms | 300 (js) |
+| 12 | Form validity / submission | partial | `value`/`checked`/`disabled`/`selected`/`options`/`selectedIndex` accessors (`runtime.rs:1630-1798`); shell notes "Enter never submits" (`crates/browser/src/forms.rs:20`, `cli.rs:73`) | `HTMLFormElement.submit/requestSubmit/elements`, `validity`/`checkValidity`/`reportValidity`, `setCustomValidity`, `input.files`, `setSelectionRange` | login/search/newsletter forms | 300 (js) |
 | 13 | `HTMLDialogElement`, `template.content` | absent | `document.createElement` accepts any name (`runtime.rs:2209`) but `template.content`/`dialog.showModal` are absent | modal dialogs, template cloning | cookie banners, modals, web components | 120 (js) |
 | 14 | Canvas 2D / WebGL / OffscreenCanvas / `Image` | absent | no `getContext` in `crates/js/src`; paint rasterizes layout only | all raster drawing APIs | charts, maps, games, image editors, captchas | 700+ (paint or new crate) |
 | 15 | WebSocket / EventSource | absent | no install site; net has no WS client | WS client + EventSource | chat, live dashboards, notifications | 600 (net + js) |
@@ -132,7 +132,7 @@ installed.
 8. **`TextEncoder`/`TextDecoder`** (200 LOC, `crates/js`): needed by fetch bodies and most bundles.
 9. **`popstate`/`hashchange`** (120 LOC, `crates/js` + `crates/render`): turns the queued history actions
    into real events so routers stop hard-reloading.
-10. **`KeyboardEvent`/`InputEvent`/`FocusEvent` constructors** (200 LOC, `crates/js` + `crates/shell`):
+10. **`KeyboardEvent`/`InputEvent`/`FocusEvent` constructors** (200 LOC, `crates/js` + `crates/browser`):
     also the precondition for wiring shell key/input events into JS at all.
 11. **`storage` events** (80 LOC, `crates/js`): localStorage writes currently never notify other tabs/
     windows, so cross-tab sync code deadlocks in its own assumptions.
@@ -143,7 +143,7 @@ installed.
 14. **`Blob`/`File`/`FormData`** (400 LOC, `crates/js`): uploads and previews; also unlocks ArrayBuffer
     request bodies in `fetch`.
 15. **`HTMLFormElement.submit`/`requestSubmit` + validity** (300 LOC, `crates/js`): the shell deliberately
-    never submits (`crates/shell/src/forms.rs:20`), so JS-side submission is the only viable path.
+    never submits (`crates/browser/src/forms.rs:20`), so JS-side submission is the only viable path.
 
 Not ranked but strategically largest: **bucket 1** (no live event loop in the shell). Until the shell keeps
 a live realm and forwards input, every "partial" row above only helps *prerendered* output; the ranking

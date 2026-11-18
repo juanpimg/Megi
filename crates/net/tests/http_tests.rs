@@ -10,7 +10,7 @@ use std::net::{Shutdown, TcpListener};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, Url, fetch};
+use megi_net::{FetchError, FetchOptions, Url, fetch};
 
 fn options() -> FetchOptions {
     FetchOptions {
@@ -348,7 +348,7 @@ fn streaming_trailer_section_is_capped() {
     };
 
     let mut chunks = 0usize;
-    let error = net::fetch_streaming(&url, &small_headers, &mut |_chunk| {
+    let error = megi_net::fetch_streaming(&url, &small_headers, &mut |_chunk| {
         chunks += 1;
         Ok(())
     })
@@ -368,7 +368,7 @@ fn streaming_conflicting_content_length_is_rejected() {
     let (base, server) = spawn_server(vec![response]);
     let url = base_url(&base).join("/stream-smuggled").expect("join");
 
-    let error = net::fetch_streaming(&url, &options(), &mut |_chunk| Ok(()))
+    let error = megi_net::fetch_streaming(&url, &options(), &mut |_chunk| Ok(()))
         .expect_err("streaming conflicting Content-Length");
     assert!(
         matches!(error, FetchError::InvalidResponse(_)),
@@ -390,7 +390,7 @@ fn request_headers_are_validated_before_connecting() {
         ("X-Test", "bad\u{7f}value"),
     ];
     for (name, value) in cases {
-        let error = net::http::fetch_with_method(&url, &options, "GET", &[(name, value)], None)
+        let error = megi_net::http::fetch_with_method(&url, &options, "GET", &[(name, value)], None)
             .expect_err("header must be rejected before the connection");
         assert!(
             matches!(error, FetchError::InvalidRequestHeader(_)),
@@ -403,7 +403,7 @@ fn request_headers_are_validated_before_connecting() {
 fn request_headers_with_crlf_are_rejected_before_the_wire() {
     // #635: `user_agent`, `origin` and `extra_headers` were concatenated into the request head
     // verbatim, so a CRLF in any of them injected extra headers (or a second request).
-    use net::http::fetch_with_headers;
+    use megi_net::http::fetch_with_headers;
     let (base, server) = spawn_server(vec![]);
     let url = base_url(&format!("{base}/split"));
 

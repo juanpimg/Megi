@@ -31,7 +31,7 @@ case "$cmd" in
         cargo doc --workspace --no-deps
         ;;
     report)
-        cargo run -p test_harness -- --summary
+        cargo run -p megi-test-harness -- --summary
         ;;
     all)
         echo "==> [1/5] Checking formatting..."
@@ -46,7 +46,7 @@ case "$cmd" in
         echo "==> [4/5] Building workspace documentation..."
         cargo doc --workspace --no-deps
         echo "==> [5/5] Running conformance gate (test_harness --summary)..."
-        cargo run -p test_harness -- --summary
+        cargo run -p megi-test-harness -- --summary
         echo "==> All checks passed!"
         ;;
     -h|--help)

@@ -4,7 +4,7 @@ Esta galería documenta los resultados visuales deterministas producidos por los
 
 ---
 
-## 1. Navegador de Escritorio Interactivo (`crates/shell`)
+## 1. Navegador de Escritorio Interactivo (`crates/browser`)
 
 ![Megi Desktop Showcase](images/showcase.png)
 
@@ -16,10 +16,10 @@ Render determinista (1024×768) de una página compleja de prueba que combina:
 
 ```bash
 # Abrir interactivamente:
-cargo run --release -p shell -- tests/fixtures/render/showcase/index.html
+cargo run --release -p megi-browser -- tests/fixtures/render/showcase/index.html
 
 # Generar captura headless:
-cargo run --release -p shell -- tests/fixtures/render/showcase/index.html --screenshot docs/images/showcase.png --width 1024 --height 768
+cargo run --release -p megi-browser -- tests/fixtures/render/showcase/index.html --screenshot docs/images/showcase.png --width 1024 --height 768
 ```
 
 ---
@@ -34,7 +34,7 @@ Prueba del pipeline completo de Fase 5 resolviendo `<base href="...">` y hojas d
 - Aplicación simultánea de `<style>` inline.
 
 ```bash
-cargo run --release -p render -- tests/fixtures/render/basic.html docs/images/render-fixture.png --width 640 --height 400
+cargo run --release -p megi-render -- tests/fixtures/render/basic.html docs/images/render-fixture.png --width 640 --height 400
 ```
 
 ---
@@ -49,7 +49,7 @@ Demostración del subsistema gráfico multiformato:
 - Soporte integrado y puro en Rust para **PNG, JPEG (con miniaturas EXIF), GIF y WebP (lossless y lossy VP8)**.
 
 ```bash
-cargo run --release -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png
+cargo run --release -p megi-render -- tests/fixtures/render/images.html docs/images/images-e2e.png
 ```
 
 ---
@@ -66,5 +66,5 @@ Render determinista a 800×600 validando las capacidades fundamentales de raster
 - Compresión final generada directamente con el codificador PNG propio de Megi.
 
 ```bash
-cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run --release -p megi-paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 ```

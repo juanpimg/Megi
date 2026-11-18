@@ -10,9 +10,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{BorderRadii, BorderStyle, BoxShadow, Color};
+use megi_css::{BorderRadii, BorderStyle, BoxShadow, Color};
 use megi_core::NodeId;
-use layout::Rect;
+use megi_layout::Rect;
 
 /// Decoded replaced-element images keyed by the DOM node that references them.
 ///
@@ -159,19 +159,19 @@ pub enum DisplayItem {
     /// runs the filters on it and writes it back before the element paints.
     BackdropFilter {
         rect: Rect,
-        filters: Vec<css::FilterFunction>,
+        filters: Vec<megi_css::FilterFunction>,
     },
     /// An offscreen filter/blend group (CSS `filter` / `mix-blend-mode`).
     ///
     /// The nested items are rasterized into a transparent buffer, the `filters`
     /// are applied in order to that buffer, and the result is composited over the
     /// destination with `blend` (CSS Filter Effects 1 §3 / Compositing 1 §5).
-    /// Caps: at most [`css::MAX_FILTER_FUNCTIONS`] functions, blur ≤64 px and a
+    /// Caps: at most [`megi_css::MAX_FILTER_FUNCTIONS`] functions, blur ≤64 px and a
     /// group area ≤16.7 Mpx (documented; larger groups paint unfiltered).
     EffectGroup {
         rect: Rect,
-        filters: Vec<css::FilterFunction>,
-        blend: css::MixBlendMode,
+        filters: Vec<megi_css::FilterFunction>,
+        blend: megi_css::MixBlendMode,
         items: Vec<DisplayItem>,
     },
     /// An offscreen compositing group.
@@ -194,7 +194,7 @@ pub enum DisplayItem {
     /// with analytic edge antialiasing (CSS Images 3 §3).
     Gradient {
         rect: Rect,
-        gradient: Arc<css::Gradient>,
+        gradient: Arc<megi_css::Gradient>,
     },
     /// Draws a decoded replaced element (`<img>`) scaled into `rect`.
     ///

@@ -3,9 +3,9 @@
 #[cfg(not(feature = "js"))]
 #[test]
 fn module_api_is_disabled_without_the_js_feature() {
-    use js::JsError;
-    use js::runtime::Budget;
-    let mut runtime = js::JsRuntime;
+    use megi_js::JsError;
+    use megi_js::runtime::Budget;
+    let mut runtime = megi_js::JsRuntime;
     let error = runtime
         .eval_module("export const x = 1;", "main", "mem://main", &Budget)
         .expect_err("feature disabled");
@@ -15,5 +15,5 @@ fn module_api_is_disabled_without_the_js_feature() {
 #[cfg(feature = "js")]
 #[test]
 fn module_api_feature_enabled_placeholder() {
-    assert!(js::JsRuntime::new().is_ok());
+    assert!(megi_js::JsRuntime::new().is_ok());
 }

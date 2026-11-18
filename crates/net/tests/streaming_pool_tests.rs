@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::h2::client::{self, H2Request, Limits};
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
-use net::h2::hpack::Encoder;
-use net::{AcceptEncoding, FetchError, FetchOptions, ResourceLoader, Url};
+use megi_net::h2::client::{self, H2Request, Limits};
+use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
+use megi_net::h2::hpack::Encoder;
+use megi_net::{AcceptEncoding, FetchError, FetchOptions, ResourceLoader, Url};
 
 fn spawn_once(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -60,7 +60,7 @@ fn h1_streaming_delivers_chunked_body_in_chunks() {
     });
     let url = Url::parse(&format!("http://127.0.0.1:{port}/chunked")).expect("url");
     let mut chunks = Vec::new();
-    let response = net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |chunk| {
+    let response = megi_net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |chunk| {
         chunks.push(chunk.to_vec());
         Ok(())
     })
@@ -87,7 +87,7 @@ fn h1_streaming_content_length_and_callback_errors() {
     });
     let url = Url::parse(&format!("http://127.0.0.1:{port}/body")).expect("url");
     let mut collected = Vec::new();
-    net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |chunk| {
+    megi_net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |chunk| {
         collected.extend_from_slice(chunk);
         Ok(())
     })
@@ -106,7 +106,7 @@ fn h1_streaming_content_length_and_callback_errors() {
         let _ = tcp.shutdown(Shutdown::Write);
     });
     let url = Url::parse(&format!("http://127.0.0.1:{port}/body")).expect("url");
-    let error = net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |_| {
+    let error = megi_net::http::fetch_streaming(&url, &FetchOptions::default(), &mut |_| {
         Err(FetchError::Timeout)
     })
     .expect_err("callback error");

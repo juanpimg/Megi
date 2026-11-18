@@ -19,7 +19,7 @@ presupuestos (§11: layout ≤45, pipeline ≤140) calibrados contra el measurer
    `:353,:387,:452,:568,:600,:623,:861,:942,:1025`, todos a `layout_document(...)`.
 2. `sed -n '49,64p' crates/layout/src/lib.rs` (cita fallback).
 3. `grep layout_document_with_measurer crates/render/src/lib.rs` (producción lo usa).
-4. `cargo run --release -p bench -- --filter layout/realistic` (mide con fallback).
+4. `cargo run --release -p megi-bench -- --filter layout/realistic` (mide con fallback).
 
 ## Esperado vs observado
 Esperado: filas layout/pipeline con el measurer de producción (determinista con

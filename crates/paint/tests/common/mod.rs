@@ -8,7 +8,7 @@
 /// The 8-byte PNG signature.
 pub const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
-/// CRC-32 (IEEE 802.3) implemented independently of `paint::png`, so the
+/// CRC-32 (IEEE 802.3) implemented independently of `megi_paint::png`, so the
 /// tests do not assert the encoder against itself.
 pub fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
@@ -126,7 +126,7 @@ pub fn parse_png(png: &[u8]) -> ParsedPng {
 
 /// Decompresses a zlib stream with the paint crate's verification decoder.
 pub fn inflate_stored_zlib(zlib: &[u8]) -> Vec<u8> {
-    paint::inflate_zlib(zlib).expect("valid zlib/IDAT payload")
+    megi_paint::inflate_zlib(zlib).expect("valid zlib/IDAT payload")
 }
 
 /// PNG `Paeth` predictor (PNG spec §6.6).

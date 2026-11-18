@@ -7,7 +7,7 @@
 - [ ] `cargo fmt --all -- --check` passes
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
 - [ ] `cargo test --workspace` passes (0 failures)
-- [ ] `cargo run -p test_harness -- --summary` passes (gate PASS)
+- [ ] `cargo run -p megi-test-harness -- --summary` passes (gate PASS)
 - [ ] Goldens byte-identical (if applicable)
 - [ ] `cargo doc --workspace --no-deps` builds
 - [ ] No new `unsafe` without `// SAFETY:` comment

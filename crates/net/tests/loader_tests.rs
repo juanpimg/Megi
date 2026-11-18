@@ -1,4 +1,4 @@
-//! [`net::ResourceLoader`] tests: `file://` loads, MIME resolution and the in-memory cache.
+//! [`megi_net::ResourceLoader`] tests: `file://` loads, MIME resolution and the in-memory cache.
 //!
 //! Offline by construction: `file://` cases use temporary files, the HTTP case uses a
 //! one-shot `127.0.0.1:0` server. Temporary files are removed on drop.
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, LoadError, ResourceLoader, Url};
+use megi_net::{FetchError, FetchOptions, LoadError, ResourceLoader, Url};
 
 struct TempFile {
     path: PathBuf,

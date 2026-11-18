@@ -9,7 +9,7 @@
 //!
 //! The constants and allowlists below are the **single source of truth** for the gate shared by
 //! the `test_harness` CLI (`--summary`) and the `closed_loop` integration tests. Every failure not
-//! listed here is a regression and must fail both `cargo test -p test_harness` and
+//! listed here is a regression and must fail both `cargo test -p megi-test-harness` and
 //! `tools/dev.sh all`.
 
 #![forbid(unsafe_code)]

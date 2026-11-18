@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 
-use js::host::FetchResult;
-use js::runtime::{Budget, JsRuntime};
+use megi_js::host::FetchResult;
+use megi_js::runtime::{Budget, JsRuntime};
 
 fn runtime_with(modules: &[(&str, &str)]) -> JsRuntime {
     let resolver: HashMap<String, String> = modules
@@ -40,12 +40,12 @@ fn runtime_with(modules: &[(&str, &str)]) -> JsRuntime {
         sources
             .get(url)
             .cloned()
-            .ok_or_else(|| js::JsError::ModuleNotFound(url.to_string()))
+            .ok_or_else(|| megi_js::JsError::ModuleNotFound(url.to_string()))
     }));
     runtime
 }
 
-fn eval(runtime: &mut JsRuntime, source: &str) -> Result<js::ModuleOutcome, js::JsError> {
+fn eval(runtime: &mut JsRuntime, source: &str) -> Result<megi_js::ModuleOutcome, megi_js::JsError> {
     runtime.eval_module_async(source, "main", "mem://main", &Budget::default())
 }
 

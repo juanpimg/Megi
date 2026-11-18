@@ -118,7 +118,7 @@ y `docs/audit/findings/f1/*`.
   `seen`, y acto seguido `let _ = seen;` (línea 40). El `provider` construye
   `MockTransport { sent: Vec::new() }` propio e inaccesible. El test
   `websocket_send_and_constants` ejecuta `ws.send('ping')` / `ws.close()` sin
-  ningún assert posterior (líneas 80-82). Suite verde: `cargo test -p js --tests`
+  ningún assert posterior (líneas 80-82). Suite verde: `cargo test -p megi-js --tests`
   31/31 ok — el test pasa sin comprobar lo que su nombre afirma.
 - `impact`: regresión en `WebSocketTransport::send` (p. ej. mensaje tragado o nunca
   entregado al transporte) no la detecta ningún test.
@@ -127,7 +127,7 @@ y `docs/audit/findings/f1/*`.
 - `fix`: mover `seen` dentro del provider (`events` ya se clona por invocación;
   hacer lo mismo con un `Rc<RefCell<Vec<String>>>` compartido) y
   `assert_eq!(sent…, ["ping"])`.
-- `repro`: `cargo test -p js --test websocket_api_tests` (pasa en verde).
+- `repro`: `cargo test -p megi-js --test websocket_api_tests` (pasa en verde).
 - `dedup`: new (F1 cita `let _` muertos en otros archivos, nunca en este).
 
 ### w2-t-03 — `style_collection_records_rules_for_each_group` no comprueba la colección
@@ -146,7 +146,7 @@ y `docs/audit/findings/f1/*`.
   registradas por grupo) coherente con su título.
 - `fix`: exponer/consultar los grupos de `collection` y asertar 2 reglas en sus
   grupos esperados, o renombrar el test a lo que realmente comprueba.
-- `repro`: `cargo test -p css --test cascade_core` (pasa).
+- `repro`: `cargo test -p megi-css --test cascade_core` (pasa).
 - `dedup`: new (patrón similar a F1 css-svg-html.md #5, pero archivo y test distintos).
 
 ### w2-t-04 — el test top-layer calcula el nº de display items y lo tira
@@ -165,7 +165,7 @@ y `docs/audit/findings/f1/*`.
 - `expected`: asertar posición relativa del item del diálogo vs overlay en `list`.
 - `fix`: capturar el `count` (o los índices) y asertar
   `dialog_item_index > overlay_item_index`.
-- `repro`: `cargo test -p paint --test dialog_top_layer` (pasa).
+- `repro`: `cargo test -p megi-paint --test dialog_top_layer` (pasa).
 - `dedup`: new (F1 paint-image.md #5 es sobre `robustness.rs`, no este archivo).
 
 ### w2-t-05 — `eprintln!("DEBUG …")` commiteado en `auth_tests.rs`
@@ -177,13 +177,13 @@ y `docs/audit/findings/f1/*`.
 - `title`: resto de depuración `eprintln!("DEBUG status={}", …)` en el árbol commiteado ensucia la salida de `cargo test`
 - `evidence`: `grep -n eprintln crates/net/tests/auth_tests.rs` → línea 69;
   presente en HEAD `e87f206` (no es WIP). Suite verde
-  (`cargo test -p net --tests`, todo ok).
+  (`cargo test -p megi-net --tests`, todo ok).
 - `impact`: ruido en logs de CI; en suites paralelas dificulta atribuir salidas.
 - `expected`: los tests no deben emitir por stderr en el camino verde
   (usar el valor en el assert o `dbg!` eliminado).
 - `fix`: borrar la línea (el `assert_eq!(response.status, 200)` de la línea 70
   ya cubre la comprobación).
-- `repro`: `cargo test -p net --test auth_tests -- --nocapture 2>&1 | grep DEBUG`.
+- `repro`: `cargo test -p megi-net --test auth_tests -- --nocapture 2>&1 | grep DEBUG`.
 - `dedup`: new.
 
 ### w2-t-06 — dos generadores EXIF escriben los mismos `exif_o1..8.jpg` con distinta geometría
@@ -238,7 +238,7 @@ y `docs/audit/findings/f1/*`.
 - `fix`: cap 64 KiB al leer `head`, manejar/extender longitudes o documentar el
   límite de 125 bytes, contador `static` para el nombre temporal y limpieza
   RAII antes del `join`.
-- `repro`: `cargo test -p render --test websocket_e2e_tests` (pasa; el defecto
+- `repro`: `cargo test -p megi-render --test websocket_e2e_tests` (pasa; el defecto
   es latente, visible por lectura).
 - `dedup`: new.
 
@@ -260,7 +260,7 @@ y `docs/audit/findings/f1/*`.
 - `expected`: ambos helpers con el mismo parseo robusto (reutilizar el
   case-insensitive del segundo).
 - `fix`: copiar el parseo de líneas 119-127 al primer servidor.
-- `repro`: `cargo test -p render --test form_post_tests` (pasa; latente).
+- `repro`: `cargo test -p megi-render --test form_post_tests` (pasa; latente).
 - `dedup`: new.
 
 ## Comandos ejecutados
@@ -287,9 +287,9 @@ Desde `/tmp/opencode/megi-verify` (HEAD `3c06db8` limpio), con
 Desde el árbol principal (antes del aviso de contención; con WIP ajeno
 conviviendo, resultados todos en verde):
 
-- `cargo test -p css/layout/net/svg/paint/image --tests` → todo ok, 0 fallos.
-- `cargo test -p js --tests` → 31 suites ok, 0 fallos (incl. `slot_tests` 3/3).
-- `cargo test -p render --tests` → todas las suites ok (incl. `iframe_tests`
+- `cargo test -p megi-css/layout/net/svg/paint/image --tests` → todo ok, 0 fallos.
+- `cargo test -p megi-js --tests` → 31 suites ok, 0 fallos (incl. `slot_tests` 3/3).
+- `cargo test -p megi-render --tests` → todas las suites ok (incl. `iframe_tests`
   7/7 con los tests WIP de `contentDocument`, luego revertidos).
 
 ## Concern

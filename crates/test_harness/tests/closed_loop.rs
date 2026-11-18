@@ -1,9 +1,9 @@
 //! Closed-loop integration tests for `crates/test_harness`.
 //!
 //! These are the conformance **gate**: they run every vendored fixture suite and assert exact
-//! totals with an explicit, documented allowlist of known failures (see `test_harness::KNOWN_*`).
+//! totals with an explicit, documented allowlist of known failures (see `megi_test_harness::KNOWN_*`).
 //! A regression outside the allowlist, a changed fixture count, a missing fixture, or drift between
-//! the `.dat` and exported `.json` tree fixtures all fail `cargo test -p test_harness`.
+//! the `.dat` and exported `.json` tree fixtures all fail `cargo test -p megi-test-harness`.
 //!
 //! Covered:
 //! 1. All 14 `tokenizer/*.test` JSON files (6,824 test cases) parse cleanly.
@@ -14,13 +14,13 @@
 //!    only 37 documented order-only differences remain.
 //! 5. All 62 tree-construction suites run: **3,904/3,904** mode-runs. The four `#script-on`
 //!    `scripted_*` suites execute parser-inserted scripts (WP-6.4) through the JS executor
-//!    installed by `test_harness::tree_harness`; there are no known tree failures.
+//!    installed by `megi_test_harness::tree_harness`; there are no known tree failures.
 //! 6. The vendored WPT CSS Syntax fixtures run with no skip: 30/30 results.
 //! 7. The five tracked html5lib HTML-serializer suites run: 230/230 cases.
 
 use std::path::{Path, PathBuf};
 
-use test_harness::{
+use megi_test_harness::{
     CSS_EXPECTED_RESULTS, KNOWN_SERIALIZER_FAILURES, KNOWN_TOKENIZER_ERROR_ORDER_GAPS,
     KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, SERIALIZER_EXPECTED_PASSED,
     SERIALIZER_EXPECTED_TESTS, SERIALIZER_SUITE_COUNT, SERIALIZER_SUITE_TOTALS,
@@ -41,7 +41,7 @@ use test_harness::{
 /// raw `.dat` bytes; this normalization is only for the content-parity test.
 fn load_dat_cases_json_compatible(
     path: &Path,
-) -> Result<Vec<test_harness::tree_harness::TreeConstructionCase>, String> {
+) -> Result<Vec<megi_test_harness::tree_harness::TreeConstructionCase>, String> {
     let raw = std::fs::read_to_string(path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
     let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
@@ -432,7 +432,7 @@ fn test_scripted_parser_inserted_suites_pass_with_js_executor() {
 
 #[test]
 fn test_closed_loop_wpt_css_syntax_suites() {
-    let wpt_css_dir = test_harness::wpt_css_syntax_dir();
+    let wpt_css_dir = megi_test_harness::wpt_css_syntax_dir();
     assert!(
         wpt_css_dir.is_dir(),
         "missing vendored WPT CSS fixtures at {}: the CSS conformance gate must never be skipped. \
@@ -441,11 +441,11 @@ fn test_closed_loop_wpt_css_syntax_suites() {
     );
 
     let decl_results =
-        test_harness::css_harness::run_wpt_declarations_trim_whitespace(&wpt_css_dir)
+        megi_test_harness::css_harness::run_wpt_declarations_trim_whitespace(&wpt_css_dir)
             .expect("WPT declarations-trim-whitespace.html fixture must run");
-    let prep_results = test_harness::css_harness::run_wpt_input_preprocessing(&wpt_css_dir)
+    let prep_results = megi_test_harness::css_harness::run_wpt_input_preprocessing(&wpt_css_dir)
         .expect("WPT input-preprocessing.html fixture must run");
-    let anb_results = test_harness::css_harness::run_wpt_anb_parsing(&wpt_css_dir)
+    let anb_results = megi_test_harness::css_harness::run_wpt_anb_parsing(&wpt_css_dir)
         .expect("WPT anb-parsing.html fixture must run");
 
     let mut results = decl_results;
@@ -488,7 +488,7 @@ fn test_closed_loop_wpt_css_syntax_suites() {
 /// These fixtures encode html5lib's legacy serializer dialect (unquoted/legacy-quoted attributes,
 /// optional-tag omission, meta-charset injection, whitespace stripping) rather than WHATWG HTML
 /// §13.3 defaults; `serializer_harness` implements that option-driven dialect, while the public
-/// `html::serialize_html`/`serialize_fragment`/`serialize_outer_html` API implements §13.3 and has
+/// `megi_html::serialize_html`/`serialize_fragment`/`serialize_outer_html` API implements §13.3 and has
 /// its own unit tests in `crates/html/src/serializer.rs`. Every case must match one `expected`
 /// (HTML) alternative; the 18 `xhtml` alternatives are recorded but not exercised.
 #[test]

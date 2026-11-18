@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
-//! CLI Conformance Runner for `test_harness` (`cargo run -p test_harness -- --summary`).
+//! CLI Conformance Runner for `test_harness` (`cargo run -p megi-test-harness -- --summary`).
 //!
 //! Exit codes are the gate:
-//! - `0`: every failure is in the documented allowlist (see `test_harness::KNOWN_*_FAILURES`).
+//! - `0`: every failure is in the documented allowlist (see `megi_test_harness::KNOWN_*_FAILURES`).
 //! - `1`: a regression outside the allowlist, missing fixtures, or (with `--strict`) any failure.
 //!
 //! Tokenizer runs also gate the 2,769 parse-error annotations declared by the fixtures (expanded to
@@ -17,7 +17,7 @@
 
 use std::collections::BTreeSet;
 
-use test_harness::{
+use megi_test_harness::{
     CSS_EXPECTED_RESULTS, KNOWN_SERIALIZER_FAILURES, KNOWN_TOKENIZER_ERROR_ORDER_GAPS,
     KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, SERIALIZER_EXPECTED_PASSED,
     SERIALIZER_EXPECTED_TESTS, SERIALIZER_SUITE_COUNT, SERIALIZER_SUITE_TOTALS,
@@ -416,7 +416,7 @@ fn main() {
 
     // -------------------------------------------------------------- WPT CSS (no skip)
     println!("--- WPT CSS Syntax Suites (tests/wpt/css/css-syntax/*.html) ---");
-    let wpt_css_dir = test_harness::wpt_css_syntax_dir();
+    let wpt_css_dir = megi_test_harness::wpt_css_syntax_dir();
     let css_results = (|| -> Result<Vec<_>, String> {
         let mut results = Vec::new();
         results.extend(run_wpt_declarations_trim_whitespace(&wpt_css_dir)?);

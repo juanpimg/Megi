@@ -4,19 +4,19 @@
 //! pipeline with the bundled deterministic fonts, so they also exercise the
 //! interaction between the IFC (baselines, line boxes) and the painter.
 
-use css::Color;
-use layout::Rect;
-use paint::{
+use megi_css::Color;
+use megi_layout::Rect;
+use megi_paint::{
     DisplayItem, DisplayList, MarkerKind, Pixmap, build_display_list, rasterize_display_list,
 };
 
 fn render(source: &str, width: u32, height: u32) -> (Pixmap, DisplayList) {
-    let document = html::parse_document(source, false);
-    let styles = paint::resolve_embedded_styles(&document);
+    let document = megi_html::parse_document(source, false);
+    let styles = megi_paint::resolve_embedded_styles(&document);
     let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
-    let measurer = layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
+    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
     let layout_root =
-        layout::layout_document_with_measurer(&document, &styles, viewport, &measurer)
+        megi_layout::layout_document_with_measurer(&document, &styles, viewport, &measurer)
             .expect("layout must produce a root box");
     let display_list = build_display_list(&layout_root, viewport);
     let pixmap = rasterize_display_list(&display_list, width, height);

@@ -5,11 +5,11 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-fn render_page(html: &str) -> render::RenderOutput {
+fn render_page(html: &str) -> megi_render::RenderOutput {
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
         "megi-canvas-test-{}-{}.html",
@@ -27,7 +27,7 @@ fn render_page(html: &str) -> render::RenderOutput {
     output
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -35,7 +35,7 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
 
 #[cfg(feature = "js")]
 #[test]

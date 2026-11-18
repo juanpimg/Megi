@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -23,12 +23,12 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -36,13 +36,13 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
-const BLUE: css::Color = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
-const GREEN: css::Color = css::Color::new(0x00, 0xFF, 0x00, 0xFF);
-const MAGENTA: css::Color = css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
-const YELLOW: css::Color = css::Color::new(0xFF, 0xCC, 0x00, 0xFF);
-const ORANGE: css::Color = css::Color::new(0xFF, 0x88, 0x00, 0xFF);
-const PURPLE: css::Color = css::Color::new(0x88, 0x00, 0xFF, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const BLUE: megi_css::Color = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+const GREEN: megi_css::Color = megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF);
+const MAGENTA: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
+const YELLOW: megi_css::Color = megi_css::Color::new(0xFF, 0xCC, 0x00, 0xFF);
+const ORANGE: megi_css::Color = megi_css::Color::new(0xFF, 0x88, 0x00, 0xFF);
+const PURPLE: megi_css::Color = megi_css::Color::new(0x88, 0x00, 0xFF, 0xFF);
 
 #[test]
 fn inline_svg_is_rasterized_like_an_image() {
@@ -287,7 +287,7 @@ fn inline_svg_replacements_respect_the_image_budget() {
         data_url_base64(source.as_bytes())
     );
 
-    let output = render::render_url(&url, &limited).expect("render");
+    let output = megi_render::render_url(&url, &limited).expect("render");
     assert_eq!(
         output.stats.inline_svgs, 2,
         "only as many inline SVGs as the image budget allows may be replaced"
@@ -303,7 +303,7 @@ fn inline_svg_replacements_respect_the_image_budget() {
     );
 
     // With the default budget all six fit.
-    let output = render::render_url(&url, &options()).expect("render");
+    let output = megi_render::render_url(&url, &options()).expect("render");
     assert_eq!(output.stats.inline_svgs, 6);
 }
 

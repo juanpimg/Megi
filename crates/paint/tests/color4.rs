@@ -1,9 +1,9 @@
 //! Modern CSS colors reaching paint: background, gradients and color-mix (R159).
 
-use css::{Color, ComputedStyle, Display};
+use megi_css::{Color, ComputedStyle, Display};
 use megi_core::{Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, ImageStore, build_display_list_with_images_and_backgrounds,
     rasterize_display_list,
 };
@@ -15,7 +15,7 @@ const VIEWPORT: Rect = Rect {
     height: 20.0,
 };
 
-fn render(style: ComputedStyle) -> paint::Pixmap {
+fn render(style: ComputedStyle) -> megi_paint::Pixmap {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -66,26 +66,26 @@ fn test_modern_background_color_paints_srgb() {
 fn test_modern_gradient_stops_paint() {
     let mut style = ComputedStyle::initial();
     style.display = Display::Block;
-    style.background_layers = vec![css::BackgroundLayer {
-        gradient: Some(std::sync::Arc::new(css::Gradient {
-            kind: css::GradientKind::Linear(css::LinearGradient {
-                direction: css::LinearDirection::ToRight,
+    style.background_layers = vec![megi_css::BackgroundLayer {
+        gradient: Some(std::sync::Arc::new(megi_css::Gradient {
+            kind: megi_css::GradientKind::Linear(megi_css::LinearGradient {
+                direction: megi_css::LinearDirection::ToRight,
             }),
             repeating: false,
             stops: vec![
-                css::GradientStop {
+                megi_css::GradientStop {
                     color: Color::parse("color(srgb 1 0 0)").expect("red"),
                     position: None,
                 },
-                css::GradientStop {
+                megi_css::GradientStop {
                     color: Color::parse("color(srgb 0 0 1)").expect("blue"),
                     position: None,
                 },
             ],
             hints: Vec::new(),
-            interpolation: css::InterpolationSpace::Srgb,
+            interpolation: megi_css::InterpolationSpace::Srgb,
         })),
-        ..css::BackgroundLayer::default()
+        ..megi_css::BackgroundLayer::default()
     }];
     style.background_geometry_explicit = true;
     let pixmap = render(style);

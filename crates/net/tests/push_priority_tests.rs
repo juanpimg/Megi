@@ -8,9 +8,9 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use net::h2::client::{self, Limits, PushPriority};
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, error_code, flags, kind};
-use net::h2::hpack::Encoder;
+use megi_net::h2::client::{self, Limits, PushPriority};
+use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, error_code, flags, kind};
+use megi_net::h2::hpack::Encoder;
 
 fn spawn_server(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");

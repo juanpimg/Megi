@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use megi_core::Document;
-use render::{HistoryAction, LocationAction, RenderOptions, RenderStorage, Viewport, render_url};
+use megi_render::{HistoryAction, LocationAction, RenderOptions, RenderStorage, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -25,12 +25,12 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture_with(name: &str, options: &RenderOptions) -> render::RenderOutput {
+fn render_fixture_with(name: &str, options: &RenderOptions) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), options)
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_fixture_with(name, &options())
 }
 
@@ -47,13 +47,13 @@ fn element_with_id(document: &Document, id: &str) -> megi_core::NodeId {
         .unwrap_or_else(|| panic!("fixture element #{id} missing"))
 }
 
-fn text_content(output: &render::RenderOutput, id: &str) -> String {
+fn text_content(output: &megi_render::RenderOutput, id: &str) -> String {
     output
         .document
         .text_content(element_with_id(&output.document, id))
 }
 
-fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
+fn count_where(pixmap: &megi_paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
     pixmap
         .pixels
         .iter()
@@ -140,7 +140,7 @@ fn storage_is_per_render_without_the_shared_option() {
 fn host_hashchange_and_popstate_events_mutate_before_the_final_render() {
     let no_events = render_fixture("js_host_events.html");
     let red =
-        |pixmap: &paint::Pixmap| count_where(pixmap, |[r, g, b, _]| r > 200 && g < 60 && b < 60);
+        |pixmap: &megi_paint::Pixmap| count_where(pixmap, |[r, g, b, _]| r > 200 && g < 60 && b < 60);
     assert!(
         red(&no_events.pixmap) > 700,
         "both boxes red without host events"
@@ -257,19 +257,19 @@ fn host_dom_events_forward_focus_keydown_input_change_blur_to_form_controls() {
         </script>";
 
     let events = vec![
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "focus".to_owned(),
-            target: render::HostEventTarget::FormControl(7),
+            target: megi_render::HostEventTarget::FormControl(7),
             bubbles: false,
             cancelable: false,
-            kind: render::HostUiEventKind::Focus,
+            kind: megi_render::HostUiEventKind::Focus,
         },
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "keydown".to_owned(),
-            target: render::HostEventTarget::FormControl(7),
+            target: megi_render::HostEventTarget::FormControl(7),
             bubbles: true,
             cancelable: true,
-            kind: render::HostUiEventKind::Keyboard {
+            kind: megi_render::HostUiEventKind::Keyboard {
                 key: "c".to_owned(),
                 code: "KeyC".to_owned(),
                 ctrl_key: false,
@@ -279,36 +279,36 @@ fn host_dom_events_forward_focus_keydown_input_change_blur_to_form_controls() {
                 repeat: false,
             },
         },
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "input".to_owned(),
-            target: render::HostEventTarget::FormControl(7),
+            target: megi_render::HostEventTarget::FormControl(7),
             bubbles: true,
             cancelable: false,
-            kind: render::HostUiEventKind::Input {
+            kind: megi_render::HostUiEventKind::Input {
                 data: Some("c".to_owned()),
                 input_type: "insertText".to_owned(),
             },
         },
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "blur".to_owned(),
-            target: render::HostEventTarget::FormControl(7),
+            target: megi_render::HostEventTarget::FormControl(7),
             bubbles: false,
             cancelable: false,
-            kind: render::HostUiEventKind::Focus,
+            kind: megi_render::HostUiEventKind::Focus,
         },
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "change".to_owned(),
-            target: render::HostEventTarget::FormControl(8),
+            target: megi_render::HostEventTarget::FormControl(8),
             bubbles: true,
             cancelable: false,
-            kind: render::HostUiEventKind::Simple,
+            kind: megi_render::HostUiEventKind::Simple,
         },
-        render::HostDomEvent {
+        megi_render::HostDomEvent {
             event_type: "submit".to_owned(),
-            target: render::HostEventTarget::OwningForm(7),
+            target: megi_render::HostEventTarget::OwningForm(7),
             bubbles: true,
             cancelable: true,
-            kind: render::HostUiEventKind::Simple,
+            kind: megi_render::HostUiEventKind::Simple,
         },
     ];
     let opts = RenderOptions {

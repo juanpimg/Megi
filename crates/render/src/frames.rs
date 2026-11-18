@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use megi_core::NodeId;
-use net::Url;
+use megi_net::Url;
 
 use crate::{FrameRenderContext, RenderError, RenderOptions, Viewport};
 
@@ -52,7 +52,7 @@ pub const MAX_FRAME_PIXELS: u64 = 4_000_000;
 
 /// Pre-scripted child `<iframe>` state captured from the parent `JsRuntime` (#1544).
 #[cfg(feature = "js")]
-pub type PreScriptedFrameMap = HashMap<NodeId, (megi_core::Document, js::SandboxFlags, String)>;
+pub type PreScriptedFrameMap = HashMap<NodeId, (megi_core::Document, megi_js::SandboxFlags, String)>;
 #[cfg(not(feature = "js"))]
 pub type PreScriptedFrameMap = HashMap<NodeId, ()>;
 
@@ -99,8 +99,8 @@ pub fn collect_frames_with_context(
     document: &megi_core::Document,
     base_url: &Url,
     options: &RenderOptions,
-    styles: &HashMap<NodeId, css::ComputedStyle>,
-    csp: Option<&net::csp::ContentSecurityPolicy>,
+    styles: &HashMap<NodeId, megi_css::ComputedStyle>,
+    csp: Option<&megi_net::csp::ContentSecurityPolicy>,
     pre_scripted: &PreScriptedFrameMap,
     depth: usize,
     warnings: &mut Vec<String>,
@@ -153,7 +153,7 @@ pub fn collect_frames_with_context(
         #[cfg(feature = "js")]
         let sandbox_flags = data
             .get_attribute("sandbox")
-            .map(js::SandboxFlags::from_attribute);
+            .map(megi_js::SandboxFlags::from_attribute);
         #[cfg(feature = "js")]
         if let Some(flags) = sandbox_flags {
             if !flags.allow_scripts {
@@ -239,7 +239,7 @@ pub fn collect_frames_with_context(
         let child_input = if let Some(srcdoc) = data.get_attribute("srcdoc") {
             format!(
                 "data:text/html;base64,{}",
-                net::base64_encode(srcdoc.as_bytes())
+                megi_net::base64_encode(srcdoc.as_bytes())
             )
         } else if let Some(src) = data
             .get_attribute("src")
@@ -311,17 +311,17 @@ pub fn collect_frames_with_context(
 }
 
 fn frame_size(
-    style: Option<&css::ComputedStyle>,
+    style: Option<&megi_css::ComputedStyle>,
     parent_viewport: Viewport,
     width_attr: Option<&str>,
     height_attr: Option<&str>,
 ) -> (u32, u32) {
-    let from_css = |len: css::Length, basis: u32| -> Option<u32> {
+    let from_css = |len: megi_css::Length, basis: u32| -> Option<u32> {
         match len {
-            css::Length::Px(px) if px.is_finite() && px >= 1.0 => {
+            megi_css::Length::Px(px) if px.is_finite() && px >= 1.0 => {
                 Some((px.round() as u32).clamp(1, MAX_FRAME_PIXELS as u32))
             }
-            css::Length::Percent(pct) if pct.is_finite() && pct > 0.0 => {
+            megi_css::Length::Percent(pct) if pct.is_finite() && pct > 0.0 => {
                 let px = (pct / 100.0) * (basis as f32);
                 (px >= 1.0).then(|| (px.round() as u32).clamp(1, MAX_FRAME_PIXELS as u32))
             }

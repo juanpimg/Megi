@@ -3,7 +3,7 @@
 //!
 //! Scripts run against a **snapshot of the computed styles taken before script execution**
 //! (author + UA cascade, same cascade the render will use after scripts). `getComputedStyle`
-//! exposes that snapshot through [`js::JsRuntime::set_computed_style_provider`]; layout and
+//! exposes that snapshot through [`megi_js::JsRuntime::set_computed_style_provider`]; layout and
 //! paint are recomputed from scratch after scripts, so script-visible styles always describe
 //! the pre-script DOM (documented limitation: re-querying after DOM mutations still returns
 //! the snapshot).
@@ -16,14 +16,14 @@
 //! *specified* computed values, not the used pixel sizes (documented simplification: no
 //! containing-block resolution inside `js`).
 //!
-//! `matchMedia(query)` is evaluated with the same [`css::MediaContext`] used to load the
+//! `matchMedia(query)` is evaluated with the same [`megi_css::MediaContext`] used to load the
 //! page's stylesheets (viewport from the render options, `screen` medium), so media queries
 //! seen by scripts agree with the CSS cascade. `window.innerWidth`/`innerHeight`/
 //! `devicePixelRatio` come from the same viewport (DPR is fixed at 1.0 by the pipeline).
 
 use std::collections::HashMap;
 
-use css::{BorderStyle, Color, ComputedStyle, Display, FontStyle, Length, Position, TextAlign};
+use megi_css::{BorderStyle, Color, ComputedStyle, Display, FontStyle, Length, Position, TextAlign};
 use megi_core::{Document, NodeId};
 
 /// Serializes one computed style into `(kebab-case property, CSS value)` pairs.
@@ -112,7 +112,7 @@ pub(crate) fn computed_style_for(
         .and_then(|node| node.as_element())
         .and_then(|element| element.get_attribute("style"))
         .map(|inline| {
-            css::parse_inline_declarations(inline)
+            megi_css::parse_inline_declarations(inline)
                 .into_iter()
                 .map(|declaration| (declaration.name, declaration.raw_value))
                 .collect()
@@ -121,9 +121,9 @@ pub(crate) fn computed_style_for(
 }
 
 /// Evaluates a `matchMedia` query string against the render's media context.
-pub(crate) fn media_matches(media: &css::MediaContext, query: &str) -> bool {
-    let list = css::parse_media_query_list(query);
-    css::evaluate_media(&list, media)
+pub(crate) fn media_matches(media: &megi_css::MediaContext, query: &str) -> bool {
+    let list = megi_css::parse_media_query_list(query);
+    megi_css::evaluate_media(&list, media)
 }
 
 fn color_css(color: &Color) -> String {
@@ -243,10 +243,10 @@ mod tests {
     fn computed_style_for_bounds_oversized_inline_style() {
         let prefix = "color: rgb(1, 2, 3); ";
         let mut style = String::from(prefix);
-        style.push_str(&" ".repeat(css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
+        style.push_str(&" ".repeat(megi_css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
         style.push('🦀');
         style.push_str("; background-color: rgb(9, 9, 9);");
-        assert!(!style.is_char_boundary(css::MAX_INLINE_STYLE_BYTES));
+        assert!(!style.is_char_boundary(megi_css::MAX_INLINE_STYLE_BYTES));
 
         let mut doc = Document::new();
         let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);

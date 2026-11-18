@@ -4,14 +4,14 @@
 
 use std::path::Path;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_path(name: &str) -> String {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render");
     format!("file://{}", dir.join(name).display())
 }
 
-fn render(name: &str, width: u32, height: u32) -> render::RenderOutput {
+fn render(name: &str, width: u32, height: u32) -> megi_render::RenderOutput {
     let options = RenderOptions {
         viewport: Viewport::new(width, height).expect("viewport"),
         ..RenderOptions::default()
@@ -20,16 +20,16 @@ fn render(name: &str, width: u32, height: u32) -> render::RenderOutput {
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn pixel(output: &render::RenderOutput, x: u32, y: u32) -> css::Color {
+fn pixel(output: &megi_render::RenderOutput, x: u32, y: u32) -> megi_css::Color {
     output.pixmap.pixels[(y * output.pixmap.width + x) as usize]
 }
 
-fn non_white(output: &render::RenderOutput) -> usize {
+fn non_white(output: &megi_render::RenderOutput) -> usize {
     output
         .pixmap
         .pixels
         .iter()
-        .filter(|pixel| **pixel != css::Color::WHITE)
+        .filter(|pixel| **pixel != megi_css::Color::WHITE)
         .count()
 }
 
@@ -63,7 +63,7 @@ fn linear_gradients_paint_deterministically() {
         middle.r > 60 && middle.b > 60,
         "middle is a gradient mix: {middle:?}"
     );
-    assert_eq!(pixel(&first, 200, 180), css::Color::WHITE);
+    assert_eq!(pixel(&first, 200, 180), megi_css::Color::WHITE);
 
     // `background-clip: text`: glyph pixels show the gradient, outside the glyphs is white.
     let clip = first.stats.display_items;
@@ -72,7 +72,7 @@ fn linear_gradients_paint_deterministically() {
     for y in 248..292 {
         for x in 8..168 {
             let p = pixel(&first, x, y);
-            if p != css::Color::WHITE {
+            if p != megi_css::Color::WHITE {
                 colored_text_pixels += 1;
             }
         }

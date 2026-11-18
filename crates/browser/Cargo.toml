@@ -1,5 +1,5 @@
 [package]
-name = "shell"
+name = "megi-browser"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,13 +10,13 @@ description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer 
 
 [dependencies]
 megi-core.workspace = true
-html.workspace = true
-layout.workspace = true
-css.workspace = true
+megi-html.workspace = true
+megi-layout.workspace = true
+megi-css.workspace = true
 megi-fonts.workspace = true
-render.workspace = true
-paint.workspace = true
-net.workspace = true
+megi-render.workspace = true
+megi-paint.workspace = true
+megi-net.workspace = true
 megi-image.workspace = true
 winit.workspace = true
 softbuffer.workspace = true

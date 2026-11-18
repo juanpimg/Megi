@@ -2,11 +2,11 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-fn render_page(html: &str) -> render::RenderOutput {
+fn render_page(html: &str) -> megi_render::RenderOutput {
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
         "megi-iframe-test-{}-{}.html",
@@ -24,7 +24,7 @@ fn render_page(html: &str) -> render::RenderOutput {
     output
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -32,7 +32,7 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
 
 #[test]
 fn iframe_srcdoc_renders_child_document() {
@@ -75,7 +75,7 @@ fn iframe_src_loads_external_document() {
     };
     let url = format!("file://{}", parent_path.display());
     let output = render_url(&url, &options).expect("render");
-    let blue = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+    let blue = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
     assert!(
         count_color(&output.pixmap, blue) > 50,
         "iframe src child must paint blue"
@@ -102,7 +102,7 @@ fn iframe_depth_cap_prevents_infinite_recursion() {
         child.replace('\'', "\"")
     ));
     // The test completing at all proves the depth cap works; green from the child is visible.
-    let green = css::Color::new(0x00, 0x80, 0x00, 0xFF);
+    let green = megi_css::Color::new(0x00, 0x80, 0x00, 0xFF);
     assert!(
         count_color(&output.pixmap, green) > 0,
         "child document must paint green"
@@ -162,7 +162,7 @@ fn iframe_css_width_and_height_size_viewport_in_px_and_percent() {
          </body></html>",
     );
     let red = count_color(&output.pixmap, RED);
-    let blue = count_color(&output.pixmap, css::Color::new(0x00, 0x00, 0xFF, 0xFF));
+    let blue = count_color(&output.pixmap, megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF));
     assert!(
         red >= 2_500,
         "CSS px dimensions must grow iframe beyond HTML 10x10 fallback, got {red} red px"
@@ -236,7 +236,7 @@ fn spawn_http_routes(
 
 #[test]
 fn iframe_csp_frame_src_and_child_src_block_disallowed_frames() {
-    let green = css::Color::new(0x00, 0x80, 0x00, 0xFF);
+    let green = megi_css::Color::new(0x00, 0x80, 0x00, 0xFF);
     let (other_origin, other_handle) = spawn_http_routes(
         vec![(
             "/other.html",
@@ -336,8 +336,8 @@ fn iframe_parent_script_mutating_content_document_reaches_pixels() {
 #[cfg(feature = "js")]
 #[test]
 fn iframe_bidirectional_post_message_reaches_parent_and_child_pixels() {
-    let blue = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
-    let green = css::Color::new(0x00, 0x80, 0x00, 0xFF);
+    let blue = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+    let green = megi_css::Color::new(0x00, 0x80, 0x00, 0xFF);
     let child_doc = "<body style='margin:0'>\
          <script>\
          window.addEventListener('message', function(e) {\
@@ -373,7 +373,7 @@ fn iframe_bidirectional_post_message_reaches_parent_and_child_pixels() {
 #[cfg(feature = "js")]
 #[test]
 fn iframe_sandbox_without_allow_same_origin_has_opaque_origin_and_isolated_storage() {
-    let green = css::Color::new(0x00, 0x80, 0x00, 0xFF);
+    let green = megi_css::Color::new(0x00, 0x80, 0x00, 0xFF);
     let child_html = "<body style='margin:0'><script>\
         var storageThrew = false;\
         try { window.localStorage.setItem('k', 'v'); } catch (e) { storageThrew = true; }\
@@ -403,7 +403,7 @@ fn iframe_sandbox_without_allow_same_origin_has_opaque_origin_and_isolated_stora
         2,
     );
     let shared_storage =
-        std::sync::Arc::new(std::sync::Mutex::new(render::RenderStorage::default()));
+        std::sync::Arc::new(std::sync::Mutex::new(megi_render::RenderStorage::default()));
     let options = RenderOptions {
         viewport: Viewport::new(400, 300).expect("viewport"),
         storage: Some(shared_storage.clone()),

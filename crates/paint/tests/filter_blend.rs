@@ -1,9 +1,9 @@
 //! `filter`, `mix-blend-mode` and `image-set()` painting (R137).
 
-use css::{Color, ComputedStyle, Display, FilterFunction, MixBlendMode, resolve_document_styles};
+use megi_css::{Color, ComputedStyle, Display, FilterFunction, MixBlendMode, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, ImageStore, Pixmap,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };

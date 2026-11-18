@@ -1,6 +1,6 @@
 //! End-to-end render pipeline tests for CSS `::before` and `::after` pseudo-elements (#1540).
 
-use render::{RenderCache, RenderOptions, Viewport, render_url, render_url_cached};
+use megi_render::{RenderCache, RenderOptions, Viewport, render_url, render_url_cached};
 
 fn data_url(html: &str) -> String {
     let mut encoded = String::with_capacity(html.len());
@@ -19,7 +19,7 @@ fn data_url(html: &str) -> String {
     format!("data:text/html;charset=utf-8,{encoded}")
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -57,8 +57,8 @@ fn pseudo_element_backgrounds_and_html_before_paint_in_png() {
     };
     let output = render_url(&data_url(html), &options).expect("render");
 
-    let red = count_color(&output.pixmap, css::Color::RED);
-    let green = count_color(&output.pixmap, css::Color::GREEN);
+    let red = count_color(&output.pixmap, megi_css::Color::RED);
+    let green = count_color(&output.pixmap, megi_css::Color::GREEN);
     assert!(
         red >= 40 * 20,
         "html::before must paint its 40x20 red box (not skipped by canvas propagation), got {red} px"
@@ -70,7 +70,7 @@ fn pseudo_element_backgrounds_and_html_before_paint_in_png() {
 
     // Clicking inside #box::after maps hit region back to the originating #box element.
     let box_id = output.document.get_element_by_id("box").expect("#box");
-    let hit = paint::hit_test(&output.hit_regions, 10.0, 35.0);
+    let hit = megi_paint::hit_test(&output.hit_regions, 10.0, 35.0);
     assert_eq!(hit, Some(box_id));
 }
 
@@ -96,7 +96,7 @@ fn render_cache_distinguishes_changed_pseudo_element_styles() {
     let div_a = out_a.document.get_elements_by_tag_name("div")[0];
     let div_b = out_b.document.get_elements_by_tag_name("div")[0];
 
-    fn box_height(layout: &layout::LayoutBox, id: megi_core::NodeId) -> f32 {
+    fn box_height(layout: &megi_layout::LayoutBox, id: megi_core::NodeId) -> f32 {
         if layout.node_id() == Some(id) && !layout.is_pseudo {
             return layout.dimensions.content.height;
         }

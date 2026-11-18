@@ -18,7 +18,7 @@
 
 | id | veredicto | comando | salida literal (recorte) | nota |
 |----|-----------|---------|--------------------------|------|
-| w2-assets-01 | VERIFIED | probe `render` (`svg::render_svg` sobre `switch.svg`) | `switch.svg: 100x50 painted=5000 … top=[((0, 0, 255, 255), 2500), ((255, 0, 0, 255), 2500)]` | Ambos hijos pintados completos (rojo 2500 + azul 2500); esperado sólo el azul. Causa en `document.rs:1067` (`"g" \| "a" \| "switch"` comparten rama grupo, `visit_children` sin filtro `systemLanguage`). Idéntico al `painted= 5000` del informe. |
+| w2-assets-01 | VERIFIED | probe `render` (`megi_svg::render_svg` sobre `switch.svg`) | `switch.svg: 100x50 painted=5000 … top=[((0, 0, 255, 255), 2500), ((255, 0, 0, 255), 2500)]` | Ambos hijos pintados completos (rojo 2500 + azul 2500); esperado sólo el azul. Causa en `document.rs:1067` (`"g" \| "a" \| "switch"` comparten rama grupo, `visit_children` sin filtro `systemLanguage`). Idéntico al `painted= 5000` del informe. |
 | w2-assets-02 | VERIFIED | probe `textcol` (columna x=100, 20 primeras filas) | `miter.svg: col_x100_first20_alpha=[0, 0, 0, 0, 0, 0, 0, 0, 0, 159, 255, …] topmost_ink_row=Some(5)`; `miter-bevel.svg: […, 0, 0, 0, 0, 128, 255, …] topmost_ink_row=Some(5)` | Miter deja filas 0–8 vacías donde bevel pinta desde la fila 5; el tip falta. Código `raster.rs:1883-1892`: intersección `v + n0·t` con `v + n1·u` (rectas por `v`) con `t ≡ -1` implícito; el chequeo `distance <= miter_limit * half` nunca mide el pico exterior. |
 | w2-assets-03 | VERIFIED | probe `render` sobre `namedcolor.svg` + lectura `color.rs:138-163` | `namedcolor.svg: 20x20 painted=0 … top=[((0, 0, 0, 0), 400)]` | `named_color` sólo 16 básicos + `orange` + `transparent`; `rebeccapurple` → `_ => None` → `Paint::None`. Esperado `(102,51,153)` opaco. |
 | w2-assets-04 | VERIFIED | probe `render` sobre `hsl.svg` + lectura `color.rs:68-71` | `hsl.svg: 20x20 painted=0 … top=[((0, 0, 0, 0), 400)]` | `parse_color` sólo ramifica `rgb\|rgba` (`_ => None`); `hsl(0,100%,50%)` → `None` → transparente. Esperado rojo `(255,0,0,255)`. |
@@ -34,8 +34,8 @@ Detalle de comandos (todos con `TMPDIR=/home/jp/.cache/megi-tmp CARGO_TARGET_DIR
 desde `/tmp/opencode/megi-verify`):
 
 - `cargo run --manifest-path /home/jp/.cache/megi-probe-assets/Cargo.toml -- render|textcol|alph|jpeg|grad|textpos|concerns|file …`
-  (sonda con path-deps al worktree; render in-process vía `svg::render_svg`, ALPH/JPEG vía `megi_image::decode`).
-- `cargo test -p svg`, `cargo test -p megi-image`, `cargo test -p megi-fonts` en serie: todo `ok`, 0 failed
+  (sonda con path-deps al worktree; render in-process vía `megi_svg::render_svg`, ALPH/JPEG vía `megi_image::decode`).
+- `cargo test -p megi-svg`, `cargo test -p megi-image`, `cargo test -p megi-fonts` en serie: todo `ok`, 0 failed
   (svg: 37+14+13+16+…; image: 32+34+5+9+8+6+7+21+1; fonts: 3+19+10+1).
 - Verificado-fijo del informe (`currentcolor`): re-confirmado —
   `currentcolor.svg: 20x20 painted=400 … ((255, 0, 0, 255), 400)`. No es hallazgo.
@@ -47,7 +47,7 @@ desde `/tmp/opencode/megi-verify`):
    (`size > 4096.0 → return Ok(())`, truncado silencioso). El auditor no pudo ejecutarlo
    (bus lleno); esta mesa sí lo ejecutó. Propuesta: es material de hallazgo P3 (error silencioso;
    considerar `SvgError::Limit` o documentar el tope), no sólo concern.
-2. **C2 — needs-repro (sólo código)**: `svg::text::families` (`text.rs:108-123`) parte por `,`
+2. **C2 — needs-repro (sólo código)**: `megi_svg::text::families` (`text.rs:108-123`) parte por `,`
    sin respetar comillas y desnuda genéricos entrecomillados, mientras
    `megi_fonts::parse_font_families` (`db.rs:193-…`) sí respeta comillas (bucle con
    `in_single`/`in_double`/`escaped`). Divergencia confirmada por lectura; sin sonda de
@@ -72,5 +72,5 @@ desde `/tmp/opencode/megi-verify`):
    el factor por píxel persiste aunque el absoluto baje — de acuerdo con el informe.
 7. **Dedup**: de acuerdo con el informe — #1270 (gradiente) y #1324 (miter) son diferidos
    cerrados pero vivos → evidencia nueva válida; #1129/#1130 son del crate `css` y no cubren
-   a `svg::color` (tablas distintas: `css` 148 colores + hsl vs `svg` 16 + rgb). #1329/#1273
+   a `megi_svg::color` (tablas distintas: `css` 148 colores + hsl vs `svg` 16 + rgb). #1329/#1273
    (switch) likewise vivos.

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -32,7 +32,7 @@ fn options() -> RenderOptions {
     }
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -40,11 +40,11 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const ORANGE: css::Color = css::Color::new(0xF2, 0xAA, 0x4C, 0xFF);
-const BLUE: css::Color = css::Color::new(0x33, 0x66, 0x99, 0xFF);
-const MAGENTA: css::Color = css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
-const GREEN: css::Color = css::Color::new(0x00, 0xFF, 0x00, 0xFF);
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const ORANGE: megi_css::Color = megi_css::Color::new(0xF2, 0xAA, 0x4C, 0xFF);
+const BLUE: megi_css::Color = megi_css::Color::new(0x33, 0x66, 0x99, 0xFF);
+const MAGENTA: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
+const GREEN: megi_css::Color = megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
 
 // ---------------------------------------------------------------------------
 // Minimal loopback HTTP server (copied pattern from the images tests)

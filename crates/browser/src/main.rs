@@ -13,7 +13,7 @@
 use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
-use shell::{
+use megi_browser::{
     CliArgs, LaunchMode, RefreshPolicy, ShellError, WindowViewOptions, finish_args, parse_args,
     zoom,
 };
@@ -24,15 +24,15 @@ use shell::{
 /// (document, subresources, redirects and later navigations in window mode).
 /// `--origin` overrides the CORS `Origin` used for subresource fetches (otherwise the
 /// document's own origin is used automatically by `render`).
-fn render_options(args: &CliArgs) -> render::RenderOptions {
+fn render_options(args: &CliArgs) -> megi_render::RenderOptions {
     let cookie_jar = args
         .cookies
-        .then(|| Arc::new(Mutex::new(net::CookieJar::new())));
-    render::RenderOptions {
+        .then(|| Arc::new(Mutex::new(megi_net::CookieJar::new())));
+    megi_render::RenderOptions {
         cookie_jar,
         origin: args.origin.clone(),
         time_ms: args.time_ms,
-        ..render::RenderOptions::default()
+        ..megi_render::RenderOptions::default()
     }
 }
 
@@ -53,7 +53,7 @@ fn main() -> ExitCode {
 fn run() -> Result<(), ShellError> {
     let raw = parse_args(std::env::args().skip(1))?;
     if raw.help {
-        println!("{}", shell::cli::USAGE);
+        println!("{}", megi_browser::cli::USAGE);
         return Ok(());
     }
     let args = finish_args(raw)?;
@@ -68,7 +68,7 @@ fn run() -> Result<(), ShellError> {
     view.session_path = if args.no_session {
         None
     } else {
-        shell::session::resolve_session_path(args.session_file.as_deref())
+        megi_browser::session::resolve_session_path(args.session_file.as_deref())
     };
     view.download_dir = args.download_dir.clone();
     match args.mode {
@@ -88,12 +88,12 @@ fn run() -> Result<(), ShellError> {
             // `--reader` extracts the article from the source page first and renders the
             // generated reader data URL; chrome/find then apply to that clean page.
             let input = if args.reader {
-                shell::headless::reader_url(&active_url, css_width, css_height, &options)?
+                megi_browser::headless::reader_url(&active_url, css_width, css_height, &options)?
             } else {
                 active_url
             };
             let output = if args.chrome && args.chrome_menu {
-                shell::headless::render_target_with_chrome_menu(
+                megi_browser::headless::render_target_with_chrome_menu(
                     &input,
                     css_width,
                     css_height,
@@ -101,7 +101,7 @@ fn run() -> Result<(), ShellError> {
                     args.find.as_deref(),
                 )?
             } else if args.chrome {
-                shell::headless::render_target_with_chrome(
+                megi_browser::headless::render_target_with_chrome(
                     &input,
                     css_width,
                     css_height,
@@ -109,12 +109,12 @@ fn run() -> Result<(), ShellError> {
                     args.find.as_deref(),
                 )?
             } else if let Some(query) = &args.find {
-                let (output, _hits) = shell::headless::render_target_with_find(
+                let (output, _hits) = megi_browser::headless::render_target_with_find(
                     &input, css_width, css_height, &options, query,
                 )?;
                 output
             } else {
-                shell::headless::render_target_with_options(
+                megi_browser::headless::render_target_with_options(
                     &input, css_width, css_height, &options,
                 )?
             };
@@ -132,13 +132,13 @@ fn run() -> Result<(), ShellError> {
                     reason: "the render produced no PNG bytes".to_string(),
                 });
             }
-            shell::download::write_png_bytes_to(&path, &png).map_err(|reason| ShellError::Io {
+            megi_browser::download::write_png_bytes_to(&path, &png).map_err(|reason| ShellError::Io {
                 path: path.display().to_string(),
                 reason,
             })?;
             if let Some(save_path) = &args.save_png {
                 let bytes =
-                    shell::download::write_png_bytes_to(save_path, &png).map_err(|reason| {
+                    megi_browser::download::write_png_bytes_to(save_path, &png).map_err(|reason| {
                         ShellError::Io {
                             path: save_path.display().to_string(),
                             reason,
@@ -147,7 +147,7 @@ fn run() -> Result<(), ShellError> {
                 println!("saved png ({bytes} bytes) to {}", save_path.display());
             }
             if let Some(save_path) = &args.save_html {
-                let bytes = shell::download::write_html_to(save_path, &output.document).map_err(
+                let bytes = megi_browser::download::write_html_to(save_path, &output.document).map_err(
                     |reason| ShellError::Io {
                         path: save_path.display().to_string(),
                         reason,
@@ -179,7 +179,7 @@ fn run() -> Result<(), ShellError> {
             }
             Ok(())
         }
-        LaunchMode::Window => shell::run_window_with_view_options(
+        LaunchMode::Window => megi_browser::run_window_with_view_options(
             args.input,
             args.title,
             args.width,
@@ -196,7 +196,7 @@ mod screenshot_diagnostics_tests {
     #[test]
     fn render_diagnostics_are_detected() {
         // A screenshot with warnings or limit violations must be treated as degraded.
-        let mut violations = html::LimitViolations::default();
+        let mut violations = megi_html::LimitViolations::default();
         let mut warnings: Vec<String> = Vec::new();
         assert!(
             warnings.is_empty() && violations.is_empty(),

@@ -1,7 +1,7 @@
 //! End-to-end CSS animation frames: the renderer evaluates the animation timeline at the
 //! deterministic `RenderOptions::time_ms` supplied by the caller.
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 const PAGE: &str = r#"<!doctype html><html><head><style>
 html, body { margin: 0; background: #ffffff; }
@@ -10,7 +10,7 @@ html, body { margin: 0; background: #ffffff; }
 @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
 </style></head><body><div id="box"></div></body></html>"#;
 
-fn render_at(time_ms: f64) -> render::RenderOutput {
+fn render_at(time_ms: f64) -> megi_render::RenderOutput {
     let dir = std::env::temp_dir().join(format!(
         "megi-animation-{}-{}",
         std::process::id(),
@@ -30,7 +30,7 @@ fn render_at(time_ms: f64) -> render::RenderOutput {
     output
 }
 
-fn center_pixel(output: &render::RenderOutput) -> css::Color {
+fn center_pixel(output: &megi_render::RenderOutput) -> megi_css::Color {
     output.pixmap.pixels[(50 * 100 + 50) as usize]
 }
 

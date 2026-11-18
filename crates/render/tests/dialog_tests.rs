@@ -2,9 +2,9 @@
 
 #![cfg(feature = "js")]
 
-use render::{RenderOptions, RenderOutput, Viewport, render_url};
+use megi_render::{RenderOptions, RenderOutput, Viewport, render_url};
 
-fn pixel_at(output: &RenderOutput, x: u32, y: u32) -> css::Color {
+fn pixel_at(output: &RenderOutput, x: u32, y: u32) -> megi_css::Color {
     output.pixmap.pixels[(y * output.pixmap.width + x) as usize]
 }
 
@@ -66,13 +66,13 @@ fn render_modal_dialog_shows_backdrop_and_centered_box_above_clip_and_z_index() 
     let center = pixel_at(&output, 100, 60);
     assert_eq!(
         center,
-        css::Color::new(0, 0, 255, 255),
+        megi_css::Color::new(0, 0, 255, 255),
         "expected blue dialog at center"
     );
     let right_half = pixel_at(&output, 130, 60);
     assert_eq!(
         right_half,
-        css::Color::new(0, 0, 255, 255),
+        megi_css::Color::new(0, 0, 255, 255),
         "dialog must not be clipped at 40px"
     );
 }

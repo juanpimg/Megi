@@ -1,5 +1,5 @@
 [package]
-name = "paint"
+name = "megi-paint"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,13 +10,13 @@ description = "Megi Engine — Decoupled Display Lists, CSS 2.2 painting order a
 
 [dependencies]
 megi-core = { workspace = true }
-css = { workspace = true }
-layout = { workspace = true }
+megi-css = { workspace = true }
+megi-layout = { workspace = true }
 megi-fonts = { workspace = true }
 megi-image = { workspace = true }
 
 [dev-dependencies]
-html = { workspace = true }
+megi-html = { workspace = true }
 
 [lints]
 workspace = true

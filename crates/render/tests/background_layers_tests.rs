@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_path(name: &str) -> String {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render");
@@ -18,23 +18,23 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
 /// Row-major pixel lookup (opaque canvas, so alpha is always 255 here).
-fn pixel(output: &render::RenderOutput, x: u32, y: u32) -> css::Color {
+fn pixel(output: &megi_render::RenderOutput, x: u32, y: u32) -> megi_css::Color {
     let width = output.pixmap.width;
     let index = (y * width + x) as usize;
     output.pixmap.pixels[index]
 }
 
-const MAGENTA: css::Color = css::Color::new(255, 0, 255, 255);
-const BLACK: css::Color = css::Color::new(0, 0, 0, 255);
-const WHITE: css::Color = css::Color::new(255, 255, 255, 255);
-const BULLET_CORNER: css::Color = css::Color::new(242, 170, 76, 255);
-const CHECKER: css::Color = css::Color::new(51, 102, 153, 255);
+const MAGENTA: megi_css::Color = megi_css::Color::new(255, 0, 255, 255);
+const BLACK: megi_css::Color = megi_css::Color::new(0, 0, 0, 255);
+const WHITE: megi_css::Color = megi_css::Color::new(255, 255, 255, 255);
+const BULLET_CORNER: megi_css::Color = megi_css::Color::new(242, 170, 76, 255);
+const CHECKER: megi_css::Color = megi_css::Color::new(51, 102, 153, 255);
 
 #[test]
 fn multi_layer_background_order_origin_and_clip() {

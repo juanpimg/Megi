@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, ContainerType, Length};
+use megi_css::{ComputedStyle, ContainerType, Length};
 use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn element(doc: &mut Document, tag: &str, attributes: Vec<Attribute>) -> NodeId {
@@ -25,7 +25,7 @@ fn page(css: &str, viewport_width: f32) -> Page {
     doc.append_child(html, body);
     doc.append_child(body, container);
     doc.append_child(container, child);
-    let styles = css::resolve_document_styles_with_viewport(&doc, Some(css), viewport_width, 600.0);
+    let styles = megi_css::resolve_document_styles_with_viewport(&doc, Some(css), viewport_width, 600.0);
     Page {
         styles,
         container,
@@ -134,7 +134,7 @@ fn nearest_nested_container_wins() {
     doc.append_child(body, outer);
     doc.append_child(outer, inner);
     doc.append_child(inner, child);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some(
             ".outer { width: 500px; container-type: inline-size; container-name: outer; }

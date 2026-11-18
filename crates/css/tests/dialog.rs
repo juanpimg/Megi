@@ -1,6 +1,6 @@
 //! Dialog UA styling (#1546): a `<dialog>` without `open` is `display: none`.
 
-use css::{Display, resolve_document_styles};
+use megi_css::{Display, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
 
 fn dialog_display(open: bool) -> Display {

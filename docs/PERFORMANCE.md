@@ -195,7 +195,7 @@ Ver tabla completa en §11. Resumen: todos los presupuestos se cumplen con marge
 
 `pipeline/html-to-png` compone a mano html→styles→layout→display-list→raster→PNG
 y **no mide el crate `render`**. La fila nueva pasa una página determinista por
-`render::render_url` (loader datos, scans, colección de estilos, layout, paint y
+`megi_render::render_url` (loader datos, scans, colección de estilos, layout, paint y
 PNG):
 
 | Medición | r32 |

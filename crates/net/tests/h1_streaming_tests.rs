@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, Url, fetch_streaming};
+use megi_net::{FetchError, FetchOptions, Url, fetch_streaming};
 
 const GZIP_BODY: &[u8] = &[
     31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 203, 72, 205, 201, 201, 87, 72, 175, 202, 44, 80, 40, 46,

@@ -1,4 +1,4 @@
-use js::{JsRuntime, SandboxFlags};
+use megi_js::{JsRuntime, SandboxFlags};
 
 #[test]
 fn sandbox_attribute_parses_all_tokens() {
@@ -19,7 +19,7 @@ fn sandbox_attribute_parses_all_tokens() {
 
 #[test]
 fn same_origin_iframe_exposes_content_document_and_content_window_identity() {
-    let doc = html::parse_document(
+    let doc = megi_html::parse_document(
         "<!doctype html><html><body>\
          <iframe id='f' srcdoc='<body data-v=\"1\"><p id=\"p\">hi</p></body>'></iframe>\
          </body></html>",
@@ -53,7 +53,7 @@ fn same_origin_iframe_exposes_content_document_and_content_window_identity() {
 
 #[test]
 fn sandboxed_iframe_without_allow_same_origin_has_opaque_origin() {
-    let doc = html::parse_document(
+    let doc = megi_html::parse_document(
         "<!doctype html><html><body>\
          <iframe id='box' sandbox='allow-scripts' srcdoc='\
            <script>\
@@ -83,7 +83,7 @@ fn sandboxed_iframe_without_allow_same_origin_has_opaque_origin() {
     assert_eq!(blocked, "true|true");
 
     // Verify sandbox state when JsRuntime itself runs directly as a sandboxed document.
-    let child_doc = html::parse_document(
+    let child_doc = megi_html::parse_document(
         "<!doctype html><html><body><form id='fm'></form></body></html>",
         false,
     );
@@ -110,7 +110,7 @@ fn sandboxed_iframe_without_allow_same_origin_has_opaque_origin() {
 
 #[test]
 fn cross_origin_iframe_blocks_dom_and_supports_post_message() {
-    let doc = html::parse_document(
+    let doc = megi_html::parse_document(
         "<!doctype html><html><body><iframe id='xo' src='https://other.example/frame.html'></iframe></body></html>",
         false,
     );
@@ -161,7 +161,7 @@ fn cross_origin_iframe_blocks_dom_and_supports_post_message() {
 
 #[test]
 fn same_origin_iframe_supports_bidirectional_post_message_and_srcdoc_reload() {
-    let doc = html::parse_document(
+    let doc = megi_html::parse_document(
         "<!doctype html><html><body>\
          <iframe id='so' srcdoc='<script>\
            window.addEventListener(\"message\", function (e) {\

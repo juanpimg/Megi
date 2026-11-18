@@ -27,8 +27,8 @@
 //!   definite sizes keep their declared values. Replaced boxes prefer their
 //!   intrinsic ratio with `auto` (or the declared ratio when it is explicit).
 
-use css::calc::CalcValue;
-use css::{
+use megi_css::calc::CalcValue;
+use megi_css::{
     BoxSizing, Clear, ComputedStyle, Display, FlexDirection, FlexWrap, Float, Length, Overflow,
     Position, WhiteSpace,
 };

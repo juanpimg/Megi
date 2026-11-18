@@ -1,7 +1,7 @@
 //! Dynamic CSS pseudo-class state in the render pipeline (R112).
 //!
-//! Render resolves styles with an empty `css::StateContext` (no pointer/focus ownership) but
-//! `css::state` derives `:checked`/`:disabled`/`:placeholder-shown`/... from the DOM and
+//! Render resolves styles with an empty `megi_css::StateContext` (no pointer/focus ownership) but
+//! `megi_css::state` derives `:checked`/`:disabled`/`:placeholder-shown`/... from the DOM and
 //! honours the documented `data-megi-*` attributes, so static documents can model host state
 //! (the shell injects `data-megi-focused` after interactions).
 //!
@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_path(name: &str) -> String {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render");
@@ -26,12 +26,12 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -39,13 +39,13 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const GREEN_BORDER: css::Color = css::Color::new(0x00, 0xFF, 0x00, 0xFF);
-const DARK_GREEN: css::Color = css::Color::new(0x00, 0x66, 0x00, 0xFF);
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
-const BLUE: css::Color = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
-const YELLOW: css::Color = css::Color::new(0xFF, 0xFF, 0x00, 0xFF);
-const MAGENTA: css::Color = css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
-const BLACK: css::Color = css::Color::new(0x00, 0x00, 0x00, 0xFF);
+const GREEN_BORDER: megi_css::Color = megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF);
+const DARK_GREEN: megi_css::Color = megi_css::Color::new(0x00, 0x66, 0x00, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const BLUE: megi_css::Color = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+const YELLOW: megi_css::Color = megi_css::Color::new(0xFF, 0xFF, 0x00, 0xFF);
+const MAGENTA: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
+const BLACK: megi_css::Color = megi_css::Color::new(0x00, 0x00, 0x00, 0xFF);
 
 #[test]
 fn input_checked_border_paints_in_the_png() {

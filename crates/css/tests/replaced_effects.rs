@@ -1,9 +1,9 @@
 //! `aspect-ratio`, `object-fit`/`object-position` and `backdrop-filter` parsing (R149).
 
-use css::{BackgroundPosition, Length, ObjectFit, resolve_document_styles};
+use megi_css::{BackgroundPosition, Length, ObjectFit, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
 
-fn computed_style(inline: &str) -> css::ComputedStyle {
+fn computed_style(inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -17,7 +17,7 @@ fn computed_style(inline: &str) -> css::ComputedStyle {
     resolved.get(&element).cloned().expect("computed style")
 }
 
-fn style_pair(parent: &str, child: &str) -> (css::ComputedStyle, css::ComputedStyle) {
+fn style_pair(parent: &str, child: &str) -> (megi_css::ComputedStyle, megi_css::ComputedStyle) {
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let parent_node = document.create_element(
@@ -39,7 +39,7 @@ fn style_pair(parent: &str, child: &str) -> (css::ComputedStyle, css::ComputedSt
 
 #[test]
 fn test_defaults() {
-    let style = css::ComputedStyle::initial();
+    let style = megi_css::ComputedStyle::initial();
     assert_eq!(style.aspect_ratio, None);
     assert_eq!(style.object_fit, ObjectFit::Fill);
     assert_eq!(style.object_position.x, Length::Percent(50.0));
@@ -145,19 +145,19 @@ fn test_backdrop_filter_cap() {
         .collect::<Vec<_>>()
         .join(" ");
     let style = computed_style(&format!("backdrop-filter: {value};"));
-    assert_eq!(style.backdrop_filter.len(), css::MAX_FILTER_FUNCTIONS);
+    assert_eq!(style.backdrop_filter.len(), megi_css::MAX_FILTER_FUNCTIONS);
     assert_eq!(
         style.backdrop_filter.first(),
-        Some(&css::FilterFunction::Brightness(1.0))
+        Some(&megi_css::FilterFunction::Brightness(1.0))
     );
     assert_eq!(
         style.backdrop_filter.last(),
-        Some(&css::FilterFunction::Brightness(1.0 + 15.0 * 0.05))
+        Some(&megi_css::FilterFunction::Brightness(1.0 + 15.0 * 0.05))
     );
     assert!(
         !style
             .backdrop_filter
-            .contains(&css::FilterFunction::Brightness(1.0 + 16.0 * 0.05))
+            .contains(&megi_css::FilterFunction::Brightness(1.0 + 16.0 * 0.05))
     );
 }
 
@@ -218,15 +218,15 @@ fn test_backdrop_filter_order_is_preserved() {
     let style = computed_style("backdrop-filter: grayscale(1) blur(2px) brightness(0.5);");
     assert!(matches!(
         style.backdrop_filter[0],
-        css::FilterFunction::Grayscale(1.0)
+        megi_css::FilterFunction::Grayscale(1.0)
     ));
     assert!(matches!(
         style.backdrop_filter[1],
-        css::FilterFunction::Blur(2.0)
+        megi_css::FilterFunction::Blur(2.0)
     ));
     assert!(matches!(
         style.backdrop_filter[2],
-        css::FilterFunction::Brightness(0.5)
+        megi_css::FilterFunction::Brightness(0.5)
     ));
 }
 
@@ -238,7 +238,7 @@ fn test_prefixed_backdrop_filter_used_when_unprefixed_invalid() {
     assert_eq!(style.backdrop_filter.len(), 1);
     assert!(matches!(
         style.backdrop_filter[0],
-        css::FilterFunction::Sepia(1.0)
+        megi_css::FilterFunction::Sepia(1.0)
     ));
 }
 

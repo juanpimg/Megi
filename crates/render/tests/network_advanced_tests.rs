@@ -11,8 +11,8 @@ use std::net::{Shutdown, TcpListener};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
-use paint::Color;
-use render::{RenderOptions, Viewport, render_url};
+use megi_paint::Color;
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn options(width: u32, height: u32) -> RenderOptions {
     RenderOptions {
@@ -359,7 +359,7 @@ fn redirect_hops_keep_cookies_for_the_final_request() {
 
 #[test]
 fn shared_cookie_jar_persists_across_renders() {
-    let jar = Arc::new(Mutex::new(net::CookieJar::new()));
+    let jar = Arc::new(Mutex::new(megi_net::CookieJar::new()));
     let mut routes = HashMap::new();
     routes.insert(
         "/first".to_string(),
@@ -430,7 +430,7 @@ fn cross_origin_stylesheet_sends_document_origin_and_applies_when_allowed() {
     let css_requests = css_server.join().expect("css server");
     let document_origin =
         header_value(&css_requests[0], "Origin").expect("stylesheet request with Origin?");
-    let expected = net::Origin::parse(&html_base)
+    let expected = megi_net::Origin::parse(&html_base)
         .expect("html origin")
         .as_str();
     assert_eq!(document_origin, expected);
@@ -661,7 +661,7 @@ fn no_cors_classic_script_runs_without_acao_while_crossorigin_requires_cors() {
     let (html_base, html_server) = spawn_router(html_routes, 1);
 
     let mut render_options = options(120, 80);
-    render_options.scripting = render::ScriptingMode::Enabled;
+    render_options.scripting = megi_render::ScriptingMode::Enabled;
     let output = render_url(&html_base, &render_options).expect("render");
     assert_eq!(
         output.pixmap.pixel(5, 5),
@@ -709,11 +709,11 @@ fn hit_regions_are_exposed_without_changing_the_png() {
     for region in &output.hit_regions {
         let cx = region.rect.x + region.rect.width / 2.0;
         let cy = region.rect.y + region.rect.height / 2.0;
-        if let Some(link) = paint::find_link_at(document, &output.hit_regions, cx, cy) {
+        if let Some(link) = megi_paint::find_link_at(document, &output.hit_regions, cx, cy) {
             assert_eq!(link.href, "next.html");
             found_link = true;
             break;
         }
     }
-    assert!(found_link, "paint::find_link_at did not find the anchor");
+    assert!(found_link, "megi_paint::find_link_at did not find the anchor");
 }

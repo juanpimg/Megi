@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
+use megi_css::ComputedStyle;
 use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
@@ -21,7 +21,7 @@ fn computed(css_text: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId
     let html = append(&mut doc, root, "html", &[]);
     let body = append(&mut doc, html, "body", &[]);
     let target = append(&mut doc, body, "div", &[("id", "target")]);
-    let styles = css::resolve_document_styles(&doc, Some(css_text));
+    let styles = megi_css::resolve_document_styles(&doc, Some(css_text));
     (doc, styles, target)
 }
 
@@ -41,7 +41,7 @@ fn width_height_store_mixed_calc_components() {
     assert_eq!(height.percent, 50.0);
     assert_eq!(height.px, 16.0);
     // The plain `Length` fallback keeps the absolute component for legacy consumers.
-    assert!(matches!(style.width, css::Length::Px(px) if px == -20.0));
+    assert!(matches!(style.width, megi_css::Length::Px(px) if px == -20.0));
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn plain_values_leave_calc_sides_empty() {
     let (_doc, styles, target) =
         computed("#target { width: 100px; height: 50%; margin: 4px; padding: 2%; gap: 8px; }");
     let style = style_of(&styles, target);
-    assert_eq!(style.calc_lengths, css::CalcLengths::default());
+    assert_eq!(style.calc_lengths, megi_css::CalcLengths::default());
     assert_eq!(style.calc_lengths.width, None);
     assert_eq!(style.calc_lengths.height, None);
 }
@@ -223,8 +223,8 @@ fn pure_calc_values_do_not_populate_calc_sides() {
     let style = style_of(&styles, target);
     assert_eq!(style.calc_lengths.width, None);
     assert_eq!(style.calc_lengths.height, None);
-    assert!(matches!(style.width, css::Length::Percent(50.0)));
-    assert!(matches!(style.height, css::Length::Px(32.0)));
+    assert!(matches!(style.width, megi_css::Length::Percent(50.0)));
+    assert!(matches!(style.height, megi_css::Length::Px(32.0)));
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn border_radius_longhand_mixed_calc_is_stored() {
     assert_eq!((radius[4].percent, radius[4].px), (5.0, 1.0));
     assert_eq!(
         radius[6],
-        css::calc::CalcValue {
+        megi_css::calc::CalcValue {
             percent: 0.0,
             px: 0.0
         }

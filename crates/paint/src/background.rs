@@ -32,9 +32,9 @@
 //! gradients and images per layer beyond the render-provided URL map are out of
 //! scope for this phase.
 
-use css::{BackgroundAttachment, BackgroundClip, BackgroundOrigin, BackgroundPosition};
-use css::{BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, Length};
-use layout::Rect;
+use megi_css::{BackgroundAttachment, BackgroundClip, BackgroundOrigin, BackgroundPosition};
+use megi_css::{BackgroundRepeat, BackgroundRepeatAxis, BackgroundSize, Length};
+use megi_layout::Rect;
 
 /// Hard cap on the number of tile rectangles generated for one background layer.
 pub const MAX_BACKGROUND_TILES: usize = 4096;

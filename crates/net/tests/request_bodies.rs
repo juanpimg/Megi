@@ -8,12 +8,12 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
-use net::FetchError;
-use net::Url;
-use net::h2::client::{H2Request, Limits, request_many};
-use net::h2::frame::{self, CONNECTION_PREFACE, Frame, FrameReader, flags, kind};
-use net::h2::hpack::{Decoder, Encoder};
-use net::http::{FetchOptions, fetch_with_method};
+use megi_net::FetchError;
+use megi_net::Url;
+use megi_net::h2::client::{H2Request, Limits, request_many};
+use megi_net::h2::frame::{self, CONNECTION_PREFACE, Frame, FrameReader, flags, kind};
+use megi_net::h2::hpack::{Decoder, Encoder};
+use megi_net::http::{FetchOptions, fetch_with_method};
 
 fn listener() -> (TcpListener, String) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -106,7 +106,7 @@ fn h2_exchange(
     request: H2Request,
     limits: Limits,
     server: impl FnOnce(&mut TcpStream) + Send + 'static,
-) -> Result<Vec<Result<net::h2::client::H2Response, FetchError>>, FetchError> {
+) -> Result<Vec<Result<megi_net::h2::client::H2Response, FetchError>>, FetchError> {
     let (listener, authority) = listener();
     let _ = &authority;
     let handle = std::thread::spawn(move || {
@@ -502,7 +502,7 @@ fn loader_fetch_with_method_posts_and_returns_resource() {
         ok_response(stream, b"stored");
     });
     let url = Url::parse(&format!("http://{authority}/resource")).expect("url");
-    let mut loader = net::ResourceLoader::new();
+    let mut loader = megi_net::ResourceLoader::new();
     let resource = loader
         .fetch_with_method(&url, "PUT", &[], Some(b"data"))
         .expect("loader PUT");

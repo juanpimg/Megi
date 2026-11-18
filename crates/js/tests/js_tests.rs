@@ -5,7 +5,7 @@
 
 #![cfg(feature = "js")]
 
-use js::{Budget, JsError, JsRuntime};
+use megi_js::{Budget, JsError, JsRuntime};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");
@@ -205,7 +205,7 @@ fn style_property_updates_inline_attribute_and_css_parses_it() {
         .expect("style attribute");
     assert!(style.contains("color: red"), "style attribute: {style}");
     assert!(style.contains("width: 120px"), "style attribute: {style}");
-    let declarations = css::parser::parse_list_of_declarations(style);
+    let declarations = megi_css::parser::parse_list_of_declarations(style);
     assert!(
         declarations
             .iter()

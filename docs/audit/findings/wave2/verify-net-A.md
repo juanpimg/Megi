@@ -6,8 +6,8 @@
 - `CARGO_TARGET_DIR=/home/jp/.cache/megi-verify-target`.
 - Repro reutilizado del informe (sin modificar): copiado a
   `/tmp/opencode/w2net-verify-A` con el `path` de `net` re-apuntado al worktree
-  limpio. `cargo run --offline` + `cargo test -p net --offline` ejecutados ahí.
-- `cargo test -p net`: todo verde (157 unit + suites de integración, 0 fallos).
+  limpio. `cargo run --offline` + `cargo test -p megi-net --offline` ejecutados ahí.
+- `cargo test -p megi-net`: todo verde (157 unit + suites de integración, 0 fallos).
 
 ## Hallazgos nuevos
 

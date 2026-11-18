@@ -1,7 +1,7 @@
 //! Property-based tests for `css` tokenizer, stylesheet/declaration parsers,
 //! selector matching, `@media`, `calc()`, color parsing, and style cascade (#961).
 
-use css::{
+use megi_css::{
     MediaContext, parse_list_of_declarations, parse_media_query_list, parse_stylesheet,
     resolve_document_styles_with_viewport, tokenizer::tokenize, try_query_selector,
     try_query_selector_all,
@@ -79,7 +79,7 @@ proptest! {
         let reparsed = parse_stylesheet(&input);
         prop_assert_eq!(sheet.rules.len(), reparsed.rules.len());
         for rule in &sheet.rules {
-            prop_assert!(matches!(rule, css::rule::Rule::Style(_) | css::rule::Rule::At(_)));
+            prop_assert!(matches!(rule, megi_css::rule::Rule::Style(_) | megi_css::rule::Rule::At(_)));
         }
     }
 
@@ -98,8 +98,8 @@ proptest! {
     fn parse_media_query_list_arbitrary_utf8_never_panics(input in any::<String>()) {
         let mql = parse_media_query_list(&input);
         let ctx = MediaContext::with_viewport(1280.0, 720.0);
-        let first = css::evaluate_media(&mql, &ctx);
-        let second = css::evaluate_media(&parse_media_query_list(&input), &ctx);
+        let first = megi_css::evaluate_media(&mql, &ctx);
+        let second = megi_css::evaluate_media(&parse_media_query_list(&input), &ctx);
         prop_assert_eq!(first, second);
     }
 

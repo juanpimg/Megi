@@ -1,8 +1,8 @@
 //! Integration tests for CSS `direction` / `unicode-bidi` and UAX #9 inline reordering (#986, #944).
 
-use css::{Direction, TextAlign, UnicodeBidi, resolve_document_styles_with_viewport};
+use megi_css::{Direction, TextAlign, UnicodeBidi, resolve_document_styles_with_viewport};
 use megi_core::{Attribute, Document, Namespace};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn collect_line_text(b: &LayoutBox) -> String {
     let mut out = String::new();

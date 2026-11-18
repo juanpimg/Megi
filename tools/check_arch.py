@@ -112,6 +112,13 @@ def scan() -> tuple[list[str], int]:
                 legacy_count += 1
 
         src = ROOT / member / "src"
+        local_modules = set()
+        if src.exists():
+            local_modules = {p.stem for p in src.glob("*.rs") if p.stem not in {"lib", "main"}}
+            for p in src.rglob("*.rs"):
+                local_modules.update(
+                    re.findall(r"(?:pub\s+)?mod\s+([a-z0-9_]+)\s*;", p.read_text(errors="replace"))
+                )
         for path in sorted(src.rglob("*.rs")) if src.exists() else []:
             rel = path.relative_to(ROOT).as_posix()
             lines = path.read_text(errors="replace").splitlines()
@@ -130,6 +137,8 @@ def scan() -> tuple[list[str], int]:
                     else:
                         violations.append(f"{key}: forbidden ownership/unsafe pattern")
                 m = use_re.match(line)
+                if m and m.group(1) in local_modules:
+                    continue  # a module of this crate, not an external edge
                 if m and m.group(1) in known:
                     msgs = violations_for_edge(name, m.group(1), allowed)
                     if msgs and m.group(1) not in legacy_edges.get(name, set()):

@@ -26,8 +26,8 @@ Status counts across the eight matrices below: 31 present, 34 partial, 71 absent
 | Feature | Status | Evidence | Consequence |
 | --- | --- | --- | --- |
 | Parsing (full HTML5 tree construction, fragments) | present | `crates/html/src/tree_builder.rs` | — |
-| Forms: rendering and input | partial | `crates/shell/src/forms.rs:1-24` | controls work, submission does not (see below) |
-| **Form submission** (`action`, `method`, `FormData`, Enter/click) | **absent** | `crates/shell/src/lib.rs:134`, `forms.rs:20` | login, search and checkout do nothing (#1526) |
+| Forms: rendering and input | partial | `crates/browser/src/forms.rs:1-24` | controls work, submission does not (see below) |
+| **Form submission** (`action`, `method`, `FormData`, Enter/click) | **absent** | `crates/browser/src/lib.rs:134`, `forms.rs:20` | login, search and checkout do nothing (#1526) |
 | **`[hidden]` attribute** | **absent** | no `[hidden]` rule in `crates/css/src/user_agent.rs` | hidden panels stay visible and take layout space (#1530) |
 | **Shadow DOM / custom elements** | **absent** | `attachShadow`/`customElements` only appear as `feDropShadow` (`tree_builder.rs:322`) | framework components render empty (#1529) |
 | **`srcset`/`sizes`, `<picture>`** | **absent** | `crates/render/src/images.rs:90-113` | `srcset`-only images never load (#1531) |
@@ -104,7 +104,7 @@ copy/paste, drag & drop, multiple windows (`window.open`), dialogs (`alert`/`con
 
 ## 7. Accessibility
 
-`crates/shell/src/a11y.rs` computes roles, accessible names and a focus order, and nothing
+`crates/browser/src/a11y.rs` computes roles, accessible names and a focus order, and nothing
 consumes them: `shell/src/lib.rs:206` only re-exports the module and the page is drawn as
 pixels (`chrome.rs:1408`). Consequences: screen readers see a blank window (#1516),
 keyboard cannot reach links and `:focus` never matches (#1517), no `label[for]`, no focus

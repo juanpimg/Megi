@@ -229,11 +229,11 @@ pub fn history_page_html(entries: &[HistoryEntry]) -> String {
 
 /// Domain shown in the history menu thumbnails (`host`, `file`, `data` or the raw URL).
 pub fn domain_of(url: &str) -> String {
-    let Ok(parsed) = net::Url::parse(url) else {
+    let Ok(parsed) = megi_net::Url::parse(url) else {
         return url.chars().take(24).collect();
     };
     match parsed.scheme() {
-        net::Scheme::Http | net::Scheme::Https => {
+        megi_net::Scheme::Http | megi_net::Scheme::Https => {
             let host = parsed.host();
             if host.is_empty() {
                 "local".to_string()
@@ -241,8 +241,8 @@ pub fn domain_of(url: &str) -> String {
                 host.to_string()
             }
         }
-        net::Scheme::File => "file".to_string(),
-        net::Scheme::Data => "data".to_string(),
+        megi_net::Scheme::File => "file".to_string(),
+        megi_net::Scheme::Data => "data".to_string(),
     }
 }
 

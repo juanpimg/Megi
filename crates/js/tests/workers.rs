@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use megi_js::runtime::JsRuntime;
 
 fn runtime_with_worker(source: &'static str) -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");
@@ -10,7 +10,7 @@ fn runtime_with_worker(source: &'static str) -> JsRuntime {
         if url.ends_with("worker.js") {
             Ok(source.to_string())
         } else {
-            Err(js::JsError::Runtime(format!("not found: {url}")))
+            Err(megi_js::JsError::Runtime(format!("not found: {url}")))
         }
     }));
     runtime

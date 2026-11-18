@@ -1,6 +1,6 @@
 //! Round 33: textPath auto-rotation/textLength/side and <use> presentation inheritance.
 
-use svg::{SvgImage, SvgOptions, render_svg};
+use megi_svg::{SvgImage, SvgOptions, render_svg};
 
 fn render(svg: &[u8]) -> SvgImage {
     render_svg(

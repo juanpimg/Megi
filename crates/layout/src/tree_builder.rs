@@ -1,12 +1,12 @@
 //! # Layout Box Tree Construction
 //!
-//! Transforms a [`megi_core::Document`] and its resolved [`css::ComputedStyle`] map into
+//! Transforms a [`megi_core::Document`] and its resolved [`megi_css::ComputedStyle`] map into
 //! a conformant CSS Box Tree per CSS 2.2 §9 and CSS Display Module Level 3.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{
+use megi_css::{
     ComputedStyle, ContentItem, Display, Float, Overflow, Position, PseudoElement, PseudoStyles,
 };
 use megi_core::{Document, Namespace, NodeId, NodeKind};
@@ -273,7 +273,7 @@ fn build_pseudo_box(
     } else {
         let needs_counters = matches!(
             &style.content,
-            css::Content::Items(items) if items.iter().any(|it| matches!(it, ContentItem::Counter(_)))
+            megi_css::Content::Items(items) if items.iter().any(|it| matches!(it, ContentItem::Counter(_)))
         );
         let counter_map = if needs_counters {
             counters.snapshot()
@@ -836,8 +836,8 @@ mod style_cache_tests {
     fn equal_parent_styles_share_anonymous_derivation() {
         let mut cache = StyleCache::default();
         // Two distinct Arc allocations holding equal styles.
-        let a = Arc::new(css::ComputedStyle::initial());
-        let b = Arc::new(css::ComputedStyle::initial());
+        let a = Arc::new(megi_css::ComputedStyle::initial());
+        let b = Arc::new(megi_css::ComputedStyle::initial());
         assert!(!Arc::ptr_eq(&a, &b));
 
         let derived_a = cache.anonymous_for(&a);

@@ -53,7 +53,7 @@ jobs:
       - name: Build release binaries
         shell: bash
         run: |
-          cargo build --release --locked --target ${{ matrix.target }} -p shell -p render -p test_harness -p bench
+          cargo build --release --locked --target ${{ matrix.target }} -p megi-browser -p megi-render -p megi-test-harness -p megi-bench
       - name: Package artifacts (Unix)
         if: runner.os != 'Windows'
         shell: bash

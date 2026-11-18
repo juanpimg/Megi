@@ -1,5 +1,5 @@
 [package]
-name = "layout"
+name = "megi-layout"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ description = "Megi Engine — CSS Box Tree, Block Formatting Context & Layout E
 
 [dependencies]
 megi-core.workspace = true
-css.workspace = true
+megi-css.workspace = true
 megi-fonts.workspace = true
 
 [dev-dependencies]

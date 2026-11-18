@@ -1,7 +1,7 @@
 //! The in-SVG `<style>` cascade is bounded: rules × selectors × elements can otherwise be
 //! made arbitrarily large from a small document (a remote CPU DoS).
 
-use svg::{Limits, SvgError, SvgOptions, render_svg_with_limits};
+use megi_svg::{Limits, SvgError, SvgOptions, render_svg_with_limits};
 
 #[test]
 fn stylesheet_selector_checks_are_budgeted() {

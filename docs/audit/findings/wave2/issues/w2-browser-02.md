@@ -2,7 +2,7 @@
 
 ## Resumen
 
-Asignar `document.title` desde script no tiene ningún efecto observable: el setter solo escribe `host.title`, un campo que ningún consumidor de título lee. El título de ventana/pestaña se compone desde el elemento `<title>` del DOM (`crates/shell/src/title.rs: document_title`), que el setter nunca toca ni crea.
+Asignar `document.title` desde script no tiene ningún efecto observable: el setter solo escribe `host.title`, un campo que ningún consumidor de título lee. El título de ventana/pestaña se compone desde el elemento `<title>` del DOM (`crates/browser/src/title.rs: document_title`), que el setter nunca toca ni crea.
 
 ## Impacto
 
@@ -13,7 +13,7 @@ Contrato DOM roto y visible: cualquier página que actualice `document.title` (c
 1. Renderizar un documento con `<title>Original</title>`.
 2. Ejecutar `document.title = "Nuevo";`.
 3. Leer `document.title` → devuelve `"Nuevo"` (el getter lee `host.title`).
-4. Componer el título de ventana (`shell::title::document_title` sobre el DOM) → sigue siendo `"Original"`; el elemento `<title>` no existe o conserva el texto viejo.
+4. Componer el título de ventana (`megi_browser::title::document_title` sobre el DOM) → sigue siendo `"Original"`; el elemento `<title>` no existe o conserva el texto viejo.
 
 ## Esperado vs observado
 
@@ -36,7 +36,7 @@ fn document_title_set(
 }
 ```
 
-`host.title` no tiene más lectores en el árbol: `grep -n "host.title"` solo da la estimación de memoria (`runtime.rs:634`, `+ host.title.len()`) y el getter/setter (`runtime.rs:3778,3788`). En el lado de visualización, `crates/shell/src/title.rs` (`document_title`) recorre el DOM renderizado buscando el primer `<title>` HTML — nunca consulta `host.title`.
+`host.title` no tiene más lectores en el árbol: `grep -n "host.title"` solo da la estimación de memoria (`runtime.rs:634`, `+ host.title.len()`) y el getter/setter (`runtime.rs:3778,3788`). En el lado de visualización, `crates/browser/src/title.rs` (`document_title`) recorre el DOM renderizado buscando el primer `<title>` HTML — nunca consulta `host.title`.
 
 ## Workaround
 

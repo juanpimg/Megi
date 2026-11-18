@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -31,12 +31,12 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&file_url(&fixture_dir().join(name)), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -44,11 +44,11 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
-const BLUE: css::Color = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
-const GREEN: css::Color = css::Color::new(0x00, 0xFF, 0x00, 0xFF);
-const MAGENTA: css::Color = css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
-const BG_BLUE: css::Color = css::Color::new(0x33, 0x66, 0xCC, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const BLUE: megi_css::Color = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+const GREEN: megi_css::Color = megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF);
+const MAGENTA: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
+const BG_BLUE: megi_css::Color = megi_css::Color::new(0x33, 0x66, 0xCC, 0xFF);
 
 #[test]
 fn img_svg_renders_expected_shape_and_colour() {

@@ -1,5 +1,5 @@
 [package]
-name = "css"
+name = "megi-css"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

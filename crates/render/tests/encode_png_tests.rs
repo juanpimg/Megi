@@ -1,6 +1,6 @@
 //! R201: `RenderOptions::encode_png` skips the eager page PNG so overlay callers
 //! (`--chrome`/`--find`) encode exactly once at the end, with byte-identical output.
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn page() -> String {
     let html = "<!DOCTYPE html><html><body><h1>encode png</h1><p style=\"color:#c33\">text</p></body></html>";
@@ -49,8 +49,8 @@ fn skipping_png_does_not_change_dom_layout_or_stats() {
     let eager = render_url(&page(), &options(true)).expect("eager");
     let lazy = render_url(&page(), &options(false)).expect("lazy");
     assert_eq!(
-        html::serialize_html(&eager.document),
-        html::serialize_html(&lazy.document)
+        megi_html::serialize_html(&eager.document),
+        megi_html::serialize_html(&lazy.document)
     );
     assert_eq!(
         eager.display_list.items.len(),

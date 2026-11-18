@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_css::{
     BackgroundClip, BackgroundLayer, BorderRadii, Color, ComputedStyle, Display, FontStyle, Length,
     Radius, TextDecoration,
 };
 use megi_core::{Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -94,7 +94,7 @@ fn render_container(
 
 fn overflow_style(radius_px: f32) -> ComputedStyle {
     let mut style = block_style();
-    style.overflow = css::Overflow::Hidden;
+    style.overflow = megi_css::Overflow::Hidden;
     style.border_radius = uniform_radius(radius_px);
     style.background_color = Color::WHITE;
     style
@@ -358,7 +358,7 @@ fn test_background_clip_text_masks_image_and_multiple_lines() {
 fn test_clip_text_mask_runs_are_capped() {
     let (_document, nodes) = document_with_nodes(1);
     let mut children = Vec::new();
-    for index in 0..(paint::MAX_TEXT_MASK_RUNS + 8) {
+    for index in 0..(megi_paint::MAX_TEXT_MASK_RUNS + 8) {
         let mut text_style = block_style();
         text_style.display = Display::Inline;
         text_style.font_size = 12.0;
@@ -386,7 +386,7 @@ fn test_clip_text_mask_runs_are_capped() {
             _ => None,
         })
         .expect("text mask group");
-    assert!(runs <= paint::MAX_TEXT_MASK_RUNS, "runs capped: {runs}");
+    assert!(runs <= megi_paint::MAX_TEXT_MASK_RUNS, "runs capped: {runs}");
     let _ = nodes;
 }
 

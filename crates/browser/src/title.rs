@@ -13,7 +13,7 @@
 
 use megi_core::{Document, Namespace, NodeId, NodeKind};
 
-use net::Url;
+use megi_net::Url;
 
 /// Maximum number of characters kept from a document `<title>`.
 pub const MAX_TITLE_CHARS: usize = 120;

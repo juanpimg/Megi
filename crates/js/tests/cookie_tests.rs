@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::{CookieProvider, JsRuntime};
+use megi_js::{CookieProvider, JsRuntime};
 
 #[test]
 fn document_cookie_delegates_to_cookie_provider() {

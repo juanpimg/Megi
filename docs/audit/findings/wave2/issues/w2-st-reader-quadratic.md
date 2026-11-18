@@ -1,7 +1,7 @@
 [shell] reader extract() re-escanea subárboles por cada contenedor (O(n²)); la caché no evita los walks
 
 ## Resumen
-`crates/shell/src/reader.rs:82-104,44-73`: por cada nodo contenedor, `visible_text` recorre todo su subárbol vía `or_insert_with(|| visible_text(…).chars().count())` — el walk completo se ejecuta antes de cachear. Nodos anidados de profundidad D → ~D²/2 visitas. En ventana corre en el event loop (freeze UI); con `--reader` headless se mide el delta.
+`crates/browser/src/reader.rs:82-104,44-73`: por cada nodo contenedor, `visible_text` recorre todo su subárbol vía `or_insert_with(|| visible_text(…).chars().count())` — el walk completo se ejecuta antes de cachear. Nodos anidados de profundidad D → ~D²/2 visitas. En ventana corre en el event loop (freeze UI); con `--reader` headless se mide el delta.
 
 ## Impacto
 P2 — perf/DoS local: página hostil + Ctrl+Shift+R / `--reader` → freeze de segundos. Fix concreto (texto bottom-up en una sola pasada o cap de contenedores evaluados). P3 admisible porque exige página hostil + acción del usuario y el coste en release es menor.

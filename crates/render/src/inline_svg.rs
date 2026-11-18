@@ -147,7 +147,7 @@ pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> Inli
         total_bytes += markup.len();
         let data_url = format!(
             "data:image/svg+xml;base64,{}",
-            net::base64_encode(markup.as_bytes())
+            megi_net::base64_encode(markup.as_bytes())
         );
         let attributes = synthetic_img_attributes(document, node_id, &data_url);
         let image_id = document.create_element(Namespace::Html, "img", attributes);
@@ -221,7 +221,7 @@ fn inline_svg_depth(document: &Document, root_id: NodeId) -> usize {
 
 /// Serializes the inline SVG to standalone SVG markup (repairing `xmlns` declarations).
 fn svg_markup(document: &Document, node_id: NodeId) -> String {
-    let serialized = html::serialize_outer_html(document, node_id);
+    let serialized = megi_html::serialize_outer_html(document, node_id);
     let element = document.node(node_id).as_element();
     let has_xmlns = element.is_some_and(|el| {
         el.attributes

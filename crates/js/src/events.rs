@@ -1514,7 +1514,7 @@ fn get_computed_style(
                 .and_then(|node| node.as_element())
                 .and_then(|element| element.get_attribute("style"))
                 .map(|style| {
-                    css::parser::parse_list_of_declarations(style)
+                    megi_css::parser::parse_list_of_declarations(style)
                         .into_iter()
                         .map(|declaration| (declaration.name, declaration.raw_value))
                         .collect()

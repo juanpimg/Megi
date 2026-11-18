@@ -10,7 +10,7 @@ P3 (suelo) cleanup — nulo en runtime; ruido de mantenimiento.
 
 ## Pasos para reproducir
 1. Lectura de `selector.rs:1725-1727`.
-2. `cargo build -p css` tras `cargo clean -p css` → 0 warnings.
+2. `cargo build -p megi-css` tras `cargo clean -p megi-css` → 0 warnings.
 3. Programa mínimo `/tmp/dup.rs` que imprime `1` (rama 1): el brazo 2 es
    inalcanzable verificado.
 
@@ -23,7 +23,7 @@ Observado: duplicación exacta; compilación limpia sin warnings.
 1
 Finished dev profile …
 ```
-(sin warnings en `cargo build -p css`).
+(sin warnings en `cargo build -p megi-css`).
 
 Commit: 3c06db8
 

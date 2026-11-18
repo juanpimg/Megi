@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 use std::path::{Path, PathBuf};
 
 fn fixture_dir() -> PathBuf {
@@ -18,11 +18,11 @@ fn options(no_network: bool) -> RenderOptions {
         ..RenderOptions::default()
     }
 }
-fn render_fixture(name: &str, no_network: bool) -> render::RenderOutput {
+fn render_fixture(name: &str, no_network: bool) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options(no_network))
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
-fn text(output: &render::RenderOutput, id: &str) -> String {
+fn text(output: &megi_render::RenderOutput, id: &str) -> String {
     let document = &output.document;
     let node = document
         .descendants(document.root())
@@ -63,9 +63,9 @@ fn fetch_volume_is_budgeted_per_page() {
     // #660: only per-call loader caps existed, so a script could issue thousands of fetch()
     // calls in one render (each one a file read / HTTP request plus a body copy).
     let mut limited = options(false);
-    limited.scripting_limits = render::ScriptingLimits {
+    limited.scripting_limits = megi_render::ScriptingLimits {
         max_fetch_calls: 4,
-        ..render::ScriptingLimits::default()
+        ..megi_render::ScriptingLimits::default()
     };
     let output = render_url(&fixture_path("js_fetch_budget.html"), &limited)
         .expect("the render must not fail when scripts exhaust the fetch budget");

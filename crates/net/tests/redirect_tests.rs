@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, RedirectMode, Url, fetch, fetch_streaming};
+use megi_net::{FetchError, FetchOptions, RedirectMode, Url, fetch, fetch_streaming};
 
 fn read_head(stream: &mut impl Read) -> Vec<u8> {
     let mut request = Vec::new();
@@ -119,12 +119,12 @@ fn redirect_mode_error_rejects_redirect_across_fetch_variants() {
 
     let (port_c, server_c) = spawn_sequence(vec![body]);
     let url_c = Url::parse(&format!("http://127.0.0.1:{port_c}/start")).expect("url");
-    let mut loader = net::ResourceLoader::with_options(opts);
+    let mut loader = megi_net::ResourceLoader::with_options(opts);
     let err = loader.load(&url_c).expect_err("loader rejects 3xx");
     assert!(
         matches!(
             err,
-            net::LoadError::Fetch(FetchError::RedirectDisallowed(307))
+            megi_net::LoadError::Fetch(FetchError::RedirectDisallowed(307))
         ),
         "expected RedirectDisallowed(307), got {err}"
     );
@@ -232,7 +232,7 @@ mod tls_redirect_tests {
 
     #[test]
     fn https_to_http_downgrade_blocked_by_default_and_allowed_when_opted_in() {
-        net::hsts::clear();
+        megi_net::hsts::clear();
         let (cert, key, client) = cert_and_client();
         let (http_port, http_server) = spawn_sequence(vec![
             b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\ndowngraded".to_vec(),
@@ -269,7 +269,7 @@ mod tls_redirect_tests {
 
     #[test]
     fn https_redirect_to_http_upgraded_by_hsts_succeeds() {
-        net::hsts::clear();
+        megi_net::hsts::clear();
         let (cert, key, client) = cert_and_client();
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind TLS");
         let port = listener.local_addr().expect("addr").port();
@@ -307,9 +307,9 @@ mod tls_redirect_tests {
         };
         let response = fetch(&url, &opts).expect("HSTS upgrades redirect hop to HTTPS");
         assert_eq!(response.status, 200);
-        assert_eq!(response.final_url.scheme(), net::Scheme::Https);
+        assert_eq!(response.final_url.scheme(), megi_net::Scheme::Https);
         assert_eq!(response.body, b"secure");
         handle.join().expect("tls server");
-        net::hsts::clear();
+        megi_net::hsts::clear();
     }
 }

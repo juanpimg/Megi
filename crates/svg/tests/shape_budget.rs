@@ -3,7 +3,7 @@
 //! CPU/memory DoS vectors: `points` produced unbounded edges for the rasterizer, and a
 //! single path could allocate gigabytes before the budget was checked on flush.
 
-use svg::{Limits, SvgError, SvgOptions, render_svg, render_svg_with_limits};
+use megi_svg::{Limits, SvgError, SvgOptions, render_svg, render_svg_with_limits};
 
 fn svg_doc(body: &str) -> String {
     format!("<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>{body}</svg>")

@@ -15,7 +15,7 @@ Ejecutados en worktree limpio en el commit de cierre, con `CARGO_TARGET_DIR` fue
 | Lint | `cargo clippy --workspace --all-targets -- -D warnings` | PASS (`clippy=0`) |
 | Build mínimo | `cargo check --workspace --no-default-features` | PASS (`nodefault=0`) |
 | Suite completa | `cargo test --workspace` | PASS (`tests=0`) |
-| Conformidad | `cargo run --release -p test_harness -- --summary` | PASS (`gate=0`) |
+| Conformidad | `cargo run --release -p megi-test-harness -- --summary` | PASS (`gate=0`) |
 | Artefactos de progreso | `python3 tools/update_progress.py --check --no-gate --no-count` | PASS (`progress=0`) |
 | Ledger | `python3 tools/audit_coverage.py --check --strict` | PASS (`ledger=0`) |
 

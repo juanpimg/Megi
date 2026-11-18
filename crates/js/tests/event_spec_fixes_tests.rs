@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use megi_js::runtime::JsRuntime;
 
 #[test]
 fn custom_event_is_not_cancelable_by_default() {

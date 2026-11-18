@@ -5,7 +5,7 @@
   Alcance intacto entre `3c06db8` y HEAD actual (diff vacío en `crates/core|html|css`).
   WIP del principal sólo en `crates/js/**`, `crates/render/**`, `crates/net/**`
   (fuera de alcance) → **ningún hallazgo depende de WIP** (`excluir: WIP del usuario` — no aplica).
-- `cargo test -p megi-core -p html -p css` (desde verify, `CARGO_TARGET_DIR`/`TMPDIR` en disco
+- `cargo test -p megi-core -p megi-html -p megi-css` (desde verify, `CARGO_TARGET_DIR`/`TMPDIR` en disco
   porque `/tmp` tmpfs estaba lleno): **529 passed, 0 failed** (css lib 164, dom lib 54,
   html lib 36 + 30 suites de integración/doc).
 - Dedup: `docs/audit/FINDINGS.md` (228), `docs/GAPS.md`, `docs/audit/findings/f2/00-index.md`,
@@ -156,7 +156,7 @@ serializer.rs (688), tokenizer.rs (3576), tree_builder.rs (5036).
 - archivo:línea: `crates/css/src/selector.rs:1725-1727` (dos brazos idénticos patrón+guarda)
 - lente: código muerto | severidad: P3 | categoría: cleanup
 - title: duplicación exacta; el segundo brazo nunca ejecuta y rustc no avisa con guardas
-- evidence: compilación limpia (`cargo build -p css` sin warnings tras `cargo clean -p css`) + programa mínimo que imprime `1` (rama 1) — el brazo 2 es código muerto verificado
+- evidence: compilación limpia (`cargo build -p megi-css` sin warnings tras `cargo clean -p megi-css`) + programa mínimo que imprime `1` (rama 1) — el brazo 2 es código muerto verificado
 - impact: nulo en runtime; ruido de mantenimiento
 - expected: un solo brazo
 - fix: eliminar el duplicado
@@ -239,9 +239,9 @@ serializer.rs (688), tokenizer.rs (3576), tree_builder.rs (5036).
 
 ## Comandos ejecutados (todos desde `/tmp/opencode/megi-verify`, HEAD `3c06db8`)
 
-- `cargo test -p megi-core -p html -p css` → 529 passed, 0 failed (con `CARGO_TARGET_DIR`/`TMPDIR`
+- `cargo test -p megi-core -p megi-html -p megi-css` → 529 passed, 0 failed (con `CARGO_TARGET_DIR`/`TMPDIR`
   en disco por tmpfs lleno; doctests incluidos en el total final).
-- `cargo build -p css` tras `cargo clean -p css` → 0 warnings (evidencia w2-core-09).
+- `cargo build -p megi-css` tras `cargo clean -p megi-css` → 0 warnings (evidencia w2-core-09).
 - Sonda `/tmp/probe` (deps re-apuntadas al worktree limpio), 2 ejecuciones idénticas:
   T1–T10, L1–L7, O1/O2, H1–H3, W1, B1/B2, Q1/Q2, V1, M1/M2, F1, C1/C2, S1 + `mem`
   (2 MiB `\n` → ΔRSS 24 612 KB, `nodes=4`, sin violaciones).

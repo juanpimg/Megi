@@ -17,15 +17,15 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 megi-core = { path = "../crates/core" }
 megi-fonts = { path = "../crates/fonts" }
-html = { path = "../crates/html" }
-css = { path = "../crates/css" }
-net = { path = "../crates/net" }
+megi-html = { path = "../crates/html" }
+megi-css = { path = "../crates/css" }
+megi-net = { path = "../crates/net" }
 megi-image = { path = "../crates/image" }
-render = { path = "../crates/render" }
-js = { path = "../crates/js" }
-svg = { path = "../crates/svg" }
-layout = { path = "../crates/layout" }
-paint = { path = "../crates/paint" }
+megi-render = { path = "../crates/render" }
+megi-js = { path = "../crates/js" }
+megi-svg = { path = "../crates/svg" }
+megi-layout = { path = "../crates/layout" }
+megi-paint = { path = "../crates/paint" }
 
 [[bin]]
 name = "html_parse"

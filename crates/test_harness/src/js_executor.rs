@@ -20,8 +20,8 @@
 //! `scripted_*` cases are self-contained scripts, so no cross-script globals are needed.
 
 use megi_core::Document;
-use html::{ScriptExecution, ScriptExecutor};
-use js::{Budget, JsRuntime};
+use megi_html::{ScriptExecution, ScriptExecutor};
+use megi_js::{Budget, JsRuntime};
 
 /// Marker element id used to hand the captured `document.write` output back to Rust.
 const WRITES_MARKER_ID: &str = "__megi_parser_writes__";
@@ -146,21 +146,21 @@ mod tests {
 
     #[test]
     fn test_document_write_is_captured_and_markers_removed() {
-        let mut doc = html::parse_document("<html><body></body></html>", false);
+        let mut doc = megi_html::parse_document("<html><body></body></html>", false);
         let mut executor = JsScriptExecutor::new();
         let outcome = executor.execute(&mut doc, "document.write('<p>hola</p>')", "<script>");
         assert_eq!(outcome.written_html, "<p>hola</p>");
         assert!(outcome.error.is_none(), "{:?}", outcome.error);
         assert!(doc.get_element_by_id(WRITES_MARKER_ID).is_none());
         assert_eq!(
-            html::serialize_dom_for_test(&doc),
+            megi_html::serialize_dom_for_test(&doc),
             "| <html>\n|   <head>\n|   <body>"
         );
     }
 
     #[test]
     fn test_dom_mutation_and_remove_polyfill() {
-        let mut doc = html::parse_document(
+        let mut doc = megi_html::parse_document(
             "<html><body>hello<table><tbody><tr></tr></tbody></table></body></html>",
             false,
         );
@@ -172,14 +172,14 @@ mod tests {
         );
         assert!(outcome.error.is_none(), "{:?}", outcome.error);
         assert_eq!(
-            html::serialize_dom_for_test(&doc),
+            megi_html::serialize_dom_for_test(&doc),
             "| <table>\n|   <tbody>\n|     <tr>"
         );
     }
 
     #[test]
     fn test_script_errors_are_non_fatal() {
-        let mut doc = html::parse_document("<html><body></body></html>", false);
+        let mut doc = megi_html::parse_document("<html><body></body></html>", false);
         let mut executor = JsScriptExecutor::new();
         let outcome = executor.execute(&mut doc, "throw new Error('boom')", "<script>");
         assert!(outcome.written_html.is_empty());

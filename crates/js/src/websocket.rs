@@ -1,6 +1,6 @@
 //! `WebSocket` built on a host-injected transport (#1534).
 //!
-//! The host owns the socket (via `net::websocket::WebSocketClient`); this module installs a
+//! The host owns the socket (via `megi_net::websocket::WebSocketClient`); this module installs a
 //! native `__megi_ws_native(url, op, payload)` bridge and a small JS `WebSocket` class with the
 //! standard readyState constants, `send`/`close` and `onopen`/`onmessage`/`onclose`/`onerror`
 //! handlers. Events are delivered when the host calls `JsRuntime::poll_websockets()`.

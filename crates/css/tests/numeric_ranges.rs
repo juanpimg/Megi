@@ -1,6 +1,6 @@
 //! Regression tests for out-of-range numeric CSS values (#1670, #1671, #1676).
 
-use css::{ComputedStyle, resolve_document_styles};
+use megi_css::{ComputedStyle, resolve_document_styles};
 use megi_core::{Document, Namespace};
 
 fn computed(css: &str) -> ComputedStyle {
@@ -74,19 +74,19 @@ fn calc_and_length_share_the_magnitude_cap() {
     let calc = computed("p { width: calc(99999999px) }");
     assert_eq!(
         plain.width,
-        css::Length::Auto,
+        megi_css::Length::Auto,
         "plain oversized length must be rejected"
     );
     assert_eq!(
         calc.width,
-        css::Length::Auto,
+        megi_css::Length::Auto,
         "calc oversized length must be rejected too"
     );
 
     let calc_em = computed("p { font-size: 16px; width: calc(99999999em) }");
     assert_eq!(
         calc_em.width,
-        css::Length::Auto,
+        megi_css::Length::Auto,
         "calc oversized em must be rejected"
     );
 }
@@ -95,9 +95,9 @@ fn calc_and_length_share_the_magnitude_cap() {
 fn vertical_align_rejects_oversized_lengths() {
     // #1677: same 1e6 magnitude cap; negatives remain valid.
     let huge = computed("p { vertical-align: 999999999px }");
-    assert_eq!(huge.vertical_align, css::VerticalAlign::Baseline);
+    assert_eq!(huge.vertical_align, megi_css::VerticalAlign::Baseline);
     let valid = computed("p { vertical-align: -4px }");
-    assert_eq!(valid.vertical_align, css::VerticalAlign::Length(-4.0));
+    assert_eq!(valid.vertical_align, megi_css::VerticalAlign::Length(-4.0));
 }
 
 #[test]
@@ -106,9 +106,9 @@ fn background_repeat_invalid_list_component_rejects_declaration() {
     let style = computed("p { background-repeat: no-repeat, bogus }");
     assert_eq!(
         style.background_repeat,
-        css::BackgroundRepeat::REPEAT,
+        megi_css::BackgroundRepeat::REPEAT,
         "invalid list component must reject the whole declaration"
     );
     let valid = computed("p { background-repeat: no-repeat, repeat }");
-    assert_ne!(valid.background_repeat, css::BackgroundRepeat::REPEAT);
+    assert_ne!(valid.background_repeat, megi_css::BackgroundRepeat::REPEAT);
 }

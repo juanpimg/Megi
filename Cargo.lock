@@ -168,20 +168,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
-name = "bench"
-version = "0.1.0"
-dependencies = [
- "css",
- "html",
- "layout",
- "megi-core",
- "megi-fonts",
- "megi-image",
- "paint",
- "render",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -633,14 +619,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 
 [[package]]
-name = "css"
-version = "0.1.0"
-dependencies = [
- "megi-core",
- "proptest",
-]
-
-[[package]]
 name = "ctor"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1069,14 +1047,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17592d60ebacc7d5e169f4663c5f84f9161cc90328abcfe8456f41e4dfcb284"
 
 [[package]]
-name = "html"
-version = "0.1.0"
-dependencies = [
- "megi-core",
- "proptest",
-]
-
-[[package]]
 name = "icu_calendar"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,16 +1282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "js"
-version = "0.1.0"
-dependencies = [
- "boa_engine",
- "css",
- "html",
- "megi-core",
-]
-
-[[package]]
 name = "js-sys"
 version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1330,16 +1290,6 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "layout"
-version = "0.1.0"
-dependencies = [
- "css",
- "megi-core",
- "megi-fonts",
- "proptest",
 ]
 
 [[package]]
@@ -1416,8 +1366,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "megi-bench"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-fonts",
+ "megi-html",
+ "megi-image",
+ "megi-layout",
+ "megi-paint",
+ "megi-render",
+]
+
+[[package]]
+name = "megi-browser"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-fonts",
+ "megi-html",
+ "megi-image",
+ "megi-layout",
+ "megi-net",
+ "megi-paint",
+ "megi-render",
+ "softbuffer",
+ "winit",
+]
+
+[[package]]
 name = "megi-core"
 version = "0.1.0"
+
+[[package]]
+name = "megi-css"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "proptest",
+]
 
 [[package]]
 name = "megi-fonts"
@@ -1431,8 +1420,97 @@ dependencies = [
 ]
 
 [[package]]
+name = "megi-html"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "proptest",
+]
+
+[[package]]
 name = "megi-image"
 version = "0.1.0"
+
+[[package]]
+name = "megi-js"
+version = "0.1.0"
+dependencies = [
+ "boa_engine",
+ "megi-core",
+ "megi-css",
+ "megi-html",
+]
+
+[[package]]
+name = "megi-layout"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-fonts",
+ "proptest",
+]
+
+[[package]]
+name = "megi-net"
+version = "0.1.0"
+dependencies = [
+ "megi-image",
+ "megi-js",
+ "rcgen",
+ "rustls",
+ "webpki-roots",
+]
+
+[[package]]
+name = "megi-paint"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-fonts",
+ "megi-html",
+ "megi-image",
+ "megi-layout",
+]
+
+[[package]]
+name = "megi-render"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-fonts",
+ "megi-html",
+ "megi-image",
+ "megi-js",
+ "megi-layout",
+ "megi-net",
+ "megi-paint",
+ "megi-svg",
+ "rcgen",
+ "rustls",
+]
+
+[[package]]
+name = "megi-svg"
+version = "0.1.0"
+dependencies = [
+ "megi-fonts",
+ "megi-image",
+]
+
+[[package]]
+name = "megi-test-harness"
+version = "0.1.0"
+dependencies = [
+ "megi-core",
+ "megi-css",
+ "megi-html",
+ "megi-js",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "memchr"
@@ -1483,17 +1561,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
-]
-
-[[package]]
-name = "net"
-version = "0.1.0"
-dependencies = [
- "js",
- "megi-image",
- "rcgen",
- "rustls",
- "webpki-roots",
 ]
 
 [[package]]
@@ -1893,18 +1960,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paint"
-version = "0.1.0"
-dependencies = [
- "css",
- "html",
- "layout",
- "megi-core",
- "megi-fonts",
- "megi-image",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2237,24 +2292,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "render"
-version = "0.1.0"
-dependencies = [
- "css",
- "html",
- "js",
- "layout",
- "megi-core",
- "megi-fonts",
- "megi-image",
- "net",
- "paint",
- "rcgen",
- "rustls",
- "svg",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2483,23 +2520,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shell"
-version = "0.1.0"
-dependencies = [
- "css",
- "html",
- "layout",
- "megi-core",
- "megi-fonts",
- "megi-image",
- "net",
- "paint",
- "render",
- "softbuffer",
- "winit",
-]
-
-[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2662,14 +2682,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "svg"
-version = "0.1.0"
-dependencies = [
- "megi-fonts",
- "megi-image",
-]
-
-[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2753,18 +2765,6 @@ dependencies = [
  "timezone_provider",
  "tinystr",
  "writeable",
-]
-
-[[package]]
-name = "test_harness"
-version = "0.1.0"
-dependencies = [
- "css",
- "html",
- "js",
- "megi-core",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -38,7 +38,7 @@
 ## Comment-existing (texto listo, NO issue nuevo)
 
 - **F1 → comentar en #1169**:
-  > Evidencia nueva en HEAD `3c06db8`: `WindowApp::new` rama `Some(session)` (`crates/shell/src/window.rs:371-394`) restaura y fusiona solo `input`, nunca consulta `view.tabs`; la rama `None` sí usa `TabsState::from_urls(view.tabs)` (línea 396). Apoyo: en headless los `--tabs` también se ignoran (F16, md5 idénticos). Mesa A: NEEDS-REPRO (requiere display). Mesa B: YA REPORTADO (#1169), P2 mantener.
+  > Evidencia nueva en HEAD `3c06db8`: `WindowApp::new` rama `Some(session)` (`crates/browser/src/window.rs:371-394`) restaura y fusiona solo `input`, nunca consulta `view.tabs`; la rama `None` sí usa `TabsState::from_urls(view.tabs)` (línea 396). Apoyo: en headless los `--tabs` también se ignoran (F16, md5 idénticos). Mesa A: NEEDS-REPRO (requiere display). Mesa B: YA REPORTADO (#1169), P2 mantener.
 - **F3 → comentar en #1166**:
   > Evidencia nueva en HEAD `3c06db8`: `click_at_cursor` (`window.rs:946`) y `CursorMoved`/`rueda` (`window.rs:2609,2638`) construyen `dropdown_layout(&rect, dropdown.options.len(), …)` (1:1 con opciones), mientras `paint_dropdown` usa `dropdown.items()` con `DropdownItem{option_index:None}` por cada `<optgroup>` (`chrome.rs:1875-1876` + `dropdown_layout_items`). A partir del primer header, fila pintada N ≠ opción N (3 call sites afectados). Mesa A: NEEDS-REPRO (click real requiere display). Mesa B: YA REPORTADO (#1166), P2 mantener.
 - **F4 → comentar en #1167**:
@@ -50,7 +50,7 @@
 - **F7 → comentar en #1175**:
   > Evidencia nueva en HEAD `3c06db8`: `finish_args` acepta `--save-png/--save-html/--find/--chrome/--reader` (`main.rs:60-73`) pero la rama `Window` no los referencia (`main.rs:175-182`); solo la rama `Screenshot` los consume. Verificable con `grep` (la rama window exige display; el hecho "no se referencia" es estático). Fix: aviso `megi: --save-png solo aplica con --screenshot` o `Usage`. Mesa A: VERIFIED. Mesa B: YA REPORTADO (#1175), P3 ok.
 - **F8 → comentar en #1171**:
-  > Evidencia nueva en HEAD `3c06db8`: `save()` (`session.rs:422-446`) hace `write_temporary` + `fs::rename` sin `sync_all`; `grep -rn "sync_all|fsync|fdatasync" crates/shell/src/ | wc -l` → `0` (ejecutado en worktree limpio). La pérdida concreta (crash entre write y flush) es `needs-repro` por naturaleza; el hecho estático está probado. Mesa A: VERIFIED (estático) + needs-repro (evento). Mesa B: YA REPORTADO (#1171), P2 mantener (P3 admisible).
+  > Evidencia nueva en HEAD `3c06db8`: `save()` (`session.rs:422-446`) hace `write_temporary` + `fs::rename` sin `sync_all`; `grep -rn "sync_all|fsync|fdatasync" crates/browser/src/ | wc -l` → `0` (ejecutado en worktree limpio). La pérdida concreta (crash entre write y flush) es `needs-repro` por naturaleza; el hecho estático está probado. Mesa A: VERIFIED (estático) + needs-repro (evento). Mesa B: YA REPORTADO (#1171), P2 mantener (P3 admisible).
 - **F10 → comentar en #1174**:
   > Evidencia nueva en HEAD `3c06db8`: `if per_tab * count > available && available >= TAB_MIN_WIDTH` (`chrome.rs:545-569`) — con `width<100` (`available<72`) nunca hay marker `+N`; `visible=count`, tabs de 72 px pintados fuera del strip. Mesa A: NEEDS-REPRO (requiere display). Mesa B: YA REPORTADO (#1174), P3 ok.
 - **F11 → comentar en #1197**:

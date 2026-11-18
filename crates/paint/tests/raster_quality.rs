@@ -7,16 +7,16 @@
 //! - culling of off-screen items,
 //! - `Pixmap` dimension validation.
 
-use css::{BorderStyle, Color};
-use layout::Rect;
-use paint::{
+use megi_css::{BorderStyle, Color};
+use megi_layout::Rect;
+use megi_paint::{
     BorderSide, DisplayItem, DisplayList, Pixmap, RenderConfig,
     rasterize_display_list_with_font_database, rasterize_display_list_with_font_database_and_stats,
 };
 
 /// Bundled font database used by the reference pipeline.
 fn database() -> &'static megi_fonts::FontDatabase {
-    paint::bundled_font_database()
+    megi_paint::bundled_font_database()
 }
 
 /// A red border side of the given width.

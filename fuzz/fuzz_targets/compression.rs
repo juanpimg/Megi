@@ -6,7 +6,7 @@
 //! with bounded decompression limits so malformed streams cannot OOM.
 
 use libfuzzer_sys::fuzz_target;
-use net::compression::{
+use megi_net::compression::{
     CompressionLimits, ContentEncoding, decode_body, decode_deflate, decode_gzip,
 };
 

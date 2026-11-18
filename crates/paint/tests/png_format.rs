@@ -8,8 +8,8 @@
 mod common;
 
 use common::{ihdr_fields, parse_png, rgba_from_scanlines};
-use layout::Rect;
-use paint::{Color, Pixmap};
+use megi_layout::Rect;
+use megi_paint::{Color, Pixmap};
 
 /// Builds a small pixmap with a known, non-uniform pattern:
 ///
@@ -103,15 +103,15 @@ fn test_encode_pixels_matches_encode_rgba_byte_for_byte() {
     // The direct-pixel path avoids the intermediate raw-RGBA buffer; it must
     // produce exactly the same PNG stream.
     let (pixmap, rgba) = patterned_pixmap();
-    let direct = paint::encode_pixels(pixmap.width, pixmap.height, &pixmap.pixels);
-    let via_rgba = paint::encode_rgba(pixmap.width, pixmap.height, &rgba);
+    let direct = megi_paint::encode_pixels(pixmap.width, pixmap.height, &pixmap.pixels);
+    let via_rgba = megi_paint::encode_rgba(pixmap.width, pixmap.height, &rgba);
     assert_eq!(direct, via_rgba);
 
     let mut flat = Pixmap::new(120, 60);
     flat.fill_rect(Rect::new(0.0, 0.0, 120.0, 60.0), Color::new(9, 8, 7, 255));
     assert_eq!(
-        paint::encode_pixels(flat.width, flat.height, &flat.pixels),
-        paint::encode_rgba(flat.width, flat.height, &flat.to_rgba_bytes())
+        megi_paint::encode_pixels(flat.width, flat.height, &flat.pixels),
+        megi_paint::encode_rgba(flat.width, flat.height, &flat.to_rgba_bytes())
     );
 }
 
@@ -179,8 +179,8 @@ fn test_zlib_roundtrip_public_api() {
         pseudo_random.push((state >> 16) as u8);
     }
     for input in [&b""[..], b"abcabcabc", &pseudo_random] {
-        let compressed = paint::zlib_compress(input);
-        let decoded = paint::inflate_zlib(&compressed).expect("valid zlib stream");
+        let compressed = megi_paint::zlib_compress(input);
+        let decoded = megi_paint::inflate_zlib(&compressed).expect("valid zlib stream");
         assert_eq!(decoded, input);
     }
 }

@@ -13,11 +13,11 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::FetchOptions;
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
-use net::h2::hpack::{Decoder, Encoder};
+use megi_net::FetchOptions;
+use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
+use megi_net::h2::hpack::{Decoder, Encoder};
 use rcgen::generate_simple_self_signed;
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 
@@ -190,7 +190,7 @@ fn spawn_push_origin(
     (port, handle)
 }
 
-fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
+fn count_where(pixmap: &megi_paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
     pixmap
         .pixels
         .iter()

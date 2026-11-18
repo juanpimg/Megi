@@ -3,7 +3,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::{Budget, JsRuntime};
+use megi_js::runtime::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
     JsRuntime::new().expect("runtime")
@@ -236,7 +236,7 @@ fn idle_callback_can_be_cancelled() {
 
 #[test]
 fn layout_provider_geometry() {
-    use js::host::{LayoutProvider, LayoutRect, ViewportInfo};
+    use megi_js::host::{LayoutProvider, LayoutRect, ViewportInfo};
     let mut rt = runtime();
     let provider: LayoutProvider = Box::new(|_node| {
         Some(LayoutRect {

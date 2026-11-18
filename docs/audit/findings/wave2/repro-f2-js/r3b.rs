@@ -1,4 +1,4 @@
-use js::JsRuntime;
+use megi_js::JsRuntime;
 use std::time::Instant;
 fn main() {
     let mut r = JsRuntime::new().expect("runtime");

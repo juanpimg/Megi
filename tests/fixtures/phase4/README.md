@@ -51,7 +51,7 @@ made (and reviewed in the diff of the next commit):
 
 ```bash
 # 1. Render the fixture and dump the canonical RGBA bytes next to the PNG.
-cargo run -p paint --example html_to_png -- \
+cargo run -p megi-paint --example html_to_png -- \
     tests/fixtures/phase4/basic.html /tmp/basic.png \
     --rgba tests/fixtures/phase4/basic.rgba
 
@@ -59,7 +59,7 @@ cargo run -p paint --example html_to_png -- \
 python3 tools/png_check.py /tmp/basic.png
 
 # 3. Re-run the end-to-end tests (golden comparison included).
-cargo test -p paint --test end_to_end_html
+cargo test -p megi-paint --test end_to_end_html
 ```
 
 The pipeline is deterministic: parsing, style resolution, layout, display list,
@@ -68,7 +68,7 @@ map-iteration-order dependencies (the font database is the bundled DejaVu Sans
 and the text caches are lookup-only). Rendering the same input twice must
 produce byte-identical output; the golden test relies on this. After WP-4.11
 the rasterizer keeps per-pass caches of shaped runs, faces and glyph masks
-(see `paint::RasterStats`), so the same bytes are produced with cache misses or
+(see `megi_paint::RasterStats`), so the same bytes are produced with cache misses or
 hits.
 
 ## Notes

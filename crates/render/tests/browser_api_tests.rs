@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use megi_core::{Document, NodeId};
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -24,7 +24,7 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
@@ -42,7 +42,7 @@ fn element_with_id(document: &Document, id: &str) -> NodeId {
         .unwrap_or_else(|| panic!("fixture element #{id} missing"))
 }
 
-fn attribute(output: &render::RenderOutput, id: &str, name: &str) -> String {
+fn attribute(output: &megi_render::RenderOutput, id: &str, name: &str) -> String {
     let node_id = element_with_id(&output.document, id);
     output
         .document
@@ -53,7 +53,7 @@ fn attribute(output: &render::RenderOutput, id: &str, name: &str) -> String {
         .to_owned()
 }
 
-fn text_content(output: &render::RenderOutput, id: &str) -> String {
+fn text_content(output: &megi_render::RenderOutput, id: &str) -> String {
     let node_id = element_with_id(&output.document, id);
     output.document.text_content(node_id)
 }
@@ -142,7 +142,7 @@ fn request_animation_frame_runs_on_the_virtual_event_loop() {
         .pixmap
         .pixels
         .iter()
-        .filter(|pixel| **pixel == css::Color::new(0x00, 0xFF, 0x00, 0xFF))
+        .filter(|pixel| **pixel == megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF))
         .count();
     assert!(
         green > 5_000,
@@ -177,7 +177,7 @@ fn uncaught_timer_error_reaches_onerror_and_warnings() {
         .pixmap
         .pixels
         .iter()
-        .filter(|pixel| **pixel == css::Color::new(0xFF, 0x00, 0xFF, 0xFF))
+        .filter(|pixel| **pixel == megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF))
         .count();
     assert!(magenta > 500);
 }

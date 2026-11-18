@@ -14,7 +14,7 @@
 //! - exception rules (`!www.ck` ⇒ `www.ck` is not a suffix; its suffix is `ck`).
 //!
 //! Unknown TLDs keep the documented last-label fallback. IDNA is not implemented
-//! (`net::Url` rejects non-ASCII hosts): matching is ASCII/punycode only, so Unicode PSL
+//! (`megi_net::Url` rejects non-ASCII hosts): matching is ASCII/punycode only, so Unicode PSL
 //! entries cannot match a host today (documented limitation; the list itself stays intact).
 //!
 //! A public suffix itself has no registrable domain; host-only cookies for a public suffix

@@ -1,5 +1,5 @@
 [package]
-name = "js"
+name = "megi-js"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,8 +14,8 @@ js = ["dep:boa_engine"]
 
 [dependencies]
 megi-core.workspace = true
-html.workspace = true
-css.workspace = true
+megi-html.workspace = true
+megi-css.workspace = true
 boa_engine = { workspace = true, optional = true }
 
 [lints]

@@ -40,7 +40,7 @@
 //! 3D effects are out of scope for Phase 7.
 
 use megi_core::{Document, NodeId};
-use layout::Rect;
+use megi_layout::Rect;
 
 /// Coarse kind of painted primitive that produced a [`HitRegion`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

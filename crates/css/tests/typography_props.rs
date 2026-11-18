@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Length, TextTransform, WhiteSpace, resolve_document_styles};
+use megi_css::{ComputedStyle, Display, Length, TextTransform, WhiteSpace, resolve_document_styles};
 use megi_core::{Document, Namespace, NodeId};
 
 fn setup() -> (Document, NodeId, NodeId) {
@@ -90,6 +90,6 @@ fn typography_initial_values_are_neutral() {
     assert_eq!(WhiteSpace::parse("pre-wrap"), Some(WhiteSpace::PreWrap));
     assert_eq!(WhiteSpace::parse("pre-line"), Some(WhiteSpace::PreLine));
     // `sticky` is a valid position keyword (layout renders it relative-like headless).
-    assert_eq!(css::Position::parse("sticky"), Some(css::Position::Sticky));
+    assert_eq!(megi_css::Position::parse("sticky"), Some(megi_css::Position::Sticky));
     let _ = Display::Block;
 }

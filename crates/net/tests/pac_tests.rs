@@ -8,8 +8,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::proxy::ProxyConfig;
-use net::{FetchOptions, ResourceLoader, Url, fetch};
+use megi_net::proxy::ProxyConfig;
+use megi_net::{FetchOptions, ResourceLoader, Url, fetch};
 
 fn spawn(handler: impl FnOnce(TcpListener) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");

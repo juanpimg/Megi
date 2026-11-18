@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use css::{ComputedStyle, FontStyle};
+use megi_css::{ComputedStyle, FontStyle};
 use megi_fonts::FontDatabase;
 
 use crate::inline::{DefaultTextMeasurer, FontMetrics, TextMeasurer};
@@ -24,10 +24,10 @@ use crate::inline::{DefaultTextMeasurer, FontMetrics, TextMeasurer};
 /// Create it once per layout pass (it owns a [`FontDatabase`]):
 ///
 /// ```no_run
-/// use layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
+/// use megi_layout::{FontTextMeasurer, Rect, layout_document_with_measurer};
 /// # use std::collections::HashMap;
 /// # use megi_core::{Document, NodeId};
-/// # use css::ComputedStyle;
+/// # use megi_css::ComputedStyle;
 /// # fn main() -> Result<(), megi_fonts::FontError> {
 /// let measurer = FontTextMeasurer::bundled()?;
 /// # let doc = Document::new();

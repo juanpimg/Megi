@@ -98,7 +98,7 @@ Prefijo: `w2-lp`. Alcance: todos los `.rs` bajo `crates/layout/src/` y
 - `evidence`: lectura directa — `BLUR_PLANES[0..3]` reciben R/G/B sin
   premultiplicar (líneas 3804-3807) y el plano alfa se difumina aparte
   (3815-3821); el doc del módulo (líneas 27-36) confirma almacenamiento
-  straight. Comando: `cargo test -p paint` en verify (253 passed) — ningún
+  straight. Comando: `cargo test -p megi-paint` en verify (253 passed) — ningún
   test cubre franjas de borde con alfa parcial bajo blur.
 - `impact`: halos oscuros alrededor de contenido semitransparente con blur.
 - `expected`: difuminar en espacio premultiplicado y convertir de vuelta.
@@ -151,7 +151,7 @@ Prefijo: `w2-lp`. Alcance: todos los `.rs` bajo `crates/layout/src/` y
   pintan nada cuando `área > 16_777_216`, sin fallback cuadrado
 - `evidence`: tres `return` tempranos idénticos; `MAX_ROUNDED_GROUP_PIXELS`
   reutilizado como cap de área (documentado como limitación). `cargo test
-  -p paint` no cubre el umbral.
+  -p megi-paint` no cubre el umbral.
 - `impact`: en páginas ≥16.7 Mpx los fondos redondeados/gradientes
   desaparecen (píxeles transparentes) en vez de degradar al rectángulo.
 - `expected`: degradar a relleno cuadrado (lo que el propio grupo redondeado
@@ -179,7 +179,7 @@ Prefijo: `w2-lp`. Alcance: todos los `.rs` bajo `crates/layout/src/` y
   (éstas usan escala simple, línea 1937).
 - `expected`: o eliminar el path plano o hacerlo coherente (una sola escala).
 - `fix`: quitar el `scaled` de la línea 1945 (usar `color` ya escalado).
-- `repro`: código + `cargo test -p paint` (253 passed)
+- `repro`: código + `cargo test -p megi-paint` (253 passed)
 - `dedup`: #1196 / #1211 (deferred; evidencia nueva: doble aplicación
   exacta + prueba de inalcanzabilidad)
 
@@ -298,8 +298,8 @@ Prefijo: `w2-lp`. Alcance: todos los `.rs` bajo `crates/layout/src/` y
 
 ## Comandos ejecutados (todos en `/tmp/opencode/megi-verify`, HEAD 3c06db8)
 
-- `cargo test -p layout` ⇒ **287 passed, 0 failed**
-- `cargo test -p paint` ⇒ **253 passed, 0 failed**
+- `cargo test -p megi-layout` ⇒ **287 passed, 0 failed**
+- `cargo test -p megi-paint` ⇒ **253 passed, 0 failed**
 - Repros (binarios en `/tmp/opencode/w2lp`, deps por path contra el
   worktree limpio; cada uno ejecutado 2 veces con salida idéntica):
   - `cargo run --bin w2lp` ⇒ R1 `red … width: 120.0, height: 70.0 … true`;

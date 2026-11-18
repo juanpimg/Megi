@@ -7,14 +7,14 @@
 
 use std::path::Path;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_path(name: &str) -> String {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render");
     format!("file://{}", dir.join(name).display())
 }
 
-fn render(name: &str, max_image_dim: Option<u32>) -> render::RenderOutput {
+fn render(name: &str, max_image_dim: Option<u32>) -> megi_render::RenderOutput {
     let options = RenderOptions {
         viewport: Viewport::new(200, 200).expect("viewport"),
         max_image_dim,

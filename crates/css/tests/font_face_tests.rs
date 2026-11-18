@@ -1,6 +1,6 @@
 //! `@font-face` parsing tests (CSS Fonts 4 §4.1): descriptors, src lists, malformed rules.
 
-use css::parse_stylesheet;
+use megi_css::parse_stylesheet;
 
 #[test]
 fn parses_woff2_and_ttf_sources_with_formats() {

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use megi_core::{Document, NodeKind};
-use render::{
+use megi_render::{
     RenderOptions, RenderStats, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport, render_url,
 };
 
@@ -39,7 +39,7 @@ fn disabled_options() -> RenderOptions {
     }
 }
 
-fn render_fixture(name: &str, options: &RenderOptions) -> render::RenderOutput {
+fn render_fixture(name: &str, options: &RenderOptions) -> megi_render::RenderOutput {
     render_url(&fixture_url(name), options).expect("fixture renders")
 }
 

@@ -21,9 +21,9 @@
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
 //! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
 
-use css::properties::{BorderRadii, Length, Radius};
-use layout::Rect;
-use paint::{Color, Pixmap};
+use megi_css::properties::{BorderRadii, Length, Radius};
+use megi_layout::Rect;
+use megi_paint::{Color, Pixmap};
 
 use crate::forms::SelectOption;
 use crate::links::CssRect;
@@ -434,12 +434,12 @@ fn next_char_index(text: &str, index: usize) -> usize {
 /// Resolves address-bar text into a URL: absolute URLs are used as-is; bare hosts/domains
 /// without a scheme (e.g. `wikipedia.org`, `localhost:8080`) default to `https://` (or
 /// `http://` for loopback); explicit relative references (`/path`, `./page`) join `base`.
-pub fn resolve_address(input: &str, base: Option<&net::Url>) -> Result<net::Url, String> {
+pub fn resolve_address(input: &str, base: Option<&megi_net::Url>) -> Result<megi_net::Url, String> {
     let input = input.trim();
     if input.is_empty() {
         return Err("empty address".to_string());
     }
-    if let Ok(url) = net::Url::parse(input) {
+    if let Ok(url) = megi_net::Url::parse(input) {
         return Ok(url);
     }
     if !input.starts_with('/')
@@ -477,7 +477,7 @@ pub fn resolve_address(input: &str, base: Option<&net::Url>) -> Result<net::Url,
         if !looks_like_file_ext && (is_loopback || host.contains('.') || authority.starts_with('['))
         {
             let scheme = if is_loopback { "http://" } else { "https://" };
-            if let Ok(url) = net::Url::parse(&format!("{scheme}{input}")) {
+            if let Ok(url) = megi_net::Url::parse(&format!("{scheme}{input}")) {
                 return Ok(url);
             }
         }
@@ -2409,7 +2409,7 @@ mod tests {
 
     #[test]
     fn resolve_address_parses_absolute_and_joins_relative() {
-        let base = net::Url::parse("https://example.com/dir/page.html").expect("base");
+        let base = megi_net::Url::parse("https://example.com/dir/page.html").expect("base");
         assert_eq!(
             resolve_address("https://other.example/x", Some(&base))
                 .expect("absolute")

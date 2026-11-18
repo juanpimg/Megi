@@ -4,8 +4,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 
 fn runtime_with_fetch() -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));

@@ -9,7 +9,7 @@
 //! ## Sizing rules (documented)
 //!
 //! - The **layout intrinsic size** is the SVG document's own `width`/`height` (or `viewBox`
-//!   aspect) in CSS px as returned by [`svg::intrinsic_size`]; it may be fractional.
+//!   aspect) in CSS px as returned by [`megi_svg::intrinsic_size`]; it may be fractional.
 //! - The **raster** is produced at `ceil(intrinsic)` pixels in each axis (at least 1×1), so
 //!   a fractional intrinsic size is rounded up by less than one CSS pixel; CSS `width`/
 //!   `height` on the `<img>` still wins for the box geometry (the bitmap is stretched like
@@ -25,7 +25,7 @@
 //! `background-image: url(*.svg)` is rasterized at the intrinsic size too and then stretched
 //! into the element's padding box by paint (the same rule as PNG backgrounds).
 
-use svg::{Limits, SvgError, SvgOptions};
+use megi_svg::{Limits, SvgError, SvgOptions};
 
 /// Render-side cap on the rasterized SVG area: 16 Mpx (64 MiB of RGBA8). Intrinsic sizes
 /// above this are rejected with a warning rather than risking an allocation spike.
@@ -119,7 +119,7 @@ fn render_limits() -> Limits {
 /// Parses the intrinsic size and rasterizes the SVG at `ceil(intrinsic)` pixels.
 pub(crate) fn render(bytes: &[u8]) -> Result<RenderedSvg, SvgError> {
     let limits = render_limits();
-    let intrinsic = svg::intrinsic_size_with_limits(bytes, &limits)?;
+    let intrinsic = megi_svg::intrinsic_size_with_limits(bytes, &limits)?;
     let width = intrinsic.0.ceil().max(1.0);
     let height = intrinsic.1.ceil().max(1.0);
     if !width.is_finite() || !height.is_finite() {
@@ -136,7 +136,7 @@ pub(crate) fn render(bytes: &[u8]) -> Result<RenderedSvg, SvgError> {
             limits.max_pixels
         )));
     }
-    let raster = svg::render_svg_with_limits(
+    let raster = megi_svg::render_svg_with_limits(
         bytes,
         &SvgOptions {
             width: Some(width as u32),

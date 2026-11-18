@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Length, Origin, StyleCollection};
+use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
 use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn page(css: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId) {
@@ -14,7 +14,7 @@ fn page(css: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId) {
     doc.append_child(doc.root(), html);
     doc.append_child(html, body);
     doc.append_child(body, target);
-    let styles = css::resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+    let styles = megi_css::resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
     (doc, styles, target)
 }
 
@@ -188,7 +188,7 @@ fn inline_style_wins_over_layers() {
     );
     doc.append_child(doc.root(), html);
     doc.append_child(html, target);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some("@layer base { .x { width: 10px; } }"),
         800.0,
@@ -228,7 +228,7 @@ fn container_rules_inside_a_layer_keep_the_layer_order() {
     doc.append_child(html, body);
     doc.append_child(body, container);
     doc.append_child(container, target);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some(
             ".box { width: 300px; container-type: inline-size; }

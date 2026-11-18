@@ -3,7 +3,7 @@
 
 #![cfg(feature = "js")]
 
-use js::{Budget, JsRuntime};
+use megi_js::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");

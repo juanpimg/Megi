@@ -2,7 +2,7 @@
 
 Auditor: wave2 F3/F4 (scope F4 = `w2-perf`, este fichero).
 HEAD: `3c06db8c186e4f7a19c7816aed4955a0b68f91ef`.
-Mediciones: `cargo run --release -p bench` ejecutado en árbol principal (sucio) y
+Mediciones: `cargo run --release -p megi-bench` ejecutado en árbol principal (sucio) y
 re-ejecutado en `/tmp/opencode/megi-verify` (limpio, `worktree_dirty:false`).
 Constantes del arnés verificadas idénticas en HEAD (`crates/bench` sin WIP).
 Metodología: `docs/PERFORMANCE.md` §1/§13/§36 (7 pasadas, mediana por fila, warmup 1 /
@@ -59,7 +59,7 @@ iterations 5, heavy 3).
 - `fix`: strip por declaración (parsear el `<style>` y filtrar declaraciones, no líneas)
   o reformatear el fixture a una declaración por línea; test que asevere
   `stripped != fixture` y `!stripped.contains("filter:")`.
-- `repro`: `python3` one-liner de arriba + `cargo run --release -p bench -- --filter filter-fixture`
+- `repro`: `python3` one-liner de arriba + `cargo run --release -p megi-bench -- --filter filter-fixture`
   en HEAD limpio (0,816 vs 0,818 ms).
 - `dedup`: #1197 (Deferred; evidencia NUEVA de que el fix parcial no lo cierra).
 
@@ -81,7 +81,7 @@ iterations 5, heavy 3).
   MPix/s entre filas (`render` vs `image`) inválidas.
 - `expected`: `with_units(0.48, "MPix")` (o el área real del viewport).
 - `fix`: una línea + regenerar `bench-baseline.json` para esa fila.
-- `repro`: `cargo run --release -p bench -- --filter render/html-to-png` + división.
+- `repro`: `cargo run --release -p megi-bench -- --filter render/html-to-png` + división.
 - `dedup`: #1198 (Deferred; la constante no cambió).
 
 ### w2-perf-03 — caps `heavy` parcialmente documentados: warmup cap silencioso, `--warmup 0` aceptado, meta con valores pedidos (#1199 parcial)
@@ -103,12 +103,12 @@ iterations 5, heavy 3).
 - `expected`: documentar ambos caps en `--help`, rechazar `--warmup 0`, o estampar
   efectivos en la meta.
 - `fix`: 3 líneas en `cli.rs`/`report.rs` + test de CLI.
-- `repro`: `cargo run --release -p bench -- --help` + `--warmup 0 --filter shell` (iters=3/0).
+- `repro`: `cargo run --release -p megi-bench -- --help` + `--warmup 0 --filter shell` (iters=3/0).
 - `dedup`: #1199 (Deferred; fix parcial verificable).
 
 ### w2-perf-04 — `layout/*` y `pipeline/*` siguen con el measurer fallback, no el de producción (#1201 sigue vivo)
 
-- `archivo:línea`: `crates/bench/src/benches.rs:861,942,1025` (`layout::layout_document`)
+- `archivo:línea`: `crates/bench/src/benches.rs:861,942,1025` (`megi_layout::layout_document`)
 - `lente`: contrato vs documentación
 - `severidad`: P2
 - `categoría`: perf
@@ -128,7 +128,7 @@ iterations 5, heavy 3).
   empaquetadas) o documentar la divergencia en PERFORMANCE.md.
 - `fix`: `layout_document_with_measurer(&doc, &styles, viewport, &FontTextMeasurer::bundled()?)`
   en los 3 sitios (nota: feature `fonts` del bench ya existe, `BENCH_FEATURES=fonts`).
-- `repro`: grep de arriba + `cargo run --release -p bench -- --filter layout/realistic`.
+- `repro`: grep de arriba + `cargo run --release -p megi-bench -- --filter layout/realistic`.
 - `dedup`: #1201 (Deferred; call sites intactos).
 
 ### w2-perf-05 — `GradientSpec::evaluate` sigue siendo scan lineal por píxel (#1270 sigue vivo)
@@ -165,7 +165,7 @@ iterations 5, heavy 3).
 
 | Comando (worktree limpio salvo nota) | Salida |
 |---|---|
-| `cargo run --release -p bench -- --json` (limpio, `3c06db8`, dirty:false) | exit 0; filter 0,816 vs 0,818 · pipeline-filter 2,363 vs 2,320 · backdrop 0,786 vs 0,062 · render/html-to-png 28,701 ms = 3,35 MPix/s (0,096) |
+| `cargo run --release -p megi-bench -- --json` (limpio, `3c06db8`, dirty:false) | exit 0; filter 0,816 vs 0,818 · pipeline-filter 2,363 vs 2,320 · backdrop 0,786 vs 0,062 · render/html-to-png 28,701 ms = 3,35 MPix/s (0,096) |
 | gradient probe ×3×2 + ×5×2 a 2048² (limpio) | 1024²: 313 vs 440 ms mín · 2048²: 300 vs 565 ms mín (+88 % para 64× stops) |
 | strip 0/29 vs 2/31 | `python3` sobre fixtures (2 ejecuciones, idéntico) |
 | `bench_compare.py` | leído; sin ejecutar contra baseline nueva (comparación pendiente de próxima ventana) |

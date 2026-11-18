@@ -1,8 +1,8 @@
 //! R216: byte-identical PNG region/row-cache encoding.
 
-use css::Color;
-use layout::Rect;
-use paint::{Pixmap, PngRegionEncoder, encode_png_regions};
+use megi_css::Color;
+use megi_layout::Rect;
+use megi_paint::{Pixmap, PngRegionEncoder, encode_png_regions};
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 48;

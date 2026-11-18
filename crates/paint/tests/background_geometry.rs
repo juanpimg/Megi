@@ -4,13 +4,13 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_css::{
     BackgroundPosition, BackgroundRepeat, BackgroundSize, Color, ComputedStyle, Display, Length,
 };
 use megi_core::{Document, Namespace};
 use megi_image::RgbaImage;
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, ImageStore, MAX_BACKGROUND_TILES, Pixmap, background_tiles,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -72,7 +72,7 @@ fn box_with_style(
 }
 
 /// Builds `html > div` with a patterned background and paints it.
-fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (paint::DisplayList, Pixmap) {
+fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (megi_paint::DisplayList, Pixmap) {
     let (_document, ids) = node_ids(2);
     let mut root_style = block_style();
     root_style.background_color = Color::WHITE; // keep canvas propagation on root
@@ -95,7 +95,7 @@ fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (paint::Dis
     (display_list, pixmap)
 }
 
-fn images(display_list: &paint::DisplayList) -> Vec<Rect> {
+fn images(display_list: &megi_paint::DisplayList) -> Vec<Rect> {
     display_list
         .iter()
         .filter_map(|item| match item {
@@ -296,7 +296,7 @@ fn test_background_tiles_matches_painter_geometry() {
 
 // --- R94: origin/clip/attachment, multiple layers and space/round -------------
 
-use css::{BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin};
+use megi_css::{BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin};
 
 fn layer(
     image: &str,

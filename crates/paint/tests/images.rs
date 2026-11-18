@@ -2,18 +2,18 @@
 //!
 //! Synthetic `LayoutBox` trees pin the paint-side contract independently of the
 //! render/network layers: `DisplayItem::Image` is emitted for a
-//! `BoxType::Replaced` node present in the [`paint::ImageStore`], scaled with
+//! `BoxType::Replaced` node present in the [`megi_paint::ImageStore`], scaled with
 //! bilinear filtering, alpha-blended, clipped and deterministic; a missing
 //! image becomes the documented gray placeholder.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{Color, ComputedStyle, Display};
+use megi_css::{Color, ComputedStyle, Display};
 use megi_core::{Document, Namespace};
 use megi_image::RgbaImage;
-use layout::{BoxType, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, LayoutBox, Rect};
+use megi_paint::{
     DisplayItem, DisplayList, IMAGE_PLACEHOLDER, ImageStore, Pixmap, build_display_list,
     build_display_list_with_images, rasterize_display_list,
 };

@@ -1,5 +1,5 @@
 //! R185: `RenderOptions::stream_responses` routes the main `http(s)` document through
-//! `net::fetch_streaming`. The buffered and streaming paths must render byte-identically
+//! `megi_net::fetch_streaming`. The buffered and streaming paths must render byte-identically
 //! (#1390): the old test used a `file://` fixture, which never reaches the streaming path,
 //! so it certified a no-op option.
 
@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 const HTML: &str = "<!doctype html><html><head><style>body{background:rgb(20,120,220)}</style>\
 </head><body><h1>Streaming test</h1></body></html>";

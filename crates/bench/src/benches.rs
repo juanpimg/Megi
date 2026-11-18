@@ -9,8 +9,8 @@ use std::hint::black_box;
 use std::sync::Arc;
 
 use megi_core::{Document, NodeId};
-use html::ParseOptions;
-use layout::Rect;
+use megi_html::ParseOptions;
+use megi_layout::Rect;
 
 use crate::cli::Options;
 use crate::generators;
@@ -98,7 +98,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
         );
         suite.add(
             BenchEntry::new("html/realistic-1mb", "html", detail, move || {
-                black_box(html::parse_document(&input, false));
+                black_box(megi_html::parse_document(&input, false));
             })
             .with_units(size_mib, "MiB"),
         );
@@ -118,7 +118,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
             "html",
             format!("{depth} divs anidados, {mib:.2} MiB"),
             move || {
-                black_box(html::parse_document_with_options(
+                black_box(megi_html::parse_document_with_options(
                     &input,
                     false,
                     &GENEROUS_PARSE,
@@ -139,7 +139,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
     {
         let depth = generators::scale(generators::NESTED_DEPTHS[2], scale);
         let input = generators::nested_divs(depth);
-        let probe = html::parse_document_with_options(&input, false, &html::ParseOptions::DEFAULT);
+        let probe = megi_html::parse_document_with_options(&input, false, &megi_html::ParseOptions::DEFAULT);
         let nodes = probe.document.len();
         let dropped = probe.limit_violations.depth_exceeded;
         let detail = format!(
@@ -151,7 +151,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
             "html",
             detail,
             move || {
-                black_box(html::parse_document(&input, false));
+                black_box(megi_html::parse_document(&input, false));
             },
         ));
     }
@@ -167,7 +167,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
                 "html",
                 format!("{count} </p> consecutivos, {mib:.2} MiB"),
                 move || {
-                    black_box(html::parse_document(&input, false));
+                    black_box(megi_html::parse_document(&input, false));
                 },
             )
             .with_units(count as f64, "tags"),
@@ -185,7 +185,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
                 "html",
                 format!("{count} bloques <b><i><u> mal anidados, {mib:.2} MiB"),
                 move || {
-                    black_box(html::parse_document(&input, false));
+                    black_box(megi_html::parse_document(&input, false));
                 },
             )
             .with_units(count as f64, "blocks"),
@@ -203,7 +203,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
                 "html",
                 format!("{count} atributos en un solo elemento, {mib:.2} MiB"),
                 move || {
-                    black_box(html::parse_document_with_options(
+                    black_box(megi_html::parse_document_with_options(
                         &input,
                         false,
                         &GENEROUS_PARSE,
@@ -226,7 +226,7 @@ fn register_html(suite: &mut Suite, scale: f64) {
                 "html",
                 format!("{blocks} bloques indentados, {mib:.2} MiB"),
                 move || {
-                    black_box(html::parse_document(&input, false));
+                    black_box(megi_html::parse_document(&input, false));
                 },
             )
             .with_units(blocks as f64, "blocks"),
@@ -247,7 +247,7 @@ fn register_css(suite: &mut Suite, scale: f64) {
                 "css",
                 format!("{rules} reglas, {mib:.2} MiB"),
                 move || {
-                    black_box(css::parse_stylesheet(&sheet));
+                    black_box(megi_css::parse_stylesheet(&sheet));
                 },
             )
             .with_units(mib, "MiB"),
@@ -261,7 +261,7 @@ fn register_css(suite: &mut Suite, scale: f64) {
     ] {
         let target = generators::scale(base_nodes, scale);
         let markup = generators::element_document(target);
-        let document = html::parse_document(&markup, false);
+        let document = megi_html::parse_document(&markup, false);
         let elements = count_elements(&document);
         let author_css = generators::element_author_css();
         let rule_count = author_css.matches('{').count();
@@ -271,7 +271,7 @@ fn register_css(suite: &mut Suite, scale: f64) {
                 "css",
                 format!("{elements} elementos, {rule_count} reglas de autor"),
                 move || {
-                    black_box(css::resolve_document_styles(&document, Some(&author_css)));
+                    black_box(megi_css::resolve_document_styles(&document, Some(&author_css)));
                 },
             )
             .with_units(elements as f64, "elements"),
@@ -281,9 +281,9 @@ fn register_css(suite: &mut Suite, scale: f64) {
     // Selector matching: simple compounds and descendant combinators.
     let markup = generators::element_document(generators::scale(generators::SELECTOR_NODES, scale));
     {
-        let document = html::parse_document(&markup, false);
+        let document = megi_html::parse_document(&markup, false);
         let elements = collect_elements(&document);
-        let selectors = css::parse_selectors("div.item, span.label, .c0, #e42");
+        let selectors = megi_css::parse_selectors("div.item, span.label, .c0, #e42");
         let selector_count = selectors.selectors.len().max(1);
         let element_count = elements.len();
         let matches = (element_count * selector_count) as f64;
@@ -308,9 +308,9 @@ fn register_css(suite: &mut Suite, scale: f64) {
         );
     }
     {
-        let document = html::parse_document(&markup, false);
+        let document = megi_html::parse_document(&markup, false);
         let elements = collect_elements(&document);
-        let selectors = css::parse_selectors(
+        let selectors = megi_css::parse_selectors(
             "div#app div.item span.label, body div span, div.item.c0, .app .label",
         );
         let selector_count = selectors.selectors.len().max(1);
@@ -345,12 +345,12 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
     let realistic = generators::realistic_document(target_bytes);
     let html_source = realistic.html;
     let size_mib = html_source.len() as f64 / (1024.0 * 1024.0);
-    let document = html::parse_document(&html_source, false);
-    let styles = paint::resolve_embedded_styles(&document);
+    let document = megi_html::parse_document(&html_source, false);
+    let styles = megi_paint::resolve_embedded_styles(&document);
     let styled_elements = styles.len();
     let viewport = Rect::new(0.0, 0.0, VIEWPORT_WIDTH as f32, VIEWPORT_HEIGHT as f32);
 
-    let Some(layout_root) = layout::layout_document(&document, &styles, viewport) else {
+    let Some(layout_root) = megi_layout::layout_document(&document, &styles, viewport) else {
         suite.skip("layout/realistic-1mb", "layout_document devolvió None");
         for name in [
             "paint/build-display-list",
@@ -364,12 +364,12 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
     };
 
     // Two independent display lists so each paint benchmark can own one.
-    let display_list_raster = paint::build_display_list(&layout_root, viewport);
-    let display_list_png = paint::build_display_list(&layout_root, viewport);
+    let display_list_raster = megi_paint::build_display_list(&layout_root, viewport);
+    let display_list_png = megi_paint::build_display_list(&layout_root, viewport);
     let display_items = display_list_raster.items.len();
     let png_bytes = {
         let pixmap =
-            paint::rasterize_display_list(&display_list_png, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+            megi_paint::rasterize_display_list(&display_list_png, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
         pixmap.to_png().len()
     };
     let png_mib = png_bytes as f64 / (1024.0 * 1024.0);
@@ -384,7 +384,7 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
                  {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}"
             ),
             move || {
-                black_box(layout::layout_document(&document, &styles, viewport));
+                black_box(megi_layout::layout_document(&document, &styles, viewport));
             },
         )
         .with_units(styled_elements as f64, "elements"),
@@ -396,7 +396,7 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
         "paint",
         format!("{display_items} items de display list"),
         move || {
-            black_box(paint::build_display_list(&layout_root, viewport));
+            black_box(megi_paint::build_display_list(&layout_root, viewport));
         },
     ));
 
@@ -407,7 +407,7 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
             "paint",
             format!("{display_items} items → pixmap {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}"),
             move || {
-                black_box(paint::rasterize_display_list(
+                black_box(megi_paint::rasterize_display_list(
                     &display_list_raster,
                     VIEWPORT_WIDTH,
                     VIEWPORT_HEIGHT,
@@ -428,7 +428,7 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
             "paint",
             format!("rasterize + to_png → {png_bytes} bytes ({png_mib:.2} MiB)"),
             move || {
-                let pixmap = paint::rasterize_display_list(
+                let pixmap = megi_paint::rasterize_display_list(
                     &display_list_png,
                     VIEWPORT_WIDTH,
                     VIEWPORT_HEIGHT,
@@ -447,12 +447,12 @@ fn register_layout_and_paint(suite: &mut Suite, scale: f64) {
             "pipeline",
             format!("{size_mib:.2} MiB: parse + styles + layout + display list + raster + PNG"),
             move || {
-                let document = html::parse_document(&html_source, false);
-                let styles = paint::resolve_embedded_styles(&document);
-                let root = layout::layout_document(&document, &styles, viewport)
+                let document = megi_html::parse_document(&html_source, false);
+                let styles = megi_paint::resolve_embedded_styles(&document);
+                let root = megi_layout::layout_document(&document, &styles, viewport)
                     .expect("fixture must lay out");
-                let display_list = paint::build_display_list(&root, viewport);
-                let pixmap = paint::rasterize_display_list(
+                let display_list = megi_paint::build_display_list(&root, viewport);
+                let pixmap = megi_paint::rasterize_display_list(
                     &display_list,
                     viewport.width as u32,
                     viewport.height as u32,
@@ -518,7 +518,7 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
     {
         let nodes = generators::scale(generators::VARS_CALC_NODES, scale);
         let markup = generators::element_document(nodes);
-        let document = html::parse_document(&markup, false);
+        let document = megi_html::parse_document(&markup, false);
         let elements = count_elements(&document);
         let author_css = generators::vars_calc_css();
         let vars = author_css.matches("var(--").count();
@@ -529,7 +529,7 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
                 "css",
                 format!("{elements} elementos, {vars} var(), {calcs} calc()"),
                 move || {
-                    black_box(css::resolve_document_styles(&document, Some(&author_css)));
+                    black_box(megi_css::resolve_document_styles(&document, Some(&author_css)));
                 },
             )
             .with_units(elements as f64, "elements"),
@@ -552,8 +552,8 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
     {
         let target_bytes = generators::scale(generators::STICKY_TEXT_TARGET_BYTES, scale);
         let markup = generators::sticky_text_page(target_bytes);
-        let document = html::parse_document(&markup, false);
-        let styles = paint::resolve_embedded_styles(&document);
+        let document = megi_html::parse_document(&markup, false);
+        let styles = megi_paint::resolve_embedded_styles(&document);
         let styled_elements = styles.len();
         let mib = markup.len() as f64 / (1024.0 * 1024.0);
         suite.add(
@@ -565,7 +565,7 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
                      text-transform, viewport {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}"
                 ),
                 move || {
-                    black_box(layout::layout_document(&document, &styles, viewport));
+                    black_box(megi_layout::layout_document(&document, &styles, viewport));
                 },
             )
             .with_units(styled_elements as f64, "elements"),
@@ -595,12 +595,12 @@ fn add_feature_pipeline(
                         "{what}: {items} items de display list, PNG {png_bytes} B - parse+styles+layout+dl+raster+PNG"
                     ),
                     move || {
-                        let document = html::parse_document(&html_source, false);
-                        let styles = paint::resolve_embedded_styles(&document);
-                        let root = layout::layout_document(&document, &styles, viewport)
+                        let document = megi_html::parse_document(&html_source, false);
+                        let styles = megi_paint::resolve_embedded_styles(&document);
+                        let root = megi_layout::layout_document(&document, &styles, viewport)
                             .expect("fixture must lay out");
-                        let display_list = paint::build_display_list(&root, viewport);
-                        let pixmap = paint::rasterize_display_list(
+                        let display_list = megi_paint::build_display_list(&root, viewport);
+                        let pixmap = megi_paint::rasterize_display_list(
                             &display_list,
                             viewport.width as u32,
                             viewport.height as u32,
@@ -618,11 +618,11 @@ fn add_feature_pipeline(
 /// Runs the pipeline once outside the timed loop to validate the fixture and
 /// report its display-list/PNG sizes. Returns `(items, png_bytes)`.
 fn probe_pipeline(html_source: &str, viewport: Rect) -> Option<(usize, usize)> {
-    let document = html::parse_document(html_source, false);
-    let styles = paint::resolve_embedded_styles(&document);
-    let root = layout::layout_document(&document, &styles, viewport)?;
-    let display_list = paint::build_display_list(&root, viewport);
-    let pixmap = paint::rasterize_display_list(&display_list, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    let document = megi_html::parse_document(html_source, false);
+    let styles = megi_paint::resolve_embedded_styles(&document);
+    let root = megi_layout::layout_document(&document, &styles, viewport)?;
+    let display_list = megi_paint::build_display_list(&root, viewport);
+    let pixmap = megi_paint::rasterize_display_list(&display_list, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
     Some((display_list.items.len(), pixmap.to_png().len()))
 }
 
@@ -643,10 +643,10 @@ fn register_layer_effects(suite: &mut Suite) {
 
     // (a) Filter / backdrop-filter raster cost on a synthetic layer stack.
     {
-        let mut items: Vec<paint::DisplayItem> = Vec::new();
-        items.push(paint::DisplayItem::SolidColor {
+        let mut items: Vec<megi_paint::DisplayItem> = Vec::new();
+        items.push(megi_paint::DisplayItem::SolidColor {
             rect: viewport,
-            color: css::Color::WHITE,
+            color: megi_css::Color::WHITE,
         });
         for index in 0..24 {
             let cell = Rect::new(
@@ -655,19 +655,19 @@ fn register_layer_effects(suite: &mut Suite) {
                 120.0,
                 130.0,
             );
-            items.push(paint::DisplayItem::SolidColor {
+            items.push(megi_paint::DisplayItem::SolidColor {
                 rect: cell,
-                color: css::Color::new((index * 9) as u8, 90, 180, 255),
+                color: megi_css::Color::new((index * 9) as u8, 90, 180, 255),
             });
             let color_filters = vec![
-                css::FilterFunction::Brightness(0.85),
-                css::FilterFunction::Grayscale(0.2),
+                megi_css::FilterFunction::Brightness(0.85),
+                megi_css::FilterFunction::Grayscale(0.2),
             ];
             let spatial_filters = vec![
-                css::FilterFunction::Blur(2.0),
-                css::FilterFunction::Brightness(1.05),
+                megi_css::FilterFunction::Blur(2.0),
+                megi_css::FilterFunction::Brightness(1.05),
             ];
-            items.push(paint::DisplayItem::BackdropFilter {
+            items.push(megi_paint::DisplayItem::BackdropFilter {
                 rect: cell,
                 filters: if index % 2 == 0 {
                     color_filters
@@ -675,7 +675,7 @@ fn register_layer_effects(suite: &mut Suite) {
                     spatial_filters
                 },
             });
-            items.push(paint::DisplayItem::EffectGroup {
+            items.push(megi_paint::DisplayItem::EffectGroup {
                 rect: Rect::new(
                     cell.x + 4.0,
                     cell.y + 4.0,
@@ -683,24 +683,24 @@ fn register_layer_effects(suite: &mut Suite) {
                     cell.height - 8.0,
                 ),
                 filters: vec![
-                    css::FilterFunction::Brightness(0.9),
-                    css::FilterFunction::Contrast(1.1),
-                    css::FilterFunction::Saturate(1.2),
+                    megi_css::FilterFunction::Brightness(0.9),
+                    megi_css::FilterFunction::Contrast(1.1),
+                    megi_css::FilterFunction::Saturate(1.2),
                 ],
-                blend: css::MixBlendMode::Normal,
-                items: vec![paint::DisplayItem::SolidColor {
+                blend: megi_css::MixBlendMode::Normal,
+                items: vec![megi_paint::DisplayItem::SolidColor {
                     rect: cell,
-                    color: css::Color::new(240, 120, 40, 200),
+                    color: megi_css::Color::new(240, 120, 40, 200),
                 }],
             });
         }
-        let display_list = paint::DisplayList { items };
+        let display_list = megi_paint::DisplayList { items };
         suite.add(BenchEntry::new(
             "paint/layer-effects-800x600",
             "paint",
             "24 backdrop-filter + 24 filter groups → pixmap".to_string(),
             move || {
-                black_box(paint::rasterize_display_list(
+                black_box(megi_paint::rasterize_display_list(
                     &display_list,
                     VIEWPORT_WIDTH,
                     VIEWPORT_HEIGHT,
@@ -714,57 +714,57 @@ fn register_layer_effects(suite: &mut Suite) {
         let mut document = Document::new();
         let html_node = document.create_element(megi_core::Namespace::Html, "html", vec![]);
         document.append_child(document.root(), html_node);
-        let mut root_style = css::ComputedStyle::initial();
-        root_style.display = css::Display::Block;
-        root_style.background_color = css::Color::WHITE;
+        let mut root_style = megi_css::ComputedStyle::initial();
+        root_style.display = megi_css::Display::Block;
+        root_style.background_color = megi_css::Color::WHITE;
         let mut root =
-            layout::LayoutBox::new(layout::BoxType::BlockNode(html_node), Some(root_style));
+            megi_layout::LayoutBox::new(megi_layout::BoxType::BlockNode(html_node), Some(root_style));
         root.dimensions.content = viewport;
         let image = Arc::new(
             megi_image::RgbaImage::new(16, 10, vec![120u8; 16 * 10 * 4]).expect("RGBA fixture"),
         );
-        let mut images = paint::ImageStore::new();
+        let mut images = megi_paint::ImageStore::new();
         let fits = [
-            css::ObjectFit::Contain,
-            css::ObjectFit::Cover,
-            css::ObjectFit::None,
-            css::ObjectFit::ScaleDown,
+            megi_css::ObjectFit::Contain,
+            megi_css::ObjectFit::Cover,
+            megi_css::ObjectFit::None,
+            megi_css::ObjectFit::ScaleDown,
         ];
         for index in 0..128u32 {
             let node = document.create_element(megi_core::Namespace::Html, "img", vec![]);
             document.append_child(html_node, node);
             images.insert(node, Arc::clone(&image));
-            let mut style = css::ComputedStyle::initial();
-            style.display = css::Display::Block;
+            let mut style = megi_css::ComputedStyle::initial();
+            style.display = megi_css::Display::Block;
             style.object_fit = fits[index as usize % fits.len()];
-            let mut child = layout::LayoutBox::new(layout::BoxType::Replaced(node), Some(style));
-            child.dimensions = layout::Dimensions {
+            let mut child = megi_layout::LayoutBox::new(megi_layout::BoxType::Replaced(node), Some(style));
+            child.dimensions = megi_layout::Dimensions {
                 content: Rect::new(
                     (index % 16) as f32 * 50.0,
                     (index / 16) as f32 * 72.0,
                     40.0,
                     30.0,
                 ),
-                padding: layout::EdgeSizes::ZERO,
-                border: layout::EdgeSizes::ZERO,
-                margin: layout::EdgeSizes::ZERO,
+                padding: megi_layout::EdgeSizes::ZERO,
+                border: megi_layout::EdgeSizes::ZERO,
+                margin: megi_layout::EdgeSizes::ZERO,
             };
             root.children.push(child);
         }
-        let backgrounds = paint::BackgroundImages::new();
+        let backgrounds = megi_paint::BackgroundImages::new();
         suite.add(BenchEntry::new(
             "paint/object-fit-800x600",
             "paint",
             "128 replaced images (contain/cover/none/scale-down) → display list + pixmap"
                 .to_string(),
             move || {
-                let display_list = paint::build_display_list_with_images_and_backgrounds(
+                let display_list = megi_paint::build_display_list_with_images_and_backgrounds(
                     &root,
                     viewport,
                     &images,
                     &backgrounds,
                 );
-                black_box(paint::rasterize_display_list(
+                black_box(megi_paint::rasterize_display_list(
                     &display_list,
                     VIEWPORT_WIDTH,
                     VIEWPORT_HEIGHT,
@@ -776,12 +776,12 @@ fn register_layer_effects(suite: &mut Suite) {
     // (c) Isolated save-png components (encode / write / both).
     {
         let mut pattern =
-            paint::Pixmap::new_with_background(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, css::Color::WHITE);
+            megi_paint::Pixmap::new_with_background(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, megi_css::Color::WHITE);
         for y in (0..VIEWPORT_HEIGHT).step_by(16) {
             for x in (0..VIEWPORT_WIDTH).step_by(16) {
                 pattern.fill_rect(
                     Rect::new(x as f32, y as f32, 8.0, 8.0),
-                    css::Color::new(30, 60, 120, 255),
+                    megi_css::Color::new(30, 60, 120, 255),
                 );
             }
         }
@@ -826,12 +826,12 @@ fn register_layer_effects(suite: &mut Suite) {
     // painted, then the full PNG is re-encoded). R196 baseline: +16,91 ms total
     // chrome overhead; these rows document the encoder share at both viewports.
     for (width, height) in [(640u32, 400u32), (1024, 768)] {
-        let mut pattern = paint::Pixmap::new_with_background(width, height, css::Color::WHITE);
+        let mut pattern = megi_paint::Pixmap::new_with_background(width, height, megi_css::Color::WHITE);
         for y in 0..height {
             let color = if y < 58 {
-                css::Color::new(0x20, 0x21, 0x24, 255)
+                megi_css::Color::new(0x20, 0x21, 0x24, 255)
             } else {
-                css::Color::new(0xF1, 0xF3, 0xF4, 255)
+                megi_css::Color::new(0xF1, 0xF3, 0xF4, 255)
             };
             pattern.fill_rect(Rect::new(0.0, y as f32, width as f32, 1.0), color);
         }
@@ -856,20 +856,20 @@ fn register_layer_effects(suite: &mut Suite) {
 /// per-fixture layer-effect cost so an A/B between paint binaries is meaningful.
 fn register_fixture_effect_rows(suite: &mut Suite) {
     fn paint_tail(html_source: &'static str, viewport: Rect) -> impl Fn() {
-        let document = html::parse_document(html_source, false);
-        let styles = paint::resolve_embedded_styles(&document);
-        let root = layout::layout_document(&document, &styles, viewport);
-        let images = paint::ImageStore::new();
-        let backgrounds = paint::BackgroundImages::new();
+        let document = megi_html::parse_document(html_source, false);
+        let styles = megi_paint::resolve_embedded_styles(&document);
+        let root = megi_layout::layout_document(&document, &styles, viewport);
+        let images = megi_paint::ImageStore::new();
+        let backgrounds = megi_paint::BackgroundImages::new();
         move || {
             if let Some(root) = &root {
-                let display_list = paint::build_display_list_with_images_and_backgrounds(
+                let display_list = megi_paint::build_display_list_with_images_and_backgrounds(
                     root,
                     viewport,
                     &images,
                     &backgrounds,
                 );
-                black_box(paint::rasterize_display_list(
+                black_box(megi_paint::rasterize_display_list(
                     &display_list,
                     viewport.width as u32,
                     viewport.height as u32,
@@ -936,24 +936,24 @@ fn register_effect_fixture_pipelines(suite: &mut Suite) {
     static PATTERN_PNG: &[u8] = include_bytes!("../../../tests/fixtures/render/assets/pattern.png");
 
     fn pipeline_row(html_source: &'static str, width: u32, height: u32) -> impl Fn() {
-        let document = html::parse_document(html_source, false);
-        let styles = paint::resolve_embedded_styles(&document);
+        let document = megi_html::parse_document(html_source, false);
+        let styles = megi_paint::resolve_embedded_styles(&document);
         let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
-        let root = layout::layout_document(&document, &styles, viewport);
-        let mut backgrounds = paint::BackgroundImages::new();
+        let root = megi_layout::layout_document(&document, &styles, viewport);
+        let mut backgrounds = megi_paint::BackgroundImages::new();
         if let Ok(pattern) = megi_image::decode(PATTERN_PNG) {
             backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
         }
-        let images = paint::ImageStore::new();
+        let images = megi_paint::ImageStore::new();
         move || {
             if let Some(root) = &root {
-                let display_list = paint::build_display_list_with_images_and_backgrounds(
+                let display_list = megi_paint::build_display_list_with_images_and_backgrounds(
                     root,
                     viewport,
                     &images,
                     &backgrounds,
                 );
-                let pixmap = paint::rasterize_display_list(&display_list, width, height);
+                let pixmap = megi_paint::rasterize_display_list(&display_list, width, height);
                 black_box(pixmap.to_png());
             }
         }
@@ -1016,25 +1016,25 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
         html_source: &'static str,
         width: u32,
         height: u32,
-    ) -> (paint::DisplayList, paint::Pixmap) {
+    ) -> (megi_paint::DisplayList, megi_paint::Pixmap) {
         static PATTERN_PNG: &[u8] =
             include_bytes!("../../../tests/fixtures/render/assets/pattern.png");
-        let document = html::parse_document(html_source, false);
-        let styles = paint::resolve_embedded_styles(&document);
+        let document = megi_html::parse_document(html_source, false);
+        let styles = megi_paint::resolve_embedded_styles(&document);
         let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
-        let root = layout::layout_document(&document, &styles, viewport).expect("layout");
-        let mut backgrounds = paint::BackgroundImages::new();
+        let root = megi_layout::layout_document(&document, &styles, viewport).expect("layout");
+        let mut backgrounds = megi_paint::BackgroundImages::new();
         if let Ok(pattern) = megi_image::decode(PATTERN_PNG) {
             backgrounds.insert("assets/pattern.png".to_string(), Arc::new(pattern));
         }
-        let images = paint::ImageStore::new();
-        let display_list = paint::build_display_list_with_images_and_backgrounds(
+        let images = megi_paint::ImageStore::new();
+        let display_list = megi_paint::build_display_list_with_images_and_backgrounds(
             &root,
             viewport,
             &images,
             &backgrounds,
         );
-        let pixmap = paint::rasterize_display_list(&display_list, width, height);
+        let pixmap = megi_paint::rasterize_display_list(&display_list, width, height);
         (display_list, pixmap)
     }
     fn strip(html_source: &'static str, property: &str) -> &'static str {
@@ -1055,7 +1055,7 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
         "paint",
         "backdrop_filter.html display list → pixmap (no PNG)".to_string(),
         move || {
-            black_box(paint::rasterize_display_list(&display_list, 300, 260));
+            black_box(megi_paint::rasterize_display_list(&display_list, 300, 260));
         },
     ));
     suite.add(BenchEntry::new(
@@ -1063,7 +1063,7 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
         "paint",
         "same fixture without backdrop-filter → pixmap (no PNG)".to_string(),
         move || {
-            black_box(paint::rasterize_display_list(&display_list_bare, 300, 260));
+            black_box(megi_paint::rasterize_display_list(&display_list_bare, 300, 260));
         },
     ));
     suite.add(BenchEntry::new(
@@ -1093,19 +1093,19 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
     let width = 800u32;
     let height = 600u32;
     let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
-    fn checker() -> Vec<paint::DisplayItem> {
-        let mut items = vec![paint::DisplayItem::SolidColor {
+    fn checker() -> Vec<megi_paint::DisplayItem> {
+        let mut items = vec![megi_paint::DisplayItem::SolidColor {
             rect: Rect::new(0.0, 0.0, 800.0, 600.0),
-            color: css::Color::WHITE,
+            color: megi_css::Color::WHITE,
         }];
         for y in 0..20 {
             for x in 0..27 {
                 let color = if (x + y) % 2 == 0 {
-                    css::Color::new(220, 40, 60, 255)
+                    megi_css::Color::new(220, 40, 60, 255)
                 } else {
-                    css::Color::new(30, 90, 200, 255)
+                    megi_css::Color::new(30, 90, 200, 255)
                 };
-                items.push(paint::DisplayItem::SolidColor {
+                items.push(megi_paint::DisplayItem::SolidColor {
                     rect: Rect::new((x * 30) as f32, (y * 30) as f32, 30.0, 30.0),
                     color,
                 });
@@ -1113,11 +1113,11 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
         }
         items
     }
-    fn with_filters(filters: Vec<css::FilterFunction>) -> Vec<paint::DisplayItem> {
+    fn with_filters(filters: Vec<megi_css::FilterFunction>) -> Vec<megi_paint::DisplayItem> {
         let mut items = checker();
         for y in 0..4 {
             for x in 0..3 {
-                items.push(paint::DisplayItem::BackdropFilter {
+                items.push(megi_paint::DisplayItem::BackdropFilter {
                     rect: Rect::new(
                         40.0 + (x * 230) as f32,
                         30.0 + (y * 140) as f32,
@@ -1133,18 +1133,18 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
     for (name, filters) in [
         (
             "paint/backdrop-blur-800x600",
-            vec![css::FilterFunction::Blur(4.0)],
+            vec![megi_css::FilterFunction::Blur(4.0)],
         ),
         (
             "paint/backdrop-blur-color-800x600",
             vec![
-                css::FilterFunction::Blur(4.0),
-                css::FilterFunction::Brightness(0.9),
-                css::FilterFunction::Grayscale(0.2),
+                megi_css::FilterFunction::Blur(4.0),
+                megi_css::FilterFunction::Brightness(0.9),
+                megi_css::FilterFunction::Grayscale(0.2),
             ],
         ),
     ] {
-        let list = paint::DisplayList {
+        let list = megi_paint::DisplayList {
             items: with_filters(filters),
         };
         suite.add(
@@ -1153,20 +1153,20 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
                 "paint",
                 "12 backdrop-filter overlays over a checker → pixmap".to_string(),
                 move || {
-                    black_box(paint::rasterize_display_list(&list, width, height));
+                    black_box(megi_paint::rasterize_display_list(&list, width, height));
                 },
             )
             .heavy(),
         );
     }
-    let no_effect = paint::DisplayList { items: checker() };
+    let no_effect = megi_paint::DisplayList { items: checker() };
     suite.add(
         BenchEntry::new(
             "paint/backdrop-blur-no-effect-800x600",
             "paint",
             "same checker background without backdrop filters".to_string(),
             move || {
-                black_box(paint::rasterize_display_list(&no_effect, width, height));
+                black_box(megi_paint::rasterize_display_list(&no_effect, width, height));
             },
         )
         .heavy(),
@@ -1181,20 +1181,20 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
 /// image, so output bytes are identical to `Pixmap::to_png()`. Each pair mutates the
 /// same rows and colors, making the A/B fair at both report sizes.
 fn register_png_region_encoders(suite: &mut Suite) {
-    fn fixture(width: u32, height: u32) -> paint::Pixmap {
-        let mut pixmap = paint::Pixmap::new(width, height);
+    fn fixture(width: u32, height: u32) -> megi_paint::Pixmap {
+        let mut pixmap = megi_paint::Pixmap::new(width, height);
         for y in 0..height {
             for x in 0..width {
                 let r = ((x * 7 + y * 3) % 256) as u8;
                 let g = ((x * 2 + y * 11) % 256) as u8;
                 let b = ((x * 5 + y * 5) % 256) as u8;
-                pixmap.set_pixel(x, y, css::Color::new(r, g, b, 255));
+                pixmap.set_pixel(x, y, megi_css::Color::new(r, g, b, 255));
             }
         }
         pixmap
     }
 
-    fn fill_band(pixmap: &mut paint::Pixmap, rows: u32, color: css::Color) {
+    fn fill_band(pixmap: &mut megi_paint::Pixmap, rows: u32, color: megi_css::Color) {
         let stride = pixmap.width as usize;
         let end = (rows as usize * stride).min(pixmap.pixels.len());
         pixmap.pixels[..end].fill(color);
@@ -1203,7 +1203,7 @@ fn register_png_region_encoders(suite: &mut Suite) {
     for (width, height) in [(800u32, 600u32), (1024, 768)] {
         for pct in [10u32, 25, 50, 100] {
             let dirty_rows = ((height as u64 * u64::from(pct)) / 100) as u32;
-            let dirty = layout::Rect::new(0.0, 0.0, width as f32, dirty_rows as f32);
+            let dirty = megi_layout::Rect::new(0.0, 0.0, width as f32, dirty_rows as f32);
             let full_name: &'static str = match (width, pct) {
                 (800, 10) => "paint/png-encode-full-800x600-10pct",
                 (800, 25) => "paint/png-encode-full-800x600-25pct",
@@ -1235,9 +1235,9 @@ fn register_png_region_encoders(suite: &mut Suite) {
                     move || {
                         full_alternate = !full_alternate;
                         let color = if full_alternate {
-                            css::Color::new(11, 22, 33, 255)
+                            megi_css::Color::new(11, 22, 33, 255)
                         } else {
-                            css::Color::new(44, 55, 66, 255)
+                            megi_css::Color::new(44, 55, 66, 255)
                         };
                         fill_band(&mut full_pixmap, dirty_rows, color);
                         black_box(full_pixmap.to_png());
@@ -1247,7 +1247,7 @@ fn register_png_region_encoders(suite: &mut Suite) {
             );
 
             let mut pixmap = fixture(width, height);
-            let mut encoder = paint::PngRegionEncoder::new();
+            let mut encoder = megi_paint::PngRegionEncoder::new();
             let _ = encoder.encode_regions(&pixmap, &[dirty]);
             let mut alternate = false;
             suite.add(
@@ -1258,9 +1258,9 @@ fn register_png_region_encoders(suite: &mut Suite) {
                     move || {
                         alternate = !alternate;
                         let color = if alternate {
-                            css::Color::new(11, 22, 33, 255)
+                            megi_css::Color::new(11, 22, 33, 255)
                         } else {
-                            css::Color::new(44, 55, 66, 255)
+                            megi_css::Color::new(44, 55, 66, 255)
                         };
                         fill_band(&mut pixmap, dirty_rows, color);
                         black_box(encoder.encode_regions(&pixmap, &[dirty]));
@@ -1379,7 +1379,7 @@ fn register_image(suite: &mut Suite) {
 /// `pipeline/html-to-png` predates the `render` crate and composes html/css/layout/paint
 /// manually, so it never exercises the real browser pipeline (loader, resource scanning,
 /// style collection, scripts/images scans, render options and the final PNG encode). This
-/// row feeds a deterministic data URL through `render::render_url` to measure that path.
+/// row feeds a deterministic data URL through `megi_render::render_url` to measure that path.
 fn register_render_pipeline(suite: &mut Suite) {
     fn percent_encode_data_url(html: &str) -> String {
         let mut out = String::with_capacity(html.len() + html.len() / 2 + 16);
@@ -1410,9 +1410,9 @@ fn register_render_pipeline(suite: &mut Suite) {
     }
     html.push_str("</body></html>");
     let url = percent_encode_data_url(&html);
-    let options = render::RenderOptions {
-        viewport: render::Viewport::new(800, 600).expect("render viewport"),
-        ..render::RenderOptions::default()
+    let options = megi_render::RenderOptions {
+        viewport: megi_render::Viewport::new(800, 600).expect("render viewport"),
+        ..megi_render::RenderOptions::default()
     };
     let detail = format!(
         "render crate end-to-end: data URL ({} B HTML) → DOM/styles/layout/paint → PNG",
@@ -1420,7 +1420,7 @@ fn register_render_pipeline(suite: &mut Suite) {
     );
     suite.add(
         BenchEntry::new("render/html-to-png", "render", detail, move || {
-            black_box(render::render_url(&url, &options).expect("render benchmark fixture"));
+            black_box(megi_render::render_url(&url, &options).expect("render benchmark fixture"));
         })
         .with_units(0.096, "MPix")
         .heavy(),
@@ -1606,7 +1606,7 @@ fn register_png_rows(suite: &mut Suite) {
             )
         };
         let rgba = Arc::new(png_pattern(width, height, false, false));
-        let filtered = Arc::new(paint::filter_scanlines(width, height, &rgba));
+        let filtered = Arc::new(megi_paint::filter_scanlines(width, height, &rgba));
         let filter_rgba = Arc::clone(&rgba);
         suite.add(
             BenchEntry::new(
@@ -1614,7 +1614,7 @@ fn register_png_rows(suite: &mut Suite) {
                 "paint",
                 format!("filter_scanlines {width}x{height} (flat UI)"),
                 move || {
-                    black_box(paint::filter_scanlines(width, height, &filter_rgba));
+                    black_box(megi_paint::filter_scanlines(width, height, &filter_rgba));
                 },
             )
             .heavy(),
@@ -1626,7 +1626,7 @@ fn register_png_rows(suite: &mut Suite) {
                 "paint",
                 format!("zlib_compress {width}x{height} (pre-filtered flat UI)"),
                 move || {
-                    black_box(paint::zlib_compress(&deflate_filtered));
+                    black_box(megi_paint::zlib_compress(&deflate_filtered));
                 },
             )
             .heavy(),
@@ -1638,7 +1638,7 @@ fn register_png_rows(suite: &mut Suite) {
                 "paint",
                 format!("encode_rgba {width}x{height} (flat UI)"),
                 move || {
-                    black_box(paint::encode_rgba(width, height, &encode_rgba));
+                    black_box(megi_paint::encode_rgba(width, height, &encode_rgba));
                 },
             )
             .heavy(),
@@ -1655,7 +1655,7 @@ fn register_png_rows(suite: &mut Suite) {
                 "paint",
                 format!("encode_rgba {width}x{height} (photo alpha)"),
                 move || {
-                    black_box(paint::encode_rgba(width, height, &alpha));
+                    black_box(megi_paint::encode_rgba(width, height, &alpha));
                 },
             )
             .heavy(),

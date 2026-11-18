@@ -201,7 +201,7 @@ pub enum WebSocketEvent {
 }
 
 /// Host-owned WebSocket transport: the JS side sends text and polls for incoming events.
-/// The real implementation (in the shell) drives `net::websocket::WebSocketClient`.
+/// The real implementation (in the shell) drives `megi_net::websocket::WebSocketClient`.
 pub trait WebSocketTransport: Send {
     fn send(&mut self, text: &str) -> Result<(), crate::error::JsError>;
     fn poll(&mut self) -> Vec<WebSocketEvent>;

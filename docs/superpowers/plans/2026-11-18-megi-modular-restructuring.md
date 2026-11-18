@@ -126,7 +126,7 @@ Steps mirror Task 1.1; gate: `cargo test --workspace` and `cargo run --release -
 - Test: `crates/display/tests/contract.rs`, `cargo test -p megi-display -p megi-paint -p megi-render`
 
 **Interfaces:**
-- Consumes: `paint::DisplayItem`, `paint::DisplayList`, `paint::HitRegion` current definitions.
+- Consumes: `megi_paint::DisplayItem`, `megi_paint::DisplayList`, `megi_paint::HitRegion` current definitions.
 - Produces: `megi_display::{DisplayItem, DisplayList, HitRegion, HitKind}`; `paint` re-exports them for compatibility during this task only.
 
 - [ ] **Step 1: Write a test asserting `DisplayItem` and `DisplayList` are `Clone + Debug` and contain no references** (compile-time `fn assert_owned<T: 'static>()`, no lifetimes). Run → FAIL (crate missing).
@@ -141,7 +141,7 @@ Steps mirror Task 1.1; gate: `cargo test --workspace` and `cargo run --release -
 - Test: `crates/raster/tests/golden.rs` (moved from paint), `python3 tools/png_check.py`
 
 **Interfaces:**
-- Consumes: `paint::rasterize_display_list*`, `paint::Pixmap`, `paint::RasterStats`.
+- Consumes: `megi_paint::rasterize_display_list*`, `megi_paint::Pixmap`, `megi_paint::RasterStats`.
 - Produces: `megi_raster::{rasterize_display_list, rasterize_display_list_with_font_database, RgbaFrame, RasterStats, encode_png}`. `render` calls `megi_raster` directly; `paint` no longer owns a rasterizer.
 
 - [ ] **Step 1: Copy the goldens before the move** (`cp` the fixture PNGs to `/tmp/opencode/megi-goldens-before/`); record md5.
@@ -153,7 +153,7 @@ Steps mirror Task 1.1; gate: `cargo test --workspace` and `cargo run --release -
 
 **Files:** `crates/net/src/{lib.rs,pac.rs,proxy.rs}`, `crates/net/Cargo.toml`, `crates/render/src/lib.rs`
 **Interfaces:** produces `megi_net::PacEvaluator` trait and removal of the `js` dependency from `megi-net`.
-Steps: define trait; change `pac::resolve_directives` to take `&dyn PacEvaluator`; implement adapter in `render`; remove `pac = ["dep:js"]`; gate `cargo check -p megi-net --no-default-features` + `cargo test -p megi-net` → PASS. Commit.
+Steps: define trait; change `pac::resolve_directives` to take `&dyn PacEvaluator`; implement adapter in `render`; remove `pac = ["dep:megi-js"]`; gate `cargo check -p megi-net --no-default-features` + `cargo test -p megi-net` → PASS. Commit.
 
 ### Task 4.1: De-Rc the JS host
 
@@ -165,7 +165,7 @@ Steps: add channel-based test proving a timer callback can mutate DOM without `b
 
 **Files:** create `crates/webview/{Cargo.toml,src/lib.rs,src/web_view.rs,src/event.rs,src/frame.rs,src/navigation.rs}`; move pure modules from `crates/browser/src/`.
 **Interfaces:** produces `WebView::new(options)`, `load(url)`, `tick()`, `on_event(WebEvent)`, `frame() -> &RgbaFrame`, `hit_test(x,y)`, `HostCallbacks`.
-Steps: test that a `WebView` renders `data:text/html,<h1>Hi</h1>` to a frame with no window dependency; implement using `render::render_url`; add features `default = []`, `full`; gate `cargo tree -p megi-webview --no-default-features | grep boa` → empty; `cargo test -p megi-webview` → PASS. Commit.
+Steps: test that a `WebView` renders `data:text/html,<h1>Hi</h1>` to a frame with no window dependency; implement using `megi_render::render_url`; add features `default = []`, `full`; gate `cargo tree -p megi-webview --no-default-features | grep boa` → empty; `cargo test -p megi-webview` → PASS. Commit.
 
 ### Task 6.1: Make `megi-browser` a thin frontend
 

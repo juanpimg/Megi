@@ -11,10 +11,10 @@ pub const LINE_HEIGHT: u32 = 24;
 /// Maximum content height rendered in one pass, in CSS pixels.
 ///
 /// The `render` pipeline caps a single viewport at
-/// [`render::MAX_VIEWPORT_DIMENSION`] (8192 px). Pages taller than that are
+/// [`megi_render::MAX_VIEWPORT_DIMENSION`] (8192 px). Pages taller than that are
 /// clipped with a warning (the shell advertises a 32768 px memory cap, but the
 /// renderer limit is the effective one).
-pub const MAX_CONTENT_HEIGHT: u32 = render::MAX_VIEWPORT_DIMENSION;
+pub const MAX_CONTENT_HEIGHT: u32 = megi_render::MAX_VIEWPORT_DIMENSION;
 
 /// Clamped vertical scroll state of the window.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

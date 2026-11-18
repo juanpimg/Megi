@@ -13,7 +13,7 @@ P3 — una baseline puede registrar `iterations:10/warmup:5` cuando se midió 3/
 `--warmup 0` cuela ruido cold en comparaciones.
 
 ## Pasos para reproducir
-1. `cargo run --release -p bench -- --help` (cap sólo en `--iterations`).
+1. `cargo run --release -p megi-bench -- --help` (cap sólo en `--iterations`).
 2. `--warmup 0 --iterations 1 --filter tag-40k-attrs` (+ variante `--json`):
    header `1 iterations (+0 warm-up)`, fila OK; JSON meta `"iterations": 5,
    "warmup": 0` (pedidos) vs fila `"iterations": 3` con 3 samples (efectivo).

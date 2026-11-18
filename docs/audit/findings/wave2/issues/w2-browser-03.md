@@ -26,20 +26,20 @@ Exfiltración menor de rutas locales hacia script de página, solo en documentos
 
 ```rust
 let parsed = Url::parse(url)
-    .map_err(|error| js::JsError::Runtime(format!("worker script URL {url}: {error}")))?;
+    .map_err(|error| megi_js::JsError::Runtime(format!("worker script URL {url}: {error}")))?;
 ...
-    return Err(js::JsError::Runtime(format!(
+    return Err(megi_js::JsError::Runtime(format!(
         "worker scripts only support file:// in render: {url}"
     )));
 ...
-    return Err(js::JsError::Runtime(format!(
+    return Err(megi_js::JsError::Runtime(format!(
         "worker script {url}: local file access is blocked for this document"
     )));
 ...
-let bytes = net::load_file_url_with_limit(&parsed, max_bytes)
-    .map_err(|error| js::JsError::Runtime(format!("worker script {url}: {error}")))?;
+let bytes = megi_net::load_file_url_with_limit(&parsed, max_bytes)
+    .map_err(|error| megi_js::JsError::Runtime(format!("worker script {url}: {error}")))?;
 String::from_utf8(bytes)
-    .map_err(|error| js::JsError::Runtime(format!("worker script {url} is not UTF-8: {error}")))
+    .map_err(|error| megi_js::JsError::Runtime(format!("worker script {url} is not UTF-8: {error}")))
 ```
 
 Y `crates/js/src/runtime.rs` (`worker_constructor`, `3c06db8:8017-8024`) entrega ese texto al script sin sanear:

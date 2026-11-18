@@ -25,7 +25,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 - Trabajamos con las suites de prueba de referencia de la industria:
   - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
-- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p test_harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El total vigente de tests se publica en [PROGRESS.md](PROGRESS.md) (regenerado por `tools/update_progress.py`).
+- El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p megi-test-harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El total vigente de tests se publica en [PROGRESS.md](PROGRESS.md) (regenerado por `tools/update_progress.py`).
 
 ### 1.4 Modelo de Memoria en Arena (Sin `Rc<RefCell<Node>>`)
 - Uno de los mayores cuellos de botella y fuentes de *memory leaks* en motores web en Rust es el uso de `Rc<RefCell<Node>>` o recolectores de basura pesados.
@@ -47,7 +47,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 
 - La MSRV vive **solo** en `Cargo.toml` (`rust-version`); los crates la heredan con `rust-version.workspace = true`. No se declara una MSRV distinta por crate.
 - Hoy es **1.91**, y no es una elección libre: `boa_engine` 0.22 exige 1.91 (`cargo +1.88 check` falla con *"rustc 1.88.0 is not supported"*). Si se sube Boa, la MSRV sube con él.
-- El job `msrv` de CI instala un toolchain **fijado** (`1.91.0`, no `stable`) y ejecuta `cargo check --workspace --all-targets --locked` **y** el build sin JS (`-p js`, `-p render` con `--no-default-features`).
+- El job `msrv` de CI instala un toolchain **fijado** (`1.91.0`, no `stable`) y ejecuta `cargo check --workspace --all-targets --locked` **y** el build sin JS (`-p megi-js`, `-p megi-render` con `--no-default-features`).
 - Se usa `--locked` a propósito: la MSRV se valida contra el lockfile versionado, que es exactamente lo que compilan los contribuyentes y los usuarios de `cargo install --locked`.
 - **No** se ejecuta `-Z minimal-versions` en CI: exigiría un árbol de dependencias mínimo irreal y produce rojos que nadie reproduce. La política es la contraria: el lockfile es la fuente de verdad y, si una actualización de dependencia rompe la MSRV, el propio job falla con el nombre del crate culpable; se resuelve fijando la versión anterior o subiendo `rust-version` de forma explícita (con su nota en `CHANGELOG.md`).
 - El toolchain de desarrollo puede ser más nuevo (`stable`); el job semanal `toolchain-drift` compila con el `stable` más reciente para detectar lints/novedades que rompan la build antes de que lo haga un usuario.
@@ -97,8 +97,8 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hechos (ronda 8): BFC/IFC, posicionamiento, floats, overflow, tablas §17 (rowspan/fixed/inline-table/collapse + fast path), inline-block, reemplazados, árbol de celdas expuesto y verificado (133 tests).
 - **Paint (`crates/paint`)**:
   - Gradientes ya HECHOS (rondas 19-20): `DisplayItem::Gradient` por tile con AA/sRGB, size/position/repeat/origin/clip/radius/clip:text y **conic/hints/OKLab** (ronda 20); siguientes: `display-p3`/espacios avanzados, `border-image`, filtros y pulido de `border-collapse` (colores).
-  - **Ronda 18 HECHO**: `overflow:hidden`+`border-radius` recorta contenido real y `background-clip:text` compone por máscara de glifos (`cargo test -p paint --test clipping`, 9 tests); display list byte-idéntica sin clipping.
-  - **Ronda 17**: **`border-radius`/`box-shadow`/`text-shadow`** (DisplayItems redondeados, blur determinista 3 pasadas; `cargo test -p paint --test effects`).
+  - **Ronda 18 HECHO**: `overflow:hidden`+`border-radius` recorta contenido real y `background-clip:text` compone por máscara de glifos (`cargo test -p megi-paint --test clipping`, 9 tests); display list byte-idéntica sin clipping.
+  - **Ronda 17**: **`border-radius`/`box-shadow`/`text-shadow`** (DisplayItems redondeados, blur determinista 3 pasadas; `cargo test -p megi-paint --test effects`).
   - Ya hechos (rondas 15-16): **`background-repeat`/`size`/`position`/`origin`/`clip`/`attachment`** con tiling/clip (cap 4096), **multi-capa `background_layers`** (`space`/`round` reales) y legacy flag para goldens.
   - Glyph cache global, presupuestos de memoria/tiempo y capas de opacidad.
   - Ya hecho (rondas 9–10): **hit-testing aditivo** (`HitRegion`/`hit_test`/`find_link_at`, 11 tests) y su cableado en `render` (`RenderOutput.hit_regions`, +0,6 µs) sin cambiar golden.
@@ -106,7 +106,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - **Ronda 20 HECHO**: `conic-gradient`/`repeating-conic` + color hints + espacios `srgb|srgb-linear|oklab`, `calc()` mixto (`CalcLengths`), tipografía (`text-transform`/spacing/white-space) y **fix de custom properties** lazy/COW (`Option<Arc<HashMap>>`, fast path `needs_resolution`; A/B −14,9 % css resolve quiet).
 - **Red y render (`crates/net`, `crates/render`, `crates/image`) — Fase 5 (≈99 %)**:
   - **Ronda 22 HECHO**: **HTTP/2 MVP** (HPACK/framing/ALPN h2 + fallback h1; caps 16 KiB frame/64 KiB headers/2 streams), **JPEG baseline y GIF87a/89a desde cero** y sniffing PNG|JPEG|GIF en render (PNG decode 6,65 ms p50). **Ronda 23 HECHO**: HTTP/2 **flow control**, **multiplexado ≥2 streams** y **SETTINGS** avanzados con ACK; JPEG **progresivo subset** y **EXIF orientation 1–8**; **WebP detectado sin decoder**. Pendientes: push/prioridades/h2c/trailers/request bodies, streaming, PSL completa, multi-range, WebP VP8L/VP8.
-  - **Ronda 19 HECHO**: `ReferrerConfig` instalado en el loader de render (header>meta>default) con `Referer`/SameSite reales y `RenderStats.referrer_policy`; estado CSS real (`css::state::with_state` pre/post-script) con `css_state.html`; 136 tests render.
+  - **Ronda 19 HECHO**: `ReferrerConfig` instalado en el loader de render (header>meta>default) con `Referer`/SameSite reales y `RenderStats.referrer_policy`; estado CSS real (`megi_css::state::with_state` pre/post-script) con `css_state.html`; 136 tests render.
   - **Ronda 18 HECHO**: SameSite+PSL reducida, Referrer-Policy, Range/206 y cache refinada (`no-cache`/`must-revalidate`/`s-maxage`/`Age`/`requires_revalidation`); net 207 tests.
   - Endurecer tests HTTP/TLS, ampliar fixtures de backgrounds y cubrir **red avanzada E2E** (cookies por render/sesión, CORS/credentials con denegación no fatal, gzip/deflate en HTML/CSS; `--cookies`/`--origin` ya hechos en la ronda 10).
   - Ya hechos: TLS, caché, `data:`, pipeline URL→PNG, `<img>` E2E, `@import`+media, **backgrounds E2E**, **cookies RFC 6265 + CORS básico + gzip/deflate con caps**, **ejecución JS (WP-6.2 host)**, **fuentes web @font-face/WOFF2 E2E** y decoder PNG/inflate.
@@ -120,7 +120,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
   - Ampliar corpus y targets; mejorar la señal de la CI nocturna. Ver [`docs/FUZZING.md`](docs/FUZZING.md).
-- **Fase 7 — shell (`crates/shell`, ≈75 %)**: ya hechos ventana/worker/scroll/entrada/HiDPI, **navegación con historial/título** (WP-7.5), **enlaces con hit regions nativos**, **zoom** (`--zoom`/`Ctrl+=/-/0`) y **auto-refresh opt-in** (`--refresh-ms`). **Ronda 17**: **formularios editables** (UA styles, `src/forms.rs` con FocusState/TextEdit UTF-8/snapshot re-render, clic/teclado/Tab/checkbox). Siguientes: pestañas, widgets nativos/select dropdown, validación/submit, **event loop vivo en el host** y pruebas con Xvfb.
+- **Fase 7 — shell (`crates/browser`, ≈75 %)**: ya hechos ventana/worker/scroll/entrada/HiDPI, **navegación con historial/título** (WP-7.5), **enlaces con hit regions nativos**, **zoom** (`--zoom`/`Ctrl+=/-/0`) y **auto-refresh opt-in** (`--refresh-ms`). **Ronda 17**: **formularios editables** (UA styles, `src/forms.rs` con FocusState/TextEdit UTF-8/snapshot re-render, clic/teclado/Tab/checkbox). Siguientes: pestañas, widgets nativos/select dropdown, validación/submit, **event loop vivo en el host** y pruebas con Xvfb.
 - **Fase 6 — JS (`crates/js` + `crates/render` + parser, WP-6.1/6.2/6.4 + WP-A/WP-B + eventos + APIs de navegador HECHOS, ≈90 %)**: Boa 0.22.x con feature `js` ON por defecto (build mínimo `--no-default-features`), bindings `NodeId↔handle` generacionales, eventos/timers con reloj inyectable, **WP-B** (CSSStyleDeclaration, `getComputedStyle` con provider, NodeList, matches/closest, insertAdjacent, identidad), **event loop presupuestado en `render`** y **WP-6.4** (scripts parser-inserted + `document.write` ⇒ gate 3.904/3.904). **Eventos avanzados (ronda 12)**: `currentTarget`/`eventPhase`, `once`/`passive`, handlers inline `onclick`/`onload`/`onerror`, excepciones capturadas. **APIs de navegador (ronda 16)**: `matchMedia`, viewport/DPR/scroll, `requestAnimationFrame` 16 ms, `onerror`, `readyState`, consola y `getComputedStyle` real pre-script, cableadas en `render` (rAF epoch fijo, errores ⇒ warnings). Siguientes: módulos ES, memoria real, eventos `resize`/`scroll`/`change` y event loop vivo en el shell. Ver [`docs/JAVASCRIPT-STRATEGY.md`](docs/JAVASCRIPT-STRATEGY.md).
 - **Rendimiento (rondas 10-12)**: pipeline 167,6→**134-137 ms**, `html/realistic-1mb` ~19-20 ms, `tag-40k-attr` ~12,4 ms; ronda 12: **layout −14,6 %**; ronda 15: **IFC −28 %** (layout 50,5→36,3 ms) y **pipeline 132,9→120,5 ms** con goldens byte-idénticos; encoder PNG −30,5 % invariante y `massive-end-p` ~19 ms. Siguiente techo: IFC (~34 ms; owned-styles API + caché de familias), Huffman dinámico para ratio PNG y bench E2E con JS. Medidor: `./tools/bench.sh` (baseline en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)).
 - **Harness & Tooling (`crates/test_harness`, `tools/`)**:
@@ -146,7 +146,7 @@ cargo +1.91 check --workspace --all-targets
 
 #### Dependencias del sistema (Linux)
 
-Solo `crates/shell` necesita bibliotecas nativas (`winit`/`softbuffer` con X11 y Wayland); el resto del workspace no necesita bibliotecas de sistema. En Debian/Ubuntu, los mismos paquetes que instala CI:
+Solo `crates/browser` necesita bibliotecas nativas (`winit`/`softbuffer` con X11 y Wayland); el resto del workspace no necesita bibliotecas de sistema. En Debian/Ubuntu, los mismos paquetes que instala CI:
 
 ```bash
 sudo apt-get install -y --no-install-recommends \
@@ -186,17 +186,17 @@ cargo fmt
 
 # Comprobaciones individuales útiles
 cargo test --workspace                         # suite completa (con JS por defecto; recuento en docs/status/badge-tests.svg)
-cargo test -p js --no-default-features         # stub del motor sin Boa (CI)
-cargo test -p render --no-default-features     # render sin scripts (CI)
+cargo test -p megi-js --no-default-features         # stub del motor sin Boa (CI)
+cargo test -p megi-render --no-default-features     # render sin scripts (CI)
 cargo +1.91 check --workspace --all-targets
-cargo run -p test_harness -- --summary          # gate 4 suites: PASS, exit 0
-cargo run -p test_harness -- --summary --strict # exit 1 si hay fallos no aceptados
+cargo run -p megi-test-harness -- --summary          # gate 4 suites: PASS, exit 0
+cargo run -p megi-test-harness -- --summary --strict # exit 1 si hay fallos no aceptados
 
 # Si tu CPU es más lenta que la de CI, escala los presupuestos de complejidad (CI usa 1.0)
-MEGI_PERF_BUDGET_SCALE=4 cargo test -p html --test perf
+MEGI_PERF_BUDGET_SCALE=4 cargo test -p megi-html --test perf
 
 # Pipeline HTML → PNG (Fase 4) y validación de la imagen
-cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run --release -p megi-paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
 
 # Rendimiento (release; baseline en docs/PERFORMANCE.md)
@@ -206,35 +206,35 @@ python3 tools/png_check.py /tmp/basic.png
 ./tools/bench.sh --filter pipeline  # ronda 12: ~134-137 ms
 
 # Red, render y JS (Fases 5–6; tests offline)
-cargo test -p net -p render -p megi-image
-cargo test -p js
-cargo test -p js --no-default-features   # stub mínimo sin Boa
-cargo test -p js                                # 58 tests (eventos avanzados)
-cargo test -p svg                               # crate SVG (73 tests)
-cargo test -p render --test svg_tests            # SVG E2E en render (11 tests)
-cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
-cargo run -p render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
-cargo run -p shell -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
-cargo test -p paint --test effects
-cargo run -p render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260
-cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
-cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
-cargo run --release -p bench -- --filter layout --iterations 5   # ~36 ms
-cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
-cargo test -p megi-fonts -p css -p render             # fuentes web @font-face/WOFF2
-cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03…
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
-cargo test -p html --lib scripting             # WP-6.4: hook parser-inserted
-cargo test -p render --test scripting_tests   # JS ejecutado y visible en el PNG (7 fixtures js_*)
-cargo test -p render --test event_loop_tests  # event loop presupuestado (6 fixtures js_event_*)
-cargo test -p paint --test hit_testing        # hit-testing aditivo (topmost, links, clip)
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png   # con JS
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
-cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
-cargo run -p render -- tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768
-cargo run -p shell -- tests/fixtures/render/showcase/index.html              # navegación: clic, Alt+←/→, b/n, r
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # Fase 7 headless
+cargo test -p megi-net -p megi-render -p megi-image
+cargo test -p megi-js
+cargo test -p megi-js --no-default-features   # stub mínimo sin Boa
+cargo test -p megi-js                                # 58 tests (eventos avanzados)
+cargo test -p megi-svg                               # crate SVG (73 tests)
+cargo test -p megi-render --test svg_tests            # SVG E2E en render (11 tests)
+cargo run -p megi-render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
+cargo run -p megi-render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
+cargo run -p megi-browser -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
+cargo test -p megi-paint --test effects
+cargo run -p megi-render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260
+cargo run -p megi-render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
+cargo run -p megi-render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
+cargo run --release -p megi-bench -- --filter layout --iterations 5   # ~36 ms
+cargo run -p megi-render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
+cargo test -p megi-fonts -p megi-css -p megi-render             # fuentes web @font-face/WOFF2
+cargo run -p megi-render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03…
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
+cargo test -p megi-html --lib scripting             # WP-6.4: hook parser-inserted
+cargo test -p megi-render --test scripting_tests   # JS ejecutado y visible en el PNG (7 fixtures js_*)
+cargo test -p megi-render --test event_loop_tests  # event loop presupuestado (6 fixtures js_event_*)
+cargo test -p megi-paint --test hit_testing        # hit-testing aditivo (topmost, links, clip)
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_on.png   # con JS
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
+cargo run -p megi-render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
+cargo run -p megi-render -- tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768
+cargo run -p megi-browser -- tests/fixtures/render/showcase/index.html              # navegación: clic, Alt+←/→, b/n, r
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # Fase 7 headless
 tools/megi.sh tests/fixtures/render/showcase/index.html                             # ventana usable (X11/Wayland)
 
 # Fuzzing (workspace aparte; nightly + ASan)
@@ -309,7 +309,7 @@ Antes de abrir o actualizar un PR, ejecuta y verifica:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo run -p test_harness -- --summary   # gate de conformidad: PASS
+cargo run -p megi-test-harness -- --summary   # gate de conformidad: PASS
 ```
 
 Cuando aplique: `cargo doc --workspace --no-deps`, regenerar `PROGRESS.md`/`docs/status/*` con `python3 tools/update_progress.py --write` si cambian métricas/fases, y comprobar goldens/benchmarks afectados.

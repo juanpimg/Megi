@@ -1,6 +1,6 @@
 //! Round 29: `<textPath>` and SMIL values/keyTimes/keySplines + colour animation.
 
-use svg::{SvgImage, SvgOptions, render_svg_with_time};
+use megi_svg::{SvgImage, SvgOptions, render_svg_with_time};
 
 fn render(bytes: &[u8], width: u32, height: u32, time: f32) -> SvgImage {
     render_svg_with_time(

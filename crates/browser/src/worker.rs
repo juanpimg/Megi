@@ -37,8 +37,8 @@ use crate::links::{LinkRegion, collect_link_regions};
 use crate::scroll;
 use crate::title::document_title;
 
-use css::{Overflow, Position};
-use layout::LayoutBox;
+use megi_css::{Overflow, Position};
+use megi_layout::LayoutBox;
 
 /// Coalescing window for resize/scale-triggered renders.
 pub const RENDER_DEBOUNCE: Duration = Duration::from_millis(120);
@@ -66,7 +66,7 @@ pub struct RenderRequest {
     pub host_events: Vec<String>,
     /// Structured UI/DOM events (keyboard/input/focus/change/submit) forwarded from the
     /// shell into the page's live JS realm (#1504).
-    pub host_dom_events: Vec<render::HostDomEvent>,
+    pub host_dom_events: Vec<megi_render::HostDomEvent>,
     /// Optional form POST `(Content-Type, body)` for the main document request (#1538).
     pub form_post: Option<(String, Vec<u8>)>,
 }
@@ -272,7 +272,7 @@ impl FrameStore {
         css_width: u32,
         css_height: u32,
         base_override: Option<&str>,
-        host_dom_events: Vec<render::HostDomEvent>,
+        host_dom_events: Vec<megi_render::HostDomEvent>,
     ) -> RenderRequest {
         self.generation = self.generation.saturating_add(1);
         self.pending = true;
@@ -493,14 +493,14 @@ where
 /// and only re-renders at full content height when the page is taller than the
 /// window (typical pages: one render).
 pub fn render_document(request: &RenderRequest) -> Result<RenderFrame, String> {
-    render_document_with_options(request, &render::RenderOptions::default())
+    render_document_with_options(request, &megi_render::RenderOptions::default())
 }
 
-/// [`render_document`] with base [`render::RenderOptions`] (cookie jar, CORS origin,
+/// [`render_document`] with base [`megi_render::RenderOptions`] (cookie jar, CORS origin,
 /// scripting toggles, network caps) applied to every render of the window.
 pub fn render_document_with_options(
     request: &RenderRequest,
-    base_options: &render::RenderOptions,
+    base_options: &megi_render::RenderOptions,
 ) -> Result<RenderFrame, String> {
     // Height probe must not run page scripts: a tall page would otherwise execute
     // timers/fetches/storage writes twice (once for the probe, once at full height, #1471).
@@ -628,10 +628,10 @@ fn scrollable_content_height(root: &LayoutBox) -> f32 {
 /// disables scripting so tall pages do not run scripts twice (#1471).
 fn view_options(
     request: &RenderRequest,
-    viewport: render::Viewport,
-    base_options: &render::RenderOptions,
+    viewport: megi_render::Viewport,
+    base_options: &megi_render::RenderOptions,
     probe: bool,
-) -> render::RenderOptions {
+) -> megi_render::RenderOptions {
     let mut options = base_options.clone();
     options.viewport = viewport;
     if let Some(base) = &request.base_override {
@@ -640,7 +640,7 @@ fn view_options(
     // The height probe never executes page scripts (#1471); the final render honors
     // the caller's scripting toggle.
     if probe || !request.scripting {
-        options.scripting = render::ScriptingMode::Disabled;
+        options.scripting = megi_render::ScriptingMode::Disabled;
     }
     // Host-dispatched events run on `window` after `load`, before the final re-render (#1503).
     options.host_events = request.host_events.clone();
@@ -653,10 +653,10 @@ fn view_options(
 fn render_view(
     request: &RenderRequest,
     height: u32,
-    base_options: &render::RenderOptions,
+    base_options: &megi_render::RenderOptions,
     probe: bool,
-) -> Result<render::RenderOutput, String> {
-    let viewport = render::Viewport::new(request.css_width, height).map_err(|error| {
+) -> Result<megi_render::RenderOutput, String> {
+    let viewport = megi_render::Viewport::new(request.css_width, height).map_err(|error| {
         format!(
             "invalid render viewport {}x{height}: {error}",
             request.css_width
@@ -668,10 +668,10 @@ fn render_view(
         Err((code, message)) => {
             let page =
                 crate::pages::data_url(&crate::pages::error_html(&request.input, &code, &message));
-            return render::render_url(&page, &options).map_err(|error| error.to_string());
+            return megi_render::render_url(&page, &options).map_err(|error| error.to_string());
         }
     };
-    match render::render_url(&prepared, &options) {
+    match megi_render::render_url(&prepared, &options) {
         Ok(output) => Ok(output),
         Err(error) => {
             // Browser error page for DNS/HTTP/TLS/file failures instead of a blank window.
@@ -681,7 +681,7 @@ fn render_view(
                 code,
                 &error.to_string(),
             ));
-            render::render_url(&page, &options).map_err(|_| error.to_string())
+            megi_render::render_url(&page, &options).map_err(|_| error.to_string())
         }
     }
 }
@@ -811,20 +811,20 @@ mod unit_tests {
             host_dom_events: Vec::new(),
             form_post: None,
         };
-        let viewport = render::Viewport::new(100, 100).expect("viewport");
-        let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
+        let viewport = megi_render::Viewport::new(100, 100).expect("viewport");
+        let options = view_options(&request, viewport, &megi_render::RenderOptions::default(), false);
         assert_eq!(options.host_events, vec!["popstate".to_owned()]);
     }
 
     #[test]
     fn ui_event_request_and_view_options_propagate_host_dom_events() {
         let mut store = FrameStore::new();
-        let events = vec![render::HostDomEvent {
+        let events = vec![megi_render::HostDomEvent {
             event_type: "input".to_owned(),
-            target: render::HostEventTarget::FormControl(3),
+            target: megi_render::HostEventTarget::FormControl(3),
             bubbles: true,
             cancelable: false,
-            kind: render::HostUiEventKind::Input {
+            kind: megi_render::HostUiEventKind::Input {
                 data: Some("x".to_owned()),
                 input_type: "insertText".to_owned(),
             },
@@ -838,8 +838,8 @@ mod unit_tests {
         );
         assert!(request.scripting);
         assert_eq!(request.host_dom_events, events);
-        let viewport = render::Viewport::new(320, 200).expect("viewport");
-        let options = view_options(&request, viewport, &render::RenderOptions::default(), false);
+        let viewport = megi_render::Viewport::new(320, 200).expect("viewport");
+        let options = view_options(&request, viewport, &megi_render::RenderOptions::default(), false);
         assert_eq!(options.host_dom_events, events);
     }
 

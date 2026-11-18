@@ -70,7 +70,7 @@ impl SavedDownload {
 ///
 /// `https://example.com/x` → `example.com`; `file:` URLs → `local`; `data:` URLs → `page`;
 /// everything else is lowercased and reduced to `[a-z0-9-]`, capped at [`MAX_HOST_CHARS`].
-pub fn sanitize_host(url: &net::Url) -> String {
+pub fn sanitize_host(url: &megi_net::Url) -> String {
     let raw = match url.scheme().as_str() {
         "file" => "local".to_string(),
         "data" => "page".to_string(),
@@ -103,7 +103,7 @@ pub fn sanitize_host(url: &net::Url) -> String {
 /// Finds the first free `megi-<host>-<n>.<extension>` path in `dir`.
 ///
 /// Naming is deterministic: it starts at 1 and increments while the candidate exists.
-pub fn next_download_path(dir: &Path, url: &net::Url, extension: &str) -> PathBuf {
+pub fn next_download_path(dir: &Path, url: &megi_net::Url, extension: &str) -> PathBuf {
     let host = sanitize_host(url);
     // Reject extensions that could escape the download directory.
     if extension.contains('/') || extension.contains('\\') || extension.contains("..") {
@@ -212,7 +212,7 @@ pub(crate) fn create_new_temp_file(path: &Path) -> std::io::Result<(PathBuf, fs:
 ///
 /// `png` must be a complete PNG file (validated by [`is_png`]); the render's `RenderOutput.png`
 /// is passed through byte for byte, so `Ctrl+S`/`--save-png` are identical to `--screenshot`.
-pub fn save_png(dir: &Path, url: &net::Url, png: &[u8]) -> Result<SavedDownload, String> {
+pub fn save_png(dir: &Path, url: &megi_net::Url, png: &[u8]) -> Result<SavedDownload, String> {
     if !is_png(png) {
         return Err("not a PNG image (missing signature)".to_string());
     }
@@ -227,7 +227,7 @@ pub fn save_png(dir: &Path, url: &net::Url, png: &[u8]) -> Result<SavedDownload,
 }
 
 /// Infers a download extension from image bytes (magic) or the URL path.
-pub fn image_extension(bytes: &[u8], url: &net::Url) -> &'static str {
+pub fn image_extension(bytes: &[u8], url: &megi_net::Url) -> &'static str {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         return "png";
     }
@@ -257,7 +257,7 @@ pub fn image_extension(bytes: &[u8], url: &net::Url) -> &'static str {
 }
 
 /// Saves fetched image bytes as a download `megi-<host>-<n>.<ext>` (atomic, no re-encode).
-pub fn save_image(dir: &Path, url: &net::Url, bytes: &[u8]) -> Result<SavedDownload, String> {
+pub fn save_image(dir: &Path, url: &megi_net::Url, bytes: &[u8]) -> Result<SavedDownload, String> {
     if bytes.is_empty() {
         return Err("the image resource is empty".to_string());
     }
@@ -274,7 +274,7 @@ pub fn save_image(dir: &Path, url: &net::Url, bytes: &[u8]) -> Result<SavedDownl
 
 /// Serializes a DOM as a complete HTML document (doctype prepended when missing).
 pub fn serialize_document(document: &megi_core::Document) -> String {
-    let mut html = html::serialize_html(document);
+    let mut html = megi_html::serialize_html(document);
     if !html
         .trim_start()
         .to_ascii_lowercase()
@@ -303,7 +303,7 @@ pub fn write_html_to(path: &Path, document: &megi_core::Document) -> Result<usiz
 /// Saves the rendered DOM as an HTML download (the serializer includes the doctype).
 pub fn save_html(
     dir: &Path,
-    url: &net::Url,
+    url: &megi_net::Url,
     document: &megi_core::Document,
 ) -> Result<SavedDownload, String> {
     fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
@@ -433,8 +433,8 @@ mod progress_tests {
 mod tests {
     use super::*;
 
-    fn url(raw: &str) -> net::Url {
-        net::Url::parse(raw).expect("test URL")
+    fn url(raw: &str) -> megi_net::Url {
+        megi_net::Url::parse(raw).expect("test URL")
     }
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -447,7 +447,7 @@ mod tests {
         dir
     }
 
-    fn rendered() -> render::RenderOutput {
+    fn rendered() -> megi_render::RenderOutput {
         crate::headless::render_target(
             "data:text/html,<title>Download Page</title><h1>hello</h1>",
             64,
@@ -724,7 +724,7 @@ mod tests {
     #[test]
     fn download_names_are_unique_and_sanitized() {
         let dir = temp_dir("progress-naming");
-        let url = net::Url::parse("https://example.com/some image.PNG?x=1").expect("url");
+        let url = megi_net::Url::parse("https://example.com/some image.PNG?x=1").expect("url");
         let png = [0x89u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
         let first = save_image(&dir, &url, &png).expect("first");
         let second = save_image(&dir, &url, &png).expect("second");

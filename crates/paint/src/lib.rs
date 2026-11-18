@@ -5,7 +5,7 @@
 //!
 //! The crate also owns the Phase 4 **HTML → PNG** building blocks:
 //!
-//! - [`build_display_list`] turns a laid-out [`layout::LayoutBox`] tree into a
+//! - [`build_display_list`] turns a laid-out [`megi_layout::LayoutBox`] tree into a
 //!   flat display list, painting the canvas background following CSS 2.2 §14.2
 //!   (root/`body` background propagation).
 //! - [`rasterize_display_list`] executes the list into a [`Pixmap`] starting
@@ -31,7 +31,7 @@ pub mod rasterizer;
 pub mod style;
 
 pub use background::{MAX_BACKGROUND_TILES, background_tile_size, background_tiles};
-pub use css::Color;
+pub use megi_css::Color;
 pub use deflate::zlib_compress;
 pub use display_list::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
@@ -57,9 +57,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use css::{ComputedStyle, Display, Length};
+    use megi_css::{ComputedStyle, Display, Length};
     use megi_core::{Document, Namespace};
-    use layout::{Rect, layout_document};
+    use megi_layout::{Rect, layout_document};
 
     fn make_box_style(
         width: Length,
@@ -81,7 +81,7 @@ mod tests {
         s.border_color.right = border_color;
         s.border_color.bottom = border_color;
         s.border_color.left = border_color;
-        s.border_style = css::RectEdges::all(css::BorderStyle::Solid);
+        s.border_style = megi_css::RectEdges::all(megi_css::BorderStyle::Solid);
         s
     }
 

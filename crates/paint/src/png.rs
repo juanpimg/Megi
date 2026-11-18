@@ -29,8 +29,8 @@
 
 use std::cell::RefCell;
 
-use css::Color;
-use layout::Rect;
+use megi_css::Color;
+use megi_layout::Rect;
 
 use crate::deflate;
 

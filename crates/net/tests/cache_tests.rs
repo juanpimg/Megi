@@ -1,4 +1,4 @@
-//! Offline HTTP-cache tests (RFC 9111 subset) for [`net::ResourceLoader`].
+//! Offline HTTP-cache tests (RFC 9111 subset) for [`megi_net::ResourceLoader`].
 //!
 //! Every case spins up a one-shot plain-HTTP server on `127.0.0.1:0` and asserts both
 //! the bytes served and the conditional headers sent on revalidation. No external
@@ -9,7 +9,7 @@ use std::net::{Shutdown, TcpListener};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, LoadError, ResourceLoader, Url};
+use megi_net::{FetchError, FetchOptions, LoadError, ResourceLoader, Url};
 
 fn short_options() -> FetchOptions {
     FetchOptions {

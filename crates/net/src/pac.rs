@@ -267,7 +267,7 @@ fn evaluate_directives(
     target: &Url,
     host: &str,
 ) -> Result<Vec<PacDirective>, String> {
-    let mut runtime = js::JsRuntime::new().map_err(|error| format!("JS runtime: {error}"))?;
+    let mut runtime = megi_js::JsRuntime::new().map_err(|error| format!("JS runtime: {error}"))?;
     let call = format!(
         "{PAC_HELPERS_PRELUDE}\n{script}\nFindProxyForURL({}, {});",
         js_string(&target.as_str()),

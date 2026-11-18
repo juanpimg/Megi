@@ -5,9 +5,9 @@
 //! painter now has a depth and a live-pixel budget; past it the contents are painted flat
 //! and nested groups are skipped instead of recursing.
 
-use css::{BorderRadii, BoxShadow, Color, Length, Radius};
-use layout::Rect;
-use paint::{DisplayItem, DisplayList, rasterize_display_list};
+use megi_css::{BorderRadii, BoxShadow, Color, Length, Radius};
+use megi_layout::Rect;
+use megi_paint::{DisplayItem, DisplayList, rasterize_display_list};
 
 const NESTING: usize = 2_048;
 
@@ -147,7 +147,7 @@ fn deeply_nested_opacity_and_effect_groups_stay_bounded() {
 
     // Effect groups go through the same budget: 300 nested `blur(0px)` groups must not
     // exhaust memory and must terminate.
-    let filters = vec![css::FilterFunction::Blur(0.0)];
+    let filters = vec![megi_css::FilterFunction::Blur(0.0)];
     let mut nested_effect = DisplayItem::SolidColor {
         rect,
         color: Color::new(0, 255, 0, 255),
@@ -156,7 +156,7 @@ fn deeply_nested_opacity_and_effect_groups_stay_bounded() {
         nested_effect = DisplayItem::EffectGroup {
             rect,
             filters: filters.clone(),
-            blend: css::MixBlendMode::Normal,
+            blend: megi_css::MixBlendMode::Normal,
             items: vec![nested_effect],
         };
     }

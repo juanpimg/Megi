@@ -10,7 +10,7 @@ members = [
     "crates/paint",
     "crates/net",
     "crates/render",
-    "crates/shell",
+    "crates/browser",
     "crates/js",
     "crates/svg",
     "crates/test_harness",
@@ -27,17 +27,17 @@ repository = "https://github.com/juanpimg/Megi"
 
 [workspace.dependencies]
 megi-core = { path = "crates/core", version = "0.1.0" }
-html = { path = "crates/html", version = "0.1.0" }
-css = { path = "crates/css", version = "0.1.0" }
-layout = { path = "crates/layout", version = "0.1.0" }
+megi-html = { path = "crates/html", version = "0.1.0" }
+megi-css = { path = "crates/css", version = "0.1.0" }
+megi-layout = { path = "crates/layout", version = "0.1.0" }
 megi-fonts = { path = "crates/fonts", version = "0.1.0" }
 megi-image = { path = "crates/image", version = "0.1.0" }
-paint = { path = "crates/paint", version = "0.1.0" }
-net = { path = "crates/net", version = "0.1.0" }
-render = { path = "crates/render", version = "0.1.0" }
-shell = { path = "crates/shell", version = "0.1.0" }
-js = { path = "crates/js", version = "0.1.0" }
-svg = { path = "crates/svg", version = "0.1.0" }
+megi-paint = { path = "crates/paint", version = "0.1.0" }
+megi-net = { path = "crates/net", version = "0.1.0" }
+megi-render = { path = "crates/render", version = "0.1.0" }
+megi-browser = { path = "crates/browser", version = "0.1.0" }
+megi-js = { path = "crates/js", version = "0.1.0" }
+megi-svg = { path = "crates/svg", version = "0.1.0" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

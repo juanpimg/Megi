@@ -4,9 +4,9 @@
 
 use std::collections::VecDeque;
 
-use js::error::JsError;
-use js::host::{WebSocketEvent, WebSocketProvider, WebSocketTransport};
-use js::runtime::JsRuntime;
+use megi_js::error::JsError;
+use megi_js::host::{WebSocketEvent, WebSocketProvider, WebSocketTransport};
+use megi_js::runtime::JsRuntime;
 
 struct MockTransport {
     events: VecDeque<WebSocketEvent>,

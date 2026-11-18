@@ -1,6 +1,6 @@
 //! Integration tests for `RenderCache` (layout fingerprint cache & CSS parse cache, #947, #990).
 
-use render::{RenderCache, RenderOptions, Viewport, render_url, render_url_cached};
+use megi_render::{RenderCache, RenderOptions, Viewport, render_url, render_url_cached};
 
 #[test]
 fn render_url_cached_reuses_layout_and_produces_byte_identical_png() {

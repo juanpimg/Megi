@@ -99,7 +99,7 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 - `fix`: evaluar por hijo `systemLanguage` (lista del usuario; `required*` →
   no pasar) y pintar sólo el primero válido; sin tests → primero.
 - `repro`: `docs/audit/findings/wave2/repro-w2-assets/switch.svg` +
-  `cargo run -p svg --example svg_to_png -- switch.svg out.png` + conteo de píxeles.
+  `cargo run -p megi-svg --example svg_to_png -- switch.svg out.png` + conteo de píxeles.
 - `dedup`: #1329 (y #1273) — evidencia nueva de que sigue vivo en HEAD.
 
 ### w2-assets-02 — `stroke-linejoin="miter"` deja un hueco en vez del tip
@@ -274,7 +274,7 @@ Verificado-fijo (no es hallazgo): `currentColor` + propiedad `color` (#1276/#133
 - `impact`: lectores del contrato esperan errores que ya no existen.
 - `expected`: docs = comportamiento.
 - `fix`: actualizar los tres docstrings.
-- `repro`: lectura + `cargo test -p megi-image -p svg`.
+- `repro`: lectura + `cargo test -p megi-image -p megi-svg`.
 - `dedup`: new.
 
 ## Comandos ejecutados
@@ -284,11 +284,11 @@ por cambios WIP en `crates/js`/`crates/render`, fuera de este scope):
 
 - `cargo test -p megi-fonts` → `3, 19, 10, 1 passed; 0 failed` (33 tests).
 - `cargo test -p megi-image` → `32, 34, 5, 9, 8, 6 … passed; 0 failed` (123 tests).
-- `cargo test -p svg` → 147 passed, 0 failed.
-- Total: 303 passed, 0 failed. (Un intento inicial de `cargo test -p megi-fonts -p megi-image -p svg`
+- `cargo test -p megi-svg` → 147 passed, 0 failed.
+- Total: 303 passed, 0 failed. (Un intento inicial de `cargo test -p megi-fonts -p megi-image -p megi-svg`
   en paralelo falló el linkado por carrera de `rlib` en el `target` compartido;
   reejecutado por crate en serie: verde.)
-- `cargo run -p svg --example svg_to_png -- <repro>.svg /tmp/w2-*.png` (10 fixtures):
+- `cargo run -p megi-svg --example svg_to_png -- <repro>.svg /tmp/w2-*.png` (10 fixtures):
   salidas `rendered … (100x50/200x100/20x20/100x30 …)`; análisis de píxeles con
   decodificador PNG propio (`zlib` stdlib): switch `red 2500 + blue 2500`;
   namedcolor/hsl/vis-inherit `painted= 0`; text-px ink-x=1 vs text-num ink-x=11;
@@ -312,7 +312,7 @@ por cambios WIP en `crates/js`/`crates/render`, fuera de este scope):
   silencio (`raster.rs:1016-1018`, `size > 4096 → return Ok`). No pude renderizar
   la prueba (fallo de bus con `/tmp` al 100% durante el experimento). Pregunta si
   el truncado silencioso es aceptable o debe ser `SvgError::Limit`.
-- **C2 (needs-repro)**: `svg::text::families` parte por comas sin respetar
+- **C2 (needs-repro)**: `megi_svg::text::families` parte por comas sin respetar
   comillas y desnuda genéricos entrecomillados, divergiendo de
   `megi_fonts::parse_font_families` y del fix #1239 (`"serif"` citado → genérico).
   Sólo evidencia a nivel código (`text.rs:108-123` vs `db.rs:193-301`).

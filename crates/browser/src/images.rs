@@ -10,7 +10,7 @@
 //! [`crate::download::save_image`]).
 
 use megi_core::{Document, NodeId};
-use layout::LayoutBox;
+use megi_layout::LayoutBox;
 
 use crate::links::CssRect;
 
@@ -36,7 +36,7 @@ impl ImageRegion {
 pub fn collect_image_regions(
     document: &Document,
     layout: &LayoutBox,
-    base_url: Option<&net::Url>,
+    base_url: Option<&megi_net::Url>,
 ) -> Vec<ImageRegion> {
     let mut images = Vec::new();
     let mut stack: Vec<&LayoutBox> = vec![layout];
@@ -44,10 +44,10 @@ pub fn collect_image_regions(
         if let Some(node_id) = layout_box.node_id()
             && let Some(element) = document.node(node_id).as_element()
             && element.local_name == "img"
-            && let Some(src) = render::images::resolve_img_source(
+            && let Some(src) = megi_render::images::resolve_img_source(
                 document,
                 node_id,
-                &css::MediaContext::default(),
+                &megi_css::MediaContext::default(),
                 1.0,
             )
         {
@@ -58,7 +58,7 @@ pub fn collect_image_regions(
                         .join(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
-                    None => net::Url::parse(&src)
+                    None => megi_net::Url::parse(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
                 };

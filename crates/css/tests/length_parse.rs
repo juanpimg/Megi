@@ -5,7 +5,7 @@
 //! allowed range makes the declaration invalid (CSS Values 3 §4.1), so callers must see
 //! `None` and fall back to the initial/inherited value.
 
-use css::Length;
+use megi_css::Length;
 
 #[test]
 fn non_finite_numbers_are_invalid_lengths() {

@@ -5,8 +5,8 @@
 
 use std::path::PathBuf;
 
-use paint::DisplayItem;
-use render::{RenderOptions, RenderOutput, Viewport, render_url};
+use megi_paint::DisplayItem;
+use megi_render::{RenderOptions, RenderOutput, Viewport, render_url};
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

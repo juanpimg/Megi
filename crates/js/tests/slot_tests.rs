@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use megi_js::runtime::JsRuntime;
 
 #[test]
 fn default_slot_receives_unnamed_light_children() {

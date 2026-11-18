@@ -185,7 +185,7 @@ jobs:
       - name: Closed-loop conformance summary (fails on unexpected regressions)
         run: |
           set -o pipefail
-          cargo run --locked -p test_harness -- --summary 2>&1 | tee /tmp/conformance.log
+          cargo run --locked -p megi-test-harness -- --summary 2>&1 | tee /tmp/conformance.log
       - name: Upload conformance log
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -216,8 +216,8 @@ jobs:
       # default one (#52).
       - name: Check the JS-free configuration against the MSRV
         run: |
-          cargo check -p js --no-default-features --all-targets --locked
-          cargo check -p render --no-default-features --all-targets --locked
+          cargo check -p megi-js --no-default-features --all-targets --locked
+          cargo check -p megi-render --no-default-features --all-targets --locked
 
   minimal:
     name: JS-free build (--no-default-features)
@@ -238,13 +238,13 @@ jobs:
       # `--no-default-features` still links Boa through `shell`/`test_harness`, so the
       # documented JS-free build is checked per crate (no system libraries needed here).
       - name: Clippy the renderer without the JavaScript engine
-        run: cargo clippy -p render --no-default-features --all-targets --locked -- -D warnings
+        run: cargo clippy -p megi-render --no-default-features --all-targets --locked -- -D warnings
       - name: Clippy the engine stub
-        run: cargo clippy -p js --no-default-features --all-targets --locked -- -D warnings
+        run: cargo clippy -p megi-js --no-default-features --all-targets --locked -- -D warnings
       - name: Test the engine stub
-        run: cargo test -p js --no-default-features --locked
+        run: cargo test -p megi-js --no-default-features --locked
       - name: Test the renderer without scripts
-        run: cargo test -p render --no-default-features --locked
+        run: cargo test -p megi-render --no-default-features --locked
 
   package:
     name: Packaging dry-run
@@ -431,9 +431,9 @@ jobs:
       - name: Release-profile tests (core crates)
         run: |
           cargo test --release --locked --lib \
-            -p megi-core -p html -p css -p layout -p megi-fonts -p megi-image -p paint -p net -p svg -p js
+            -p megi-core -p megi-html -p megi-css -p megi-layout -p megi-fonts -p megi-image -p megi-paint -p megi-net -p megi-svg -p megi-js
       - name: Release conformance summary
-        run: cargo run --release --locked -p test_harness -- --summary
+        run: cargo run --release --locked -p megi-test-harness -- --summary
 
   # Umbrella job for branch protection: a single required check that aggregates
   # every gate above (#577). Branch protection can require just `check`.

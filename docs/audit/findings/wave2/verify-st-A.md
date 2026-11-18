@@ -6,7 +6,7 @@
   (sólo `?? tests/fixtures/render/f2-exp10.html`, `f2-exp12.html` untracked;
   `git status` sin WIP en `crates/`).
   Env: `TMPDIR=/home/jp/.cache/megi-tmp`, `CARGO_TARGET_DIR=/home/jp/.cache/f2-target`.
-  Binario: build fresco `cargo build -p shell` (24.8 s, sin warnings relevantes).
+  Binario: build fresco `cargo build -p megi-browser` (24.8 s, sin warnings relevantes).
 - Regla aplicada: todo lo que depende de ventana real (`window.rs`, display) queda
   en `needs-repro` aunque la evidencia de código sea concluyente. Los marcados
   `security`+`advisory` (F2 favicon `file:`, F9 tmp predecibles) quedan como
@@ -22,8 +22,8 @@
 | F4 w2-st-1167-find-offset | NEEDS-REPRO | lectura `window.rs:2465-2490` + `find.rs:284-349` | `overlay_highlights_dest(…, css_width, css_height, …)` con `scale_y = dest_height / css_viewport_height` sin descontar `chrome_px`; `current_key = rects.get(current)` sobre `rects` deduplicados por `rect_key` | Doble defecto confirmado: mapeo sin offset de chrome + `current` índice DOM vs fragmentos. Overlay real requiere ventana. |
 | F5 w2-st-1165-reader-url | NEEDS-REPRO | lectura `window.rs:1282-1301` + `save_active_tab 2142-2152` | `self.input = "about:reader".to_string()` (`open_reader`); `tab.url.clone_from(&self.input)` (`save_active_tab`); tras reinicio `reader_html=None` → render de página vacía | Cadena persistencia→restore completa en código. Requiere display (Ctrl+Shift+R + reinicio con sesión). |
 | F6 w2-st-1163-history-push | NEEDS-REPRO | lectura `window.rs:1337-1356`, `start_navigation 556-590`, `navigate_to` | `handle_address_key(Enter)` → `start_navigation` (sin `self.nav.…push`); `navigate_selected_history` → `start_navigation` (ídem); sólo `navigate_to` hace push (`NavigationOutcome::Pushed`) | Llamantes tipados confirmados sin push. Back real requiere display. |
-| F7 w2-st-1175-headless-flags | VERIFIED | `awk '/match args.mode/,0' main.rs \| grep …` | `save_png/save_html/find/chrome/reader` sólo en rama `LaunchMode::Screenshot`; rama `LaunchMode::Window => shell::run_window_with_view_options(` sin referencias | Flags muertos en ventana confirmados estáticamente (la rama exige display, el hecho "no se referencia" no). |
-| F8 w2-st-1171-no-fsync | VERIFIED (estático) + `needs-repro` (evento) | `grep -rn "sync_all\|fsync\|fdatasync" crates/shell/src/ \| wc -l` | `0` (+ `(no matches)`); `session.rs:422-446` `write_temporary` + `fs::rename` sin `sync_all` | Ausencia total de fsync probada. La pérdida concreta (crash entre write y flush) es `needs-repro` por naturaleza. |
+| F7 w2-st-1175-headless-flags | VERIFIED | `awk '/match args.mode/,0' main.rs \| grep …` | `save_png/save_html/find/chrome/reader` sólo en rama `LaunchMode::Screenshot`; rama `LaunchMode::Window => megi_browser::run_window_with_view_options(` sin referencias | Flags muertos en ventana confirmados estáticamente (la rama exige display, el hecho "no se referencia" no). |
+| F8 w2-st-1171-no-fsync | VERIFIED (estático) + `needs-repro` (evento) | `grep -rn "sync_all\|fsync\|fdatasync" crates/browser/src/ \| wc -l` | `0` (+ `(no matches)`); `session.rs:422-446` `write_temporary` + `fs::rename` sin `sync_all` | Ausencia total de fsync probada. La pérdida concreta (crash entre write y flush) es `needs-repro` por naturaleza. |
 | F9 w2-st-1176-tmp-writers | CONFIRMED (código) + **ADVISORY** + `needs-repro` (explotación) | lectura `download.rs:138-161`, `headless.rs:318-348,388-409` vs `session.rs:477-504` | `write_atomic`: `path.with_file_name(format!(".{file_name}.tmp"))` + `fs::write` (trunca/sigue symlinks); `save_screenshot`/`write_bytes`: mismo patrón `".{}.tmp"` + `fs::write`; `session.rs:write_temporary`: `create_new` + único + guard | 3 call sites vulnerables confirmados; `session.rs` es el contraejemplo correcto. Explotación (symlink + descarga) requiere display salvo `--save-png` → `needs-repro`. **Canal privado; no issue público.** |
 | F10 w2-st-1174-narrow | NEEDS-REPRO | lectura `chrome.rs:545-569` | `if per_tab * count as f32 > available && available >= TAB_MIN_WIDTH` → con `width<100` (`available<72`) nunca hay `+N`; `visible=count`, tabs de 72 px pintados fuera del strip | Guard confirmado; estrechar ventana <100 px requiere display. |
 | F11 w2-st-1197-strip-noop | VERIFIED | réplica python del filtro sobre `filter_effects.html` | `total: 29 stripped: 29 identical: True`; `grep -c 'filter:'` → `12` (todos `filter:` dentro de regla, nunca a inicio de línea: e.g. `.gray { filter: grayscale(1); }`) | Strip estructuralmente vacío confirmado. Nota: 29 líneas aquí vs "30" del informe (deriva menor de fixture); conclusión idéntica. |
@@ -41,13 +41,13 @@
 Todos desde `/tmp/opencode/megi-verify` (HEAD `3c06db8`), `TMPDIR=/home/jp/.cache/megi-tmp`,
 `CARGO_TARGET_DIR=/home/jp/.cache/f2-target`, salvo `grep`/`sed` (sólo lectura).
 
-1. `cargo build -p shell` → `Finished dev profile … in 24.84s`; binario `/home/jp/.cache/f2-target/debug/megi`.
+1. `cargo build -p megi-browser` → `Finished dev profile … in 24.84s`; binario `/home/jp/.cache/f2-target/debug/megi`.
 2. F16: dos renders `--tabs` distintos → ambos `wrote … 14344 bytes`, md5 `29c7df93e9775d51d46db8c170d1ad32` idénticos.
 3. F2: servidor `http.server 8932` + `present.html` (`<link rel=icon href="file:…/marker.png">`) vs `absent.html`;
    `--chrome --screenshot` → `h_present.png` md5 `8d912306…` (19024 B) vs `h_absent.png` `c33a6f75…` (19149 B): difieren.
    (Nota: difieren del md5 del auditor —otra fixture/marker— pero la dirección es la misma: oráculo presente/ausente.)
 4. F11: réplica python → `total: 29 stripped: 29 identical: True`.
-5. F8: `grep -rn "sync_all|fsync|fdatasync" crates/shell/src/ | wc -l` → `0`.
+5. F8: `grep -rn "sync_all|fsync|fdatasync" crates/browser/src/ | wc -l` → `0`.
 6. F17-ligero: fixture 71626 B / 3000 divs → `--screenshot` `0.545 s` vs `--reader --screenshot` `3.495 s`
    (`reader mode found no article on this page`).
 7. F3/F4/F5/F6/F10/F18: lecturas dirigidas (`sed`/`grep`) citadas en la tabla; sin ejecución con display.
