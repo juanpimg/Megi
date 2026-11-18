@@ -50,40 +50,39 @@ instantánea de `PROGRESS.md` (2026-11-18): 14 crates, 2.802 tests, 208k líneas
 Show HN: Megi – a browser engine written from scratch in Rust
 ```
 
-### Show HN / cuerpo
+### Show HN / cuerpo (voz real, sin tono de marketing)
 
 ```
-Hi HN,
+I've been working on this for a while and it's finally at a point where I think it's
+worth showing, with the caveats up front.
 
-I've been building Megi Web Engine, a browser engine written from scratch in Rust. It is
-not a Chromium/WebKit/Gecko wrapper, and the core HTML/CSS/layout/paint code does not use
-third-party engine crates either. It is pre-alpha, so I want to be precise about what it
-does and does not do.
+Megi is a browser engine written from scratch in Rust. No Chromium/WebKit/Gecko
+underneath, and the core HTML/CSS/layout/paint code doesn't use engine crates either.
+It's pre-alpha and not a daily driver. What it does today: it parses HTML and builds the
+DOM with full html5lib-tests conformance (7,050/7,050 tokenizer, 3,904/3,904 tree,
+230/230 serializer), resolves CSS including layers, container queries, var() and calc(),
+lays out tables/flexbox/grid, rasterizes to PNG, and runs JS through embedded Boa with
+DOM bindings, ES modules and fetch. There's also an HTTP/2 + TLS stack and a desktop
+shell with tabs.
 
-What works today:
-- WHATWG HTML tokenizer and tree builder, verified against html5lib-tests:
-  7,050/7,050 tokenizer, 3,904/3,904 tree, 230/230 serializer.
-- CSS Syntax / Selectors L4 / cascade layers / container queries / var() and calc().
-- Layout (BFC/IFC, tables, flexbox, grid), a 2D rasterizer and an in-house PNG encoder.
-- HTTP/1.1 and HTTP/2 with rustls TLS, HTTP cache, cookies, CORS, and WebSockets.
-- JavaScript through embedded Boa 0.22, with DOM bindings, events, timers, ES modules
-  and fetch. A desktop shell with tabs and a headless screenshot mode.
+The part I'm proudest of is probably not a feature: every crate has
+#![forbid(unsafe_code)], and there's a capability manifest where each "done" item points
+at a test or a conformance gate instead of a percentage I made up. Right now it's 54/70
+(77%), with 2 partial. The audit ledger covers every auditable file in the repo.
 
-The workspace has 14 crates in an acyclic dependency graph, all with
-#![forbid(unsafe_code)]. The test suite has 2,802 tests; `test_harness --summary` is the
-conformance gate and passes. Capability coverage is a verifiable 54/70 (77%), published
-as a manifest with evidence rather than an estimate.
+What's still missing is substantial: runtime CSS animations, CJK and complex-script
+shaping, an accessibility tree, and multi-process tab isolation. I'm not claiming this
+competes with real browsers.
 
-What is missing: runtime CSS animations, CJK/complex-script shaping, an accessibility
-tree, and multi-process tab isolation. It is a research/pre-alpha engine, not a daily
-driver.
+I'm mostly looking for two things: people who want to try it and tell me where it breaks,
+and help with the smaller issues. There are 10 labeled "good first issue" and 5 "help
+wanted", most with a repro and a local command to verify.
 
 Repo: https://github.com/juanpimg/Megi
 Docs: https://juanpimg.github.io/Megi-web/
-Good first issues: https://github.com/juanpimg/Megi/labels/good%20first%20issue
 
-I'm especially looking for help with SVG/CSS conformance edge cases, fuzz triage and
-documentation. Happy to answer questions about the architecture or the audit process.
+Happy to answer questions about the architecture or why I made certain choices. I'll be
+around today.
 ```
 
 ### r/rust (flair: Showcase)
