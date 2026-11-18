@@ -15,6 +15,8 @@
 //! scripts through the WP-6.4 hook and pass (3,904/3,904). `--verbose`/`-v` prints failure details. A positional filter limits the report to
 //! suites whose file name contains the given substring (totals are not gated in that mode).
 
+use std::collections::BTreeSet;
+
 use test_harness::{
     CSS_EXPECTED_RESULTS, KNOWN_SERIALIZER_FAILURES, KNOWN_TOKENIZER_ERROR_ORDER_GAPS,
     KNOWN_TOKENIZER_FAILURES, KNOWN_TREE_FAILURES, SERIALIZER_EXPECTED_PASSED,
@@ -81,7 +83,7 @@ fn main() {
     let mut tok_error_expected_total = 0usize;
     let mut tok_error_actual_total = 0usize;
     let mut tok_error_multiset_mismatches = 0usize;
-    let mut tok_error_order_gaps = 0usize;
+    let mut tok_error_order_gaps: BTreeSet<(String, usize, String)> = BTreeSet::new();
     let mut xml_violation_unannotated_errors = 0usize;
     for path in &tok_entries {
         let fname = path.file_name().unwrap().to_str().unwrap();
@@ -111,13 +113,16 @@ fn main() {
         let mut suite_expected_errors = 0usize;
         let mut suite_actual_errors = 0usize;
         let mut suite_multiset_mismatches = 0usize;
-        let mut suite_order_gaps = 0usize;
         for run in &runs {
             suite_expected_errors += run.expected_errors.len();
             suite_actual_errors += run.actual_errors.len();
             if run.errors_passed {
                 if !run.errors_in_order {
-                    suite_order_gaps += 1;
+                    tok_error_order_gaps.insert((
+                        fname.to_string(),
+                        run.index,
+                        run.initial_state.clone(),
+                    ));
                 }
             } else {
                 suite_multiset_mismatches += 1;
@@ -125,7 +130,6 @@ fn main() {
         }
         tok_error_expected_total += suite_expected_errors;
         tok_error_actual_total += suite_actual_errors;
-        tok_error_order_gaps += suite_order_gaps;
         if fname == "xmlViolation.test" {
             // This fixture only asserts coerced tokens; its input still legitimately raises
             // input-stream errors, which are counted and documented instead of compared.
@@ -139,12 +143,21 @@ fn main() {
                      that differ (code/line/col multiset)"
                 ));
             }
-            let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, fname);
-            if suite_order_gaps != allowed_order_gaps {
+            let expected_suite: BTreeSet<(usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+                .iter()
+                .filter(|(name, _, _)| *name == fname)
+                .map(|(_, index, state)| (*index, (*state).to_string()))
+                .collect();
+            let actual_suite: BTreeSet<(usize, String)> = runs
+                .iter()
+                .filter(|run| run.errors_passed && !run.errors_in_order)
+                .map(|run| (run.index, run.initial_state.clone()))
+                .collect();
+            if actual_suite != expected_suite {
                 gate_failed = true;
                 unknown_failures.push(format!(
-                    "tokenizer {fname}: {suite_order_gaps} parse-error order-only difference(s) \
-                     (documented allowlist: {allowed_order_gaps})"
+                    "tokenizer {fname}: parse-error order-only differences {actual_suite:?} \
+                     (documented allowlist: {expected_suite:?})"
                 ));
             }
         }
@@ -191,8 +204,9 @@ fn main() {
     println!(
         "Tokenizer Parse Errors: {tok_error_expected_total} expected annotation(s), \
          {tok_error_actual_total} emitted; {tok_error_multiset_mismatches} multiset mismatch(es), \
-         {tok_error_order_gaps} order-only difference(s) (documented) + \
-         {xml_violation_unannotated_errors} unannotated xmlViolation input-stream error(s)\n"
+         {} order-only difference(s) (documented) + \
+         {xml_violation_unannotated_errors} unannotated xmlViolation input-stream error(s)\n",
+        tok_error_order_gaps.len()
     );
     if filter.is_none() && tok_error_expected_total != TOKENIZER_ERROR_ANNOTATIONS {
         gate_failed = true;
@@ -461,7 +475,8 @@ fn main() {
         }
     );
     println!(
-        "  tokenizer errors: order-only {:?}, xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
+        "  tokenizer errors: order-only {} run(s) {:?}, xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
+        KNOWN_TOKENIZER_ERROR_ORDER_GAPS.len(),
         KNOWN_TOKENIZER_ERROR_ORDER_GAPS
     );
     println!(
@@ -473,7 +488,7 @@ fn main() {
         }
     );
     if strict {
-        let documented_error_diffs = tok_error_order_gaps + xml_violation_unannotated_errors;
+        let documented_error_diffs = tok_error_order_gaps.len() + xml_violation_unannotated_errors;
         if known_failures_total > 0 || documented_error_diffs > 0 {
             gate_failed = true;
             unknown_failures.push(format!(
