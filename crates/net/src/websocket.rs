@@ -248,7 +248,7 @@ impl WebSocketClient {
         if payload.len() > self.max_message {
             return Err(protocol("message exceeds cap"));
         }
-        let key = [0x12, 0x34, 0x56, 0x78]; // fixed client mask (RFC 6455 only requires unpredictability)
+        let key = client_mask();
         let frame = Frame {
             fin: true,
             opcode,
@@ -372,6 +372,29 @@ pub mod close_code {
     pub fn is_valid_outgoing(code: u16) -> bool {
         matches!(code, 1000..=1011 | 3000..=4999) && !matches!(code, 1004 | 1005 | 1006 | 1015)
     }
+}
+
+/// Generates an unpredictable 4-byte client masking key (RFC 6455 §5.3).
+///
+/// No extra dependencies: a per-call random [`std::collections::hash_map::RandomState`]
+/// hash over an atomic counter, wall-clock time and process id. Consecutive calls differ
+/// with overwhelming probability (counter + fresh random hash keys).
+pub fn client_mask() -> [u8; 4] {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hash, Hasher};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let mut hasher = RandomState::new().build_hasher();
+    counter.hash(&mut hasher);
+    now.hash(&mut hasher);
+    (std::process::id() as u64).hash(&mut hasher);
+    hasher.finish().to_le_bytes()[..4]
+        .try_into()
+        .expect("u64 yields four bytes")
 }
 
 /// Applies/removes the RFC 6455 masking transform (XOR with the repeating 4-byte key).
@@ -873,6 +896,38 @@ mod tests {
         let result = WebSocketClient::connect(&url, &test_options());
         let _ = server.join();
         assert!(result.is_ok(), "RFC-valid handshake must pass");
+    }
+
+    #[test]
+    fn client_masks_are_unpredictable() {
+        // w2-net-003: the fixed `[0x12,0x34,0x56,0x78]` mask makes keystreams predictable.
+        let first = client_mask();
+        let second = client_mask();
+        assert_ne!(first, second, "consecutive client masks must differ");
+        assert!(
+            !(first == [0x12, 0x34, 0x56, 0x78] && second == [0x12, 0x34, 0x56, 0x78]),
+            "client masks must not be the fixed legacy value"
+        );
+    }
+
+    #[test]
+    fn fresh_mask_still_masks_frames() {
+        // A frame masked with a fresh mask round-trips through unmasking, and the
+        // RFC 6455 §5.7 known vector still holds via `encode_frame`.
+        let key = client_mask();
+        let frame = Frame {
+            fin: true,
+            opcode: Opcode::Text,
+            masked: true,
+            payload: b"Hello".to_vec(),
+        };
+        let encoded = encode_frame(&frame, key);
+        assert_eq!(encoded[0], 0x81);
+        assert_eq!(encoded[1], 0x85, "client frames must carry MASK + length");
+        assert_eq!(&encoded[2..6], &key, "wire mask must be the fresh key");
+        let mut payload = encoded[6..].to_vec();
+        mask(&mut payload, key);
+        assert_eq!(payload, b"Hello");
     }
 }
 
