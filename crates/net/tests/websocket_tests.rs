@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
-use net::websocket::accept_value;
 use net::{WebSocket, WebSocketError};
 
 fn read_head(stream: &mut std::net::TcpStream) -> String {

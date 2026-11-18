@@ -14,8 +14,9 @@ leídos línea por línea de arriba abajo, más `crates/render/tests/iframe_test
 - Cambios desde la última lectura verificados: `frames.rs`, `lib.rs`
   (+hunk `frame_documents`, hoy commiteado como e87f206), `scripts.rs`
   (+hunk `set_frame_document`), `ws_bridge.rs` (nuevo, cf388f6),
-  `iframe_tests.rs` (+44: `contentDocument` same-origin y sandbox nulo; el
-  `eprintln!("WARN2: ...")` de depuración de aquel WIP **ya no está en HEAD**).
+  `iframe_tests.rs` (+44 en el WIP auditado: `contentDocument` same-origin y
+  sandbox nulo — esos tests **no se commitearon**; en HEAD la suite tiene 5
+  tests, en verde).
 
 Foco: caps post-descarga (#1213), truncado discovery (#1214/#1222), event-loop
 budget (#1215/#1299), cache FNV (#1223), `contains("await")` (#1304), doble
@@ -207,19 +208,26 @@ llenó dos veces durante la sesión: `ld` murió con SIGBUS; reintentado con
 - `fix`: alinear con backgrounds (contar cada omitida).
 - `dedup`: new
 
-### w2-render-11 — [CÓDIGO VERIFICADO, ejecución pendiente] `contentDocument` solo para `srcdoc`
+### w2-render-11 — [VERIFIED] `contentDocument` solo para `srcdoc`
 
 - `id`: w2-render-11 · `lib.rs:1020-1029` (commiteado en e87f206 como #1544; era
   WIP al auditar, hoy es HEAD)
 - `lente`: contrato · `severidad`: P3 · `categoría`: contract
 - `title`: los iframes `src` same-origin no exponen documento al padre
-- `evidence`: `sed -n '1020,1032p'` → solo `get_attribute("srcdoc")` alimenta
-  `frame_documents`; tests de e87f206 solo cubren `srcdoc`.
+- `evidence` (ejecución, binario HEAD 2eaab73): padre con
+  `<iframe id='f' src='f2-child.html'>` same-origin + script que lee
+  `contentDocument` → `executed: 1 failed: 0`,
+  warnings: `['console.warn: RESULT:NULL']` (debería exponer el documento).
+  Control `srcdoc` (misma sonda con `srcdoc="<body>…from-frame…"`):
+  `RESULT:from-frame` (funciona). Asimetría `srcdoc`-sí / `src`-no confirmada
+  por ejecución. (Nota: los tests `contentDocument` del WIP auditado no se
+  commitearon en e87f206 — solo el código; la suite `iframe_tests` en HEAD
+  tiene 5 tests, en verde.)
 - `impact`: `iframe[src].contentDocument` same-origin → `null` indebido.
 - `fix`: reutilizar el documento hijo de `collect_frames` (además hoy se
   parsea dos veces) o documentar la limitación a `srcdoc`.
-- `dedup`: new · `needs-repro` (sonda `src` same-origin vía CLI pendiente del
-  binario en `/home/jp/.cache/verify-target`)
+- `repro`: `f2-parent.html`/`f2-child.html` + `render --json` (ejecutado).
+- `dedup`: new
 
 ### w2-render-12 — [VERIFIED] Cap silencioso de 1024 en `collect_responsive_image_sources`
 
@@ -252,8 +260,11 @@ llenó dos veces durante la sesión: `ld` murió con SIGBUS; reintentado con
 3. `cargo check -p render --no-default-features`: `error[E0433] ...
    ws_bridge.rs:8:5` (w2-render-02).
 4. `cargo test -p render --lib` (worktree limpio): `ok. 42 passed; 0 failed`.
-5. Targets de integración: enlace imposible por tmpfs lleno (`ld` SIGBUS);
-   reintentado con `CARGO_TARGET_DIR=/home/jp/.cache/verify-target` (en curso).
+5. Targets de integración: enlace imposible en tmpfs lleno (`ld` SIGBUS);
+   reintentado con `CARGO_TARGET_DIR=/home/jp/.cache/verify-target`:
+   `iframe_tests` → **ok. 5 passed; 0 failed** (worktree 3c06db8); mismo
+   resultado en el árbol principal HEAD (`cargo test -p render --test
+   iframe_tests` → 5 passed). Resto de targets pendientes de `/tmp` sano.
 6. `test_harness --summary --strict`: `CSS Syntax Total: 30 / 30`; gate FAIL
    (38 parse-error differences).
 7. Repros (salidas arriba): exp03, exp05×4, exp05b, exp05c, exp05d, exp06
