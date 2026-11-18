@@ -233,7 +233,7 @@ fn missing_export_is_typed_error() {
 }
 
 #[test]
-fn circular_dependency_is_typed_error() {
+fn sync_evaluator_rejects_cycles_by_design() {
     let modules = Modules {
         resolver: HashMap::from([
             ("./a.js".to_string(), "mem://a".to_string()),
@@ -372,4 +372,41 @@ fn module_graph_depth_is_bounded() {
         )
         .expect_err("the module graph depth is capped");
     assert!(matches!(error, JsError::ModuleDepth(_)), "{error:?}");
+}
+
+#[test]
+fn async_evaluator_accepts_the_cycle_rejected_above() {
+    let modules = Modules {
+        resolver: HashMap::from([
+            ("./a.js".to_string(), "mem://a".to_string()),
+            ("./b.js".to_string(), "mem://b".to_string()),
+        ]),
+        sources: HashMap::from([
+            (
+                "mem://a".to_string(),
+                "import { b } from './b.js'; export const a = 1; export function sum() { return a + b; }".to_string(),
+            ),
+            (
+                "mem://b".to_string(),
+                "import { a } from './a.js'; export const b = 2;".to_string(),
+            ),
+        ]),
+    };
+    let mut runtime = runtime_with(&modules);
+    let outcome = runtime
+        .eval_module_async(
+            "import { a, sum } from './a.js'; export const total = a + sum();",
+            "main",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("native modules support cycles");
+    assert!(
+        outcome
+            .exports
+            .iter()
+            .any(|(name, value)| name == "total" && value == "4"),
+        "{:?}",
+        outcome.exports
+    );
 }

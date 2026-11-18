@@ -168,6 +168,10 @@
 //!   `JsError::ModuleCycle`; missing modules/exports and malformed modules return typed
 //!   errors (`ModuleNotFound`/`ModuleExport`/`ModuleSyntax`). `ModuleOutcome` exposes the
 //!   entry URL and stringified exports. The host supplies all module text (docs/FUZZING).
+//! - **Cycle semantics (#1372):** this is a deliberate gap of the line-based synchronous
+//!   evaluator, which snapshots bindings in topological order. Use
+//!   [`JsRuntime::eval_module_async`] (native Boa modules with live bindings) when the graph
+//!   may contain cycles; both paths are covered by tests in `crates/js/tests`.
 //! ## Round 27 DOM/JS gap APIs
 //!
 //! Implemented: `URL`/`URLSearchParams` subset (parse/install base, append/delete/get/
