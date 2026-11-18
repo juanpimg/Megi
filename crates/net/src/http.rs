@@ -448,226 +448,253 @@ pub fn fetch_pooled(
     };
     let upgraded_url = crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), url);
     let url = upgraded_url.as_ref().unwrap_or(url);
-    let pool_proxy = options
-        .proxy
-        .as_deref()
-        .and_then(|config| config.proxy_for_url(url))
-        .filter(|proxy| proxy.scheme() == Scheme::Http);
-    let socks_configured = options
-        .proxy
-        .as_deref()
-        .is_some_and(|config| config.socks_for(url).is_some());
     let is_https = url.scheme() == Scheme::Https;
-    if !(url.scheme() == Scheme::Http
-        || (is_https && cfg!(feature = "tls") && pool_proxy.is_none()))
-        || socks_configured
-        || options
-            .proxy
-            .as_deref()
-            .is_some_and(|config| config.proxy_for_url(url).is_some() && pool_proxy.is_none())
+    let routes = options.proxy.as_deref().map_or_else(
+        || vec![crate::proxy::ProxyRoute::Direct],
+        |config| config.routes_for_url(url),
+    );
+    let has_https_proxy_to_https = routes.iter().any(|route| {
+        is_https
+            && matches!(route, crate::proxy::ProxyRoute::Http(proxy) if proxy.scheme() == Scheme::Https)
+    });
+    if !(url.scheme() == Scheme::Http || (is_https && cfg!(feature = "tls")))
+        || has_https_proxy_to_https
         || !options.reuse_connections
         || options.accept_push
         || options.range.is_some()
     {
         return fetch(url, options);
     }
-    let (connect_host, connect_port, origin, request_target) = match &pool_proxy {
-        Some(proxy) => {
-            let proxy_port = proxy.port_or_default().ok_or_else(|| {
-                FetchError::UnsupportedScheme("proxy URL without port".to_owned())
-            })?;
-            let origin = format!(
-                "proxy:{}://{}:{}",
-                proxy.scheme().as_str(),
-                proxy.host(),
-                proxy_port
-            );
-            let target = absolute_request_target(
-                url,
-                &match url.port() {
-                    Some(port) => format!("{}:{port}", url.host()),
-                    None => url.host().to_owned(),
-                },
-            );
-            (proxy.host_for_dns().to_owned(), proxy_port, origin, target)
-        }
-        None => (
-            url.host_for_dns().to_owned(),
-            url.port_or_default()
-                .unwrap_or(if is_https { 443 } else { 80 }),
-            origin_key(url),
-            url.request_target(),
-        ),
-    };
     let host_header = match url.port() {
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
     };
-    let proxy_auth = pool_proxy
-        .as_ref()
-        .and_then(crate::proxy::proxy_authorization);
     let mut last_error = None;
-    for attempt in 0..2 {
-        let (transport, from_pool) = match pool.take(&origin) {
-            Some(transport) => (transport, true),
-            None => {
-                let tcp = connect_tcp(&connect_host, connect_port, options)?;
-                tcp.set_read_timeout(Some(options.read_timeout)).ok();
-                tcp.set_write_timeout(Some(options.read_timeout)).ok();
+    'routes: for (route_idx, route) in routes.iter().enumerate() {
+        let (origin, request_target, proxy_auth) = match route {
+            crate::proxy::ProxyRoute::Direct => (origin_key(url), url.request_target(), None),
+            crate::proxy::ProxyRoute::Http(proxy) => {
+                let proxy_port = proxy.port_or_default().ok_or_else(|| {
+                    FetchError::UnsupportedScheme("proxy URL without port".to_owned())
+                })?;
                 if is_https {
-                    let (tls, _) = connect_tls(url.host(), tcp, options, false)?;
-                    (tls, false)
+                    let origin = format!(
+                        "proxy-connect:{}:{}->{}",
+                        proxy.host(),
+                        proxy_port,
+                        origin_key(url)
+                    );
+                    (origin, url.request_target(), None)
                 } else {
-                    (Transport::Plain(tcp), false)
+                    let origin = format!(
+                        "proxy:{}://{}:{}",
+                        proxy.scheme().as_str(),
+                        proxy.host(),
+                        proxy_port
+                    );
+                    let target = absolute_request_target(url, &host_header);
+                    let auth = crate::proxy::proxy_authorization(proxy);
+                    (origin, target, auth)
                 }
             }
+            crate::proxy::ProxyRoute::Socks5(socks) => (
+                format!("socks5:{}:{}->{}", socks.host, socks.port, origin_key(url)),
+                url.request_target(),
+                None,
+            ),
+            crate::proxy::ProxyRoute::Socks4(socks4) => (
+                format!(
+                    "socks4:{}:{}->{}",
+                    socks4.host,
+                    socks4.port,
+                    origin_key(url)
+                ),
+                url.request_target(),
+                None,
+            ),
         };
-        let mut reader = ConnReader::new(transport);
-        let http_version = if options.force_http10 { "1.0" } else { "1.1" };
-        let mut request = format!(
-            "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
-            options.user_agent,
-        );
-        if let Some(value) = options.accept_encoding.header_value() {
-            request.push_str(&format!("Accept-Encoding: {value}\r\n"));
-        }
-        if let Some(origin_header) = options.origin.as_deref() {
-            request.push_str(&format!("Origin: {origin_header}\r\n"));
-        }
-        let request_site = if options.request_site != RequestSite::SameSite {
-            options.request_site
-        } else if let Some(referrer) = &options.referrer {
-            RequestSite::classify(&referrer.source, url, false)
-        } else {
-            RequestSite::SameSite
-        };
-        if let Some(jar) = &options.cookie_jar
-            && let Some(cookie_header) = lock_jar(jar).header_for_url_with_site(url, request_site)
-        {
-            request.push_str(&format!("Cookie: {cookie_header}\r\n"));
-        }
-        if let Some(referrer) = &options.referrer
-            && let Some(referer) = referrer.referer_for(url)
-        {
-            request.push_str(&format!("Referer: {referer}\r\n"));
-        }
-        // Same URL-credential rule as `fetch_once` (#310).
-        if let Some(auth) = url_basic_authorization(url) {
-            request.push_str(&format!("Authorization: {auth}\r\n"));
-        }
-        if let Some(auth) = proxy_auth.as_ref() {
-            request.push_str(&format!("Proxy-Authorization: {auth}\r\n"));
-        }
-        if options.force_http10 {
-            request.push_str("Connection: keep-alive\r\n");
-        }
-        request.push_str("\r\n");
-        let result = (|| -> Result<Response, FetchError> {
-            reader
-                .stream
-                .write_all(request.as_bytes())
-                .map_err(map_io_error)?;
-            reader.stream.flush().map_err(map_io_error)?;
-            let head = reader.read_head(options.max_header_bytes)?;
-            let (version, status, reason, headers) = parse_head_verbose(&head)?;
-            if is_https
-                && let Some(header) = headers
-                    .iter()
-                    .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
-            {
-                crate::hsts::observe_https_with(
-                    options.hsts_store.as_deref(),
-                    url.host(),
-                    &header.1,
-                );
-            }
-            if is_redirect(status) {
-                match options.redirect_mode {
-                    RedirectMode::Follow => {
-                        return Err(FetchError::InvalidResponse(
-                            "redirect in pooled fetch".to_owned(),
-                        ));
+        let target_port = url
+            .port_or_default()
+            .unwrap_or(if is_https { 443 } else { 80 });
+        for attempt in 0..2 {
+            let (transport, from_pool) = match pool.take(&origin) {
+                Some(transport) => (transport, true),
+                None => match open_proxy_or_direct_transport(
+                    route,
+                    url,
+                    url.host_for_dns(),
+                    target_port,
+                    &host_header,
+                    false,
+                    options,
+                ) {
+                    Ok((transport, _, _, _)) => (transport, false),
+                    Err(error)
+                        if route_idx + 1 < routes.len() && is_route_failover_error(&error) =>
+                    {
+                        last_error = Some(error);
+                        continue 'routes;
                     }
-                    RedirectMode::Error => {
-                        if let Some(req_origin) = options.origin.as_deref() {
-                            cors::validate_response(
-                                url,
-                                req_origin,
-                                &headers,
-                                options.cookie_jar.is_some(),
-                            )?;
-                        }
-                        return Err(FetchError::RedirectDisallowed(status));
+                    Err(error) => {
+                        last_error = Some(error);
+                        break;
                     }
-                    RedirectMode::Manual => {}
-                }
-            }
-            let has_length = headers
-                .iter()
-                .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
-            let is_chunked = headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("transfer-encoding")
-                    && value.to_ascii_lowercase().contains("chunked")
-            });
-            let connection_close = headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("connection")
-                    && value
-                        .split(',')
-                        .any(|token| token.trim().eq_ignore_ascii_case("close"))
-            });
-            let (raw_body, trailers) = read_body(&mut reader, status, &headers, options)?;
-            let body = decode_response_body(&headers, raw_body, options)?;
-            if let Some(jar) = &options.cookie_jar {
-                lock_jar(jar).store_from_response(url, &headers);
-            }
-            if let Some(req_origin) = options.origin.as_deref() {
-                cors::validate_response(url, req_origin, &headers, options.cookie_jar.is_some())?;
-            }
-            let connection_keep_alive = headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("connection")
-                    && value
-                        .split(',')
-                        .any(|token| token.trim().eq_ignore_ascii_case("keep-alive"))
-            });
-            let mut keep_alive = if version == (1, 0) {
-                (has_length || is_chunked) && connection_keep_alive && !connection_close
-            } else {
-                (has_length || is_chunked) && !connection_close
+                },
             };
-            if reader.position < reader.buffer.len() {
-                keep_alive = false; // unexpected pipelined bytes: do not reuse
+            let mut reader = ConnReader::new(transport);
+            let http_version = if options.force_http10 { "1.0" } else { "1.1" };
+            let mut request = format!(
+                "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
+                options.user_agent,
+            );
+            if let Some(value) = options.accept_encoding.header_value() {
+                request.push_str(&format!("Accept-Encoding: {value}\r\n"));
             }
-            Ok(Response {
-                status,
-                reason,
-                headers,
-                body,
-                final_url: url.clone(),
-                content_range: None,
-                accept_ranges: false,
-                trailers,
-                pushed: Vec::new(),
-                pooled_stream: keep_alive.then_some((origin.clone(), reader.stream)),
-            })
-        })();
-        match result {
-            Ok(mut response) => {
-                if let Some((origin, stream)) = response.pooled_stream.take() {
-                    pool.put(origin, stream);
+            if let Some(origin_header) = options.origin.as_deref() {
+                request.push_str(&format!("Origin: {origin_header}\r\n"));
+            }
+            let request_site = if options.request_site != RequestSite::SameSite {
+                options.request_site
+            } else if let Some(referrer) = &options.referrer {
+                RequestSite::classify(&referrer.source, url, false)
+            } else {
+                RequestSite::SameSite
+            };
+            if let Some(jar) = &options.cookie_jar
+                && let Some(cookie_header) =
+                    lock_jar(jar).header_for_url_with_site(url, request_site)
+            {
+                request.push_str(&format!("Cookie: {cookie_header}\r\n"));
+            }
+            if let Some(referrer) = &options.referrer
+                && let Some(referer) = referrer.referer_for(url)
+            {
+                request.push_str(&format!("Referer: {referer}\r\n"));
+            }
+            // Same URL-credential rule as `fetch_once` (#310).
+            if let Some(auth) = url_basic_authorization(url) {
+                request.push_str(&format!("Authorization: {auth}\r\n"));
+            }
+            if let Some(auth) = proxy_auth.as_ref() {
+                request.push_str(&format!("Proxy-Authorization: {auth}\r\n"));
+            }
+            if options.force_http10 {
+                request.push_str("Connection: keep-alive\r\n");
+            }
+            request.push_str("\r\n");
+            let result = (|| -> Result<Response, FetchError> {
+                reader
+                    .stream
+                    .write_all(request.as_bytes())
+                    .map_err(map_io_error)?;
+                reader.stream.flush().map_err(map_io_error)?;
+                let head = reader.read_head(options.max_header_bytes)?;
+                let (version, status, reason, headers) = parse_head_verbose(&head)?;
+                if is_https
+                    && let Some(header) = headers
+                        .iter()
+                        .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+                {
+                    crate::hsts::observe_https_with(
+                        options.hsts_store.as_deref(),
+                        url.host(),
+                        &header.1,
+                    );
                 }
-                return Ok(response);
-            }
-            Err(error @ (FetchError::Cors(_) | FetchError::RedirectDisallowed(_))) => {
-                return Err(error);
-            }
-            Err(error) => {
-                last_error = Some(error);
-                if attempt == 0 && from_pool {
-                    continue;
+                if is_redirect(status) {
+                    match options.redirect_mode {
+                        RedirectMode::Follow => {
+                            return Err(FetchError::InvalidResponse(
+                                "redirect in pooled fetch".to_owned(),
+                            ));
+                        }
+                        RedirectMode::Error => {
+                            if let Some(req_origin) = options.origin.as_deref() {
+                                cors::validate_response(
+                                    url,
+                                    req_origin,
+                                    &headers,
+                                    options.cookie_jar.is_some(),
+                                )?;
+                            }
+                            return Err(FetchError::RedirectDisallowed(status));
+                        }
+                        RedirectMode::Manual => {}
+                    }
                 }
-                break;
+                let has_length = headers
+                    .iter()
+                    .any(|(name, _)| name.eq_ignore_ascii_case("content-length"));
+                let is_chunked = headers.iter().any(|(name, value)| {
+                    name.eq_ignore_ascii_case("transfer-encoding")
+                        && value.to_ascii_lowercase().contains("chunked")
+                });
+                let connection_close = headers.iter().any(|(name, value)| {
+                    name.eq_ignore_ascii_case("connection")
+                        && value
+                            .split(',')
+                            .any(|token| token.trim().eq_ignore_ascii_case("close"))
+                });
+                let (raw_body, trailers) = read_body(&mut reader, status, &headers, options)?;
+                let body = decode_response_body(&headers, raw_body, options)?;
+                if let Some(jar) = &options.cookie_jar {
+                    lock_jar(jar).store_from_response(url, &headers);
+                }
+                if let Some(req_origin) = options.origin.as_deref() {
+                    cors::validate_response(
+                        url,
+                        req_origin,
+                        &headers,
+                        options.cookie_jar.is_some(),
+                    )?;
+                }
+                let connection_keep_alive = headers.iter().any(|(name, value)| {
+                    name.eq_ignore_ascii_case("connection")
+                        && value
+                            .split(',')
+                            .any(|token| token.trim().eq_ignore_ascii_case("keep-alive"))
+                });
+                let mut keep_alive = if version == (1, 0) {
+                    (has_length || is_chunked) && connection_keep_alive && !connection_close
+                } else {
+                    (has_length || is_chunked) && !connection_close
+                };
+                if reader.position < reader.buffer.len() {
+                    keep_alive = false; // unexpected pipelined bytes: do not reuse
+                }
+                Ok(Response {
+                    status,
+                    reason,
+                    headers,
+                    body,
+                    final_url: url.clone(),
+                    content_range: None,
+                    accept_ranges: false,
+                    trailers,
+                    pushed: Vec::new(),
+                    pooled_stream: keep_alive.then_some((origin.clone(), reader.stream)),
+                })
+            })();
+            match result {
+                Ok(mut response) => {
+                    if let Some((origin, stream)) = response.pooled_stream.take() {
+                        pool.put(origin, stream);
+                    }
+                    return Ok(response);
+                }
+                Err(error @ (FetchError::Cors(_) | FetchError::RedirectDisallowed(_))) => {
+                    return Err(error);
+                }
+                Err(error) => {
+                    last_error = Some(error);
+                    if attempt == 0 && from_pool {
+                        continue;
+                    }
+                    break;
+                }
             }
         }
+        break;
     }
     // Redirects/encoded responses/races fall back to the buffered fetch (semantics first).
     let is_pooled_redirect = matches!(
@@ -1439,110 +1466,43 @@ fn fetch_once(
         None => url.host().to_owned(),
     };
 
-    // Proxy selection (R205): per scheme and per hop (`no_proxy` is checked against the
-    // current target URL, so redirects can switch between proxied and direct).
-    let proxy = options
-        .proxy
-        .as_deref()
-        .and_then(|config| config.proxy_for_url(url));
-    let socks_proxy = options
-        .proxy
-        .as_deref()
-        .and_then(|config| config.socks_for(url))
-        .cloned();
-    let mut absolute_form: Option<String> = None;
-    let mut proxy_auth_header: Option<String> = None;
-    let proxy_for_407 = proxy.clone();
-    let (mut stream, h2_negotiated) = match (socks_proxy, proxy) {
-        (Some(socks), _) => {
-            let tcp_stream = connect_tcp(&socks.host, socks.port, options)?;
-            let mut tunnel = tcp_stream;
-            crate::socks::connect(&mut tunnel, &socks, url.host_for_dns(), port)?;
-            match url.scheme() {
-                Scheme::Http => (Transport::Plain(tunnel), false),
-                Scheme::Https => {
-                    let (transport, negotiated_h2) =
-                        connect_tls(host, tunnel, options, method != "OPTIONS").map_err(
-                            |error| match error {
-                                FetchError::Io(reason) => {
-                                    FetchError::ProxyTunnel(reason.to_string())
-                                }
-                                other => other,
-                            },
-                        )?;
-                    (transport, negotiated_h2)
-                }
-                Scheme::File | Scheme::Data => {
-                    return Err(FetchError::UnsupportedScheme(
-                        url.scheme().as_str().to_owned(),
-                    ));
-                }
+    // Proxy selection (R205): per scheme, per hop, and PAC failover directives.
+    let routes = options.proxy.as_deref().map_or_else(
+        || vec![crate::proxy::ProxyRoute::Direct],
+        |config| config.routes_for_url(url),
+    );
+    let mut selected_transport = None;
+    for (idx, route) in routes.iter().enumerate() {
+        match open_proxy_or_direct_transport(
+            route,
+            url,
+            host,
+            port,
+            &host_header,
+            method != "OPTIONS",
+            options,
+        ) {
+            Ok((stream, h2_negotiated, absolute_form, proxy_auth_header)) => {
+                let proxy_for_407 = match route {
+                    crate::proxy::ProxyRoute::Http(proxy) => Some(proxy.clone()),
+                    _ => None,
+                };
+                selected_transport = Some((
+                    stream,
+                    h2_negotiated,
+                    absolute_form,
+                    proxy_auth_header,
+                    proxy_for_407,
+                ));
+                break;
             }
+            Err(error) if idx + 1 < routes.len() && is_route_failover_error(&error) => continue,
+            Err(error) => return Err(error),
         }
-        (None, Some(proxy_url)) => {
-            let proxy_host = proxy_url.host_for_dns();
-            let proxy_port = proxy_url.port_or_default().ok_or_else(|| {
-                FetchError::UnsupportedScheme(format!(
-                    "proxy URL without a usable port: {proxy_url}"
-                ))
-            })?;
-            let auth = crate::proxy::proxy_authorization(&proxy_url);
-            let tcp_stream = connect_tcp(proxy_host, proxy_port, options)?;
-            if url.scheme() == Scheme::Https {
-                if proxy_url.scheme() == Scheme::Https {
-                    return Err(FetchError::ProxyConnect(
-                        "an https proxy can only forward http targets (nested TLS is not supported)"
-                            .to_owned(),
-                    ));
-                }
-                let tunnel = establish_connect_tunnel(
-                    tcp_stream,
-                    host,
-                    port,
-                    auth.as_deref(),
-                    &proxy_url,
-                    options,
-                )?;
-                let (transport, negotiated_h2) =
-                    connect_tls(host, tunnel, options, method != "OPTIONS").map_err(|error| {
-                        match error {
-                            // IO during the handshake means the proxy closed/broke the
-                            // tunnel; certificate/SNI failures stay typed as TLS errors.
-                            FetchError::Io(reason) => FetchError::ProxyTunnel(reason.to_string()),
-                            other => other,
-                        }
-                    })?;
-                (transport, negotiated_h2)
-            } else {
-                // `http:` target: absolute-form request through the proxy. An `https:`
-                // proxy wraps that hop in TLS (only for plain-http targets).
-                absolute_form = Some(absolute_request_target(url, &host_header));
-                proxy_auth_header = auth;
-                if proxy_url.scheme() == Scheme::Https {
-                    let (transport, _) = connect_tls(proxy_host, tcp_stream, options, false)?;
-                    (transport, false)
-                } else {
-                    (Transport::Plain(tcp_stream), false)
-                }
-            }
-        }
-        (None, None) => {
-            let tcp_stream = connect_tcp(host, port, options)?;
-            match url.scheme() {
-                Scheme::Http => (Transport::Plain(tcp_stream), false),
-                Scheme::Https => {
-                    let (transport, negotiated_h2) =
-                        connect_tls(host, tcp_stream, options, method != "OPTIONS")?;
-                    (transport, negotiated_h2)
-                }
-                Scheme::File | Scheme::Data => {
-                    return Err(FetchError::UnsupportedScheme(
-                        url.scheme().as_str().to_owned(),
-                    ));
-                }
-            }
-        }
-    };
+    }
+    let (mut stream, h2_negotiated, absolute_form, proxy_auth_header, proxy_for_407) =
+        selected_transport
+            .ok_or_else(|| FetchError::ProxyConnect("no proxy routes available".to_owned()))?;
     let host_header = match url.port() {
         Some(port) => format!("{}:{port}", url.host()),
         None => url.host().to_owned(),
@@ -1851,6 +1811,120 @@ fn url_basic_authorization(url: &Url) -> Option<String> {
         "Basic {}",
         crate::data::base64_encode(credentials.as_bytes())
     ))
+}
+
+fn is_route_failover_error(error: &FetchError) -> bool {
+    matches!(
+        error,
+        FetchError::Connect(_)
+            | FetchError::Io(_)
+            | FetchError::ProxyConnect(_)
+            | FetchError::ProxyTunnel(_)
+            | FetchError::Timeout
+    )
+}
+
+fn open_proxy_or_direct_transport(
+    route: &crate::proxy::ProxyRoute,
+    url: &Url,
+    host: &str,
+    port: u16,
+    host_header: &str,
+    allow_h2: bool,
+    options: &FetchOptions,
+) -> Result<(Transport, bool, Option<String>, Option<String>), FetchError> {
+    match route {
+        crate::proxy::ProxyRoute::Socks5(socks) => {
+            let mut tunnel = connect_tcp(&socks.host, socks.port, options)?;
+            crate::socks::connect(&mut tunnel, socks, url.host_for_dns(), port)?;
+            match url.scheme() {
+                Scheme::Http => Ok((Transport::Plain(tunnel), false, None, None)),
+                Scheme::Https => {
+                    let (transport, negotiated_h2) = connect_tls(host, tunnel, options, allow_h2)
+                        .map_err(|error| match error {
+                        FetchError::Io(reason) => FetchError::ProxyTunnel(reason.to_string()),
+                        other => other,
+                    })?;
+                    Ok((transport, negotiated_h2, None, None))
+                }
+                Scheme::File | Scheme::Data => Err(FetchError::UnsupportedScheme(
+                    url.scheme().as_str().to_owned(),
+                )),
+            }
+        }
+        crate::proxy::ProxyRoute::Socks4(socks4) => {
+            let mut tunnel = connect_tcp(&socks4.host, socks4.port, options)?;
+            crate::socks::connect_socks4(&mut tunnel, socks4, url.host_for_dns(), port)?;
+            match url.scheme() {
+                Scheme::Http => Ok((Transport::Plain(tunnel), false, None, None)),
+                Scheme::Https => {
+                    let (transport, negotiated_h2) = connect_tls(host, tunnel, options, allow_h2)
+                        .map_err(|error| match error {
+                        FetchError::Io(reason) => FetchError::ProxyTunnel(reason.to_string()),
+                        other => other,
+                    })?;
+                    Ok((transport, negotiated_h2, None, None))
+                }
+                Scheme::File | Scheme::Data => Err(FetchError::UnsupportedScheme(
+                    url.scheme().as_str().to_owned(),
+                )),
+            }
+        }
+        crate::proxy::ProxyRoute::Http(proxy_url) => {
+            let proxy_host = proxy_url.host_for_dns();
+            let proxy_port = proxy_url.port_or_default().ok_or_else(|| {
+                FetchError::UnsupportedScheme(format!(
+                    "proxy URL without a usable port: {proxy_url}"
+                ))
+            })?;
+            let auth = crate::proxy::proxy_authorization(proxy_url);
+            let tcp_stream = connect_tcp(proxy_host, proxy_port, options)?;
+            if url.scheme() == Scheme::Https {
+                if proxy_url.scheme() == Scheme::Https {
+                    return Err(FetchError::ProxyConnect(
+                        "an https proxy can only forward http targets (nested TLS is not supported)"
+                            .to_owned(),
+                    ));
+                }
+                let tunnel = establish_connect_tunnel(
+                    tcp_stream,
+                    host,
+                    port,
+                    auth.as_deref(),
+                    proxy_url,
+                    options,
+                )?;
+                let (transport, negotiated_h2) = connect_tls(host, tunnel, options, allow_h2)
+                    .map_err(|error| match error {
+                        FetchError::Io(reason) => FetchError::ProxyTunnel(reason.to_string()),
+                        other => other,
+                    })?;
+                Ok((transport, negotiated_h2, None, None))
+            } else {
+                let absolute_form = Some(absolute_request_target(url, host_header));
+                if proxy_url.scheme() == Scheme::Https {
+                    let (transport, _) = connect_tls(proxy_host, tcp_stream, options, false)?;
+                    Ok((transport, false, absolute_form, auth))
+                } else {
+                    Ok((Transport::Plain(tcp_stream), false, absolute_form, auth))
+                }
+            }
+        }
+        crate::proxy::ProxyRoute::Direct => {
+            let tcp_stream = connect_tcp(host, port, options)?;
+            match url.scheme() {
+                Scheme::Http => Ok((Transport::Plain(tcp_stream), false, None, None)),
+                Scheme::Https => {
+                    let (transport, negotiated_h2) =
+                        connect_tls(host, tcp_stream, options, allow_h2)?;
+                    Ok((transport, negotiated_h2, None, None))
+                }
+                Scheme::File | Scheme::Data => Err(FetchError::UnsupportedScheme(
+                    url.scheme().as_str().to_owned(),
+                )),
+            }
+        }
+    }
 }
 
 /// Opens a `CONNECT host:port` tunnel through `proxy`, returning the raw stream.
