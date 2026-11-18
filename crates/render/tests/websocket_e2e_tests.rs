@@ -1,13 +1,13 @@
 //! #1534: end-to-end — a page script opens a real WebSocket, sends a message and receives the
 //! echo, with the JS handler mutating the DOM (verified via the document title).
-
+#![cfg(feature = "js")]
 #![cfg(feature = "js")]
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
 use net::websocket;
-use render::{RenderOptions, Viewport, render_url};
+use render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 fn spawn_echo_server() -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -74,6 +74,29 @@ fn spawn_echo_server() -> (u16, JoinHandle<()>) {
     (port, handle)
 }
 
+fn serve_http_html(html: String, csp: Option<&str>) -> (String, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let url = format!("http://{}/page.html", listener.local_addr().expect("addr"));
+    let csp_header = csp
+        .map(|value| format!("Content-Security-Policy: {value}\r\n"))
+        .unwrap_or_default();
+    let handle = std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut buf = [0u8; 1024];
+        let _ = stream.read(&mut buf);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n{csp_header}Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+            html.len(),
+            html
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    });
+    (url, handle)
+}
+
 #[test]
 fn page_script_exchanges_messages_over_real_websocket() {
     let (port, server) = spawn_echo_server();
@@ -107,4 +130,90 @@ fn page_script_exchanges_messages_over_real_websocket() {
     );
     let _ = std::fs::remove_file(&path);
     let _ = server.join();
+}
+
+#[test]
+fn websocket_is_blocked_when_no_network_is_enabled() {
+    let html = "<html><body><script>\
+        var ws = new WebSocket('ws://127.0.0.1:9/blocked');\
+        document.body.setAttribute('data-state', String(ws.readyState));\
+        ws.onerror = function (e) { document.body.setAttribute('data-error', e.message || 'err'); };\
+    </script></body></html>";
+    let path = std::env::temp_dir().join(format!("megi-ws-nonet-{}.html", std::process::id()));
+    std::fs::write(&path, html).expect("write fixture");
+    let options = RenderOptions {
+        viewport: Viewport::new(320, 200).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        no_network: true,
+        ..RenderOptions::default()
+    };
+    let output = render_url(&format!("file://{}", path.display()), &options).expect("render");
+    let body = output.document.body().expect("body");
+    let elem = output
+        .document
+        .try_node(body)
+        .and_then(|n| n.as_element())
+        .expect("element");
+    assert_eq!(elem.get_attribute("data-state"), Some("3"));
+    assert!(
+        elem.get_attribute("data-error")
+            .is_some_and(|msg| msg.contains("--no-network")),
+        "expected --no-network error, got {:?}",
+        elem.get_attribute("data-error")
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn websocket_enforces_csp_connect_src() {
+    // 1) connect-src 'none' blocks opening a WebSocket without even dialing TCP.
+    let blocked_html = "<html><body><script>\
+        var ws = new WebSocket('ws://127.0.0.1:9/echo');\
+        document.body.setAttribute('data-state', String(ws.readyState));\
+        ws.onerror = function (e) { document.body.setAttribute('data-error', e.message || 'err'); };\
+    </script></body></html>"
+        .to_owned();
+    let (blocked_url, blocked_http) = serve_http_html(blocked_html, Some("connect-src 'none'"));
+    let options = RenderOptions {
+        viewport: Viewport::new(320, 200).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        ..RenderOptions::default()
+    };
+    let blocked_out = render_url(&blocked_url, &options).expect("render blocked");
+    let body = blocked_out.document.body().expect("body");
+    let elem = blocked_out
+        .document
+        .try_node(body)
+        .and_then(|n| n.as_element())
+        .expect("element");
+    assert_eq!(elem.get_attribute("data-state"), Some("3"));
+    assert!(
+        elem.get_attribute("data-error")
+            .is_some_and(|msg| msg.contains("connect-src")),
+        "expected CSP connect-src error, got {:?}",
+        elem.get_attribute("data-error")
+    );
+    blocked_http.join().expect("blocked http");
+
+    // 2) Explicit ws://127.0.0.1:<port> in connect-src allows the real WebSocket exchange.
+    let (ws_port, ws_server) = spawn_echo_server();
+    let allowed_html = format!(
+        "<html><body><script>\
+            var ws = new WebSocket('ws://127.0.0.1:{ws_port}/echo');\
+            ws.onopen = function () {{ ws.send('csp-ok'); }};\
+            ws.onmessage = function (e) {{ document.body.setAttribute('data-echo', e.data); }};\
+        </script></body></html>"
+    );
+    let policy = format!("connect-src ws://127.0.0.1:{ws_port}");
+    let (allowed_url, allowed_http) = serve_http_html(allowed_html, Some(&policy));
+    let allowed_out = render_url(&allowed_url, &options).expect("render allowed");
+    let body = allowed_out.document.body().expect("body");
+    let elem = allowed_out
+        .document
+        .try_node(body)
+        .and_then(|n| n.as_element())
+        .expect("element");
+    assert_eq!(elem.get_attribute("data-echo"), Some("csp-ok"));
+    allowed_http.join().expect("allowed http");
+    ws_server.join().expect("ws server");
 }

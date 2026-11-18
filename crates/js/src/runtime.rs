@@ -5616,8 +5616,17 @@ fn resolve_module(
     let resolved = {
         let host = host.borrow();
         if let Some(map) = host.import_map.as_ref() {
-            match map.resolve(specifier) {
-                Some(Some(target)) => return Ok(target),
+            match map.resolve_with_base(specifier, Some(base)) {
+                Some(Some(target)) => {
+                    if !target.contains("://")
+                        && !target.starts_with("data:")
+                        && let Some(resolver) = host.module_resolver.as_ref()
+                        && let Some(abs) = resolver(&target, base)?
+                    {
+                        return Ok(abs);
+                    }
+                    return Ok(target);
+                }
                 Some(None) => {
                     return Err(JsError::ImportMapBlocked(format!(
                         "{specifier} (base {base})"
@@ -8761,11 +8770,24 @@ impl ModuleLoader for MegiModuleLoader {
             let host = host.borrow();
             host.import_map
                 .as_ref()
-                .and_then(|map| map.resolve(&specifier))
+                .and_then(|map| map.resolve_with_base(&specifier, Some(&base)))
         };
         if let Some(result) = import_map_result {
             match result {
-                Some(target) => {
+                Some(mut target) => {
+                    if !target.contains("://") && !target.starts_with("data:") {
+                        let resolved_target = {
+                            let host = host.borrow();
+                            match host.module_resolver.as_ref() {
+                                Some(resolver) => resolver(&target, &base)
+                                    .map_err(|error| js_error(error.to_string()))?,
+                                None => None,
+                            }
+                        };
+                        if let Some(abs) = resolved_target {
+                            target = abs;
+                        }
+                    }
                     // Load from the import-map target.
                     let source = {
                         let host = host.borrow();

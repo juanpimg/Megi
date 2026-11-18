@@ -19,11 +19,71 @@ use std::collections::BTreeMap;
 
 use crate::error::JsError;
 
-/// Parsed import map.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ImportMap {
+struct MappingTable {
     exact: BTreeMap<String, Option<String>>,
     prefixes: BTreeMap<String, Option<String>>,
+}
+
+impl MappingTable {
+    fn insert(&mut self, specifier: String, target: Option<String>) {
+        if specifier.ends_with('/') {
+            self.prefixes.insert(specifier, target);
+        } else {
+            self.exact.insert(specifier, target);
+        }
+    }
+
+    fn resolve(&self, specifier: &str) -> Option<Option<String>> {
+        if let Some(target) = self.exact.get(specifier) {
+            return Some(target.clone());
+        }
+        let mut best: Option<(&String, &Option<String>)> = None;
+        for (prefix, target) in &self.prefixes {
+            if specifier.starts_with(prefix)
+                && best.is_none_or(|(current, _)| prefix.len() > current.len())
+            {
+                best = Some((prefix, target));
+            }
+        }
+        best.map(|(prefix, target)| {
+            target
+                .as_ref()
+                .map(|base| format!("{base}{}", &specifier[prefix.len()..]))
+        })
+    }
+}
+
+fn parse_mapping_table(
+    entries: &[(String, Json)],
+    max_entries: usize,
+) -> Result<MappingTable, JsError> {
+    if entries.len() > max_entries {
+        return Err(JsError::ImportMap(format!(
+            "too many import-map entries (max {max_entries})"
+        )));
+    }
+    let mut table = MappingTable::default();
+    for (specifier, target) in entries {
+        let target = match target {
+            Json::Null => None,
+            Json::String(value) => Some(value.clone()),
+            _ => {
+                return Err(JsError::ImportMap(format!(
+                    "mapping for `{specifier}` must be a string or null"
+                )));
+            }
+        };
+        table.insert(specifier.clone(), target);
+    }
+    Ok(table)
+}
+
+/// Parsed import map supporting top-level `imports`, longest-prefix `scopes`, and `integrity`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImportMap {
+    imports: MappingTable,
+    scopes: BTreeMap<String, MappingTable>,
     integrity: BTreeMap<String, String>,
 }
 
@@ -45,26 +105,29 @@ impl ImportMap {
             let imports = imports
                 .as_object()
                 .ok_or_else(|| JsError::ImportMap("`imports` is not an object".to_string()))?;
-            if imports.len() > MAX_IMPORTS {
+            map.imports = parse_mapping_table(imports, MAX_IMPORTS)?;
+        }
+        if let Some(scopes) = root
+            .iter()
+            .find(|(key, _)| key == "scopes")
+            .map(|(_, value)| value)
+        {
+            let scopes = scopes
+                .as_object()
+                .ok_or_else(|| JsError::ImportMap("`scopes` is not an object".to_string()))?;
+            if scopes.len() > MAX_IMPORTS {
                 return Err(JsError::ImportMap(format!(
-                    "too many import-map entries (max {MAX_IMPORTS})"
+                    "too many import-map scopes (max {MAX_IMPORTS})"
                 )));
             }
-            for (specifier, target) in imports {
-                let target = match target {
-                    Json::Null => None,
-                    Json::String(value) => Some(value.clone()),
-                    _ => {
-                        return Err(JsError::ImportMap(format!(
-                            "mapping for `{specifier}` must be a string or null"
-                        )));
-                    }
-                };
-                if specifier.ends_with('/') {
-                    map.prefixes.insert(specifier.clone(), target);
-                } else {
-                    map.exact.insert(specifier.clone(), target);
-                }
+            for (scope_prefix, spec_map) in scopes {
+                let entries = spec_map.as_object().ok_or_else(|| {
+                    JsError::ImportMap(format!("scope `{scope_prefix}` must be an object"))
+                })?;
+                map.scopes.insert(
+                    scope_prefix.clone(),
+                    parse_mapping_table(entries, MAX_IMPORTS)?,
+                );
             }
         }
         if let Some(integrity) = root
@@ -92,25 +155,39 @@ impl ImportMap {
         Ok(map)
     }
 
-    /// Resolves `specifier`: `Some(Some(url))` when mapped, `Some(None)` when explicitly
-    /// blocked, `None` when the map has no entry (host resolver takes over).
+    /// Resolves `specifier` with no referrer scope (top-level `imports` only):
+    /// `Some(Some(url))` when mapped, `Some(None)` when explicitly blocked,
+    /// `None` when the map has no entry.
     pub fn resolve(&self, specifier: &str) -> Option<Option<String>> {
-        if let Some(target) = self.exact.get(specifier) {
-            return Some(target.clone());
-        }
-        let mut best: Option<(&String, &Option<String>)> = None;
-        for (prefix, target) in &self.prefixes {
-            if specifier.starts_with(prefix)
-                && best.is_none_or(|(current, _)| prefix.len() > current.len())
-            {
-                best = Some((prefix, target));
+        self.resolve_with_base(specifier, None)
+    }
+
+    /// Resolves `specifier` using any matching `scopes` entry (longest prefix match on
+    /// `base_url`) before falling back to top-level `imports`.
+    pub fn resolve_with_base(
+        &self,
+        specifier: &str,
+        base_url: Option<&str>,
+    ) -> Option<Option<String>> {
+        if let Some(base) = base_url {
+            let mut matching_scopes: Vec<(&str, &MappingTable)> = self
+                .scopes
+                .iter()
+                .filter(|(scope, _)| {
+                    base == scope.as_str()
+                        || (scope.ends_with('/') && base.starts_with(scope.as_str()))
+                })
+                .map(|(scope, table)| (scope.as_str(), table))
+                .collect();
+            // HTML Import Maps §8.1.7.3: check longest matching scope first.
+            matching_scopes.sort_by(|(a, _), (b, _)| b.len().cmp(&a.len()).then_with(|| b.cmp(a)));
+            for (_, table) in matching_scopes {
+                if let Some(resolved) = table.resolve(specifier) {
+                    return Some(resolved);
+                }
             }
         }
-        best.map(|(prefix, target)| {
-            target
-                .as_ref()
-                .map(|base| format!("{base}{}", &specifier[prefix.len()..]))
-        })
+        self.imports.resolve(specifier)
     }
 
     /// Returns the integrity metadata string associated with `url`, if any (#1527).
@@ -127,12 +204,17 @@ impl ImportMap {
 
     /// Number of exact mappings.
     pub fn exact_len(&self) -> usize {
-        self.exact.len()
+        self.imports.exact.len()
     }
 
     /// Number of prefix mappings.
     pub fn prefix_len(&self) -> usize {
-        self.prefixes.len()
+        self.imports.prefixes.len()
+    }
+
+    /// Number of scoped overrides.
+    pub fn scopes_len(&self) -> usize {
+        self.scopes.len()
     }
 
     /// Number of integrity mappings.
@@ -411,5 +493,48 @@ mod integrity_tests {
             ImportMap::from_json(r#"{"integrity":{"x":123}}"#),
             Err(JsError::ImportMap(_))
         ));
+    }
+
+    #[test]
+    fn resolves_scopes_by_longest_prefix_and_falls_back_to_imports() {
+        let map = ImportMap::from_json(
+            r#"{
+                "imports": {
+                    "dep": "https://cdn.test/v1/dep.js",
+                    "pkg/": "https://cdn.test/v1/pkg/"
+                },
+                "scopes": {
+                    "https://app.test/a/": {
+                        "dep": "https://cdn.test/v2/dep.js",
+                        "blocked": null
+                    },
+                    "https://app.test/a/nested/": {
+                        "dep": "https://cdn.test/v3/dep.js"
+                    }
+                }
+            }"#,
+        )
+        .expect("parse import map with scopes");
+        assert_eq!(map.scopes_len(), 2);
+        assert_eq!(
+            map.resolve_with_base("dep", Some("https://app.test/other.js")),
+            Some(Some("https://cdn.test/v1/dep.js".to_owned()))
+        );
+        assert_eq!(
+            map.resolve_with_base("dep", Some("https://app.test/a/page.js")),
+            Some(Some("https://cdn.test/v2/dep.js".to_owned()))
+        );
+        assert_eq!(
+            map.resolve_with_base("dep", Some("https://app.test/a/nested/mod.js")),
+            Some(Some("https://cdn.test/v3/dep.js".to_owned()))
+        );
+        assert_eq!(
+            map.resolve_with_base("blocked", Some("https://app.test/a/page.js")),
+            Some(None)
+        );
+        assert_eq!(
+            map.resolve_with_base("pkg/sub.js", Some("https://app.test/a/page.js")),
+            Some(Some("https://cdn.test/v1/pkg/sub.js".to_owned()))
+        );
     }
 }
