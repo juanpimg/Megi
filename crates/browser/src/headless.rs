@@ -1,7 +1,7 @@
 //! Headless rendering and screenshot writing (no display server, no `EventLoop`).
 //!
 //! This is the path used by `megi <url|file> --screenshot out.png` and by CI: it calls
-//! [`megi_render::render_url`] with the requested viewport and writes the deterministic PNG.
+//! [`megi_webview::render::render_url`] with the requested viewport and writes the deterministic PNG.
 //! It is pure library code so the CLI can be tested in fully headless environments.
 
 use std::path::{Path, PathBuf};
@@ -23,14 +23,14 @@ pub struct ScreenshotInfo {
 
 /// Renders `input` (URL or `file://`) at `width x height` and returns the render output.
 ///
-/// Validates the viewport through [`megi_render::Viewport`] (typed error instead of a huge
-/// allocation) and uses [`megi_render::RenderOptions::default`] limits.
+/// Validates the viewport through [`megi_webview::render::Viewport`] (typed error instead of a huge
+/// allocation) and uses [`megi_webview::render::RenderOptions::default`] limits.
 pub fn render_target(
     input: &str,
     width: u32,
     height: u32,
-) -> Result<megi_render::RenderOutput, ShellError> {
-    render_target_with_options(input, width, height, &megi_render::RenderOptions::default())
+) -> Result<megi_webview::render::RenderOutput, ShellError> {
+    render_target_with_options(input, width, height, &megi_webview::render::RenderOptions::default())
 }
 
 /// Renders `input` and returns the accessibility tree of the resulting document as JSON (#1516).
@@ -47,36 +47,36 @@ pub fn accessibility_tree(input: &str, width: u32, height: u32) -> Result<String
 /// [`render_target`] with explicit render options (cookies, CORS origin, scripting, ...).
 ///
 /// The viewport is validated from `width`/`height`; every other option is taken from
-/// `options` (e.g. a shared [`megi_net::CookieJar`] or a CORS `origin`).
+/// `options` (e.g. a shared [`megi_webview::net::CookieJar`] or a CORS `origin`).
 pub fn render_target_with_options(
     input: &str,
     width: u32,
     height: u32,
-    options: &megi_render::RenderOptions,
-) -> Result<megi_render::RenderOutput, ShellError> {
-    let viewport = megi_render::Viewport::new(width, height)?;
+    options: &megi_webview::render::RenderOptions,
+) -> Result<megi_webview::render::RenderOutput, ShellError> {
+    let viewport = megi_webview::render::Viewport::new(width, height)?;
     let mut effective = options.clone();
     effective.viewport = viewport;
     let prepared = match crate::pages::prepare_input(input) {
         Ok(prepared) => prepared,
         Err((code, message)) => {
             let page = crate::pages::data_url(&crate::pages::error_html(input, &code, &message));
-            return megi_render::render_url(&page, &effective).map_err(ShellError::from);
+            return megi_webview::render::render_url(&page, &effective).map_err(ShellError::from);
         }
     };
-    match megi_render::render_url(&prepared, &effective) {
+    match megi_webview::render::render_url(&prepared, &effective) {
         Ok(output) => Ok(output),
         Err(error) => {
             // Invalid URLs stay typed errors; network/TLS/HTTP/file failures render the
             // browser error page instead of an empty/failed screenshot.
-            if matches!(error, megi_render::RenderError::Url(_)) {
+            if matches!(error, megi_webview::render::RenderError::Url(_)) {
                 return Err(ShellError::from(error));
             }
             let code = crate::pages::error_code(&error);
             let page =
                 crate::pages::data_url(&crate::pages::error_html(input, code, &error.to_string()));
             // Render the error page once; if it also fails, surface the original error.
-            match megi_render::render_url(&page, &effective) {
+            match megi_webview::render::render_url(&page, &effective) {
                 Ok(output) => Ok(output),
                 Err(_) => Err(ShellError::from(error)),
             }
@@ -90,7 +90,7 @@ pub fn reader_url(
     input: &str,
     width: u32,
     height: u32,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
 ) -> Result<String, ShellError> {
     if crate::reader::is_reader_url(input) {
         let page = crate::pages::reader_page("Reader", &[], "about:reader");
@@ -117,9 +117,9 @@ pub fn render_target_with_chrome(
     input: &str,
     width: u32,
     height: u32,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
     find_query: Option<&str>,
-) -> Result<megi_render::RenderOutput, ShellError> {
+) -> Result<megi_webview::render::RenderOutput, ShellError> {
     // Chrome/find paint the pixmap after the pipeline, so skip the eager page PNG and
     // encode once at the end (R201); the final bytes are identical to the previous path.
     let mut base = options.clone();
@@ -174,9 +174,9 @@ pub fn render_target_with_chrome_menu(
     input: &str,
     width: u32,
     height: u32,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
     find_query: Option<&str>,
-) -> Result<megi_render::RenderOutput, ShellError> {
+) -> Result<megi_webview::render::RenderOutput, ShellError> {
     let mut base = options.clone();
     base.encode_png = false;
     let mut output = render_target_with_options(input, width, height, &base)?;
@@ -222,7 +222,7 @@ pub fn render_target_with_chrome_menu(
     output.pixmap.pixels = dest
         .iter()
         .map(|pixel| {
-            megi_paint::Color::new(
+            megi_webview::paint::Color::new(
                 ((pixel >> 16) & 0xFF) as u8,
                 ((pixel >> 8) & 0xFF) as u8,
                 (pixel & 0xFF) as u8,
@@ -240,7 +240,7 @@ pub fn screenshot_with_chrome(
     width: u32,
     height: u32,
     path: impl AsRef<Path>,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
     find_query: Option<&str>,
 ) -> Result<ScreenshotInfo, ShellError> {
     let mut output = render_target_with_chrome(input, width, height, options, find_query)?;
@@ -264,15 +264,15 @@ pub fn screenshot_with_chrome(
 /// Renders `input` and paints find-in-page highlights for `query` into the pixmap.
 ///
 /// Returns the render output (with the highlight overlay already blended into
-/// [`megi_render::RenderOutput::pixmap`] and the final PNG encoded **once** after the overlay)
+/// [`megi_webview::render::RenderOutput::pixmap`] and the final PNG encoded **once** after the overlay)
 /// and the number of hits.
 pub fn render_target_with_find(
     input: &str,
     width: u32,
     height: u32,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
     query: &str,
-) -> Result<(megi_render::RenderOutput, usize), ShellError> {
+) -> Result<(megi_webview::render::RenderOutput, usize), ShellError> {
     let mut base = options.clone();
     base.encode_png = false;
     let mut output = render_target_with_options(input, width, height, &base)?;
@@ -292,7 +292,7 @@ pub fn screenshot_with_find(
     width: u32,
     height: u32,
     path: impl AsRef<Path>,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
     query: &str,
 ) -> Result<ScreenshotInfo, ShellError> {
     let (mut output, hits) = render_target_with_find(input, width, height, options, query)?;
@@ -316,7 +316,7 @@ pub fn screenshot_with_find(
 
 /// Writes the PNG of a finished render to `path` and returns its metadata.
 pub fn save_screenshot(
-    output: &megi_render::RenderOutput,
+    output: &megi_webview::render::RenderOutput,
     path: impl AsRef<Path>,
 ) -> Result<ScreenshotInfo, ShellError> {
     let path = path.as_ref().to_path_buf();
@@ -364,7 +364,7 @@ pub fn screenshot(
         width,
         height,
         path,
-        &megi_render::RenderOptions::default(),
+        &megi_webview::render::RenderOptions::default(),
     )
 }
 
@@ -374,7 +374,7 @@ pub fn screenshot_with_options(
     width: u32,
     height: u32,
     path: impl AsRef<Path>,
-    options: &megi_render::RenderOptions,
+    options: &megi_webview::render::RenderOptions,
 ) -> Result<ScreenshotInfo, ShellError> {
     let output = render_target_with_options(input, width, height, options)?;
     save_screenshot(&output, path)

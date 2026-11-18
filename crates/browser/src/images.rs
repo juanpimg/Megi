@@ -9,8 +9,8 @@
 //! cached here (the shell re-fetches the resource on demand when saving; see
 //! [`crate::download::save_image`]).
 
-use megi_core::{Document, NodeId};
-use megi_layout::LayoutBox;
+use megi_webview::core::{Document, NodeId};
+use megi_webview::layout::LayoutBox;
 
 use crate::links::CssRect;
 
@@ -36,7 +36,7 @@ impl ImageRegion {
 pub fn collect_image_regions(
     document: &Document,
     layout: &LayoutBox,
-    base_url: Option<&megi_net::Url>,
+    base_url: Option<&megi_webview::net::Url>,
 ) -> Vec<ImageRegion> {
     let mut images = Vec::new();
     let mut stack: Vec<&LayoutBox> = vec![layout];
@@ -44,10 +44,10 @@ pub fn collect_image_regions(
         if let Some(node_id) = layout_box.node_id()
             && let Some(element) = document.node(node_id).as_element()
             && element.local_name == "img"
-            && let Some(src) = megi_render::images::resolve_img_source(
+            && let Some(src) = megi_webview::render::images::resolve_img_source(
                 document,
                 node_id,
-                &megi_css::MediaContext::default(),
+                &megi_webview::css::MediaContext::default(),
                 1.0,
             )
         {
@@ -58,7 +58,7 @@ pub fn collect_image_regions(
                         .join(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
-                    None => megi_net::Url::parse(&src)
+                    None => megi_webview::net::Url::parse(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
                 };

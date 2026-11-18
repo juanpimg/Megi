@@ -24,15 +24,15 @@ use megi_browser::{
 /// (document, subresources, redirects and later navigations in window mode).
 /// `--origin` overrides the CORS `Origin` used for subresource fetches (otherwise the
 /// document's own origin is used automatically by `render`).
-fn render_options(args: &CliArgs) -> megi_render::RenderOptions {
+fn render_options(args: &CliArgs) -> megi_webview::render::RenderOptions {
     let cookie_jar = args
         .cookies
-        .then(|| Arc::new(Mutex::new(megi_net::CookieJar::new())));
-    megi_render::RenderOptions {
+        .then(|| Arc::new(Mutex::new(megi_webview::net::CookieJar::new())));
+    megi_webview::render::RenderOptions {
         cookie_jar,
         origin: args.origin.clone(),
         time_ms: args.time_ms,
-        ..megi_render::RenderOptions::default()
+        ..megi_webview::render::RenderOptions::default()
     }
 }
 
@@ -196,7 +196,7 @@ mod screenshot_diagnostics_tests {
     #[test]
     fn render_diagnostics_are_detected() {
         // A screenshot with warnings or limit violations must be treated as degraded.
-        let mut violations = megi_html::LimitViolations::default();
+        let mut violations = megi_webview::html::LimitViolations::default();
         let mut warnings: Vec<String> = Vec::new();
         assert!(
             warnings.is_empty() && violations.is_empty(),

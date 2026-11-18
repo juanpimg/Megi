@@ -9,15 +9,7 @@ repository.workspace = true
 description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer presentation and headless screenshots"
 
 [dependencies]
-megi-core.workspace = true
-megi-html.workspace = true
-megi-layout.workspace = true
-megi-css.workspace = true
-megi-fonts.workspace = true
-megi-render.workspace = true
-megi-paint.workspace = true
-megi-net.workspace = true
-megi-image.workspace = true
+megi-webview = { workspace = true, features = ["full"] }
 winit.workspace = true
 softbuffer.workspace = true
 

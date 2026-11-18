@@ -9,7 +9,7 @@
 //! At runtime the scale factor can change (moving the window between monitors);
 //! the window re-renders on [`crate::window`]'s debounced path.
 
-use megi_render::MAX_VIEWPORT_DIMENSION;
+use megi_webview::render::MAX_VIEWPORT_DIMENSION;
 
 /// Smallest accepted device scale factor.
 pub const MIN_SCALE: f64 = 0.25;
@@ -56,7 +56,7 @@ pub fn physical_to_logical(physical: u32, scale: f64) -> u32 {
 /// Computes physical/CSS dimensions for a window of `physical_width x
 /// physical_height` at `scale_factor`.
 ///
-/// The CSS viewport is clamped to `1..=megi_render::MAX_VIEWPORT_DIMENSION` so an
+/// The CSS viewport is clamped to `1..=megi_webview::render::MAX_VIEWPORT_DIMENSION` so an
 /// absurd window size or a very small scale can never request an invalid render.
 pub fn window_metrics(
     physical_width: u32,

@@ -168,19 +168,19 @@ pub fn run_window(input: String, title: String, width: u32, height: u32) -> Resu
         title,
         width,
         height,
-        megi_render::RenderOptions::default(),
+        megi_webview::render::RenderOptions::default(),
         WindowViewOptions::default(),
     )
 }
 
-/// [`run_window`] with explicit base [`megi_render::RenderOptions`] (cookie jar, CORS origin,
+/// [`run_window`] with explicit base [`megi_webview::render::RenderOptions`] (cookie jar, CORS origin,
 /// scripting toggles) applied to every render of the session.
 pub fn run_window_with_options(
     input: String,
     title: String,
     width: u32,
     height: u32,
-    render_options: megi_render::RenderOptions,
+    render_options: megi_webview::render::RenderOptions,
 ) -> Result<(), ShellError> {
     run_window_with_view_options(
         input,
@@ -198,7 +198,7 @@ pub fn run_window_with_view_options(
     title: String,
     width: u32,
     height: u32,
-    render_options: megi_render::RenderOptions,
+    render_options: megi_webview::render::RenderOptions,
     view: WindowViewOptions,
 ) -> Result<(), ShellError> {
     let event_loop = EventLoop::<UserEvent>::with_user_event()
@@ -225,7 +225,7 @@ enum FocusTarget {
     /// Form control identified by its stable `data-megi-form-id`.
     Control(u32),
     /// Anchor node (`<a href>`), resolved through [`LinkRegion::node`].
-    Link(megi_core::NodeId),
+    Link(megi_webview::core::NodeId),
 }
 
 /// Builds the keyboard focus list for a DOM snapshot in document order (#1517).
@@ -234,7 +234,7 @@ enum FocusTarget {
 /// its DOM node) or a link (matched by `LinkRegion::node`). Pure so it can be tested without
 /// a window/event loop.
 fn build_focus_targets(
-    document: &megi_core::Document,
+    document: &megi_webview::core::Document,
     forms: &[FormControl],
     links: &[LinkRegion],
 ) -> Vec<FocusTarget> {
@@ -259,7 +259,7 @@ struct WindowApp {
     surface: Option<ShellSurface>,
     proxy: EventLoopProxy<UserEvent>,
     /// Base render options for this session (cookie jar, CORS origin, scripting, ...).
-    render_options: megi_render::RenderOptions,
+    render_options: megi_webview::render::RenderOptions,
     metrics: WindowMetrics,
     scale_factor: f64,
     scroll: ScrollState,
@@ -305,7 +305,7 @@ struct WindowApp {
     /// Active IME composition state (#1519).
     ime: crate::forms::ImeState,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
-    document: Option<Arc<megi_core::Document>>,
+    document: Option<Arc<megi_webview::core::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.
     release_button: Option<u32>,
     /// Find-in-page state (query, hits, current hit).
@@ -362,7 +362,7 @@ impl WindowApp {
         width: u32,
         height: u32,
         proxy: EventLoopProxy<UserEvent>,
-        render_options: megi_render::RenderOptions,
+        render_options: megi_webview::render::RenderOptions,
         view: WindowViewOptions,
     ) -> Self {
         let mut startup_notice = None;
@@ -528,7 +528,7 @@ impl WindowApp {
             let html = crate::history::history_page_html(&self.tabs.active().history_log.recent());
             format!(
                 "data:text/html;base64,{}",
-                megi_net::base64_encode(html.as_bytes())
+                megi_webview::net::base64_encode(html.as_bytes())
             )
         } else {
             self.input.clone()
@@ -553,7 +553,7 @@ impl WindowApp {
     }
 
     /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
-    fn start_navigation(&mut self, url: &megi_net::Url) {
+    fn start_navigation(&mut self, url: &megi_webview::net::Url) {
         self.session_autosave.mark_dirty(Instant::now());
         self.input = url.as_str();
         if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
@@ -590,7 +590,7 @@ impl WindowApp {
     }
 
     /// Commits a navigation (link click): pushes a history entry unless it is the same URL.
-    fn navigate_to(&mut self, url: megi_net::Url) {
+    fn navigate_to(&mut self, url: megi_webview::net::Url) {
         if self.nav.navigate_to(url) == NavigationOutcome::Pushed
             && let Some(current) = self.nav.current().cloned()
         {
@@ -620,7 +620,7 @@ impl WindowApp {
     /// reloaded: the current DOM snapshot is re-rendered with `hashchange` and `popstate`
     /// dispatched on `window` so SPA routers can react (#1503). Any other navigation falls back
     /// to a full render.
-    fn apply_history_navigation(&mut self, url: &megi_net::Url, previous: Option<&megi_net::Url>) {
+    fn apply_history_navigation(&mut self, url: &megi_webview::net::Url, previous: Option<&megi_webview::net::Url>) {
         let same_document = previous.is_some_and(|current| current.cache_key() == url.cache_key());
         let fragment_changed = previous.and_then(|current| current.fragment()) != url.fragment();
         if same_document
@@ -838,7 +838,7 @@ impl WindowApp {
         match action {
             MenuAction::OpenLinkInNewTab => {
                 if let Some(url) = menu.target_link
-                    && let Ok(parsed) = megi_net::Url::parse(&url)
+                    && let Ok(parsed) = megi_webview::net::Url::parse(&url)
                 {
                     self.save_active_tab();
                     if self.tabs.open_tab(parsed.as_str()).is_some() {
@@ -858,7 +858,7 @@ impl WindowApp {
             }
             MenuAction::SaveImage => {
                 if let Some(image) = menu.target_image
-                    && let Ok(url) = megi_net::Url::parse(&image.url)
+                    && let Ok(url) = megi_webview::net::Url::parse(&image.url)
                 {
                     self.save_image_resource(&url);
                 }
@@ -876,8 +876,8 @@ impl WindowApp {
     }
 
     /// Fetches an image resource on demand and saves it as a download.
-    fn save_image_resource(&mut self, url: &megi_net::Url) {
-        let mut loader = megi_net::ResourceLoader::new();
+    fn save_image_resource(&mut self, url: &megi_webview::net::Url) {
+        let mut loader = megi_webview::net::ResourceLoader::new();
         match loader.load(url) {
             Ok(resource) => {
                 let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
@@ -1048,7 +1048,7 @@ impl WindowApp {
                     }
                     // Server redirects: the final URL replaces the requested history entry.
                     if !patched_render
-                        && let Ok(final_url) = megi_net::Url::parse(&frame.document_url)
+                        && let Ok(final_url) = megi_webview::net::Url::parse(&frame.document_url)
                         && self.nav.current() != Some(&final_url)
                         && self.nav.replace_current(final_url.clone())
                     {
@@ -1116,7 +1116,7 @@ impl WindowApp {
         };
         let page = match self.nav.current() {
             Some(url) => title::page_title(self.doc_title.as_deref(), url),
-            None => match megi_net::Url::parse(&self.input) {
+            None => match megi_webview::net::Url::parse(&self.input) {
                 Ok(url) => title::page_title(self.doc_title.as_deref(), &url),
                 Err(_) => title::FALLBACK_NAME.to_owned(),
             },
@@ -1227,7 +1227,7 @@ impl WindowApp {
         }
         let url = match self.nav.current().cloned() {
             Some(url) => url,
-            None => match megi_net::Url::parse(&self.input) {
+            None => match megi_webview::net::Url::parse(&self.input) {
                 Ok(url) => url,
                 Err(error) => {
                     self.notify(format!("cannot save PNG: invalid URL ({error})"));
@@ -1249,7 +1249,7 @@ impl WindowApp {
         };
         let url = match self.nav.current().cloned() {
             Some(url) => url,
-            None => match megi_net::Url::parse(&self.input) {
+            None => match megi_webview::net::Url::parse(&self.input) {
                 Ok(url) => url,
                 Err(error) => {
                     self.notify(format!("cannot save HTML: invalid URL ({error})"));
@@ -1306,7 +1306,7 @@ impl WindowApp {
             return;
         };
         if let Some(entry) = menu.selected_entry()
-            && let Ok(url) = megi_net::Url::parse(&entry.url)
+            && let Ok(url) = megi_webview::net::Url::parse(&entry.url)
         {
             self.start_navigation(&url);
         }
@@ -1589,12 +1589,12 @@ impl WindowApp {
                         if let (Some(control), Some(value)) =
                             (self.focused_control().cloned(), value)
                         {
-                            let ui_events = vec![megi_render::HostDomEvent {
+                            let ui_events = vec![megi_webview::render::HostDomEvent {
                                 event_type: "input".to_owned(),
-                                target: megi_render::HostEventTarget::FormControl(control.form_id),
+                                target: megi_webview::render::HostEventTarget::FormControl(control.form_id),
                                 bubbles: true,
                                 cancelable: false,
-                                kind: megi_render::HostUiEventKind::Input {
+                                kind: megi_webview::render::HostUiEventKind::Input {
                                     data: Some(committed),
                                     input_type: "insertCompositionText".to_owned(),
                                 },
@@ -1657,7 +1657,7 @@ impl WindowApp {
             return false;
         }
         let target =
-            crate::forms::form_get_target(&submission).and_then(|url| megi_net::Url::parse(&url).ok());
+            crate::forms::form_get_target(&submission).and_then(|url| megi_webview::net::Url::parse(&url).ok());
         let Some(target) = target else {
             return false;
         };
@@ -1698,12 +1698,12 @@ impl WindowApp {
             self.apply_form_patch_with_events(Some(control.form_id), None, None, false, ui_events);
         } else if control.kind.is_checkable() {
             self.editor = None;
-            ui_events.push(megi_render::HostDomEvent {
+            ui_events.push(megi_webview::render::HostDomEvent {
                 event_type: "change".to_owned(),
-                target: megi_render::HostEventTarget::FormControl(control.form_id),
+                target: megi_webview::render::HostEventTarget::FormControl(control.form_id),
                 bubbles: true,
                 cancelable: false,
-                kind: megi_render::HostUiEventKind::Simple,
+                kind: megi_webview::render::HostUiEventKind::Simple,
             });
             self.apply_form_patch_with_events(
                 Some(control.form_id),
@@ -1849,7 +1849,7 @@ impl WindowApp {
         value: Option<&str>,
         checked: Option<bool>,
         active: bool,
-        ui_events: Vec<megi_render::HostDomEvent>,
+        ui_events: Vec<megi_webview::render::HostDomEvent>,
     ) {
         let Some(document) = self.document.clone() else {
             return;
@@ -1932,8 +1932,8 @@ impl WindowApp {
                 .map(|control| TextEdit::new(&control.value));
             let mut ui_events = Vec::new();
             let key_target = prev_focus.map_or(
-                megi_render::HostEventTarget::Window,
-                megi_render::HostEventTarget::FormControl,
+                megi_webview::render::HostEventTarget::Window,
+                megi_webview::render::HostEventTarget::FormControl,
             );
             if let Some(ev) =
                 host_keydown_event(key_target, key, ctrl_pressed, shift_pressed, alt_pressed)
@@ -1968,7 +1968,7 @@ impl WindowApp {
                 && !control.disabled
             {
                 if matches!(key, Key::Named(NamedKey::Space)) && control.kind.is_checkable() {
-                    let target = megi_render::HostEventTarget::FormControl(control.form_id);
+                    let target = megi_webview::render::HostEventTarget::FormControl(control.form_id);
                     let mut ui_events = Vec::new();
                     if let Some(ev) = host_keydown_event(
                         target.clone(),
@@ -1979,12 +1979,12 @@ impl WindowApp {
                     ) {
                         ui_events.push(ev);
                     }
-                    ui_events.push(megi_render::HostDomEvent {
+                    ui_events.push(megi_webview::render::HostDomEvent {
                         event_type: "change".to_owned(),
                         target,
                         bubbles: true,
                         cancelable: false,
-                        kind: megi_render::HostUiEventKind::Simple,
+                        kind: megi_webview::render::HostUiEventKind::Simple,
                     });
                     self.apply_form_patch_with_events(
                         Some(control.form_id),
@@ -1996,7 +1996,7 @@ impl WindowApp {
                     return true;
                 }
                 if control.kind.is_button() {
-                    let target = megi_render::HostEventTarget::FormControl(control.form_id);
+                    let target = megi_webview::render::HostEventTarget::FormControl(control.form_id);
                     let mut ui_events = Vec::new();
                     if let Some(ev) =
                         host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
@@ -2031,8 +2031,8 @@ impl WindowApp {
             self.editor = None;
             let mut ui_events = Vec::new();
             let key_target = prev_focus.map_or(
-                megi_render::HostEventTarget::Window,
-                megi_render::HostEventTarget::FormControl,
+                megi_webview::render::HostEventTarget::Window,
+                megi_webview::render::HostEventTarget::FormControl,
             );
             if let Some(ev) =
                 host_keydown_event(key_target, key, ctrl_pressed, shift_pressed, alt_pressed)
@@ -2052,8 +2052,8 @@ impl WindowApp {
             return false;
         };
         let target = focused_id.map_or(
-            megi_render::HostEventTarget::Focused,
-            megi_render::HostEventTarget::FormControl,
+            megi_webview::render::HostEventTarget::Focused,
+            megi_webview::render::HostEventTarget::FormControl,
         );
         match key {
             Key::Character(text) => {
@@ -2071,12 +2071,12 @@ impl WindowApp {
                 ) {
                     ui_events.push(ev);
                 }
-                ui_events.push(megi_render::HostDomEvent {
+                ui_events.push(megi_webview::render::HostDomEvent {
                     event_type: "input".to_owned(),
                     target,
                     bubbles: true,
                     cancelable: false,
-                    kind: megi_render::HostUiEventKind::Input {
+                    kind: megi_webview::render::HostUiEventKind::Input {
                         data: Some(text.as_str().to_owned()),
                         input_type: "insertText".to_owned(),
                     },
@@ -2097,12 +2097,12 @@ impl WindowApp {
                 }
                 if editor.backspace() {
                     let value = editor.value().to_owned();
-                    ui_events.push(megi_render::HostDomEvent {
+                    ui_events.push(megi_webview::render::HostDomEvent {
                         event_type: "input".to_owned(),
                         target,
                         bubbles: true,
                         cancelable: false,
-                        kind: megi_render::HostUiEventKind::Input {
+                        kind: megi_webview::render::HostUiEventKind::Input {
                             data: None,
                             input_type: "deleteContentBackward".to_owned(),
                         },
@@ -2956,51 +2956,51 @@ impl ApplicationHandler<UserEvent> for WindowApp {
     }
 }
 
-/// Builds `blur` / `focus` [`megi_render::HostDomEvent`] sequence when shell focus moves (#1504).
+/// Builds `blur` / `focus` [`megi_webview::render::HostDomEvent`] sequence when shell focus moves (#1504).
 fn host_focus_events(
     prev_focus: Option<u32>,
     next_focus: Option<u32>,
-) -> Vec<megi_render::HostDomEvent> {
+) -> Vec<megi_webview::render::HostDomEvent> {
     if prev_focus == next_focus {
         return Vec::new();
     }
     let mut events = Vec::new();
     if let Some(prev) = prev_focus {
-        events.push(megi_render::HostDomEvent {
+        events.push(megi_webview::render::HostDomEvent {
             event_type: "blur".to_owned(),
-            target: megi_render::HostEventTarget::FormControl(prev),
+            target: megi_webview::render::HostEventTarget::FormControl(prev),
             bubbles: false,
             cancelable: false,
-            kind: megi_render::HostUiEventKind::Focus,
+            kind: megi_webview::render::HostUiEventKind::Focus,
         });
     }
     if let Some(next) = next_focus {
-        events.push(megi_render::HostDomEvent {
+        events.push(megi_webview::render::HostDomEvent {
             event_type: "focus".to_owned(),
-            target: megi_render::HostEventTarget::FormControl(next),
+            target: megi_webview::render::HostEventTarget::FormControl(next),
             bubbles: false,
             cancelable: false,
-            kind: megi_render::HostUiEventKind::Focus,
+            kind: megi_webview::render::HostUiEventKind::Focus,
         });
     }
     events
 }
 
-/// Builds a bubbling, cancelable `keydown` [`megi_render::HostDomEvent`] from a `winit` key (#1504).
+/// Builds a bubbling, cancelable `keydown` [`megi_webview::render::HostDomEvent`] from a `winit` key (#1504).
 fn host_keydown_event(
-    target: megi_render::HostEventTarget,
+    target: megi_webview::render::HostEventTarget,
     key: &Key,
     ctrl_key: bool,
     shift_key: bool,
     alt_key: bool,
-) -> Option<megi_render::HostDomEvent> {
+) -> Option<megi_webview::render::HostDomEvent> {
     let (dom_key, code) = dom_key_and_code(key)?;
-    Some(megi_render::HostDomEvent {
+    Some(megi_webview::render::HostDomEvent {
         event_type: "keydown".to_owned(),
         target,
         bubbles: true,
         cancelable: true,
-        kind: megi_render::HostUiEventKind::Keyboard {
+        kind: megi_webview::render::HostUiEventKind::Keyboard {
             key: dom_key,
             code,
             ctrl_key,
@@ -3057,17 +3057,17 @@ mod ui_event_forwarding_tests {
         let moved = host_focus_events(Some(1), Some(4));
         assert_eq!(moved.len(), 2);
         assert_eq!(moved[0].event_type, "blur");
-        assert_eq!(moved[0].target, megi_render::HostEventTarget::FormControl(1));
+        assert_eq!(moved[0].target, megi_webview::render::HostEventTarget::FormControl(1));
         assert!(!moved[0].bubbles);
         assert_eq!(moved[1].event_type, "focus");
-        assert_eq!(moved[1].target, megi_render::HostEventTarget::FormControl(4));
+        assert_eq!(moved[1].target, megi_webview::render::HostEventTarget::FormControl(4));
         assert!(!moved[1].bubbles);
     }
 
     #[test]
     fn host_keydown_event_maps_named_and_character_keys() {
         let enter = host_keydown_event(
-            megi_render::HostEventTarget::FormControl(3),
+            megi_webview::render::HostEventTarget::FormControl(3),
             &Key::Named(NamedKey::Enter),
             false,
             true,
@@ -3079,7 +3079,7 @@ mod ui_event_forwarding_tests {
         assert!(enter.cancelable);
         assert_eq!(
             enter.kind,
-            megi_render::HostUiEventKind::Keyboard {
+            megi_webview::render::HostUiEventKind::Keyboard {
                 key: "Enter".to_owned(),
                 code: "Enter".to_owned(),
                 ctrl_key: false,
@@ -3091,7 +3091,7 @@ mod ui_event_forwarding_tests {
         );
 
         let letter = host_keydown_event(
-            megi_render::HostEventTarget::Focused,
+            megi_webview::render::HostEventTarget::Focused,
             &Key::Character("a".into()),
             true,
             false,
@@ -3100,7 +3100,7 @@ mod ui_event_forwarding_tests {
         .expect("letter keydown");
         assert_eq!(
             letter.kind,
-            megi_render::HostUiEventKind::Keyboard {
+            megi_webview::render::HostUiEventKind::Keyboard {
                 key: "a".to_owned(),
                 code: "KeyA".to_owned(),
                 ctrl_key: true,
@@ -3122,7 +3122,7 @@ mod focus_target_tests {
     /// form control — the old Tab handler gated on `forms` and could never reach links (#1517).
     #[test]
     fn focus_list_includes_links_in_document_order() {
-        let document = megi_html::parse_document(
+        let document = megi_webview::html::parse_document(
             "<input id=a><a id=link href=/next>Next</a><button id=b>Go</button>",
             false,
         );
@@ -3162,15 +3162,15 @@ mod focus_target_tests {
         // Pure check of the mapping used by `focus_index_for_control`: build a target list
         // where a control sits between two links and verify lookups are stable.
         let targets = [
-            FocusTarget::Link(megi_core::NodeId::from_index(1)),
+            FocusTarget::Link(megi_webview::core::NodeId::from_index(1)),
             FocusTarget::Control(7),
-            FocusTarget::Link(megi_core::NodeId::from_index(3)),
+            FocusTarget::Link(megi_webview::core::NodeId::from_index(3)),
         ];
         let pos = targets
             .iter()
             .position(|target| *target == FocusTarget::Control(7));
         assert_eq!(pos, Some(1));
-        assert!(targets.contains(&FocusTarget::Link(megi_core::NodeId::from_index(3))));
+        assert!(targets.contains(&FocusTarget::Link(megi_webview::core::NodeId::from_index(3))));
     }
 }
 

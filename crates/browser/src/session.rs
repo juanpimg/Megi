@@ -144,7 +144,7 @@ impl Session {
             let mut new_index = tab.index;
             let mut kept = 0usize;
             tab.history.retain(|url| {
-                let usable = megi_net::Url::parse(url).is_ok();
+                let usable = megi_webview::net::Url::parse(url).is_ok();
                 if usable {
                     kept += 1;
                 } else if kept <= new_index {
@@ -174,10 +174,10 @@ impl Session {
     pub fn restore(&self) -> TabsState {
         let mut restored: Vec<Tab> = Vec::new();
         for session_tab in &self.tabs {
-            let history: Vec<megi_net::Url> = session_tab
+            let history: Vec<megi_webview::net::Url> = session_tab
                 .history
                 .iter()
-                .filter_map(|url| megi_net::Url::parse(url).ok())
+                .filter_map(|url| megi_webview::net::Url::parse(url).ok())
                 .collect();
             let url = if session_tab.url.is_empty() {
                 match history.get(session_tab.index) {
@@ -1039,7 +1039,7 @@ mod tests {
             tab.scroll = ScrollState::new(200, 100);
             tab.scroll.scroll_to(80);
             tab.navigation
-                .navigate_to(megi_net::Url::parse("file:///tmp/three.html").expect("url"));
+                .navigate_to(megi_webview::net::Url::parse("file:///tmp/three.html").expect("url"));
             tab.url = "file:///tmp/three.html".to_string();
         }
         let session = Session::capture(&tabs);
@@ -1207,7 +1207,7 @@ mod tests {
     fn capture_remaps_the_history_index_and_keeps_the_current_entry() {
         let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
         for index in 1..100 {
-            let url = megi_net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            let url = megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
             tabs.active_mut().navigation.navigate_to(url);
         }
         for _ in 0..90 {
@@ -1243,7 +1243,7 @@ mod tests {
                 .active()
                 .navigation
                 .current()
-                .map(megi_net::Url::as_str)
+                .map(megi_webview::net::Url::as_str)
                 .as_deref(),
             Some("https://a/")
         );
@@ -1305,7 +1305,7 @@ mod tests {
     fn capture_slides_the_window_when_the_current_entry_is_late() {
         let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
         for index in 1..256 {
-            let url = megi_net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            let url = megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
             tabs.active_mut().navigation.navigate_to(url);
         }
         let current = tabs

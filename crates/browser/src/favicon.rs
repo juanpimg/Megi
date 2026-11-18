@@ -10,7 +10,7 @@
 //! rasterization), the fallback dot is a plain square, and network favicons are only
 //! fetched when networking is enabled for the render.
 
-use megi_core::Document;
+use megi_webview::core::Document;
 
 /// Favicon size in CSS pixels (drawn in the tab strip).
 pub const ICON_SIZE: u32 = 16;
@@ -47,7 +47,7 @@ impl Favicon {
 
 /// Extracts the first `<link rel="...icon...">` URL from `document`, or the conventional
 /// `/favicon.ico` of `page`'s origin as a fallback candidate.
-pub fn icon_url(document: &Document, page: &megi_net::Url) -> Option<megi_net::Url> {
+pub fn icon_url(document: &Document, page: &megi_webview::net::Url) -> Option<megi_webview::net::Url> {
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -80,17 +80,17 @@ pub fn icon_url(document: &Document, page: &megi_net::Url) -> Option<megi_net::U
 /// `http(s)` uses the renderer's fetch options. Returns `None` on any failure
 /// or when the payload exceeds [`MAX_FAVICON_BYTES`].
 pub fn fetch(
-    icon_url: &megi_net::Url,
-    document_url: &megi_net::Url,
-    options: &megi_render::RenderOptions,
+    icon_url: &megi_webview::net::Url,
+    document_url: &megi_webview::net::Url,
+    options: &megi_webview::render::RenderOptions,
 ) -> Option<Vec<u8>> {
     match icon_url.scheme() {
-        megi_net::url::Scheme::File => {
-            if !matches!(document_url.scheme(), megi_net::url::Scheme::File) {
+        megi_webview::net::url::Scheme::File => {
+            if !matches!(document_url.scheme(), megi_webview::net::url::Scheme::File) {
                 return None;
             }
             use std::io::Read as _;
-            let path = std::path::PathBuf::from(megi_net::url::percent_decode(icon_url.path()));
+            let path = std::path::PathBuf::from(megi_webview::net::url::percent_decode(icon_url.path()));
             let file = std::fs::File::open(path).ok()?;
             let metadata = file.metadata().ok()?;
             if !metadata.is_file() || metadata.len() > MAX_FAVICON_BYTES as u64 {
@@ -105,17 +105,17 @@ pub fn fetch(
             }
             Some(bytes)
         }
-        megi_net::url::Scheme::Http | megi_net::url::Scheme::Https => {
+        megi_webview::net::url::Scheme::Http | megi_webview::net::url::Scheme::Https => {
             if options.no_network {
                 return None;
             }
-            let response = megi_net::fetch(icon_url, &options.fetch_options).ok()?;
+            let response = megi_webview::net::fetch(icon_url, &options.fetch_options).ok()?;
             if response.status != 200 || response.body.len() > MAX_FAVICON_BYTES {
                 return None;
             }
             Some(response.body)
         }
-        megi_net::url::Scheme::Data => None,
+        megi_webview::net::url::Scheme::Data => None,
     }
 }
 
@@ -123,8 +123,8 @@ pub fn fetch(
 /// when available, otherwise the deterministic origin dot.
 pub fn for_page(
     document: &Document,
-    document_url: &megi_net::Url,
-    options: &megi_render::RenderOptions,
+    document_url: &megi_webview::net::Url,
+    options: &megi_webview::render::RenderOptions,
 ) -> Favicon {
     let key = origin_key(document_url);
     let Some(icon_url) = icon_url(document, document_url) else {
@@ -137,9 +137,9 @@ pub fn for_page(
 }
 
 /// Stable cache key for a page (scheme + host + port, or `file` directory).
-pub fn origin_key(url: &megi_net::Url) -> String {
+pub fn origin_key(url: &megi_webview::net::Url) -> String {
     match url.scheme() {
-        megi_net::url::Scheme::Http | megi_net::url::Scheme::Https => {
+        megi_webview::net::url::Scheme::Http | megi_webview::net::url::Scheme::Https => {
             let mut key = url.scheme().as_str().to_owned();
             key.push_str("://");
             key.push_str(url.host());
@@ -149,14 +149,14 @@ pub fn origin_key(url: &megi_net::Url) -> String {
             }
             key
         }
-        megi_net::url::Scheme::File => {
-            let path = megi_net::url::percent_decode(url.path());
+        megi_webview::net::url::Scheme::File => {
+            let path = megi_webview::net::url::percent_decode(url.path());
             let parent = std::path::Path::new(&path)
                 .parent()
                 .map_or_else(|| "/".to_owned(), |p| p.display().to_string());
             format!("file://{parent}")
         }
-        megi_net::url::Scheme::Data => "data:".to_owned(),
+        megi_webview::net::url::Scheme::Data => "data:".to_owned(),
     }
 }
 
@@ -175,7 +175,7 @@ pub fn color_for(key: &str) -> [u8; 3] {
 
 /// Decodes image bytes and nearest-neighbour resizes them to 16x16 RGBA8.
 pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as usize]> {
-    let image = megi_image::decode(bytes).ok()?;
+    let image = megi_webview::image::decode(bytes).ok()?;
     if image.width == 0 || image.height == 0 {
         return None;
     }
@@ -261,12 +261,12 @@ impl FaviconCache {
 mod tests {
     use super::*;
 
-    fn page(input: &str) -> megi_net::Url {
-        megi_net::Url::parse(input).expect("url")
+    fn page(input: &str) -> megi_webview::net::Url {
+        megi_webview::net::Url::parse(input).expect("url")
     }
 
     fn document_with(html: &str) -> Document {
-        megi_html::parse_document(html, false)
+        megi_webview::html::parse_document(html, false)
     }
 
     #[test]
@@ -350,7 +350,7 @@ mod tests {
             "<html><head><link rel=\"icon\" href=\"{secret_url}\"></head></html>"
         ));
         let page = page("https://example.test/page.html");
-        let options = megi_render::RenderOptions::default();
+        let options = megi_webview::render::RenderOptions::default();
         let favicon = for_page(&document, &page, &options);
         assert!(
             favicon.pixels.is_none(),
@@ -378,7 +378,7 @@ mod tests {
             "<html><head><link rel=\"icon\" href=\"{icon_url}\"></head></html>"
         ));
         let page = page(&format!("file://{}/page.html", dir.display()));
-        let options = megi_render::RenderOptions::default();
+        let options = megi_webview::render::RenderOptions::default();
         let favicon = for_page(&document, &page, &options);
         assert!(favicon.pixels.is_some(), "file: page may use a file: icon");
         let _ = std::fs::remove_dir_all(&dir);
@@ -391,7 +391,7 @@ mod tests {
         let path = temp.join("favicon.ico");
         std::fs::write(&path, b"icon-bytes").expect("write");
         let url = page(&format!("file://{}/page.html", temp.display()));
-        let options = megi_render::RenderOptions::default();
+        let options = megi_webview::render::RenderOptions::default();
         let fetched = fetch(
             &icon_url(&document_with("<html></html>"), &url).unwrap(),
             &url,

@@ -217,3 +217,17 @@ impl WebView {
         self.frame.as_ref()
     }
 }
+
+/// Engine crates exposed through the facade. Embedders use these re-exports
+/// instead of depending on individual engine crates.
+pub use megi_core as core;
+pub use megi_css as css;
+pub use megi_display as display;
+pub use megi_fonts as fonts;
+pub use megi_html as html;
+pub use megi_image as image;
+pub use megi_layout as layout;
+pub use megi_net as net;
+pub use megi_paint as paint;
+pub use megi_raster as raster;
+pub use megi_render as render;

@@ -19,8 +19,8 @@ pub const DEFAULT_HEIGHT: u32 = 600;
 /// Default window title.
 pub const DEFAULT_TITLE: &str = "Megi";
 
-/// Maximum accepted viewport/window dimension (matches [`megi_render::MAX_VIEWPORT_DIMENSION`]).
-pub const MAX_DIMENSION: u32 = megi_render::MAX_VIEWPORT_DIMENSION;
+/// Maximum accepted viewport/window dimension (matches [`megi_webview::render::MAX_VIEWPORT_DIMENSION`]).
+pub const MAX_DIMENSION: u32 = megi_webview::render::MAX_VIEWPORT_DIMENSION;
 
 /// Help text for the binary.
 pub const USAGE: &str = "\
@@ -521,7 +521,7 @@ pub fn normalize_input(input: &str) -> Result<String, ShellError> {
     if crate::history::is_history_url(input) {
         return Ok(input.to_string());
     }
-    if megi_net::Url::parse(input).is_ok() {
+    if megi_webview::net::Url::parse(input).is_ok() {
         return Ok(input.to_string());
     }
     let path = std::fs::canonicalize(input).map_err(|error| {
@@ -532,7 +532,7 @@ pub fn normalize_input(input: &str) -> Result<String, ShellError> {
     // Escape `#`, `?`, `%` and spaces: a raw `file:///tmp/a#b.html` parses as path
     // `/tmp/a` with fragment `b.html` and loads the wrong file.
     let url = crate::pages::file_url(&path);
-    megi_net::Url::parse(&url)
+    megi_webview::net::Url::parse(&url)
         .map(|parsed| parsed.as_str())
         .map_err(|error| {
             ShellError::Usage(format!(
@@ -751,7 +751,7 @@ mod unit_tests {
         let url = normalize_input(&path.display().to_string()).expect("normalize");
         assert!(url.contains("%23"), "fragment delimiter escaped: {url}");
         assert!(url.contains("%3F"), "query delimiter escaped: {url}");
-        let parsed = megi_net::Url::parse(&url).expect("url");
+        let parsed = megi_webview::net::Url::parse(&url).expect("url");
         assert!(
             parsed.path().contains("%23") && parsed.path().contains("%3F"),
             "delimiters stay inside the path: {}",

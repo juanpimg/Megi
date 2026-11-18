@@ -1,11 +1,11 @@
-//! Framebuffer conversion between `megi_paint::Pixmap` (RGBA) and the softbuffer surface
+//! Framebuffer conversion between `megi_webview::paint::Pixmap` (RGBA) and the softbuffer surface
 //! format (`0RGB`, `u32` per pixel).
 //!
 //! softbuffer expects each pixel as a native-endian `u32` with the layout
 //! `0x00RRGGBB`; the render canvas is always opaque white-backed, so the alpha channel
 //! is ignored here. This conversion is pure and unit-tested (no display/event loop).
 
-use megi_paint::Pixmap;
+use megi_webview::paint::Pixmap;
 
 /// Softbuffer pixel format produced by [`pixmap_to_0rgb`].
 pub const PIXEL_FORMAT: &str = "0RGB";
@@ -16,7 +16,7 @@ pub const WHITE_0RGB: u32 = 0x00FF_FFFF;
 /// Largest framebuffer accepted by [`expected_buffer_len`]: the renderer's maximum viewport
 /// dimension squared (8K-class surfaces stay accepted; hostile u32 dimensions do not).
 pub const MAX_FRAMEBUFFER_PIXELS: usize =
-    (megi_render::MAX_VIEWPORT_DIMENSION as usize) * (megi_render::MAX_VIEWPORT_DIMENSION as usize);
+    (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize) * (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize);
 
 /// Number of `u32` pixels required for a `width * height` framebuffer, or `None` on
 /// overflow **or** beyond [`MAX_FRAMEBUFFER_PIXELS`] (hostile resize values must not panic or
@@ -45,7 +45,7 @@ pub fn blank_frame(len: usize) -> Vec<u32> {
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use megi_paint::Color;
+    use megi_webview::paint::Color;
 
     #[test]
     fn converts_rgba_to_0rgb() {
@@ -72,7 +72,7 @@ mod unit_tests {
     #[test]
     fn buffer_lengths_are_checked() {
         assert_eq!(expected_buffer_len(800, 600), Some(480_000));
-        let max = megi_render::MAX_VIEWPORT_DIMENSION;
+        let max = megi_webview::render::MAX_VIEWPORT_DIMENSION;
         assert_eq!(
             expected_buffer_len(max, max),
             Some((max as usize) * (max as usize)),

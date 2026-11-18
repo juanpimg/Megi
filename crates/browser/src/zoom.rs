@@ -81,9 +81,9 @@ pub fn zoomed_viewport(
     let zoom = sanitize_zoom(zoom);
     let effective = device_scale * zoom;
     let width = ((f64::from(physical_width.max(1)) / effective).round() as u32)
-        .clamp(1, megi_render::MAX_VIEWPORT_DIMENSION);
+        .clamp(1, megi_webview::render::MAX_VIEWPORT_DIMENSION);
     let height = ((f64::from(physical_height.max(1)) / effective).round() as u32)
-        .clamp(1, megi_render::MAX_VIEWPORT_DIMENSION);
+        .clamp(1, megi_webview::render::MAX_VIEWPORT_DIMENSION);
     (width, height)
 }
 
@@ -159,9 +159,9 @@ pub const MAX_SITE_ZOOMS: usize = 64;
 /// Returns the origin key used for per-site zoom (`scheme://host[:port]` for http(s), and
 /// the scheme for `file:`); `None` for ephemeral/data URLs.
 pub fn site_origin(url: &str) -> Option<String> {
-    let parsed = megi_net::Url::parse(url).ok()?;
+    let parsed = megi_webview::net::Url::parse(url).ok()?;
     match parsed.scheme() {
-        megi_net::Scheme::Http | megi_net::Scheme::Https => {
+        megi_webview::net::Scheme::Http | megi_webview::net::Scheme::Https => {
             let host = parsed.host();
             if host.is_empty() {
                 None
@@ -171,7 +171,7 @@ pub fn site_origin(url: &str) -> Option<String> {
                 Some(format!("{}://{}", parsed.scheme().as_str(), host))
             }
         }
-        megi_net::Scheme::File => Some("file://".to_string()),
+        megi_webview::net::Scheme::File => Some("file://".to_string()),
         _ => None,
     }
 }

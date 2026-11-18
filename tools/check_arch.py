@@ -46,8 +46,13 @@ def allowed_edges() -> dict[str, set[str]]:
             "core", "html", "css", "layout", "fonts", "image",
             "display", "paint", "raster", "net", "js", "svg",
         },
-        # `raster` supplies the owned frame type exposed by the embedding API.
-        "webview": {"core", "display", "net", "render", "raster"},
+        # Facade: re-exports the whole engine so `browser` needs no direct
+        # engine dependency. The light feature graph still compiles the same
+        # crates transitively through `render`; no window/UI dependency here.
+        "webview": {
+            "core", "display", "net", "render", "raster",
+            "css", "html", "layout", "fonts", "image", "paint",
+        },
         "browser": {"webview"},
         "shell": {"webview"},  # pre-rename alias of `browser`
         "test_harness": {"core", "html", "css", "js"},

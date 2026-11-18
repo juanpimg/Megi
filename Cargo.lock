@@ -1383,15 +1383,7 @@ dependencies = [
 name = "megi-browser"
 version = "0.1.0"
 dependencies = [
- "megi-core",
- "megi-css",
- "megi-fonts",
- "megi-html",
- "megi-image",
- "megi-layout",
- "megi-net",
- "megi-paint",
- "megi-render",
+ "megi-webview",
  "softbuffer",
  "winit",
 ]
@@ -1537,7 +1529,14 @@ name = "megi-webview"
 version = "0.1.0"
 dependencies = [
  "megi-core",
+ "megi-css",
  "megi-display",
+ "megi-fonts",
+ "megi-html",
+ "megi-image",
+ "megi-layout",
+ "megi-net",
+ "megi-paint",
  "megi-raster",
  "megi-render",
 ]

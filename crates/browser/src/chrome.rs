@@ -21,9 +21,9 @@
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
 //! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
 
-use megi_css::properties::{BorderRadii, Length, Radius};
-use megi_layout::Rect;
-use megi_paint::{Color, Pixmap};
+use megi_webview::css::properties::{BorderRadii, Length, Radius};
+use megi_webview::layout::Rect;
+use megi_webview::paint::{Color, Pixmap};
 
 use crate::forms::SelectOption;
 use crate::links::CssRect;
@@ -434,12 +434,12 @@ fn next_char_index(text: &str, index: usize) -> usize {
 /// Resolves address-bar text into a URL: absolute URLs are used as-is; bare hosts/domains
 /// without a scheme (e.g. `wikipedia.org`, `localhost:8080`) default to `https://` (or
 /// `http://` for loopback); explicit relative references (`/path`, `./page`) join `base`.
-pub fn resolve_address(input: &str, base: Option<&megi_net::Url>) -> Result<megi_net::Url, String> {
+pub fn resolve_address(input: &str, base: Option<&megi_webview::net::Url>) -> Result<megi_webview::net::Url, String> {
     let input = input.trim();
     if input.is_empty() {
         return Err("empty address".to_string());
     }
-    if let Ok(url) = megi_net::Url::parse(input) {
+    if let Ok(url) = megi_webview::net::Url::parse(input) {
         return Ok(url);
     }
     if !input.starts_with('/')
@@ -477,7 +477,7 @@ pub fn resolve_address(input: &str, base: Option<&megi_net::Url>) -> Result<megi
         if !looks_like_file_ext && (is_loopback || host.contains('.') || authority.starts_with('['))
         {
             let scheme = if is_loopback { "http://" } else { "https://" };
-            if let Ok(url) = megi_net::Url::parse(&format!("{scheme}{input}")) {
+            if let Ok(url) = megi_webview::net::Url::parse(&format!("{scheme}{input}")) {
                 return Ok(url);
             }
         }
@@ -2163,9 +2163,9 @@ fn scaled(rect: Rect, scale: f32) -> Rect {
     )
 }
 
-fn chrome_font_db() -> &'static megi_fonts::FontDatabase {
-    static DB: std::sync::OnceLock<megi_fonts::FontDatabase> = std::sync::OnceLock::new();
-    DB.get_or_init(megi_fonts::FontDatabase::new_with_bundled_and_system_fonts)
+fn chrome_font_db() -> &'static megi_webview::fonts::FontDatabase {
+    static DB: std::sync::OnceLock<megi_webview::fonts::FontDatabase> = std::sync::OnceLock::new();
+    DB.get_or_init(megi_webview::fonts::FontDatabase::new_with_bundled_and_system_fonts)
 }
 
 fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
@@ -2176,7 +2176,7 @@ fn measure_text_width(text: &str, font_size_css: f32) -> f32 {
     if let Ok(run) = db.shape(
         &["sans-serif"],
         400,
-        megi_fonts::FontStyle::Normal,
+        megi_webview::fonts::FontStyle::Normal,
         font_size_css,
         text,
     ) {
@@ -2409,7 +2409,7 @@ mod tests {
 
     #[test]
     fn resolve_address_parses_absolute_and_joins_relative() {
-        let base = megi_net::Url::parse("https://example.com/dir/page.html").expect("base");
+        let base = megi_webview::net::Url::parse("https://example.com/dir/page.html").expect("base");
         assert_eq!(
             resolve_address("https://other.example/x", Some(&base))
                 .expect("absolute")
@@ -2827,7 +2827,7 @@ mod tests {
         assert_eq!(link.items[0].action, MenuAction::OpenLinkInNewTab);
         assert_eq!(link.items[1].action, MenuAction::CopyLinkAddress);
         let image = crate::images::ImageRegion {
-            node_id: megi_core::NodeId::from_index(0),
+            node_id: megi_webview::core::NodeId::from_index(0),
             rect: crate::links::CssRect::new(0.0, 0.0, 10.0, 10.0),
             url: "https://example.com/i.png".to_string(),
         };

@@ -6,7 +6,7 @@
 //! heading/paragraph/list/quote blocks into a clean article. There is no scoring model,
 //! no timers and no scripting; the same DOM always yields the same HTML.
 
-use megi_core::{Document, NodeId};
+use megi_webview::core::{Document, NodeId};
 
 /// Tags whose text is never part of the article.
 const SKIPPED: &[&str] = &[
@@ -213,7 +213,7 @@ mod tests {
     use super::*;
 
     fn doc(html: &str) -> Document {
-        megi_html::parse_document(html, true)
+        megi_webview::html::parse_document(html, true)
     }
 
     #[test]

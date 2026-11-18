@@ -8,7 +8,7 @@ pub enum ShellError {
     /// Command-line usage error (CLI exits with code 2).
     Usage(String),
     /// The render pipeline failed (bad URL, network error, limits, ...).
-    Render(megi_render::RenderError),
+    Render(megi_webview::render::RenderError),
     /// Reading/writing a local file failed.
     Io { path: String, reason: String },
     /// Window/event-loop/softbuffer setup failed (e.g. no display server).
@@ -35,8 +35,8 @@ impl std::error::Error for ShellError {
     }
 }
 
-impl From<megi_render::RenderError> for ShellError {
-    fn from(error: megi_render::RenderError) -> Self {
+impl From<megi_webview::render::RenderError> for ShellError {
+    fn from(error: megi_webview::render::RenderError) -> Self {
         Self::Render(error)
     }
 }

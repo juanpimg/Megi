@@ -11,9 +11,9 @@
 //! URL at [`MAX_SHORT_URL_CHARS`] with an ellipsis; `data:` URLs are shortened to
 //! `data:…` because they are usually huge inline documents.
 
-use megi_core::{Document, Namespace, NodeId, NodeKind};
+use megi_webview::core::{Document, Namespace, NodeId, NodeKind};
 
-use megi_net::Url;
+use megi_webview::net::Url;
 
 /// Maximum number of characters kept from a document `<title>`.
 pub const MAX_TITLE_CHARS: usize = 120;

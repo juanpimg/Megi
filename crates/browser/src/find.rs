@@ -1,6 +1,6 @@
 //! Find-in-page: case-insensitive text search over the rendered DOM and highlights.
 //!
-//! The search runs on the **DOM text nodes** of the frame (`megi_core::NodeKind::Text`), in
+//! The search runs on the **DOM text nodes** of the frame (`megi_webview::core::NodeKind::Text`), in
 //! document order, and returns `(NodeId, byte range)` pairs. Highlight rectangles are
 //! derived from the **layout tree** (`BoxType::TextNode` inline fragments): the shell paints
 //! one translucent yellow rectangle per layout text fragment that contains a hit, which is
@@ -20,8 +20,8 @@
 
 use std::ops::Range;
 
-use megi_core::{Document, NodeId};
-use megi_layout::{BoxType, LayoutBox};
+use megi_webview::core::{Document, NodeId};
+use megi_webview::layout::{BoxType, LayoutBox};
 
 use crate::links::CssRect;
 
@@ -233,7 +233,7 @@ fn rect_key(rect: &CssRect) -> (u32, u32, u32, u32) {
 /// current hit (index `current`, clamped) uses the stronger alpha. Returns the number of
 /// painted pixels.
 pub fn overlay_highlights_pixmap(
-    pixmap: &mut megi_paint::Pixmap,
+    pixmap: &mut megi_webview::paint::Pixmap,
     rects: &[CssRect],
     current: usize,
 ) -> usize {
@@ -467,7 +467,7 @@ impl FindState {
 mod tests {
     use super::*;
 
-    fn fixture_output() -> megi_render::RenderOutput {
+    fn fixture_output() -> megi_webview::render::RenderOutput {
         let html = "<!DOCTYPE html><html><body>\
             <h1>Hello Find</h1>\
             <p>The quick brown fox jumps over the lazy dog. Quick QUICK quick.</p>\
@@ -660,7 +660,7 @@ mod tests {
     }
     #[test]
     fn search_ranges_cover_four_byte_scalars() {
-        let document = megi_html::parse_document("<body><p>a😀b</p></body>", false);
+        let document = megi_webview::html::parse_document("<body><p>a😀b</p></body>", false);
         let hits = search(&document, "😀");
         assert_eq!(hits.len(), 1);
         let text = document.node(hits[0].node_id).as_text().expect("text node");
@@ -673,7 +673,7 @@ mod tests {
     fn search_ranges_stay_on_char_boundaries_when_lowercasing_expands() {
         // U+0130 (İ) lowercases to "i" + U+0307: a match of "i" ends inside the source
         // scalar, and the returned range must still be a char-boundary range.
-        let document = megi_html::parse_document("<body><p>İstanbul</p></body>", false);
+        let document = megi_webview::html::parse_document("<body><p>İstanbul</p></body>", false);
         let hits = search(&document, "i");
         assert!(!hits.is_empty(), "the lowercased i matches");
         for hit in &hits {

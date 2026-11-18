@@ -18,10 +18,10 @@
 //! - Failed navigations keep their history entry (the URL *was* visited); the shell shows
 //!   an error frame, and `back` still works.
 //!
-//! The state stores [`megi_net::Url`] values only; it has no rendering, no timers and no I/O,
+//! The state stores [`megi_webview::net::Url`] values only; it has no rendering, no timers and no I/O,
 //! so it is fully unit-tested without a display server.
 
-use megi_net::Url;
+use megi_webview::net::Url;
 
 /// Maximum number of entries kept in a window's history (oldest are dropped first).
 pub const MAX_HISTORY: usize = 256;
