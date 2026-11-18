@@ -1509,7 +1509,9 @@ fn render_svg_document(
         }
     }
 
-    let font_db = fonts::FontDatabase::new_with_bundled_and_system_fonts();
+    // #1665: use only the bundled (deterministic) fonts, matching the normal render path in
+    // `webfonts.rs`. System fonts vary per host and made the same SVG produce different PNGs.
+    let font_db = fonts::FontDatabase::new_with_bundled_fonts();
     let measurer = layout::FontTextMeasurer::from_database(font_db);
     let viewport = layout::Rect::new(
         0.0,

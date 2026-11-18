@@ -78,12 +78,19 @@ fn run() -> Result<(), ShellError> {
             let (css_width, css_height) =
                 zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
 
+            // #1689: with `--tabs`, headless renders the selected tab (0-based `--active-tab`),
+            // not always the positional first one. This makes `--tabs` meaningful in screenshots.
+            let active_url = view
+                .tabs
+                .get(args.active_tab)
+                .cloned()
+                .unwrap_or_else(|| args.input.clone());
             // `--reader` extracts the article from the source page first and renders the
             // generated reader data URL; chrome/find then apply to that clean page.
             let input = if args.reader {
-                shell::headless::reader_url(&args.input, css_width, css_height, &options)?
+                shell::headless::reader_url(&active_url, css_width, css_height, &options)?
             } else {
-                args.input.clone()
+                active_url
             };
             let output = if args.chrome && args.chrome_menu {
                 shell::headless::render_target_with_chrome_menu(

@@ -34,8 +34,10 @@ fn spawn_echo() -> (String, Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
                         let content_length = String::from_utf8_lossy(&request[..end])
                             .lines()
                             .find_map(|line| {
-                                line.strip_prefix("Content-Length: ")
-                                    .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                                let (name, value) = line.split_once(':')?;
+                                name.trim()
+                                    .eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().unwrap_or(0))
                             })
                             .unwrap_or(0);
                         if request.len() >= end + 4 + content_length {

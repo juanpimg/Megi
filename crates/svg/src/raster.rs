@@ -1013,8 +1013,15 @@ fn draw_text(
         return Ok(());
     }
     let size = spec.font_size * scale;
-    if !size.is_finite() || size <= 0.0 || size > 4096.0 {
+    if !size.is_finite() || size <= 0.0 {
         return Ok(());
+    }
+    // #1663: an oversized effective font size exceeds the rasterizer's cap. Report it as a
+    // typed limit error instead of silently painting nothing (silent truncation is a bug).
+    if size > 4096.0 {
+        return Err(SvgError::Limit(format!(
+            "SVG text font-size {size} exceeds the 4096px cap"
+        )));
     }
     let families = text::families(&spec.font_family);
     let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();

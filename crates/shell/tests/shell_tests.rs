@@ -1692,3 +1692,61 @@ fn headless_accessibility_tree_is_consumable_json() {
         "button must be focusable: {tree}"
     );
 }
+
+#[test]
+fn session_path_docs_match_implementation() {
+    // #1691: the docs must not promise a `~/.megi/session.json` fallback that no code path
+    // returns. The real order is XDG_DATA_HOME, then HOME/.local/share, then None.
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/session.rs"),
+    )
+    .expect("session.rs source");
+    assert!(
+        !source.contains("~/.megi/session.json"),
+        "session docs promise an unreachable ~/.megi fallback"
+    );
+    // Pin the actual contract with the pure resolver.
+    let home = std::path::Path::new("/home/user");
+    assert_eq!(
+        shell::session::default_session_path(None, Some(home)),
+        Some(home.join(".local/share/megi/session.json"))
+    );
+    assert_eq!(shell::session::default_session_path(None, None), None);
+}
+
+#[test]
+fn headless_active_tab_selects_the_requested_tab() {
+    // #1689: --tabs + --active-tab must change which page a headless screenshot renders.
+    let dir = std::env::temp_dir().join(format!("megi-tabs-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let out = dir.join("shot.png");
+    let first = "data:text/html,<body style='margin:0;background:rgb(255,0,0)'>first</body>";
+    let second = "data:text/html,<body style='margin:0;background:rgb(0,0,255)'>second</body>";
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .arg("--screenshot")
+        .arg(&out)
+        .arg("--width")
+        .arg("40")
+        .arg("--height")
+        .arg("20")
+        .arg("--tabs")
+        .arg(second)
+        .arg("--active-tab")
+        .arg("1")
+        .arg(first)
+        .status()
+        .expect("run megi");
+    assert!(
+        status.success(),
+        "megi --screenshot with --active-tab must succeed"
+    );
+    let bytes = std::fs::read(&out).expect("png written");
+    // Decode the tiny PNG and sample a pixel: the second (blue) tab must have been rendered.
+    let image = image::decode(&bytes).expect("decode screenshot");
+    let pixel = image.pixel(20, 10).expect("pixel");
+    assert!(
+        pixel[2] > 180 && pixel[0] < 40 && pixel[1] < 40 && pixel[3] == 255,
+        "--active-tab 1 must render the blue tab: {pixel:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

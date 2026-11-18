@@ -222,25 +222,23 @@ impl GradientSpec {
         if t >= last.offset {
             return last.color;
         }
-        let mut previous = first;
-        for stop in &self.stops[1..] {
-            if t <= stop.offset {
-                let span = stop.offset - previous.offset;
-                let local = if span > f32::EPSILON {
-                    ((t - previous.offset) / span).clamp(0.0, 1.0)
-                } else {
-                    1.0
-                };
-                return Color::rgba(
-                    lerp_channel(previous.color.r, stop.color.r, local),
-                    lerp_channel(previous.color.g, stop.color.g, local),
-                    lerp_channel(previous.color.b, stop.color.b, local),
-                    lerp_channel(previous.color.a, stop.color.a, local),
-                );
-            }
-            previous = stop;
-        }
-        last.color
+        // #1687: stops are sorted by offset, so binary-search the first stop at or after `t`
+        // instead of scanning all of them for every covered pixel (O(log n) vs O(n)).
+        let index = self.stops.partition_point(|stop| stop.offset < t);
+        let stop = &self.stops[index];
+        let previous = &self.stops[index - 1];
+        let span = stop.offset - previous.offset;
+        let local = if span > f32::EPSILON {
+            ((t - previous.offset) / span).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        Color::rgba(
+            lerp_channel(previous.color.r, stop.color.r, local),
+            lerp_channel(previous.color.g, stop.color.g, local),
+            lerp_channel(previous.color.b, stop.color.b, local),
+            lerp_channel(previous.color.a, stop.color.a, local),
+        )
     }
 
     fn apply_spread(&self, t: f32) -> f32 {

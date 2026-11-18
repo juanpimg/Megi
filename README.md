@@ -31,6 +31,18 @@
 > El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
 > Las métricas exactas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)**. Para consultar el historial de versiones, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
 
+## 🤝 Contribuciones
+
+Megi es pre-alpha y hay trabajo acotado para empezar hoy mismo:
+
+- [Issues `good first issue`](https://github.com/juanpimg/Megi/labels/good%20first%20issue) — cambios pequeños y verificables con un comando local.
+- [Issues `help wanted`](https://github.com/juanpimg/Megi/labels/help%20wanted) — alcance algo mayor, con evidencia y repro incluidos.
+- [Guía de contribución](CONTRIBUTING.md) — convenciones, DCO, TDD y gates obligatorios.
+- [Prompt para agentes de IA](docs/AI-QUICKSTART.md) — arranque rápido para Claude Code, Codex, OpenCode u otro harness.
+- [Web del proyecto](https://juanpimg.github.io/Megi-web/) — arquitectura, estado y hoja de ruta.
+
+Si vas a trabajar en una issue, comenta en ella primero para evitar duplicados. Los cambios de seguridad se reportan en privado según [`SECURITY.md`](SECURITY.md).
+
 ---
 
 ##  Características Principales
