@@ -280,7 +280,7 @@ fn test_multiple_box_shadows_and_cap() {
         .iter()
         .filter(|item| matches!(item, DisplayItem::BoxShadow { .. }))
         .count();
-    assert!(shadows <= 32, "box-shadow cap");
+    assert_eq!(shadows, 32, "box-shadow list must be capped at 32 layers");
     let (_, second) = render(style, Rect::new(5.0, 20.0, 10.0, 10.0));
     assert_eq!(
         first.to_rgba_bytes(),
