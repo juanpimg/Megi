@@ -66,7 +66,6 @@ fn basic_challenge_retries_once_with_stored_credentials() {
         ..FetchOptions::default()
     };
     let response = fetch(&url, &options).expect("fetch");
-    eprintln!("DEBUG status={}", response.status);
     assert_eq!(response.status, 200);
     let first = heads.recv_timeout(TIMEOUT).expect("first head");
     let second = heads.recv_timeout(TIMEOUT).expect("retry head");
