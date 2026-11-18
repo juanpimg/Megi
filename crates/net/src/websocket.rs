@@ -105,6 +105,9 @@ pub struct WebSocketClient {
     fragments: Vec<u8>,
     /// Opcode of the first fragment (Text or Binary) of the in-progress message.
     fragment_opcode: Option<Opcode>,
+    /// Complete frames already decoded from `pending` but not yet returned (a single TCP read
+    /// can carry several frames; returning early must not discard the rest).
+    frame_queue: std::collections::VecDeque<Frame>,
 }
 
 impl WebSocketClient {
@@ -184,24 +187,25 @@ impl WebSocketClient {
         stream
             .set_read_timeout(options.read_timeout)
             .map_err(FetchError::Io)?;
+        // #1635: a long read timeout must not force a long write timeout (and vice versa). Use
+        // the connect budget as a bounded write deadline until FetchOptions gains a dedicated
+        // write timeout, instead of coupling it to read_timeout.
         stream
-            .set_write_timeout(options.read_timeout)
+            .set_write_timeout(options.connect_timeout)
             .map_err(FetchError::Io)?;
 
-        static NONCE: AtomicU64 = AtomicU64::new(0);
-        let mut key_bytes = [0u8; 16];
-        let seed = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos() as u64)
-            ^ (std::process::id() as u64) << 32
-            ^ NONCE.fetch_add(1, Ordering::Relaxed);
-        key_bytes[..8].copy_from_slice(&seed.to_le_bytes());
-        key_bytes[8..].copy_from_slice(&seed.swap_bytes().to_le_bytes());
-        let key = handshake_key(key_bytes);
+        let key = handshake_key(random_key_bytes());
 
+        // #1636: the Host header must omit the port when it is the scheme's default — strict
+        // virtual hosts compare the literal header value.
+        let host_header = if (secure && port == 443) || (!secure && port == 80) {
+            host.to_owned()
+        } else {
+            format!("{host}:{port}")
+        };
         let target = url.request_target();
         let request = format!(
-            "GET {target} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\n\
+            "GET {target} HTTP/1.1\r\nHost: {host_header}\r\nUpgrade: websocket\r\n\
              Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
         );
         stream
@@ -238,6 +242,7 @@ impl WebSocketClient {
             pending,
             fragments: Vec::new(),
             fragment_opcode: None,
+            frame_queue: std::collections::VecDeque::new(),
         })
     }
 
@@ -291,16 +296,24 @@ impl WebSocketClient {
     pub fn recv(&mut self) -> Result<Frame, FetchError> {
         let mut buffer = [0u8; 4096];
         loop {
+            if let Some(frame) = self.frame_queue.pop_front() {
+                return Ok(frame);
+            }
             // #1628: propagate protocol errors from a malformed buffered frame immediately
             // instead of swallowing them and blocking until the read timeout.
             let (frames, rest) = decode_frames(&self.pending, self.max_message)?;
             let rest_owned = rest.to_vec();
             self.pending.clear();
             self.pending.extend_from_slice(&rest_owned);
+            // Queue every complete frame from this read: returning the first directly would drop
+            // any additional frames carried in the same TCP segment.
             for frame in frames {
                 if let Some(complete) = self.reassemble(frame)? {
-                    return Ok(complete);
+                    self.frame_queue.push_back(complete);
                 }
+            }
+            if let Some(frame) = self.frame_queue.pop_front() {
+                return Ok(frame);
             }
             let read = self.stream.read(&mut buffer).map_err(FetchError::Io)?;
             if read == 0 {
@@ -316,6 +329,11 @@ impl WebSocketClient {
     /// Feeds one frame into the fragmentation state machine, returning a complete message when
     /// the final fragment arrives. Control frames pass through unchanged (#1632).
     fn reassemble(&mut self, frame: Frame) -> Result<Option<Frame>, FetchError> {
+        // #1638: keepalive must work for users of the raw API too, not only `recv_text`.
+        if frame.opcode == Opcode::Ping {
+            self.pong()?;
+            return Ok(Some(frame)); // still surface the ping to the caller
+        }
         if !frame.opcode.is_data() {
             return Ok(Some(frame)); // Ping/Pong/Close are never fragmented
         }
@@ -715,7 +733,7 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
         return Err(protocol("missing or invalid Connection header"));
     }
     let accept = accept.ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
-    if accept != accept_value(key) {
+    if !constant_time_eq(&accept, &accept_value(key)) {
         return Err(protocol("Sec-WebSocket-Accept mismatch"));
     }
     Ok(())
@@ -758,6 +776,40 @@ pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
 /// Generates a random base64 `Sec-WebSocket-Key` for the upgrade handshake.
 pub fn handshake_key(bytes: [u8; 16]) -> String {
     crate::data::base64_encode(&bytes)
+}
+
+/// Generates an unpredictable `Sec-WebSocket-Key` (RFC 6455 §4.1). Prefer the OS CSPRNG via
+/// `/dev/urandom`; the time/pid/counter fallback is only for platforms without it and is never
+/// used on the hosts Megi targets (#1633).
+fn random_key_bytes() -> [u8; 16] {
+    let mut bytes = [0u8; 16];
+    if let Ok(mut urandom) = std::fs::File::open("/dev/urandom")
+        && urandom.read_exact(&mut bytes).is_ok()
+    {
+        return bytes;
+    }
+    static NONCE: AtomicU64 = AtomicU64::new(0);
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos() as u64)
+        ^ (std::process::id() as u64) << 32
+        ^ NONCE.fetch_add(1, Ordering::Relaxed);
+    bytes[..8].copy_from_slice(&seed.to_le_bytes());
+    bytes[8..].copy_from_slice(&seed.swap_bytes().to_le_bytes());
+    bytes
+}
+
+/// Constant-time byte comparison for the handshake `Sec-WebSocket-Accept` (#1633). Avoids leaking
+/// the expected digest prefix through early-exit timing.
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.bytes().zip(b.bytes()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }
 
 /// Computes the expected `Sec-WebSocket-Accept` for a handshake key (RFC 6455 §4.2.2).
@@ -957,6 +1009,17 @@ mod tests {
         assert!(!close_code::is_valid_outgoing(1005));
         assert!(!close_code::is_valid_outgoing(1006));
         assert!(!close_code::is_valid_outgoing(1015));
+    }
+
+    #[test]
+    fn constant_time_eq_and_random_key() {
+        // #1633: accept comparison must be exact; handshake keys must be unpredictable.
+        assert!(constant_time_eq("abc", "abc"));
+        assert!(!constant_time_eq("abc", "abd"));
+        assert!(!constant_time_eq("abc", "ab"));
+        let a = random_key_bytes();
+        let b = random_key_bytes();
+        assert_ne!(a, b, "handshake keys must not repeat");
     }
 
     #[test]
@@ -1201,6 +1264,22 @@ impl WebSocket {
                 Opcode::Pong => {}
                 Opcode::Close => return Err(WebSocketError::Closed),
                 Opcode::Binary => return Err(WebSocketError::UnsupportedOpcode(0x2)),
+            }
+        }
+    }
+
+    /// Receives a binary message, skipping control frames (#1639). Symmetric to `recv_text`.
+    pub fn recv_bytes(&mut self) -> Result<Vec<u8>, WebSocketError> {
+        loop {
+            let frame = self.inner.recv()?;
+            match frame.opcode {
+                Opcode::Binary | Opcode::Continuation => return Ok(frame.payload),
+                Opcode::Text => {
+                    return Err(WebSocketError::InvalidFrame("expected binary frame".into()));
+                }
+                Opcode::Ping => self.inner.pong()?,
+                Opcode::Pong => {}
+                Opcode::Close => return Err(WebSocketError::Closed),
             }
         }
     }

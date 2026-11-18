@@ -322,3 +322,118 @@ fn fragmented_text_message_is_reassembled() {
     );
     server.join().expect("server");
 }
+
+#[test]
+fn raw_recv_replies_to_ping_and_recv_bytes_returns_binary() {
+    // #1638/#1639: the raw API must auto-pong, and the wrapper must expose binary messages.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread::JoinHandle;
+
+    fn spawn() -> (u16, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let handle = std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                if stream.read(&mut byte).unwrap_or(0) == 0 {
+                    return;
+                }
+                head.push(byte[0]);
+            }
+            let key = String::from_utf8_lossy(&head)
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(n, v)| {
+                        if n.eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(v.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .expect("key");
+            let response = format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+                net::websocket::accept_value(&key)
+            );
+            let _ = stream.write_all(response.as_bytes());
+            // Ping, then a binary message with bytes 0xFF 0x00.
+            let _ = stream.write_all(&[0x89, 0x00]);
+            let _ = stream.write_all(&[0x82, 0x02, 0xFF, 0x00]);
+            let _ = stream.flush();
+            // Expect an auto-pong (unmasked, opcode 0xA) from the client. Keep the socket open
+            // briefly afterwards so the client can still read the buffered binary frame (an
+            // immediate drop can send RST and discard it).
+            let mut reply = [0u8; 2];
+            let pong_ok = stream.read_exact(&mut reply).is_ok() && reply[0] == 0x8A;
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            assert!(pong_ok, "client must auto-pong a ping");
+        });
+        (port, handle)
+    }
+
+    let (port, server) = spawn();
+    let url = net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let options = net::FetchOptions {
+        read_timeout: std::time::Duration::from_secs(2),
+        ..net::FetchOptions::default()
+    };
+    let mut client = net::websocket::WebSocketClient::connect(&url, &options).expect("connect");
+    let ping = client.recv().expect("ping");
+    assert_eq!(ping.opcode, net::websocket::Opcode::Ping);
+    let binary = client.recv().expect("binary");
+    assert_eq!(binary.opcode, net::websocket::Opcode::Binary);
+    assert_eq!(binary.payload, vec![0xFF, 0x00]);
+    server.join().expect("server");
+}
+
+#[test]
+fn websocket_wrapper_recv_bytes_returns_binary() {
+    // #1639: the string-oriented wrapper must expose a symmetric binary receive API.
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    let server = std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            if stream.read(&mut byte).unwrap_or(0) == 0 {
+                return;
+            }
+            head.push(byte[0]);
+        }
+        let key = String::from_utf8_lossy(&head)
+            .lines()
+            .find_map(|line| {
+                line.split_once(':').and_then(|(n, v)| {
+                    if n.eq_ignore_ascii_case("sec-websocket-key") {
+                        Some(v.trim().to_owned())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .expect("key");
+        let response = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+            net::websocket::accept_value(&key)
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.write_all(&[0x82, 0x02, 0xAB, 0xCD]);
+        let _ = stream.flush();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    });
+    let mut socket = net::WebSocket::connect(&format!("ws://127.0.0.1:{port}/")).expect("connect");
+    assert_eq!(socket.recv_bytes().expect("recv_bytes"), vec![0xAB, 0xCD]);
+    server.join().expect("server");
+}

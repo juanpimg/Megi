@@ -22,8 +22,31 @@ pub struct AuthChallenge {
 ///
 /// Header lists may contain several comma-separated challenges; only the first is used,
 /// which is enough for the Basic retry and avoids promoting a weaker later scheme.
+/// Returns the first challenge, splitting on commas that are *not* inside a quoted string
+/// (#1634). A plain `split(',')` truncated `Basic realm="a,b"` to `realm="a"`.
+fn first_top_level_challenge(value: &str) -> &str {
+    let mut quoted = false;
+    let mut escaped = false;
+    for (index, ch) in value.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if quoted && ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' {
+            quoted = !quoted;
+        } else if ch == ',' && !quoted {
+            return &value[..index];
+        }
+    }
+    value
+}
+
 pub fn parse_challenge(value: &str) -> Option<AuthChallenge> {
-    let first = value.split(',').next()?.trim();
+    let first = first_top_level_challenge(value).trim();
     let scheme_end = first.find(char::is_whitespace).unwrap_or(first.len());
     let scheme = first[..scheme_end].to_ascii_lowercase();
     if scheme.is_empty() {
@@ -202,5 +225,26 @@ mod normalization_tests {
             store.get("http://a.test"),
             Some(("u".to_owned(), "p".to_owned()))
         );
+    }
+}
+
+#[cfg(test)]
+mod challenge_comma_tests {
+    use super::*;
+
+    #[test]
+    fn comma_inside_quoted_realm_is_not_a_separator() {
+        // #1634: `Basic realm="a,b"` must keep the whole realm value.
+        let challenge = parse_challenge("Basic realm=\"a,b\"").expect("challenge");
+        assert_eq!(challenge.scheme, "basic");
+        assert_eq!(challenge.realm.as_deref(), Some("a,b"));
+    }
+
+    #[test]
+    fn comma_outside_quotes_still_separates_challenges() {
+        let challenge =
+            parse_challenge("Bearer realm=\"x\", Basic realm=\"y\"").expect("challenge");
+        assert_eq!(challenge.scheme, "bearer");
+        assert_eq!(challenge.realm.as_deref(), Some("x"));
     }
 }
