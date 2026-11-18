@@ -136,9 +136,10 @@ crates/image/src/vp8_tables.rs	500	src	F2	wave1	2026-11-16	covered	#1148-#1151
 crates/image/src/webp.rs	1437	src	F2	wave1	2026-11-16	covered	#1148-#1151	
 crates/image/tests/data/zlib_vectors.rs	258	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/decode.rs	338	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/exif.rs	205	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/fixtures/README.md	58	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/exif.rs	195	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/fixtures/README.md	60	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate.py	308	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/fixtures/generate_exif_orientations.py	69	test	F1			pending		
 crates/image/tests/fixtures/generate_jpeg_gif.py	202	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate_webp.py	235	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/gif/animated.gif	0	binary	-			exempt		not read line by line: binary
