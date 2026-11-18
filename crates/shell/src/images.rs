@@ -44,16 +44,21 @@ pub fn collect_image_regions(
         if let Some(node_id) = layout_box.node_id()
             && let Some(element) = document.node(node_id).as_element()
             && element.local_name == "img"
-            && let Some(src) = element.get_attribute("src")
+            && let Some(src) = render::images::resolve_img_source(
+                document,
+                node_id,
+                &css::MediaContext::default(),
+                1.0,
+            )
         {
             let rect = layout_box.dimensions.border_box();
             if rect.width > 0.0 && rect.height > 0.0 {
                 let url = match base_url {
                     Some(base) => base
-                        .join(src)
+                        .join(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
-                    None => net::Url::parse(src)
+                    None => net::Url::parse(&src)
                         .map(|resolved| resolved.as_str())
                         .unwrap_or_default(),
                 };

@@ -465,6 +465,8 @@ pub struct RenderOptions {
     /// [`RenderOutput::ensure_png`]. The pixmap, DOM, layout, stats and warnings are
     /// identical either way; only the eager PNG bytes are skipped (R201).
     pub encode_png: bool,
+    /// Device pixel ratio used for responsive image selection (`srcset` / `<picture>`), default `1.0`.
+    pub device_pixel_ratio: f32,
 }
 
 impl Default for RenderOptions {
@@ -504,6 +506,7 @@ impl Default for RenderOptions {
             accept_server_push: false,
             storage: None,
             host_events: Vec::new(),
+            device_pixel_ratio: 1.0,
         }
     }
 }
@@ -1089,17 +1092,19 @@ fn render_url_inner(
     let images_start = Instant::now();
     // The canvas blit loop (js feature) mutates this; harmless in a JS-free build.
     #[cfg_attr(not(feature = "js"), allow(unused_mut))]
-    let mut loaded_images = images::load_images_with_csp(
+    let mut loaded_images = images::load_images_with_context(
         &document,
         &base_url,
         &mut loader,
         options.no_network,
+        &media_context,
         ImageLimits {
             max_images: options.max_images,
             max_image_bytes: options.max_image_bytes,
             max_total_bytes: options.max_total_image_bytes,
             max_total_decoded_pixels: options.max_total_decoded_pixels,
             max_image_dim: options.max_image_dim,
+            device_pixel_ratio: options.device_pixel_ratio,
         },
         csp.as_ref(),
         &mut warnings,
