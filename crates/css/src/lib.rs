@@ -47,8 +47,8 @@ pub use calc::{
 };
 pub use cascade::{
     CascadeOriginImportance, CompiledRule, MAX_INLINE_STYLE_BYTES, MatchedDeclaration, Origin,
-    StyleCollection, parse_inline_declarations, parse_inline_style, resolve_cascaded_properties,
-    resolve_document_styles, resolve_document_styles_with_media,
+    StyleCollection, parse_inline_declarations, parse_inline_style, resolve_backdrop_color,
+    resolve_cascaded_properties, resolve_document_styles, resolve_document_styles_with_media,
     resolve_document_styles_with_media_and_state, resolve_document_styles_with_viewport,
 };
 pub use component_value::{ComponentValue, FunctionCall, SimpleBlock};

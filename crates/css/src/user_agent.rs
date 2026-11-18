@@ -287,6 +287,35 @@ input[type=reset][data-megi-active], button[data-megi-active] {
     background-color: #d7d7d7;
     border-color: #4d90fe;
 }
+
+/* HTML <dialog> & top layer (WHATWG §15.3) */
+dialog {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: fit-content;
+    height: fit-content;
+    margin: auto;
+    border: 2px solid #000000;
+    padding: 1em;
+    background-color: #ffffff;
+    color: #000000;
+}
+dialog:not([open]) {
+    display: none;
+}
+dialog:modal {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    max-width: calc(100% - 6px - 2em);
+    max-height: calc(100% - 6px - 2em);
+    overflow: auto;
+}
+dialog:modal::backdrop {
+    background-color: rgba(0, 0, 0, 0.1);
+}
 "#;
 
 /// Parses the default User-Agent stylesheet into a [`Stylesheet`].
@@ -502,5 +531,48 @@ mod tests {
         assert_eq!(legend_style.display, Display::Block);
         assert_eq!(legend_style.font_weight, 700);
         assert_eq!(style(&styles, label).display, Display::Inline);
+    }
+
+    #[test]
+    fn dialog_ua_styles_modal_and_backdrop() {
+        let mut doc = Document::new();
+        let root = doc.root();
+        let html = append(&mut doc, root, "html", &[]);
+        let body = append(&mut doc, html, "body", &[]);
+        let closed = append(&mut doc, body, "dialog", &[]);
+        let non_modal = append(&mut doc, body, "dialog", &[("open", "")]);
+        let modal = append(
+            &mut doc,
+            body,
+            "dialog",
+            &[("open", ""), ("data-megi-modal", "1")],
+        );
+
+        let styles = crate::cascade::resolve_document_styles(&doc, None);
+        assert_eq!(style(&styles, closed).display, Display::None);
+
+        let non_modal_style = style(&styles, non_modal);
+        assert_eq!(non_modal_style.display, Display::Block);
+        assert_eq!(
+            non_modal_style.position,
+            crate::properties::Position::Absolute
+        );
+        assert!(non_modal_style.width_fit_content);
+        assert!(non_modal_style.height_fit_content);
+        assert_eq!(non_modal_style.background_color, Color::WHITE);
+        assert_eq!(non_modal_style.backdrop_color, None);
+
+        let modal_style = style(&styles, modal);
+        assert_eq!(modal_style.display, Display::Block);
+        assert_eq!(modal_style.position, crate::properties::Position::Fixed);
+        assert_eq!(modal_style.overflow, Overflow::Auto);
+        assert_eq!(modal_style.backdrop_color, Some(Color::new(0, 0, 0, 26)));
+
+        let author = "dialog::backdrop { background-color: rgba(255, 0, 0, 0.5); }";
+        let custom_styles = crate::cascade::resolve_document_styles(&doc, Some(author));
+        assert_eq!(
+            style(&custom_styles, modal).backdrop_color,
+            Some(Color::new(255, 0, 0, 128))
+        );
     }
 }

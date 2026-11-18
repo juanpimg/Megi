@@ -132,12 +132,18 @@ pub fn layout_document_with_measurer_and_replaced_sizes(
 ///   by every box whose `overflow` is not `visible` (CSS 2.2 §11.1). The clipping box
 ///   itself carries its own padding box.
 fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, is_root: bool) {
-    let mut effective_clip = inherited_clip;
+    // Top-layer elements escape ancestor overflow/clipping (#1546).
+    let base_clip = if node.is_top_layer {
+        None
+    } else {
+        inherited_clip
+    };
+    let mut effective_clip = base_clip;
     if let Some(style) = node.style.as_ref()
         && !matches!(style.overflow, Overflow::Visible)
     {
         let padding_box = node.dimensions.padding_box();
-        effective_clip = Some(match inherited_clip {
+        effective_clip = Some(match base_clip {
             Some(parent_clip) => parent_clip.intersect(padding_box).unwrap_or(Rect::new(
                 padding_box.x.max(parent_clip.x),
                 padding_box.y.max(parent_clip.y),
@@ -150,6 +156,7 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
     node.clip = effective_clip;
 
     node.establishes_stacking_context = is_root
+        || node.is_top_layer
         || node.style.as_ref().is_some_and(|style| {
             style.opacity.is_nan()
                 || style.opacity < 1.0

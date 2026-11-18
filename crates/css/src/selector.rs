@@ -375,6 +375,10 @@ pub enum PseudoClass {
     Required,
     /// `:placeholder-shown` — editable control with a placeholder and an empty value.
     PlaceholderShown,
+    /// `:modal` — `<dialog open>` opened modally into the top layer (`data-megi-modal`).
+    Modal,
+    /// `::backdrop` — pseudo-element behind a top-layer modal `<dialog>`.
+    Backdrop,
     /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
     Never,
 }
@@ -383,7 +387,8 @@ impl PseudoClass {
     /// Specificity contribution of this pseudo-class (Selectors Level 4 §16).
     ///
     /// `:is()`, `:not()` and `:has()` contribute the specificity of their most specific
-    /// argument; `:where()` contributes zero; every other pseudo-class contributes `(0, 1, 0)`.
+    /// argument; `:where()` contributes zero; `::backdrop` (pseudo-element) contributes
+    /// `(0, 0, 1)`; every other pseudo-class contributes `(0, 1, 0)`.
     pub fn specificity(&self) -> Specificity {
         match self {
             Self::Is(selectors) | Self::Not(selectors) => selectors.max_specificity(),
@@ -393,6 +398,7 @@ impl PseudoClass {
                 .map(|relative| relative.selector.specificity())
                 .max()
                 .unwrap_or(Specificity::ZERO),
+            Self::Backdrop => Specificity::new(0, 0, 1),
             _ => Specificity::new(0, 1, 0),
         }
     }
@@ -412,7 +418,8 @@ impl PseudoClass {
             Self::ReadWrite => crate::state::is_read_write(doc, node_id),
             Self::Required => crate::state::is_required(doc, node_id),
             Self::PlaceholderShown => crate::state::is_placeholder_shown(doc, node_id),
-            Self::Never => false,
+            Self::Modal => crate::state::is_modal(doc, node_id),
+            Self::Backdrop | Self::Never => false,
             Self::Is(selectors) | Self::Where(selectors) => selectors.matches(doc, node_id),
             Self::Not(selectors) => !selectors.matches(doc, node_id),
             Self::Has(relatives) => relatives
@@ -760,6 +767,14 @@ impl CompoundSelector {
     /// and universal selectors are no longer restricted to the HTML namespace, so styles now
     /// apply to SVG/MathML elements (F14).
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
+        self.matches_with_backdrop(doc, node_id, false)
+    }
+
+    pub(crate) fn matches_for_backdrop(&self, doc: &Document, node_id: NodeId) -> bool {
+        self.matches_with_backdrop(doc, node_id, true)
+    }
+
+    fn matches_with_backdrop(&self, doc: &Document, node_id: NodeId, allow_backdrop: bool) -> bool {
         if self.never_matches {
             return false;
         }
@@ -806,6 +821,9 @@ impl CompoundSelector {
         }
 
         for pseudo in &self.pseudo_classes {
+            if allow_backdrop && matches!(pseudo, PseudoClass::Backdrop) {
+                continue;
+            }
             if !pseudo.matches(doc, node_id) {
                 return false;
             }
@@ -837,6 +855,35 @@ pub struct ComplexSelector {
 }
 
 impl ComplexSelector {
+    /// Returns `true` when this selector targets the `::backdrop` pseudo-element on its subject.
+    pub fn has_backdrop(&self) -> bool {
+        self.compounds.last().is_some_and(|(compound, _)| {
+            compound
+                .pseudo_classes
+                .iter()
+                .any(|pseudo| matches!(pseudo, PseudoClass::Backdrop))
+        })
+    }
+
+    /// Matches the `::backdrop` pseudo-element whose originating element is `node_id`.
+    pub fn matches_backdrop(&self, doc: &Document, node_id: NodeId) -> bool {
+        with_match_budget(|| self.matches_backdrop_inner(doc, node_id))
+    }
+
+    fn matches_backdrop_inner(&self, doc: &Document, node_id: NodeId) -> bool {
+        if self.compounds.is_empty() || !self.has_backdrop() {
+            return false;
+        }
+        let last_idx = self.compounds.len() - 1;
+        if !self.compounds[last_idx]
+            .0
+            .matches_for_backdrop(doc, node_id)
+        {
+            return false;
+        }
+        self.matches_from_right(doc, node_id, last_idx)
+    }
+
     /// Matches the target element `node_id` against this complex selector.
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
         with_match_budget(|| self.matches_inner(doc, node_id))
@@ -1527,9 +1574,13 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                 }
 
                 if is_pseudo_element {
-                    // Pseudo-element boxes are not generated yet: the selector stays valid
-                    // but can never match an element (F13).
-                    compound.pseudo_classes.push(PseudoClass::Never);
+                    if pseudo.eq_ignore_ascii_case("backdrop") && argument.is_none() {
+                        compound.pseudo_classes.push(PseudoClass::Backdrop);
+                    } else {
+                        // Pseudo-element boxes are not generated yet: the selector stays valid
+                        // but can never match an element (F13).
+                        compound.pseudo_classes.push(PseudoClass::Never);
+                    }
                     continue;
                 }
 
@@ -1566,6 +1617,7 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                     "read-write" if argument.is_none() => PseudoClass::ReadWrite,
                     "required" if argument.is_none() => PseudoClass::Required,
                     "placeholder-shown" if argument.is_none() => PseudoClass::PlaceholderShown,
+                    "modal" if argument.is_none() => PseudoClass::Modal,
                     // Legacy single-colon pseudo-element syntax (`:before`, `:first-line`, ...).
                     "before" | "after" | "first-line" | "first-letter" if argument.is_none() => {
                         PseudoClass::Never

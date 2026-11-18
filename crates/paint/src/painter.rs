@@ -218,6 +218,8 @@ enum Phase {
     Zero,
     /// Stacking context with a positive `z-index`: step 8.
     Positive,
+    /// Top-layer modal element rendered after the entire document stacking tree (#1546).
+    TopLayer,
 }
 
 /// Maximum nesting of stacking contexts the painter recurses into.
@@ -375,8 +377,27 @@ fn build_display_list_inner(
         // page background reports the root element.
         resources.record(viewport, root.node_id(), HitKind::Background);
     }
-    let contexts = index_stacking_contexts(root, resources.effects_present);
+    let (contexts, mut top_layer) = index_stacking_contexts(root, resources.effects_present);
     paint_stacking_context(root, &mut list, skip, &resources, false, true, 0, &contexts);
+    top_layer.sort_by_key(|dialog_box| dialog_box.top_layer_order);
+    for dialog_box in top_layer {
+        if resources.regions.is_some() {
+            // The ::backdrop intercepts pointer hit-testing over the entire viewport.
+            resources.record(viewport, dialog_box.node_id(), HitKind::Background);
+        }
+        let backdrop_color = dialog_box
+            .backdrop_color
+            .unwrap_or_else(|| Color::new(0, 0, 0, 26));
+        if backdrop_color.a > 0 {
+            list.push(DisplayItem::SolidColor {
+                rect: viewport,
+                color: backdrop_color,
+            });
+        }
+        paint_stacking_context(
+            dialog_box, &mut list, skip, &resources, false, false, 0, &contexts,
+        );
+    }
     let regions = match regions {
         Some(collector) => collector.borrow_mut().take_regions(),
         None => Vec::new(),
@@ -454,6 +475,9 @@ fn border_sides(style: &css::ComputedStyle, border: layout::EdgeSizes) -> [Borde
 /// Appendix E phase of `layout_box` inside its nearest stacking context.
 #[inline]
 fn phase(layout_box: &LayoutBox, effects_present: bool) -> Phase {
+    if layout_box.is_top_layer {
+        return Phase::TopLayer;
+    }
     if layout_box.establishes_stacking_context {
         if layout_box.z_index < 0 {
             Phase::Negative
@@ -920,8 +944,12 @@ struct ContextBuckets<'a> {
 fn index_stacking_contexts<'a>(
     root: &'a LayoutBox,
     effects_present: bool,
-) -> HashMap<*const LayoutBox, ContextBuckets<'a>> {
+) -> (
+    HashMap<*const LayoutBox, ContextBuckets<'a>>,
+    Vec<&'a LayoutBox>,
+) {
     let mut contexts = HashMap::new();
+    let mut top_layer = Vec::new();
     let root_ptr = root as *const LayoutBox;
     contexts.insert(root_ptr, ContextBuckets::default());
     let mut stack: Vec<(&'a LayoutBox, *const LayoutBox, usize)> = root
@@ -931,13 +959,22 @@ fn index_stacking_contexts<'a>(
         .map(|child| (child, root_ptr, 1))
         .collect();
     while let Some((node, owner, depth)) = stack.pop() {
-        let bucket = match phase(node, effects_present) {
+        let node_phase = phase(node, effects_present);
+        let node_ptr = node as *const LayoutBox;
+        if node_phase == Phase::TopLayer {
+            top_layer.push(node);
+            contexts.entry(node_ptr).or_default();
+            for child in node.children.iter().rev() {
+                stack.push((child, node_ptr, 1));
+            }
+            continue;
+        }
+        let bucket = match node_phase {
             Phase::Negative => Some(0),
             Phase::Zero => Some(1),
             Phase::Positive => Some(2),
-            Phase::Float | Phase::InFlow => None,
+            Phase::Float | Phase::InFlow | Phase::TopLayer => None,
         };
-        let node_ptr = node as *const LayoutBox;
         if let Some(bucket) = bucket
             && depth < MAX_STACKING_CONTEXT_DEPTH
         {
@@ -959,7 +996,7 @@ fn index_stacking_contexts<'a>(
             }
         }
     }
-    contexts
+    (contexts, top_layer)
 }
 
 /// Explicit-stack task for the iterative block-background traversal.
@@ -1074,7 +1111,7 @@ fn paint_floats(
                     stack.push(grandchild);
                 }
             }
-            Phase::Negative | Phase::Zero | Phase::Positive => {}
+            Phase::Negative | Phase::Zero | Phase::Positive | Phase::TopLayer => {}
         }
     }
 }
@@ -1335,19 +1372,12 @@ fn push_inline_children<'a>(
         .iter()
         .filter(|child| {
             // Cheap flag first: `phase()` only needs to run for list items here.
-            is_list_item(child)
-                && !matches!(
-                    phase(child, effects_present),
-                    Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
-                )
+            is_list_item(child) && phase(child, effects_present) == Phase::InFlow
         })
         .count() as u32;
 
     for child in parent.children.iter().rev() {
-        if matches!(
-            phase(child, effects_present),
-            Phase::Float | Phase::Negative | Phase::Zero | Phase::Positive
-        ) {
+        if phase(child, effects_present) != Phase::InFlow {
             continue;
         }
         let ordinal = if is_list_item(child) {
