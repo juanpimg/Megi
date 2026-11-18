@@ -56,7 +56,7 @@ crates/css/src/grid.rs	884	src	F2	wave1	2026-11-16	covered	#1126-#1133
 crates/css/src/lib.rs	2131	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/media.rs	634	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/parser.rs	861	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/properties.rs	6006	src	F2	wave1	2026-11-16	covered	#1126-#1133	
+crates/css/src/properties.rs	6022	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/query.rs	370	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/rule.rs	332	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/selector.rs	2145	src	F2	wave1	2026-11-16	covered	#1126-#1133	
@@ -64,7 +64,7 @@ crates/css/src/shorthand.rs	966	src	F2	wave1	2026-11-16	covered	#1126-#1133
 crates/css/src/state.rs	242	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/token.rs	125	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/src/tokenizer.rs	570	src	F2	wave1	2026-11-16	covered	#1126-#1133	
-crates/css/src/transform.rs	271	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/css/src/transform.rs	313	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/css/src/user_agent.rs	578	src	F2	wave1	2026-11-16	covered	#1126-#1133	
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/calc_lengths.rs	273	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
@@ -84,7 +84,7 @@ crates/css/tests/pseudo_elements.rs	155	test	F1	wave2	2026-11-18	covered	#1618-#
 crates/css/tests/replaced_effects.rs	253	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/css/tests/selector_escapes.rs	77	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/css/tests/state_vars_calc.rs	794	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
-crates/css/tests/transform.rs	66	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/css/tests/transform.rs	110	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/css/tests/typography_props.rs	95	test	F1	waveF1	2026-11-17	covered	#1356-#1360	
 crates/dom/Cargo.toml	11	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/dom/src/lib.rs	4011	src	F2	wave1	2026-11-16	covered	#1105-#1119	
@@ -588,6 +588,8 @@ docs/audit/findings/f5/shell-a11y-i18n.md	231	docs	F3	lead	2026-11-17	covered	#1
 docs/audit/findings/f7/00-closeout.md	109	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 docs/audit/findings/wave1.json	3420	docs	F3	lead	2026-11-17	covered	#1404-#1487	written and reviewed while building the F0 ledger
 docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+docs/audit/findings/wave2/07-closeout.md	26	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 closeout
+docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 publication log
 docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 docs/audit/findings/wave2/advisories/w2-st-1176-tmp-writers.md	22	docs	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/

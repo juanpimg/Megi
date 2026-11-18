@@ -1,0 +1,13 @@
+<!doctype html><html><body>
+<iframe id="f" srcdoc="<title>InnerTitle</title><p id='a' class='x'>one</p><p class='x'>two</p><span>three</span>"></iframe>
+<script>
+var fr = document.getElementById("f").contentDocument;
+var t = (fr === null) ? "NULL" : ("title=" + fr.title);
+var byId = "n/a";
+try { byId = String(fr.getElementById("a").textContent); } catch(e){ byId = "ERR:"+e; }
+var qsa = "n/a";
+try { qsa = String(fr.querySelectorAll(".x").length); } catch(e){ qsa = "ERR:"+e; }
+var qsaTag = "n/a";
+try { qsaTag = String(fr.querySelectorAll("p").length); } catch(e){ qsaTag = "ERR:"+e; }
+document.body.innerHTML += "<p id=out>" + t + "|" + byId + "|cls:" + qsa + "|tag:" + qsaTag + "</p>";
+</script><p>outer</p></body></html>

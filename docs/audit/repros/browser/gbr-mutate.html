@@ -1,0 +1,1 @@
+<!doctype html><html><body><div id=a style="width:100px;height:50px">box</div><script>var el=document.getElementById("a");var r1=JSON.stringify(el.getBoundingClientRect());el.style.width="300px";document.body.appendChild(document.createElement("div"));var r2=JSON.stringify(el.getBoundingClientRect());document.body.innerHTML+="<p id=r>"+r1+"|"+r2+"</p>";</script></body></html>

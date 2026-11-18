@@ -1,0 +1,15 @@
+<!doctype html><html><body><script>
+var out=[];
+try{
+var w=new Worker("w2-worker-real.js");
+out.push("ctor-ok");
+try{Object.defineProperty(w,"__megi_worker",{value:9999});out.push("redefine-ok");}catch(e){out.push("redefine-err");}
+w.__megi_worker=9999;
+out.push("assign-done");
+try{w.postMessage("hi");out.push("post-ok");}catch(e){out.push("post-err:"+String(e).slice(0,80));}
+try{w.terminate();out.push("term-ok");}catch(e){out.push("term-err:"+String(e).slice(0,80));}
+try{var w2=new Worker("w2-worker-real.js");w2.postMessage("hi2");w2.terminate();out.push("w2-ok");}catch(e){out.push("w2-err:"+String(e).slice(0,80));}
+for(var i=0;i<20;i++){try{new Worker("w2-worker-real.js");}catch(e){out.push("cap@"+i+":"+String(e).slice(0,40));break;}}
+}catch(e){out.push("ctor-err:"+String(e).slice(0,80));}
+document.body.innerHTML+="<p id=out>"+out.join("|")+"</p>";
+</script></body></html>
