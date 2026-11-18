@@ -451,7 +451,7 @@ crates/render/tests/filter_fixture_tests.rs	117	test	F1			pending
 crates/render/tests/fixture_smoke.rs	59	test	F1			pending		
 crates/render/tests/form_post_tests.rs	202	test	F1			pending		
 crates/render/tests/gradient_tests.rs	106	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
-crates/render/tests/iframe_tests.rs	146	test	F1			pending		
+crates/render/tests/iframe_tests.rs	147	test	F1			pending		
 crates/render/tests/image_formats_tests.rs	61	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/image_scaled_tests.rs	64	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/images_tests.rs	389	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
