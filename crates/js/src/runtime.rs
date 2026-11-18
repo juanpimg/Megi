@@ -6475,9 +6475,6 @@ fn node_shadow_root_get(
     }
 }
 
-/// Resolves the shadow host of a `<slot>`: walks up to the nearest registered shadow root and
-/// returns its host element (#1541).
-
 fn frame_handle(this: &JsValue, context: &mut Context) -> JsResult<u32> {
     let object = this
         .as_object()
