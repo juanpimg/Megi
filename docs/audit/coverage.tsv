@@ -321,6 +321,7 @@ crates/layout/tests/transform.rs	50	test	F1			pending
 crates/layout/tests/typography_sticky.rs	349	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/net/Cargo.toml	27	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/net/data/public_suffix_list.dat	16610	fixture	F1	lead	2026-11-17	covered		not code: vendored data file (PSL)
+crates/net/src/auth.rs	165	src	F2			pending		
 crates/net/src/body.rs	106	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/cache.rs	353	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/compression.rs	651	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
@@ -335,10 +336,10 @@ crates/net/src/h2/frame.rs	842	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284
 crates/net/src/h2/hpack.rs	706	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/h2/mod.rs	65	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/hsts.rs	396	src	F2			pending		
-crates/net/src/http.rs	2724	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/http.rs	2814	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/integrity.rs	556	src	F2			pending		
-crates/net/src/lib.rs	189	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/loader.rs	1288	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/lib.rs	194	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/loader.rs	1300	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/mime.rs	277	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/mixed_content.rs	147	src	F2			pending		
 crates/net/src/pac.rs	224	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
@@ -349,6 +350,7 @@ crates/net/src/referrer.rs	274	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284
 crates/net/src/socks.rs	243	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/url.rs	858	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/tests/advanced_tests.rs	660	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
+crates/net/tests/auth_tests.rs	99	test	F1			pending		
 crates/net/tests/browser_features_tests.rs	824	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/cache_tests.rs	336	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
 crates/net/tests/data_tests.rs	107	test	F1	waveF1	2026-11-17	covered	#1343-#1352	
