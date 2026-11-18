@@ -70,7 +70,9 @@
 //!   encodings) and buffers the whole body before decoding. The inflater is the `image`
 //!   crate's std-only codec; extracting it into a dedicated crate is a documented
 //!   follow-up. No IDNA / non-ASCII host names (rejected with
-//!   [`UrlError::InvalidHost`]), no `ftp:`/`blob:` schemes, no WebSocket.
+//!   [`UrlError::InvalidHost`]), no `ftp:`/`blob:` schemes. WebSocket (`ws://`,
+//!   RFC 6455 framing/handshake, JS `WebSocket` class over a host transport; `wss://`
+//!   rejected until TLS is wired, #1534) is partial.
 //! - The URL parser is a *subset*: `` and whitespace handling follow the spec, but odd
 //!   legacy forms (e.g. `http:/foo`, Windows `file:` drive letters, octal/hex IPv4) are
 //!   rejected or simplified. Existing percent-escape sequences are preserved verbatim

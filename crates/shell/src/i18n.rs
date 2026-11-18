@@ -43,7 +43,7 @@ impl Locale {
     }
 }
 
-/// All user-visible strings of the generated pages for one locale.
+/// All user-visible strings of the generated pages and shell chrome for one locale.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Strings {
     pub error_loading: &'static str,
@@ -64,6 +64,14 @@ pub struct Strings {
     pub directory: &'static str,
     pub file: &'static str,
     pub truncated: &'static str,
+    // Context menu / chrome labels.
+    pub open_link_in_new_tab: &'static str,
+    pub copy_link_address: &'static str,
+    pub save_image: &'static str,
+    pub copy_image_unsupported: &'static str,
+    pub reload: &'static str,
+    pub save_page_as_png: &'static str,
+    pub save_page_as_html: &'static str,
 }
 
 /// Returns the strings table for `locale`.
@@ -87,6 +95,13 @@ pub fn strings(locale: Locale) -> Strings {
             directory: "Directory",
             file: "File",
             truncated: "listing truncated",
+            open_link_in_new_tab: "Open link in new tab",
+            copy_link_address: "Copy link address",
+            save_image: "Save image",
+            copy_image_unsupported: "Copy image (not supported)",
+            reload: "Reload",
+            save_page_as_png: "Save page as PNG",
+            save_page_as_html: "Save page as HTML",
         },
         Locale::Es => Strings {
             error_loading: "Error al cargar la página",
@@ -106,6 +121,13 @@ pub fn strings(locale: Locale) -> Strings {
             directory: "Directorio",
             file: "Archivo",
             truncated: "listado truncado",
+            open_link_in_new_tab: "Abrir enlace en una pestaña nueva",
+            copy_link_address: "Copiar dirección del enlace",
+            save_image: "Guardar imagen",
+            copy_image_unsupported: "Copiar imagen (no disponible)",
+            reload: "Recargar",
+            save_page_as_png: "Guardar página como PNG",
+            save_page_as_html: "Guardar página como HTML",
         },
     }
 }
@@ -123,6 +145,7 @@ mod tests {
                 s.error_code,
                 s.retry,
                 s.press_r,
+                s.press_r_html,
                 s.history,
                 s.no_history,
                 s.title_column,
@@ -135,6 +158,13 @@ mod tests {
                 s.directory,
                 s.file,
                 s.truncated,
+                s.open_link_in_new_tab,
+                s.copy_link_address,
+                s.save_image,
+                s.copy_image_unsupported,
+                s.reload,
+                s.save_page_as_png,
+                s.save_page_as_html,
             ] {
                 assert!(!value.is_empty(), "{locale:?} has an empty string");
             }

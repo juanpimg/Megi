@@ -220,6 +220,99 @@ pub fn collect(document: &Document, root: NodeId) -> Vec<AccessNode> {
     out
 }
 
+/// A serializable accessibility node with identity and tree relationships (#1516).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SnapshotNode {
+    /// DOM node id (stable within the document snapshot).
+    pub id: NodeId,
+    /// Parent snapshot node, if it is also exposed.
+    pub parent: Option<NodeId>,
+    pub role: String,
+    pub name: String,
+    pub disabled: bool,
+    pub hidden: bool,
+    /// Whether the node is reachable by keyboard Tab traversal.
+    pub focusable: bool,
+}
+
+/// Builds a complete accessibility snapshot: visible, role-bearing nodes in document order with
+/// parent links and focusability. This is the consumable form of the tree a screen-reader bridge
+/// (or a diagnostic tool) walks; hidden subtrees and closed dialogs are excluded (#1516).
+pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
+    let focusable: std::collections::HashSet<NodeId> =
+        focus_order(document, root).into_iter().collect();
+    let scope = top_modal_dialog(document, root);
+    let mut out: Vec<SnapshotNode> = Vec::new();
+    // Walk the same subtree `collect()` uses (modal dialog when one is open).
+    let walk_root = scope.unwrap_or(root);
+    // Map from DOM id to its nearest exposed ancestor by walking the DOM parent chain.
+    for node in document.descendants_inclusive(walk_root) {
+        if is_hidden(document, node) || is_closed_dialog(document, node) {
+            continue;
+        }
+        let Some(role) = role(document, node) else {
+            continue;
+        };
+        let mut parent = None;
+        let mut current = document.try_node(node).and_then(|n| n.parent);
+        while let Some(id) = current {
+            if out.iter().any(|exposed| exposed.id == id) {
+                parent = Some(id);
+                break;
+            }
+            current = document.try_node(id).and_then(|n| n.parent);
+        }
+        out.push(SnapshotNode {
+            id: node,
+            parent,
+            role,
+            name: name(document, node),
+            disabled: is_disabled(document, node),
+            hidden: false,
+            focusable: focusable.contains(&node),
+        });
+    }
+    out
+}
+
+/// Serializes a snapshot to JSON (no external crate): an array of nodes with their identity,
+/// parent, role, name and states. Consumable by tooling and a future AT-SPI/accesskit bridge.
+pub fn serialize(document: &Document, root: NodeId) -> String {
+    let nodes = snapshot(document, root);
+    let mut json = String::from("[");
+    for (index, node) in nodes.iter().enumerate() {
+        if index > 0 {
+            json.push(',');
+        }
+        json.push_str(&format!(
+            "{{\"id\":{},\"parent\":{},\"role\":\"{}\",\"name\":\"{}\",\"disabled\":{},\"hidden\":{},\"focusable\":{}}}",
+            node.id.get(),
+            node.parent.map_or(0, |id| id.get()),
+            escape_json(&node.role),
+            escape_json(&node.name),
+            node.disabled,
+            node.hidden,
+            node.focusable,
+        ));
+    }
+    json.push(']');
+    json
+}
+
+fn escape_json(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '"' => "\\\"".chars().collect::<Vec<_>>(),
+            '\\' => "\\\\".chars().collect::<Vec<_>>(),
+            '\n' => "\\n".chars().collect::<Vec<_>>(),
+            '\r' => "\\r".chars().collect::<Vec<_>>(),
+            '\t' => "\\t".chars().collect::<Vec<_>>(),
+            c => vec![c],
+        })
+        .collect()
+}
+
 /// Deterministic Tab order: focusable, enabled, visible elements with a role, in document
 /// order (`tabindex` is only used through its presence; negative values are skipped).
 /// When an open modal `<dialog>` is active, focus is trapped within the topmost modal dialog.
@@ -384,6 +477,40 @@ mod tests {
         assert!(nodes.iter().any(|n| n.name == "First"));
         assert!(!nodes.iter().any(|n| n.name == "Outside"));
         assert!(!nodes.iter().any(|n| n.name == "Closed"));
+    }
+
+    #[test]
+    fn snapshot_exposes_identity_parent_and_focusability() {
+        let document = doc(
+            "<main><h1>Title</h1><button id=b>Send</button><span aria-hidden=true>secret</span></main>",
+        );
+        let body = document.body().expect("body");
+        let nodes = snapshot(&document, body);
+        let button = nodes
+            .iter()
+            .find(|node| node.name == "Send")
+            .expect("button node");
+        assert_eq!(button.role, "button");
+        assert!(button.focusable, "button must be keyboard reachable");
+        assert!(
+            button.parent.is_some(),
+            "button must have an exposed parent"
+        );
+        assert!(
+            !nodes.iter().any(|node| node.name == "secret"),
+            "aria-hidden subtree must be excluded"
+        );
+    }
+
+    #[test]
+    fn serialize_produces_consumable_json() {
+        let document = doc("<button aria-label='Say \"hi\"'>Go</button>");
+        let body = document.body().expect("body");
+        let json = serialize(&document, body);
+        assert!(json.starts_with('[') && json.ends_with(']'));
+        assert!(json.contains("\"role\":\"button\""));
+        assert!(json.contains("\"focusable\":true"));
+        assert!(json.contains("\\\""), "quotes must be escaped");
     }
 
     #[test]

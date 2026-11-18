@@ -204,7 +204,10 @@ pub mod window;
 pub mod worker;
 pub mod zoom;
 
-pub use a11y::{AccessNode, collect as collect_access, focus_order, is_hidden, name, role};
+pub use a11y::{
+    AccessNode, SnapshotNode, collect as collect_access, focus_order, is_hidden, name, role,
+    serialize as accessibility_json, snapshot as accessibility_snapshot,
+};
 pub use chrome::{
     ADDRESS_BAR_HEIGHT, AddressBar, CHROME_HEIGHT, ChromeView, DropdownList, DropdownState,
     TAB_STRIP_HEIGHT, TabHit, TabRect, TabStripLayout, address_bar_rect, draw_chrome,
@@ -229,9 +232,10 @@ pub use forms::{
     snapshot_data_url,
 };
 pub use headless::{
-    ScreenshotInfo, render_target, render_target_with_chrome, render_target_with_chrome_menu,
-    render_target_with_find, render_target_with_options, save_screenshot, screenshot,
-    screenshot_with_chrome, screenshot_with_find, screenshot_with_options,
+    ScreenshotInfo, accessibility_tree, render_target, render_target_with_chrome,
+    render_target_with_chrome_menu, render_target_with_find, render_target_with_options,
+    save_screenshot, screenshot, screenshot_with_chrome, screenshot_with_find,
+    screenshot_with_options,
 };
 pub use history::{
     HistoryEntry, HistoryLog, HistoryMenu, MAX_RECENT_HISTORY, MAX_TAB_HISTORY, RecentHistory,

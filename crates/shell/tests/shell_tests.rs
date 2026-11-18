@@ -1671,3 +1671,24 @@ fn worker_render_dispatches_host_popstate_before_the_final_frame() {
         "the popstate listener must mutate the DOM and paint blue pixels"
     );
 }
+
+#[test]
+fn headless_accessibility_tree_is_consumable_json() {
+    // #1516: the accessibility model must be consumable by tooling, not just computed.
+    let tree = shell::accessibility_tree(
+        "data:text/html,<html><body><h1>Title</h1><button aria-label='Send now'>Go</button></body></html>",
+        800,
+        600,
+    )
+    .expect("accessibility tree");
+    assert!(tree.starts_with('[') && tree.ends_with(']'));
+    assert!(tree.contains("\"role\":\"button\""), "tree={tree}");
+    assert!(
+        tree.contains("Send now"),
+        "accessible name must be present: {tree}"
+    );
+    assert!(
+        tree.contains("\"focusable\":true"),
+        "button must be focusable: {tree}"
+    );
+}

@@ -205,6 +205,7 @@ mod browser_host;
 pub mod cache;
 pub mod charset;
 pub mod error;
+pub mod frames;
 pub mod images;
 mod inline_svg;
 pub mod scripts;
@@ -789,7 +790,7 @@ impl std::fmt::Debug for RenderOutput {
 
 /// Loads `input` (an absolute URL: `http(s)://`, `file://` or `data:`) and renders it.
 pub fn render_url(input: &str, options: &RenderOptions) -> Result<RenderOutput, RenderError> {
-    render_url_inner(input, options, None)
+    render_url_inner(input, options, None, 0)
 }
 
 /// Like [`render_url`], but reuses a caller-owned [`RenderCache`] for layout trees.
@@ -798,13 +799,14 @@ pub fn render_url_cached(
     options: &RenderOptions,
     cache: &mut RenderCache,
 ) -> Result<RenderOutput, RenderError> {
-    render_url_inner(input, options, Some(cache))
+    render_url_inner(input, options, Some(cache), 0)
 }
 
 fn render_url_inner(
     input: &str,
     options: &RenderOptions,
     cache: Option<&mut RenderCache>,
+    frame_depth: usize,
 ) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
@@ -1205,6 +1207,16 @@ fn render_url_inner(
                 loaded_images.sizes.insert(node, size);
             }
         }
+    }
+
+    // Nested browsing contexts (#1544): render each <iframe>'s document into its own viewport
+    // and blit it as a replaced element. Depth/count caps keep self-referential trees bounded.
+    for frame in frames::collect_frames(&document, &base_url, options, frame_depth, &mut warnings)?
+    {
+        loaded_images
+            .store
+            .insert(frame.node, std::sync::Arc::new(frame.image));
+        loaded_images.sizes.insert(frame.node, frame.size);
     }
 
     let backgrounds_start = Instant::now();
