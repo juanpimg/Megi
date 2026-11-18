@@ -130,6 +130,14 @@
 //!   remaining listeners; budget errors (infinite loops) still abort the dispatch with
 //!   [`JsError::Budget`].
 //!
+//! ## Host bridge
+//!
+//! There is no thread-local "current host". Each [`JsRuntime`] installs its shared
+//! host cell in the Boa `Context`'s `HostDefined` data at construction; every native
+//! binding borrows it from the `Context` it receives. Nested iframe/worker realms
+//! therefore always resolve their own document/providers, even while a parent realm
+//! is suspended inside a bridged call. The host cell is the only owner of that state.
+//!
 //! ## Feature layout
 //!
 //! The `js` feature is **enabled by default** and pulls `boa_engine`. With
