@@ -260,13 +260,14 @@ fn test_adversarial_vertical_align_middle_bounds() {
     doc.append_child(p, span_mid);
     doc.append_text(span_mid, "Middle");
 
+    // Tall line box so middle alignment is distinguishable from baseline (#1382).
     let mut p_style = make_block_style(Length::Px(400.0), Length::Auto);
     p_style.font_size = 16.0;
-    p_style.line_height = Some(20.0);
+    p_style.line_height = Some(40.0);
 
     let mut mid_style = make_inline_style();
-    mid_style.font_size = 16.0;
-    mid_style.line_height = Some(20.0);
+    mid_style.font_size = 24.0;
+    mid_style.line_height = Some(30.0);
     mid_style.vertical_align = VerticalAlign::Middle;
 
     let mut styles = HashMap::new();
@@ -283,38 +284,40 @@ fn test_adversarial_vertical_align_middle_bounds() {
     let span_box = &line_box.children[0];
     let text_box = &span_box.children[0];
 
-    println!(
-        "LineBox: y={}, h={}",
-        line_box.dimensions.content.y, line_box.dimensions.content.height
-    );
-    println!(
-        "Text in Middle: y={}, h={}",
-        text_box.dimensions.content.y, text_box.dimensions.content.height
-    );
-
-    // Check if text is within line box bounds
     let line_y = line_box.dimensions.content.y;
     let line_h = line_box.dimensions.content.height;
     let top = text_box.dimensions.content.y;
-    let bottom = top + text_box.dimensions.content.height;
-    println!("Middle fragment top={}, line_y={}", top, line_y);
-    println!(
-        "Middle fragment bottom={}, line_bottom={}",
-        bottom,
-        line_y + line_h
-    );
+    let fragment_h = text_box.dimensions.content.height;
+
+    // CSS 2.1 §10.8.1: middle aligns the box midpoint with parent baseline + 0.5*x-height.
+    // This is not the same as geometric centering in the line box, but it must differ from
+    // baseline alignment; the old bounds-only check accepted a baseline-positioned fragment.
+    let parent_x_height_midpoint = 0.25 * 16.0;
+    let expected_middle =
+        line_y + line_box.baseline - (parent_x_height_midpoint + fragment_h / 2.0);
+
+    let fragment_font_size = 24.0_f32;
+    let fragment_line_height = 30.0_f32;
+    let fragment_ascent = 0.8 * fragment_font_size;
+    let fragment_descent = 0.2 * fragment_font_size;
+    let fragment_leading = fragment_line_height - (fragment_ascent + fragment_descent);
+    let fragment_ascent_extent = fragment_ascent + fragment_leading / 2.0;
+    let baseline_y = line_y + line_box.baseline - fragment_ascent_extent;
 
     assert!(
-        top >= line_y - 0.001,
-        "Middle fragment top {} must be within line box (line_y = {})",
-        top,
-        line_y
+        top >= line_y - 0.001 && top + fragment_h <= line_y + line_h + 0.001,
+        "Middle fragment must remain within line box bounds (top={top}, bottom={}, line=[{line_y}, {}])",
+        top + fragment_h,
+        line_y + line_h
     );
     assert!(
-        bottom <= line_y + line_h + 0.001,
-        "Middle fragment bottom {} must be within line box (line_bottom = {})",
-        bottom,
-        line_y + line_h
+        (top - expected_middle).abs() < 0.01,
+        "Middle fragment top {top} must follow vertical-align: middle (expected {expected_middle}, baseline would be {baseline_y}, line_y={line_y}, line_h={line_h}, line_baseline={}, fragment_h={fragment_h})",
+        line_box.baseline
+    );
+    assert!(
+        (top - baseline_y).abs() > 0.01,
+        "Middle-aligned fragment must not remain on the baseline (top {top}, baseline_y {baseline_y})"
     );
 }
 
@@ -804,7 +807,7 @@ fn test_adversarial_vertical_align_middle_heterogeneous_font_sizes() {
 
     let mut p_style = make_block_style(Length::Px(800.0), Length::Auto);
     p_style.font_size = 16.0;
-    p_style.line_height = Some(20.0);
+    p_style.line_height = Some(50.0);
 
     let mut normal_style = make_inline_style();
     normal_style.font_size = 16.0;
@@ -839,29 +842,56 @@ fn test_adversarial_vertical_align_middle_heterogeneous_font_sizes() {
 
     println!("LineBox: y={}, h={}", line_y, line_h);
 
-    for span_child in &line_box.children {
+    let parent_x_height_midpoint = 0.25 * 16.0;
+    let fragment_metrics = [
+        (16.0_f32, 20.0_f32), // normal (baseline)
+        (32.0_f32, 40.0_f32), // large (middle)
+        (8.0_f32, 10.0_f32),  // small (middle)
+    ];
+
+    for (index, span_child) in line_box.children.iter().enumerate() {
         for text_child in &span_child.children {
             let top = text_child.dimensions.content.y;
-            let bottom = top + text_child.dimensions.content.height;
-            println!(
-                "Text node bounds: top={}, bottom={}, line_bounds=[{}, {}]",
-                top,
-                bottom,
-                line_y,
-                line_y + line_h
-            );
-            assert!(
-                top >= line_y - 0.001,
-                "Fragment top {} must be within line box (line_y = {})",
-                top,
-                line_y
-            );
-            assert!(
-                bottom <= line_y + line_h + 0.001,
-                "Fragment bottom {} must be within line box (line_bottom = {})",
-                bottom,
-                line_y + line_h
-            );
+            let fragment_h = text_child.dimensions.content.height;
+            if index == 0 {
+                // "Normal" uses baseline alignment; only bound it within the line box.
+                let bottom = top + fragment_h;
+                assert!(
+                    top >= line_y - 0.001,
+                    "Baseline fragment top {top} must be within line box (line_y = {line_y})"
+                );
+                assert!(
+                    bottom <= line_y + line_h + 0.001,
+                    "Baseline fragment bottom {bottom} must be within line box (line_bottom = {})",
+                    line_y + line_h
+                );
+            } else {
+                // Middle aligns midpoint with parent baseline + 0.5*x-height (CSS 2.1 §10.8.1),
+                // which differs from baseline in this mixed-size line (#1382).
+                let (font_size, fragment_line_height) = fragment_metrics[index];
+                let ascent = 0.8 * font_size;
+                let descent = 0.2 * font_size;
+                let leading = fragment_line_height - (ascent + descent);
+                let ascent_extent = ascent + leading / 2.0;
+                let expected_middle =
+                    line_y + line_box.baseline - (parent_x_height_midpoint + fragment_h / 2.0);
+                let baseline_y = line_y + line_box.baseline - ascent_extent;
+                assert!(
+                    top >= line_y - 0.001 && top + fragment_h <= line_y + line_h + 0.001,
+                    "Middle fragment must remain within line box bounds (top={top}, bottom={}, line=[{line_y}, {}], span_index={index})",
+                    top + fragment_h,
+                    line_y + line_h
+                );
+                assert!(
+                    (top - expected_middle).abs() < 0.01,
+                    "Middle fragment top {top} must follow vertical-align: middle (expected {expected_middle}, baseline would be {baseline_y}, line_y={line_y}, line_h={line_h}, line_baseline={}, fragment_h={fragment_h}, span_index={index})",
+                    line_box.baseline
+                );
+                assert!(
+                    (top - baseline_y).abs() > 0.01,
+                    "Middle-aligned fragment must not remain on the baseline (top {top}, baseline_y {baseline_y}, span_index={index})"
+                );
+            }
         }
     }
 }
