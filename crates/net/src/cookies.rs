@@ -529,10 +529,36 @@ impl CookieJar {
     /// Returns `true` when the header was applied as a store or deletion of an existing
     /// cookie, `false` when it was malformed/ignored.
     pub fn store_set_cookie(&mut self, request_url: &Url, set_cookie: &str) -> bool {
+        self.store_set_cookie_inner(request_url, set_cookie, true)
+    }
+
+    /// Parses and stores a cookie string written from DOM script (`document.cookie = ...`).
+    ///
+    /// Follows RFC 6265 §5.3 non-HTTP API rules: only `http:`/`https:` document URLs are
+    /// accepted, cookies with the `HttpOnly` attribute are ignored, and existing `HttpOnly`
+    /// cookies cannot be overwritten or deleted by scripts.
+    pub fn store_from_document(&mut self, document_url: &Url, cookie_string: &str) -> bool {
+        if !matches!(document_url.scheme(), Scheme::Http | Scheme::Https)
+            || document_url.host().is_empty()
+        {
+            return false;
+        }
+        self.store_set_cookie_inner(document_url, cookie_string, false)
+    }
+
+    fn store_set_cookie_inner(
+        &mut self,
+        request_url: &Url,
+        set_cookie: &str,
+        from_http: bool,
+    ) -> bool {
         let now = self.now();
         let Ok(parsed) = parse_set_cookie(set_cookie, request_url, now) else {
             return false;
         };
+        if !from_http && parsed.http_only {
+            return false;
+        }
         // Reject cookies that exceed the size budget (#1254).
         if parsed.name.len() + parsed.value.len() > MAX_COOKIE_BYTES {
             return false;
@@ -569,6 +595,9 @@ impl CookieJar {
         let existing = self.cookies.iter().position(|cookie| {
             cookie.name == parsed.name && cookie.domain == domain && cookie.path == path
         });
+        if !from_http && existing.is_some_and(|index| self.cookies[index].http_only) {
+            return false;
+        }
         if deleting {
             if let Some(index) = existing {
                 self.cookies.remove(index);
@@ -719,29 +748,51 @@ impl CookieJar {
     /// Builds the `Cookie` request header for `url` honoring `SameSite` for `site`.
     pub fn header_for_url_with_site(&self, url: &Url, site: RequestSite) -> Option<String> {
         let matching = self.cookies_for_url_with_site(url, site);
-        if matching.is_empty() {
-            return None;
-        }
-        let mut header = String::new();
-        const MAX_COOKIE_HEADER_BYTES: usize = 8 * 1024;
-        for (index, cookie) in matching.iter().enumerate() {
-            let entry_len = cookie.name.len() + 1 + cookie.value.len();
-            if header.len() + entry_len + 2 > MAX_COOKIE_HEADER_BYTES {
-                break;
-            }
-            if index > 0 {
-                header.push_str("; ");
-            }
-            header.push_str(&cookie.name);
-            header.push('=');
-            header.push_str(&cookie.value);
-        }
+        let header = format_cookie_pairs(&matching);
         if header.is_empty() {
             None
         } else {
             Some(header)
         }
     }
+
+    /// Returns the non-`HttpOnly` cookies visible to DOM scripts (`document.cookie`) at `url`.
+    pub fn cookies_for_document(&self, url: &Url) -> Vec<&Cookie> {
+        if !matches!(url.scheme(), Scheme::Http | Scheme::Https) || url.host().is_empty() {
+            return Vec::new();
+        }
+        self.cookies_for_url(url)
+            .into_iter()
+            .filter(|cookie| !cookie.http_only)
+            .collect()
+    }
+
+    /// Builds the `document.cookie` getter string (`name=value; ...`) for `url`, hiding `HttpOnly`.
+    pub fn document_cookie_string(&self, url: &Url) -> String {
+        let matching = self.cookies_for_document(url);
+        format_cookie_pairs(&matching)
+    }
+}
+
+fn format_cookie_pairs(matching: &[&Cookie]) -> String {
+    if matching.is_empty() {
+        return String::new();
+    }
+    let mut header = String::new();
+    const MAX_COOKIE_HEADER_BYTES: usize = 8 * 1024;
+    for (index, cookie) in matching.iter().enumerate() {
+        let entry_len = cookie.name.len() + 1 + cookie.value.len();
+        if header.len() + entry_len + 2 > MAX_COOKIE_HEADER_BYTES {
+            break;
+        }
+        if index > 0 {
+            header.push_str("; ");
+        }
+        header.push_str(&cookie.name);
+        header.push('=');
+        header.push_str(&cookie.value);
+    }
+    header
 }
 
 #[cfg(test)]
@@ -1170,5 +1221,47 @@ mod tests {
             jar.store_from_response(&origin, &headers(&[("Set-Cookie", &format!("c{index}=1"))]));
         }
         assert!(jar.len() <= MAX_COOKIES, "jar grew to {}", jar.len());
+    }
+
+    #[test]
+    fn document_cookie_hides_http_only_and_enforces_scope() {
+        let mut jar = CookieJar::new();
+        let origin = url("https://app.example.com/admin/panel");
+        let root_url = url("https://app.example.com/");
+        jar.store_from_response(
+            &origin,
+            &headers(&[
+                ("Set-Cookie", "sid=secret; HttpOnly; Path=/"),
+                ("Set-Cookie", "theme=dark; Path=/"),
+            ]),
+        );
+
+        // HttpOnly cookie is sent on HTTP requests, hidden from document.cookie.
+        assert_eq!(jar.document_cookie_string(&origin), "theme=dark");
+        let req_header = jar.header_for_url(&origin).unwrap();
+        assert!(req_header.contains("sid=secret"));
+        assert!(req_header.contains("theme=dark"));
+
+        // Script cannot set HttpOnly cookies, nor overwrite/delete existing HttpOnly cookies.
+        assert!(!jar.store_from_document(&origin, "evil=1; HttpOnly"));
+        assert!(!jar.store_from_document(&origin, "sid=pwned; Path=/"));
+        assert!(!jar.store_from_document(&origin, "sid=; Path=/; Max-Age=0"));
+        assert!(jar.header_for_url(&origin).unwrap().contains("sid=secret"));
+
+        // Script can set, overwrite, scope by Path/Domain, and delete via Max-Age=0.
+        assert!(jar.store_from_document(&origin, "pref=a; Path=/admin; Domain=example.com"));
+        assert_eq!(jar.document_cookie_string(&origin), "pref=a; theme=dark");
+        assert_eq!(jar.document_cookie_string(&root_url), "theme=dark");
+
+        assert!(jar.store_from_document(&origin, "theme=light; Path=/"));
+        assert_eq!(jar.document_cookie_string(&origin), "pref=a; theme=light");
+
+        assert!(jar.store_from_document(&origin, "theme=; Path=/; Max-Age=0"));
+        assert_eq!(jar.document_cookie_string(&origin), "pref=a");
+
+        // Opaque/file URLs cannot read or write cookies.
+        let file_origin = url("file:///tmp/index.html");
+        assert!(!jar.store_from_document(&file_origin, "a=1"));
+        assert_eq!(jar.document_cookie_string(&file_origin), "");
     }
 }

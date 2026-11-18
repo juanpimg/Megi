@@ -272,6 +272,8 @@ pub struct ScriptingHostContext {
     pub viewport: (u32, u32),
     /// Shared `localStorage` (see [`RenderStorage`]); `None` = per-render memory only.
     pub storage: Option<Arc<Mutex<RenderStorage>>>,
+    /// Shared cookie jar backing `document.cookie` (and HTTP requests); `None` = per-render jar.
+    pub cookie_jar: Option<Arc<Mutex<net::CookieJar>>>,
     /// Fetch configuration used by the ES module loader (`http(s)` imports share the same
     /// timeouts/caps/cookie jar as the rest of the render).
     pub fetch_options: net::FetchOptions,
@@ -308,6 +310,7 @@ impl ScriptingHostContext {
             media,
             viewport,
             storage: None,
+            cookie_jar: None,
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
@@ -328,6 +331,7 @@ impl ScriptingHostContext {
             media: css::MediaContext::with_viewport(800.0, 600.0),
             viewport: (800, 600),
             storage: None,
+            cookie_jar: None,
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
@@ -1123,6 +1127,35 @@ pub fn execute_scripts(
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner()) = entries.to_vec();
                 }
+            }),
+        });
+    }
+    {
+        let cookie_jar = host
+            .cookie_jar
+            .clone()
+            .or_else(|| host.fetch_options.cookie_jar.clone())
+            .unwrap_or_else(|| Arc::new(Mutex::new(net::CookieJar::new())));
+        let jar_get = Arc::clone(&cookie_jar);
+        let jar_set = Arc::clone(&cookie_jar);
+        runtime.set_cookie_provider(js::host::CookieProvider {
+            get: Box::new(move |url| {
+                let Ok(parsed) = Url::parse(url) else {
+                    return String::new();
+                };
+                jar_get
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .document_cookie_string(&parsed)
+            }),
+            set: Box::new(move |url, value| {
+                let Ok(parsed) = Url::parse(url) else {
+                    return;
+                };
+                let _ = jar_set
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .store_from_document(&parsed, value);
             }),
         });
     }

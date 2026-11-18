@@ -215,6 +215,17 @@ pub struct StorageProvider {
     pub save: StorageSaveFn,
 }
 
+/// Reads the `document.cookie` header string for the given document URL.
+pub type CookieGetFn = Box<dyn Fn(&str) -> String + Send + Sync>;
+/// Writes one `Set-Cookie`-style string from `document.cookie = ...` for the document URL.
+pub type CookieSetFn = Box<dyn Fn(&str, &str) + Send + Sync>;
+
+/// Injectable host cookie store backing `document.cookie`.
+pub struct CookieProvider {
+    pub get: CookieGetFn,
+    pub set: CookieSetFn,
+}
+
 /// Maximum simultaneous `MutationObserver` registrations per realm (#1134).
 pub(crate) const MAX_OBSERVERS: usize = 1024;
 /// Distinct nodes a single `MutationObserver` may track (#437).
@@ -412,6 +423,9 @@ pub(crate) struct Host {
     pub local_storage: StorageMap,
     pub session_storage: StorageMap,
     pub storage_provider: Option<StorageProvider>,
+    /// Optional host cookie jar provider and per-realm fallback store for `document.cookie`.
+    pub cookie_provider: Option<CookieProvider>,
+    pub cookies_fallback: Vec<(String, String)>,
     /// MutationObserver registrations and per-observer pending records.
     pub observers: Vec<ObserverRegistration>,
     /// Observed target `NodeId` -> `(observer_index_in_observers, target_options)` index (#1134).
@@ -488,6 +502,8 @@ impl Host {
             local_storage: StorageMap::default(),
             session_storage: StorageMap::default(),
             storage_provider: None,
+            cookie_provider: None,
+            cookies_fallback: Vec::new(),
             observers: Vec::new(),
             observer_index: HashMap::new(),
             active_element: None,
