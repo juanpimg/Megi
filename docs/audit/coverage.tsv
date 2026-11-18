@@ -404,9 +404,9 @@ crates/render/src/browser_host.rs	258	src	F2	wave1	2026-11-16	covered	#1212-#122
 crates/render/src/cache.rs	249	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/charset.rs	442	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/error.rs	135	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/images.rs	408	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/images.rs	864	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/inline_svg.rs	273	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
-crates/render/src/lib.rs	2297	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
+crates/render/src/lib.rs	2302	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/main.rs	357	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/scripts.rs	1825	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
 crates/render/src/stylesheets.rs	408	src	F2	wave1	2026-11-16	covered	#1212-#1227,#1299-#1306	
@@ -441,6 +441,7 @@ crates/render/tests/network_advanced_tests.rs	719	test	F1	waveF1	2026-11-17	cove
 crates/render/tests/pipeline_tests.rs	602	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/referrer_policy_tests.rs	355	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/render_cache.rs	48	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
+crates/render/tests/responsive_images_tests.rs	233	test	F1			pending		
 crates/render/tests/scripting_tests.rs	566	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/server_push_tests.rs	243	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/sri_tests.rs	334	test	F1			pending		
@@ -463,7 +464,7 @@ crates/shell/src/find.rs	692	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/forms.rs	1579	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/headless.rs	396	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/history.rs	388	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/images.rs	114	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/lib.rs	269	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/links.rs	491	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/main.rs	203	src	F2	wave1	2026-11-16	covered	#1163-#1178	
