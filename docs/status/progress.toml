@@ -36,7 +36,7 @@ tests = 2802
 tests_commit = "9318793"
 tests_date = "2026-11-18"
 crates = 14
-rust_lines = 208149
+rust_lines = 208096
 unsafe_forbidden_crates = 14
 
 [gate]

@@ -1,8 +1,8 @@
 //! Persistent browser session: tabs, per-tab history, zoom and scroll, stored as JSON.
 //!
 //! The session file lives in the user data directory (`$XDG_DATA_HOME/megi/session.json`,
-//! falling back to `~/.local/share/megi/session.json` and then `~/.megi/session.json`), or in
-//! an explicit path from `--session-file PATH`. `--no-session` disables persistence and
+//! falling back to `~/.local/share/megi/session.json`), or in an explicit path from
+//! `--session-file PATH`. `--no-session` disables persistence and
 //! headless mode never writes a session (documented). The format is a **small self-contained
 //! JSON document** (no external dependencies), versioned with [`SCHEMA_VERSION`]:
 //!
@@ -521,8 +521,8 @@ fn unique_temporary_path(path: &Path) -> PathBuf {
 
 /// Resolves the default session path from environment-like inputs (pure; tested).
 ///
-/// Order: `$XDG_DATA_HOME/megi/session.json`, `$HOME/.local/share/megi/session.json`,
-/// `$HOME/.megi/session.json`. Returns `None` when neither variable is usable.
+/// Order: `$XDG_DATA_HOME/megi/session.json`, then `$HOME/.local/share/megi/session.json`.
+/// Returns `None` when neither variable is usable.
 pub fn default_session_path(xdg_data_home: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
     if let Some(xdg) = xdg_data_home
         && !xdg.as_os_str().is_empty()
