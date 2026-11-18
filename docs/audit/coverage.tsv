@@ -19,7 +19,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	193	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .gitignore	46	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-.gitleaks.toml	26	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+.gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 CONTRIBUTING.md	337	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
@@ -484,7 +484,7 @@ crates/render/tests/websocket_e2e_tests.rs	110	test	F1	wave2	2026-11-18	covered	
 crates/render/tests/worker_tests.rs	50	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/shell/Cargo.toml	26	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/shell/src/a11y.rs	527	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/chrome.rs	3186	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/chrome.rs	3187	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/cli.rs	771	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/convert.rs	92	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/download.rs	735	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -494,7 +494,7 @@ crates/shell/src/find.rs	692	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/forms.rs	1579	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/headless.rs	454	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/history.rs	391	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/i18n.rs	179	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/shell/src/i18n.rs	214	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/lib.rs	274	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/links.rs	491	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -507,8 +507,8 @@ crates/shell/src/refresh.rs	206	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/scale.rs	173	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/session.rs	1445	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/tabs.rs	473	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/title.rs	370	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/tabs.rs	479	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/title.rs	387	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/window.rs	3200	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/worker.rs	1121	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
