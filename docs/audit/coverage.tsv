@@ -289,7 +289,7 @@ crates/layout/tests/bfc_conformance.rs	793	test	F1	waveF1	2026-11-17	covered	#13
 crates/layout/tests/bidi_tests.rs	119	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/calc.rs	628	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/container_queries.rs	179	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
-crates/layout/tests/deep_tree.rs	127	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/deep_tree.rs	120	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/flex.rs	493	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/float_budget.rs	168	test	F1			pending		
 crates/layout/tests/floats.rs	500	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
@@ -302,7 +302,7 @@ crates/layout/tests/inline_block.rs	143	test	F1	waveF1	2026-11-17	covered	#1380-
 crates/layout/tests/positioning.rs	326	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/proptest_layout.rs	287	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/replaced.rs	213	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
-crates/layout/tests/tables.rs	941	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
+crates/layout/tests/tables.rs	942	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/layout/tests/transform.rs	50	test	F1			pending		
 crates/layout/tests/typography_sticky.rs	349	test	F1	waveF1	2026-11-17	covered	#1380-#1385	
 crates/net/Cargo.toml	27	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -432,7 +432,7 @@ crates/render/tests/js_geometry_tests.rs	51	test	F1	waveF1	2026-11-17	covered	#1
 crates/render/tests/js_providers_tests.rs	225	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/mixed_content_tests.rs	147	test	F1			pending		
 crates/render/tests/module_scripts_tests.rs	181	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
-crates/render/tests/network_advanced_tests.rs	565	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
+crates/render/tests/network_advanced_tests.rs	583	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/pipeline_tests.rs	602	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/referrer_policy_tests.rs	355	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/render/tests/render_cache.rs	48	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
@@ -578,7 +578,7 @@ docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line:
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
 docs/superpowers/plans/2026-11-17-honest-progress.md	111	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
 docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-fuzz/Cargo.toml	213	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
+fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/mode2-oversize	0	exempt	-			exempt		not read line by line: exempt
@@ -594,6 +594,15 @@ fuzz/corpus/charset/utf16-bom	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/charset/utf8-ascii	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/charset/utf8-bom	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/charset/windows1252	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/bad-magic.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/empty.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/gzip-hello.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/random-corrupt.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/raw-deflate-hello.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/truncated-gzip.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/truncated-zlib.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/unsupported-method.bin	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/compression/zlib-hello.bin	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/container.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/named.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/queries.txt	0	exempt	-			exempt		not read line by line: exempt
@@ -740,25 +749,26 @@ fuzz/corpus/webp/webp_lossy.webp	0	exempt	-			exempt		not read line by line: exe
 fuzz/corpus/woff2_decode/huge_directory_length.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/open_sans.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/truncated.woff2	0	exempt	-			exempt		not read line by line: exempt
-fuzz/fuzz_targets/body_stream.rs	138	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/body_stream.rs	142	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/charset.rs	61	fuzz	F1			pending		
+fuzz/fuzz_targets/compression.rs	24	fuzz	F1			pending		
 fuzz/fuzz_targets/container_queries.rs	116	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/dom_mutate.rs	103	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/dom_mutate.rs	107	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_tree.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/exif_parse.rs	30	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/font_decode.rs	15	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/fonts_shape.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/fonts_shape.rs	37	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/h2_push.rs	141	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/hpack_decode.rs	75	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/html_parse.rs	70	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/hpack_decode.rs	74	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/html_parse.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/http_head.rs	12	fuzz	F1			pending		
 fuzz/fuzz_targets/image_decode.rs	62	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/js_eval.rs	330	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/js_module.rs	100	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/layout_resolve.rs	39	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/layout_tree.rs	24	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/net_surface.rs	54	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/net_surface.rs	55	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/net_url.rs	44	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/render_pipeline.rs	87	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
