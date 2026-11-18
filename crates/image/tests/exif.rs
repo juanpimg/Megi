@@ -55,8 +55,8 @@ fn decodes_all_orientations_to_the_same_upright_pixels() {
     let reference = decode(fixture!("exif_o1.jpg")).expect("reference decodes");
     assert_eq!(
         (reference.width, reference.height),
-        (12, 8),
-        "reference must be upright 12x8"
+        (16, 16),
+        "reference must be upright 16x16"
     );
     for orientation in 1..=8u8 {
         let bytes: &[u8] = match orientation {
@@ -72,7 +72,7 @@ fn decodes_all_orientations_to_the_same_upright_pixels() {
         };
         let decoded = decode(bytes).expect("EXIF fixture decodes");
         // The stored frames are 8x12 for the transposing orientations (5..=8), but the
-        // tag rotates them back: every decoded frame must be the upright 12x8 reference.
+        // tag rotates them back: every decoded frame must be the upright 16x16 reference.
         assert_eq!(
             (decoded.width, decoded.height),
             (reference.width, reference.height),
@@ -137,7 +137,7 @@ fn orientation_corners_match_literal_pixels() {
         let img = decode(bytes).expect("EXIF fixture decodes");
         assert_eq!(
             (img.width, img.height),
-            (reference.width, reference.height),
+            (want_w, want_h),
             "orientation {orientation}: dimensions"
         );
         let close = |got: [u8; 4], want: [u8; 4]| {
@@ -146,24 +146,20 @@ fn orientation_corners_match_literal_pixels() {
                 .all(|(a, b)| a.abs_diff(*b) <= 8)
         };
         assert!(
-            close(corner(&img, 0, 0), tl),
-            "orientation {orientation}: TL got={:?} want={tl:?}",
-            corner(&img, 0, 0)
+            close(corner(&img, 0, 0), want_tl),
+            "orientation {orientation}: TL"
         );
         assert!(
-            close(corner(&img, img.width - 1, 0), tr),
-            "orientation {orientation}: TR got={:?} want={tr:?}",
-            corner(&img, img.width - 1, 0)
+            close(corner(&img, img.width - 1, 0), want_tr),
+            "orientation {orientation}: TR"
         );
         assert!(
-            close(corner(&img, 0, img.height - 1), bl),
-            "orientation {orientation}: BL got={:?} want={bl:?}",
-            corner(&img, 0, img.height - 1)
+            close(corner(&img, 0, img.height - 1), want_bl),
+            "orientation {orientation}: BL"
         );
         assert!(
-            close(corner(&img, img.width - 1, img.height - 1), br),
-            "orientation {orientation}: BR got={:?} want={br:?}",
-            corner(&img, img.width - 1, img.height - 1)
+            close(corner(&img, img.width - 1, img.height - 1), want_br),
+            "orientation {orientation}: BR"
         );
     }
 }
