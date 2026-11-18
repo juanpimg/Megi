@@ -95,6 +95,9 @@ jobs:
       # (docs/audit/README.md).
       - name: Audit coverage ledger
         run: python3 tools/audit_coverage.py --check
+      # One canonical copy per fixture byte sequence (#1432): render aliases are symlinks.
+      - name: Fixture hash uniqueness
+        run: python3 tools/check_fixture_hashes.py
       - name: Tools tests (all modules)
         # Run every tools test module explicitly (#1402): a `test_*.py` glob would also
         # pick up test_inspector.py, which is a CLI, not a test module.

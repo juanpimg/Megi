@@ -122,3 +122,11 @@ regenerated after the task-53 (table cell text) and WP-5.9 (CSS background image
 text/bold headers and the showcase header/stage carry a checker pattern while the
 feature list uses a PNG bullet marker. See `showcase/README.md` for the statistics and
 the known layout limitations reflected in the golden.
+
+## Canonical fixture bytes (#1432)
+
+Assets in `assets/` that also exist under `crates/image/tests/fixtures/` (or
+`crates/fonts/tests/fixtures/`) are **symlinks** to the canonical copy. This keeps every
+fixture path used by the HTML pages working while storing each byte sequence once.
+`tools/check_fixture_hashes.py` (CI: *Fixture hash uniqueness*) rejects new duplicated
+regular files.

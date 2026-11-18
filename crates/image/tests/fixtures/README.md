@@ -50,3 +50,9 @@ The pipeline is deterministic, so the decoded pixels must match the committed
 `tests/fixtures/phase4/basic.rgba` golden byte for byte (the test asserts it).
 If the paint golden (`basic.rgba`) is intentionally updated, regenerate
 `basic.png` with the same command in the same commit.
+
+## Canonical fixture bytes (#1432)
+
+`jpeg/color_baseline.jpg` is a symlink to `jpeg/baseline_420.jpg` (identical bytes).
+Render-side aliases under `tests/fixtures/render/assets/` also symlink into this tree.
+`tools/check_fixture_hashes.py` rejects duplicate regular files.
