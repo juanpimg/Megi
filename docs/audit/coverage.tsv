@@ -9,7 +9,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	469	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	472	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/coverage.yml	76	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -137,7 +137,7 @@ crates/image/src/webp.rs	1437	src	F2	wave1	2026-11-16	covered	#1148-#1151
 crates/image/tests/data/zlib_vectors.rs	258	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/decode.rs	338	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/exif.rs	205	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
-crates/image/tests/fixtures/README.md	52	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
+crates/image/tests/fixtures/README.md	58	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate.py	308	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate_jpeg_gif.py	202	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
 crates/image/tests/fixtures/generate_webp.py	235	test	F1	waveF1	2026-11-17	covered	#1364,#1365,#1371	
@@ -802,7 +802,7 @@ tests/fixtures/real-sites/wikipedia.html	680	fixture	F1	waveF1	2026-11-17	covere
 tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/OpenSans-Regular-latin-corrupt.woff2	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/README.md	124	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/README.md	132	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/aspect_ratio.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/bg_photo.jpg	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/blocks.gif	0	binary	-			exempt		not read line by line: binary
@@ -1141,6 +1141,7 @@ tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	197	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/check_fixture_hashes.py	50	tool	F3			pending		
 tools/coverage_report.py	127	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/dev.sh	58	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
