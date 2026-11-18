@@ -19,3 +19,8 @@ rules = ["generic-api-key"]
 description = "Vendored real-site HTML fixture: minified page scripts trip the generic-api-key entropy heuristic"
 paths = ['''^tests/fixtures/real-sites/wikipedia\.html$''']
 rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "RFC 6455 sample Sec-WebSocket-Key in WebSocket tests is a public constant, not a credential"
+paths = ["^crates/net/src/websocket\\.rs$"]
+rules = ["generic-api-key"]

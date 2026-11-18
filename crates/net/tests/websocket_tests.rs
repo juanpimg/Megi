@@ -51,18 +51,14 @@ fn serve() -> (u16, JoinHandle<()>) {
         let key = request
             .lines()
             .find_map(|line| {
-                line.split_once(':').and_then(|(name, value)| {
-                    if name.eq_ignore_ascii_case("sec-websocket-key") {
-                        Some(value.trim().to_owned())
-                    } else {
-                        None
-                    }
-                })
+                line.split_once(':')
+                    .filter(|(name, _)| name.eq_ignore_ascii_case("Sec-WebSocket-Key"))
+                    .map(|(_, value)| value.trim().to_owned())
             })
-            .expect("Sec-WebSocket-Key");
+            .expect("client key");
+        let accept = net::websocket::accept_value(&key);
         let response = format!(
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
-            accept_value(&key)
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
         );
         stream
             .write_all(response.as_bytes())
