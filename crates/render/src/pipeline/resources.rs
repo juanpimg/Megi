@@ -7,7 +7,7 @@ use std::time::Instant;
 
 use super::imports::stylesheet_signature;
 use super::state::{ParsedDocumentInput, ResourceStageOutput, ScriptContext};
-use super::styles::{collect_styles, resolve_styles_with_state};
+use super::styles::collect_styles;
 use crate::RenderError;
 use crate::images::ImageLimits;
 use crate::{backgrounds, frames, images, inline_svg, webfonts};
@@ -46,6 +46,7 @@ pub(crate) fn run_resource_stage<'a>(
         media_context,
         reusable_stylesheets,
         mut pre_warnings,
+        transition_from_styles,
         pre_scripted_frames,
         scripts_executed,
         #[cfg(feature = "js")]
@@ -88,7 +89,7 @@ pub(crate) fn run_resource_stage<'a>(
             )?
         }
     };
-    let (styles, pseudo_styles) = resolve_styles_with_state(
+    let (styles, pseudo_styles) = super::styles::resolve_styles_with_state_and_transitions(
         &document,
         &stylesheet_collection,
         megi_css::StateContext::new(),
@@ -97,6 +98,7 @@ pub(crate) fn run_resource_stage<'a>(
             options.viewport.width as f32,
             options.viewport.height as f32,
         ),
+        transition_from_styles.as_deref(),
     );
     let styles_time = styles_start.elapsed();
 

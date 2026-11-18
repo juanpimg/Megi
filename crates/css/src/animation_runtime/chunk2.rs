@@ -162,6 +162,7 @@ pub(crate) mod tests {
     use super::*;
     use crate::animation::{
         AnimationDirection, AnimationSpec, FillMode, IterationCount, TimingFunction,
+        TransitionProperty, TransitionSpec,
     };
     use crate::parser::parse_stylesheet;
 
@@ -335,5 +336,83 @@ pub(crate) mod tests {
         assert!((mid.opacity - 0.5).abs() < 1e-4);
         let done = apply_transitions(&from, &to, 1200.0);
         assert!((done.opacity - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn explicit_transition_none_or_property_overrides_earlier_all_spec() {
+        let mut from = ComputedStyle::initial();
+        from.opacity = 0.0;
+        from.width = Length::Px(100.0);
+
+        let mut to = ComputedStyle::initial();
+        to.opacity = 1.0;
+        to.width = Length::Px(200.0);
+        to.transitions = vec![
+            TransitionSpec {
+                property: TransitionProperty::All,
+                duration_ms: 1000.0,
+                delay_ms: 0.0,
+                timing: TimingFunction::Linear,
+            },
+            TransitionSpec {
+                property: TransitionProperty::Property("opacity".to_owned()),
+                duration_ms: 0.0,
+                delay_ms: 0.0,
+                timing: TimingFunction::Linear,
+            },
+        ];
+
+        let half = apply_transitions(&from, &to, 500.0);
+        assert!((half.opacity - 1.0).abs() < 1e-4);
+        assert_eq!(half.width, Length::Px(150.0));
+    }
+
+    #[test]
+    fn collects_animation_and_transition_timeline_events() {
+        use super::super::chunk3::{collect_animation_events, collect_transition_events};
+
+        let rules = keyframes("@keyframes fade { from { opacity: 0 } to { opacity: 1 } }");
+        let mut spec = animation("fade", 500.0);
+        spec.iteration_count = IterationCount::Number(2.0);
+        spec.delay_ms = 100.0;
+
+        assert!(collect_animation_events(std::slice::from_ref(&spec), &rules, 50.0).is_empty());
+
+        let mid = collect_animation_events(std::slice::from_ref(&spec), &rules, 650.0);
+        assert_eq!(
+            mid.iter().map(|e| e.event_type).collect::<Vec<_>>(),
+            vec!["animationstart", "animationiteration"]
+        );
+        assert!((mid[1].elapsed_time_secs - 0.5).abs() < 1e-4);
+
+        let end = collect_animation_events(std::slice::from_ref(&spec), &rules, 1100.0);
+        assert_eq!(
+            end.iter().map(|e| e.event_type).collect::<Vec<_>>(),
+            vec!["animationstart", "animationiteration", "animationend"]
+        );
+        assert!((end[2].elapsed_time_secs - 1.0).abs() < 1e-4);
+
+        let mut from = ComputedStyle::initial();
+        from.opacity = 0.0;
+        let mut to = ComputedStyle::initial();
+        to.opacity = 1.0;
+        to.transitions = vec![TransitionSpec {
+            property: TransitionProperty::Property("opacity".to_owned()),
+            duration_ms: 400.0,
+            delay_ms: 100.0,
+            timing: TimingFunction::Linear,
+        }];
+
+        let queued = collect_transition_events(&from, &to, 50.0);
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].event_type, "transitionrun");
+
+        let finished = collect_transition_events(&from, &to, 500.0);
+        assert_eq!(
+            finished.iter().map(|e| e.event_type).collect::<Vec<_>>(),
+            vec!["transitionrun", "transitionstart", "transitionend"]
+        );
+        assert_eq!(finished[2].property_name, "opacity");
+        assert!((finished[2].elapsed_time_secs - 0.4).abs() < 1e-4);
     }
 }

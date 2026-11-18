@@ -117,6 +117,22 @@ impl JsRuntime {
         let _ = with_context_host(&mut self.context, |host| host.active_element = node);
     }
 
+    /// Returns `true` when at least one listener or inline handler is registered for any event in
+    /// `event_types`. Used by the renderer to skip building CSS event objects nobody observes.
+    pub fn has_any_event_listener(&self, event_types: &[&str]) -> bool {
+        host_ref(&self.context)
+            .map(|host| {
+                host.listeners
+                    .iter()
+                    .any(|listener| event_types.contains(&listener.event_type.as_str()))
+                    || host
+                        .inline_handlers
+                        .iter()
+                        .any(|handler| event_types.contains(&handler.event_type.as_str()))
+            })
+            .unwrap_or(false)
+    }
+
     /// Pushes the runtime's configured budget into the Boa VM.
     pub(crate) fn apply_current_budget(&mut self) {
         let budget = self.budget;

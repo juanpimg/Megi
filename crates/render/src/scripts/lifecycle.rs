@@ -161,6 +161,65 @@ pub(crate) fn run_lifecycle_events(
     }
     drain_microtasks(runtime, warnings);
     run_event_loop(runtime, limits, &mut loop_state, warnings);
+
+    // 6. CSS animation/transition timeline events (#941, #942). Checked lazily so pages
+    // with no timeline listeners incur no style-resolution or event-object cost.
+    const TIMELINE_EVENT_NAMES: [&str; 6] = [
+        "animationstart",
+        "animationiteration",
+        "animationend",
+        "transitionrun",
+        "transitionstart",
+        "transitionend",
+    ];
+    const MAX_TIMELINE_EVENTS: usize = 256;
+    if runtime.has_any_event_listener(&TIMELINE_EVENT_NAMES)
+        && let Some(provider) = &host.timeline_events_provider
+    {
+        let virtual_elapsed_ms = loop_state.virtual_time_ms.saturating_sub(VIRTUAL_EPOCH_MS) as f64;
+        let effective_time_ms = host.animation_time_ms.max(virtual_elapsed_ms) as f32;
+        let timeline_events = {
+            let doc_snapshot = runtime.document();
+            provider(&doc_snapshot, effective_time_ms)
+        };
+        for event in timeline_events.into_iter().take(MAX_TIMELINE_EVENTS) {
+            let kind = match event.kind {
+                super::TimelineEventKind::Animation {
+                    animation_name,
+                    elapsed_time_secs,
+                } => megi_js::JsUiEventKind::Animation {
+                    animation_name,
+                    elapsed_time: elapsed_time_secs,
+                    pseudo_element: String::new(),
+                },
+                super::TimelineEventKind::Transition {
+                    property_name,
+                    elapsed_time_secs,
+                } => megi_js::JsUiEventKind::Transition {
+                    property_name,
+                    elapsed_time: elapsed_time_secs,
+                    pseudo_element: String::new(),
+                },
+            };
+            if let Err(error) = runtime.dispatch_ui_event(
+                megi_js::JsEventTarget::Node(event.target),
+                event.event_type,
+                true,
+                false,
+                &kind,
+            ) {
+                warnings.push(format!(
+                    "dispatching timeline event {} failed: {error}",
+                    event.event_type
+                ));
+            } else {
+                execution.events_dispatched += 1;
+            }
+        }
+        drain_microtasks(runtime, warnings);
+        run_event_loop(runtime, limits, &mut loop_state, warnings);
+    }
+
     // Final microtask checkpoint: MutationObserver records queued by the last timer/host
     // callback callbacks are delivered **before** the document is handed back, so their
     // own DOM mutations are included in the re-render.

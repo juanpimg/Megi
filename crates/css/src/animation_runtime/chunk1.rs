@@ -132,6 +132,9 @@ pub fn apply_animations(
         };
         apply_keyframes(&mut style, base, rule, &spec.timing, progress);
     }
+    // CSS animations mutate the computed style after the cascade's fingerprint pass; layout
+    // interning must see the final animated value (#941).
+    style.refresh_fingerprint();
     style
 }
 
@@ -286,6 +289,24 @@ pub fn transition_progress(spec: &TransitionSpec, elapsed_ms: f32) -> Option<(f3
     Some((evaluate_timing_function(&spec.timing, linear), linear))
 }
 
+/// Resolves the winning [`TransitionSpec`] for `property` (last matching rule wins per
+/// CSS Transitions §2). An explicit `none` for the property suppresses earlier `all` specs.
+pub(crate) fn effective_transition_spec<'a>(
+    transitions: &'a [TransitionSpec],
+    property: &str,
+) -> Option<&'a TransitionSpec> {
+    let mut matched: Option<&'a TransitionSpec> = None;
+    for spec in transitions {
+        match &spec.property {
+            TransitionProperty::None => return None,
+            TransitionProperty::All => matched = Some(spec),
+            TransitionProperty::Property(target) if target == property => matched = Some(spec),
+            TransitionProperty::Property(_) => {}
+        }
+    }
+    matched
+}
+
 /// Interpolates CSS transitions between `from` and `to` at `elapsed_ms`.
 pub fn apply_transitions(
     from: &ComputedStyle,
@@ -296,33 +317,20 @@ pub fn apply_transitions(
     if to.transitions.is_empty() || !elapsed_ms.is_finite() {
         return style;
     }
-    for spec in &to.transitions {
+    for &prop in ANIMATABLE_PROPERTIES {
+        let Some(spec) = effective_transition_spec(&to.transitions, prop) else {
+            continue;
+        };
         let Some((eased, local)) = transition_progress(spec, elapsed_ms) else {
             continue;
         };
-        match &spec.property {
-            TransitionProperty::None => continue,
-            TransitionProperty::All => {
-                for &prop in ANIMATABLE_PROPERTIES {
-                    if let (Some(a), Some(b)) =
-                        (base_animatable(prop, from), base_animatable(prop, to))
-                        && a != b
-                    {
-                        interpolate_animatable(&mut style, prop, a, b, eased, local);
-                    }
-                }
-            }
-            TransitionProperty::Property(prop) => {
-                if is_animatable(prop)
-                    && let (Some(a), Some(b)) =
-                        (base_animatable(prop, from), base_animatable(prop, to))
-                    && a != b
-                {
-                    interpolate_animatable(&mut style, prop, a, b, eased, local);
-                }
-            }
+        if let (Some(a), Some(b)) = (base_animatable(prop, from), base_animatable(prop, to))
+            && a != b
+        {
+            interpolate_animatable(&mut style, prop, a, b, eased, local);
         }
     }
+    style.refresh_fingerprint();
     style
 }
 

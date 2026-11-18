@@ -52,3 +52,8 @@ pub(crate) use chunk2::interpolate_property;
 pub(crate) use chunk2::lerp_color;
 #[allow(unused_imports)]
 pub(crate) use chunk2::write_property;
+mod chunk3;
+pub use chunk3::{
+    AnimationEventKind, ScheduledAnimationEvent, ScheduledTransitionEvent, TransitionEventKind,
+    collect_animation_events, collect_transition_events,
+};

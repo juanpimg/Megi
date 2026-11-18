@@ -235,6 +235,44 @@ pub struct ScriptingHostContext {
     pub sandbox_flags: Option<megi_js::SandboxFlags>,
     /// Current nesting depth in the frame tree (`0` for top-level document).
     pub frame_depth: usize,
+    /// Deterministic animation/transition timeline timestamp (`RenderOptions::time_ms`).
+    #[cfg(feature = "js")]
+    pub animation_time_ms: f64,
+    /// Lazy post-script animation/transition event resolver invoked only when listeners exist (#941).
+    #[cfg(feature = "js")]
+    pub timeline_events_provider: Option<TimelineEventsProvider>,
+}
+
+/// Callback that computes deterministic CSS animation and transition events for a document.
+#[cfg(feature = "js")]
+pub type TimelineEventsProvider = Arc<dyn Fn(&Document, f32) -> Vec<TimelineEvent> + Send + Sync>;
+
+/// Deterministic CSS animation/transition DOM event computed from style diffs (#941).
+#[cfg(feature = "js")]
+#[derive(Clone, Debug)]
+pub struct TimelineEvent {
+    /// Element receiving the event.
+    pub target: NodeId,
+    /// DOM event type (`"animationstart"`, `"animationend"`, `"transitionend"`, ...).
+    pub event_type: &'static str,
+    /// Typed event payload.
+    pub kind: TimelineEventKind,
+}
+
+/// Typed payload for [`TimelineEvent`].
+#[cfg(feature = "js")]
+#[derive(Clone, Debug)]
+pub enum TimelineEventKind {
+    /// `AnimationEvent` payload.
+    Animation {
+        animation_name: String,
+        elapsed_time_secs: f64,
+    },
+    /// `TransitionEvent` payload.
+    Transition {
+        property_name: String,
+        elapsed_time_secs: f64,
+    },
 }
 
 impl ScriptingHostContext {
@@ -265,6 +303,10 @@ impl ScriptingHostContext {
             #[cfg(feature = "js")]
             sandbox_flags: None,
             frame_depth: 0,
+            #[cfg(feature = "js")]
+            animation_time_ms: 0.0,
+            #[cfg(feature = "js")]
+            timeline_events_provider: None,
         }
     }
 
@@ -292,6 +334,10 @@ impl ScriptingHostContext {
             #[cfg(feature = "js")]
             sandbox_flags: None,
             frame_depth: 0,
+            #[cfg(feature = "js")]
+            animation_time_ms: 0.0,
+            #[cfg(feature = "js")]
+            timeline_events_provider: None,
         }
     }
 }

@@ -4,11 +4,11 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `55ed6a74` (2026-11-19) · coverage **77%** (54/70) · **2,881** tests · conformance **PASS** · **17** crates · **218,050** lines of Rust
+**Snapshot** — commit `60c9eea6` (2026-11-19) · coverage **79%** (55/70) · **2,886** tests · conformance **PASS** · **17** crates · **219,063** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
-[Open the capability coverage report](docs/status/coverage.html) — **54/70** implemented, 2 partial. [Rules](docs/status/COVERAGE.md). [Real-site render check](docs/status/real-sites.html). [Progress map SVG](docs/status/progress.svg).
+[Open the capability coverage report](docs/status/coverage.html) — **55/70** implemented, 2 partial. [Rules](docs/status/COVERAGE.md). [Real-site render check](docs/status/real-sites.html). [Progress map SVG](docs/status/progress.svg).
 
 ## Progress map (legacy feature checklist)
 
@@ -23,7 +23,7 @@
 | **F5** | Networking & fetch | `████████████████████` | 100% |
 | **F6** | JavaScript & DOM APIs | `████████████████████` | 100% |
 | **F7** | Desktop shell (browser UI) | `███████████████████░` | 99% |
-| | **Coverage** | `███████████████░░░░░` | **77%** |
+| | **Coverage** | `███████████████░░░░░` | **79%** |
 
 ## What is done and what remains
 
@@ -152,10 +152,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `55ed6a74` (2026-11-19) |
+| Commit | `60c9eea6` (2026-11-19) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 218050 |
-| Tests (`cargo test --workspace -- --list`) | 2881 |
+| Lines of Rust (tracked `.rs`) | 219063 |
+| Tests (`cargo test --workspace -- --list`) | 2886 |
 | Crates with `#![forbid(unsafe_code)]` | 16 / 17 |
 | Conformance gate | **PASS** |
 

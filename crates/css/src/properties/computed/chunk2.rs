@@ -133,6 +133,11 @@ impl ComputedStyle {
         self.style_fingerprint = StyleFingerprint::new(self.compute_fingerprint());
     }
 
+    /// Recomputes and caches the layout-interning style fingerprint after mutating fields.
+    pub fn refresh_fingerprint(&mut self) {
+        self.style_fingerprint = StyleFingerprint::new(self.compute_fingerprint());
+    }
+
     /// Returns the cached value fingerprint used by layout's style interning.
     ///
     /// `0` means "not computed" (hand-built styles); layout then calls

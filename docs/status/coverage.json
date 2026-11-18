@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 54,
+    "implemented": 55,
     "partial": 2,
     "known": 70,
-    "percent": 77,
+    "percent": 79,
     "unverified": [],
     "invalid_states": []
   },
@@ -18,10 +18,10 @@
     },
     {
       "id": "F2",
-      "implemented": 8,
+      "implemented": 9,
       "partial": 0,
       "known": 9,
-      "percent": 89
+      "percent": 100
     },
     {
       "id": "F3",
@@ -67,16 +67,6 @@
     }
   ],
   "missing": [
-    {
-      "id": "F2-ANIM-RUNTIME",
-      "area": "F2",
-      "name": "Animaciones CSS @keyframes/transition en runtime",
-      "source": "issue #941 / #942",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 941,
-      "reason": "no requiere evidencia"
-    },
     {
       "id": "F3-TABLE-CENTER",
       "area": "F3",

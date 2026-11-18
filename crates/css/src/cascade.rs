@@ -119,11 +119,17 @@ pub use chunk4::apply_animations_to_pseudo_styles;
 #[allow(unused_imports)]
 pub use chunk4::apply_animations_to_styles;
 #[allow(unused_imports)]
+pub use chunk4::apply_transitions_to_pseudo_styles;
+#[allow(unused_imports)]
+pub use chunk4::apply_transitions_to_styles;
+#[allow(unused_imports)]
 pub(crate) use chunk4::floor_char_boundary_utf8;
 #[allow(unused_imports)]
 pub use chunk4::parse_inline_declarations;
 #[allow(unused_imports)]
 pub use chunk4::parse_inline_style;
+#[allow(unused_imports)]
+pub use chunk4::previous_style_slot_lookup;
 #[allow(unused_imports)]
 pub use chunk4::resolve_backdrop_color;
 #[allow(unused_imports)]

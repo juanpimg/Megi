@@ -104,3 +104,5 @@ pub use types::{
     LoadedScript, RenderStorage, ScriptBudget, ScriptCandidate, ScriptExecution, ScriptLoadReport,
     ScriptingHostContext, ScriptingLimits, VIRTUAL_TIME_STEP_MS,
 };
+#[cfg(feature = "js")]
+pub use types::{TimelineEvent, TimelineEventKind, TimelineEventsProvider};

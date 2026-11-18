@@ -217,6 +217,76 @@ pub(crate) fn run_script_stage<'a>(
             }
             host_context.sandbox_flags = frame_ctx.sandbox_flags;
         }
+        #[cfg(feature = "js")]
+        {
+            host_context.animation_time_ms = options.time_ms;
+            let transition_from = options
+                .transition_from_styles
+                .clone()
+                .or_else(|| pre_script_styles.clone());
+            let timeline_media = media_context.clone();
+            host_context.timeline_events_provider = Some(Arc::new(
+                move |post_doc: &megi_core::Document, elapsed_ms: f32| {
+                    // Rebuild the author stylesheet set from the post-script DOM: scripts may
+                    // have inserted `<style>` elements after the pre-script cascade (#941).
+                    let mut collection = megi_css::create_user_agent_style_collection();
+                    collection.media = timeline_media.clone();
+                    for style_el in post_doc.get_elements_by_tag_name("style") {
+                        collection
+                            .add_css(&post_doc.text_content(style_el), megi_css::Origin::Author);
+                    }
+                    let (post_styles, _) =
+                        megi_css::resolve_document_styles_from_collection(post_doc, &collection);
+                    let slot_lookup = transition_from
+                        .as_deref()
+                        .and_then(|m| megi_css::cascade::previous_style_slot_lookup(post_doc, m));
+                    let mut out = Vec::new();
+                    for node_id in post_doc.descendants(post_doc.root()) {
+                        let Some(to) = post_styles.get(&node_id) else {
+                            continue;
+                        };
+                        if !to.animations.is_empty() && !collection.keyframes.is_empty() {
+                            for ev in megi_css::animation_runtime::collect_animation_events(
+                                &to.animations,
+                                &collection.keyframes,
+                                elapsed_ms,
+                            ) {
+                                out.push(scripts::TimelineEvent {
+                                    target: node_id,
+                                    event_type: ev.event_type,
+                                    kind: scripts::TimelineEventKind::Animation {
+                                        animation_name: ev.animation_name,
+                                        elapsed_time_secs: ev.elapsed_time_secs,
+                                    },
+                                });
+                            }
+                        }
+                        let from_style = match (&slot_lookup, transition_from.as_deref()) {
+                            (Some(by_slot), _) => by_slot.get(&node_id.slot()).copied(),
+                            (None, Some(m)) => m.get(&node_id),
+                            (None, None) => None,
+                        };
+                        if !to.transitions.is_empty()
+                            && let Some(from) = from_style
+                        {
+                            for ev in megi_css::animation_runtime::collect_transition_events(
+                                from, to, elapsed_ms,
+                            ) {
+                                out.push(scripts::TimelineEvent {
+                                    target: node_id,
+                                    event_type: ev.event_type,
+                                    kind: scripts::TimelineEventKind::Transition {
+                                        property_name: ev.property_name,
+                                        elapsed_time_secs: ev.elapsed_time_secs,
+                                    },
+                                });
+                            }
+                        }
+                    }
+                    out
+                },
+            ));
+        }
         host_context.frame_depth = frame_depth;
         host_context.storage = if opaque_origin {
             None
@@ -339,6 +409,10 @@ pub(crate) fn run_script_stage<'a>(
             media_context,
             reusable_stylesheets,
             pre_warnings,
+            transition_from_styles: options
+                .transition_from_styles
+                .clone()
+                .or_else(|| pre_script_styles.clone()),
             pre_scripted_frames,
             scripts_executed,
             #[cfg(feature = "js")]

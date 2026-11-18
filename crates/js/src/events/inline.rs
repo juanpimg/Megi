@@ -104,6 +104,42 @@ inline_handler_accessors!(
         "onmessage",
         "message"
     ),
+    (
+        inline_onanimationstart_get,
+        inline_onanimationstart_set,
+        "onanimationstart",
+        "animationstart"
+    ),
+    (
+        inline_onanimationiteration_get,
+        inline_onanimationiteration_set,
+        "onanimationiteration",
+        "animationiteration"
+    ),
+    (
+        inline_onanimationend_get,
+        inline_onanimationend_set,
+        "onanimationend",
+        "animationend"
+    ),
+    (
+        inline_ontransitionrun_get,
+        inline_ontransitionrun_set,
+        "ontransitionrun",
+        "transitionrun"
+    ),
+    (
+        inline_ontransitionstart_get,
+        inline_ontransitionstart_set,
+        "ontransitionstart",
+        "transitionstart"
+    ),
+    (
+        inline_ontransitionend_get,
+        inline_ontransitionend_set,
+        "ontransitionend",
+        "transitionend"
+    ),
 );
 
 /// Inline handler accessor pairs shared with node/document wrappers.
