@@ -1492,6 +1492,7 @@ version = "0.1.0"
 dependencies = [
  "megi-core",
  "megi-css",
+ "megi-display",
  "megi-fonts",
  "megi-html",
  "megi-image",
@@ -1499,6 +1500,7 @@ dependencies = [
  "megi-layout",
  "megi-net",
  "megi-paint",
+ "megi-raster",
  "megi-svg",
  "rcgen",
  "rustls",

@@ -30,7 +30,7 @@
 //!
 //! ## Hit-testing (WP-7.5b)
 //!
-//! [`RenderOutput::hit_regions`] carries `paint`'s additive [`megi_paint::HitRegion`] list
+//! [`RenderOutput::hit_regions`] carries `paint`'s additive [`megi_display::HitRegion`] list
 //! produced by the same paint pass as [`RenderOutput::display_list`]: element
 //! backgrounds/borders, text runs (inheriting their owner element's DOM node), decorations,
 //! replaced images and list markers in painting order, clipped at emission time. The PNG
@@ -169,7 +169,7 @@
 //!   sfnt with pure-Rust `woff2` (Apache-2.0). Faces are registered under their CSS family
 //!   alias in a per-render [`megi_fonts::FontDatabase`] (bundled faces + web faces) that is used
 //!   by **both** layout ([`megi_layout::FontTextMeasurer`]) and paint
-//!   ([`megi_paint::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
+//!   ([`megi_raster::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
 //!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
 //!   plus `timings.fonts` are reported (`--json` includes them).
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
@@ -727,7 +727,7 @@ pub struct RenderOutput {
     /// pixmap to encode lazily exactly once.
     pub png: Vec<u8>,
     /// Rasterized pixel buffer (opaque white canvas).
-    pub pixmap: megi_paint::Pixmap,
+    pub pixmap: megi_raster::Pixmap,
     /// Parsed DOM document.
     pub document: Document,
     /// Computed styles per element.
@@ -735,10 +735,10 @@ pub struct RenderOutput {
     /// Laid-out root box.
     pub layout: megi_layout::LayoutBox,
     /// Flat display list consumed by the rasterizer.
-    pub display_list: megi_paint::DisplayList,
+    pub display_list: megi_display::DisplayList,
     /// Additive hit-testing regions (paint order) produced by the same paint pass as
     /// [`Self::display_list`]; the PNG is byte-identical with or without them.
-    pub hit_regions: Vec<megi_paint::HitRegion>,
+    pub hit_regions: Vec<megi_display::HitRegion>,
     /// Final document URL (after HTTP redirects).
     pub document_url: Url,
     /// `location.assign/replace/reload` requests made by page scripts, in execution
@@ -1564,7 +1564,7 @@ fn render_parsed_document_inner(
     let paint_time = paint_start.elapsed();
 
     let raster_start = Instant::now();
-    let pixmap = megi_paint::rasterize_display_list_with_font_database(
+    let pixmap = megi_raster::rasterize_display_list_with_font_database(
         &display_list,
         options.viewport.width,
         options.viewport.height,
@@ -1786,7 +1786,7 @@ fn render_svg_document(
     let display_items = display_list.items.len();
     let hit_region_count = hit_regions.len();
 
-    let pixmap = megi_paint::rasterize_display_list_with_font_database(
+    let pixmap = megi_raster::rasterize_display_list_with_font_database(
         &display_list,
         options.viewport.width,
         options.viewport.height,

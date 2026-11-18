@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Architecture linter for the Megi workspace.
 
-Checks the crate DAG, forbidden ownership patterns and file-size limits.
+Checks the production crate DAG, forbidden ownership patterns and file-size limits.
+Dev-dependencies are intentionally excluded (e.g. `megi-net` uses `megi-js` only
+in PAC tests), so "no Boa in the light build" means `cargo tree -e normal`.
 Anything recorded in docs/architecture-baseline.json is reported as `legacy`
 (informational); anything new is a violation (exit 1).
 """

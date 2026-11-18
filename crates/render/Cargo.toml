@@ -23,6 +23,8 @@ megi-css.workspace = true
 megi-layout.workspace = true
 megi-fonts.workspace = true
 megi-paint.workspace = true
+megi-display.workspace = true
+megi-raster.workspace = true
 megi-net.workspace = true
 megi-image.workspace = true
 megi-js = { workspace = true, optional = true }

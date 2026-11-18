@@ -22,7 +22,7 @@
 | 2.1 `megi-display` | ✅ complete | `DisplayItem`/`DisplayList`/`HitRegion` moved, ownership test |
 | 2.2 `megi-raster` | ✅ complete | rasterizer/PNG moved, PNG md5 `e943565…` before = after |
 | 3.1 PAC inversion | ✅ complete | `PacEvaluator` trait; `cargo tree -e normal` has zero Boa |
-| 4.1 de-Rc JS runtime | ⏳ deferred | 11k-line `runtime.rs` and `Rc<RefCell<Host>>` still present; needs its own atomic refactor with WPT gate |
+| 4.1 de-Rc JS runtime | ⏳ deferred | 11k-line `runtime.rs` and `Rc<RefCell<Host>>` still present; the planned re-entrancy test (timer callback mutating DOM while another callback is active) does **not** exist yet and must be written first when this task resumes |
 | 5.1 `megi-webview` | ✅ complete | load/frame/hit-test/history/events; light graph has zero Boa/winit/softbuffer |
 | 6.1 thin `megi-browser` | ✅ complete | browser deps = webview + winit + softbuffer; 60 shell tests pass |
 | 7.1 feature matrix + CI | ✅ complete | `megi-test-harness/js` optional; CI checks light WebView |
