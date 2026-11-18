@@ -24,6 +24,7 @@ use crate::error::JsError;
 pub struct ImportMap {
     exact: BTreeMap<String, Option<String>>,
     prefixes: BTreeMap<String, Option<String>>,
+    integrity: BTreeMap<String, String>,
 }
 
 impl ImportMap {
@@ -35,6 +36,7 @@ impl ImportMap {
             .as_object()
             .ok_or_else(|| JsError::ImportMap("root is not an object".to_string()))?;
         let mut map = Self::default();
+        const MAX_IMPORTS: usize = 1024;
         if let Some(imports) = root
             .iter()
             .find(|(key, _)| key == "imports")
@@ -43,7 +45,6 @@ impl ImportMap {
             let imports = imports
                 .as_object()
                 .ok_or_else(|| JsError::ImportMap("`imports` is not an object".to_string()))?;
-            const MAX_IMPORTS: usize = 1024;
             if imports.len() > MAX_IMPORTS {
                 return Err(JsError::ImportMap(format!(
                     "too many import-map entries (max {MAX_IMPORTS})"
@@ -64,6 +65,28 @@ impl ImportMap {
                 } else {
                     map.exact.insert(specifier.clone(), target);
                 }
+            }
+        }
+        if let Some(integrity) = root
+            .iter()
+            .find(|(key, _)| key == "integrity")
+            .map(|(_, value)| value)
+        {
+            let entries = integrity
+                .as_object()
+                .ok_or_else(|| JsError::ImportMap("`integrity` is not an object".to_string()))?;
+            if entries.len() > MAX_IMPORTS {
+                return Err(JsError::ImportMap(format!(
+                    "too many import-map integrity entries (max {MAX_IMPORTS})"
+                )));
+            }
+            for (url, sri) in entries {
+                let Some(sri_str) = sri.as_string() else {
+                    return Err(JsError::ImportMap(format!(
+                        "integrity entry for `{url}` must be a string"
+                    )));
+                };
+                map.integrity.insert(url.clone(), sri_str.to_owned());
             }
         }
         Ok(map)
@@ -90,6 +113,18 @@ impl ImportMap {
         })
     }
 
+    /// Returns the integrity metadata string associated with `url`, if any (#1527).
+    pub fn integrity_for(&self, url: &str) -> Option<&str> {
+        self.integrity.get(url).map(String::as_str)
+    }
+
+    /// Iterates `(url, integrity_metadata)` entries declared in the import map (#1527).
+    pub fn integrity_entries(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.integrity
+            .iter()
+            .map(|(url, sri)| (url.as_str(), sri.as_str()))
+    }
+
     /// Number of exact mappings.
     pub fn exact_len(&self) -> usize {
         self.exact.len()
@@ -98,6 +133,11 @@ impl ImportMap {
     /// Number of prefix mappings.
     pub fn prefix_len(&self) -> usize {
         self.prefixes.len()
+    }
+
+    /// Number of integrity mappings.
+    pub fn integrity_len(&self) -> usize {
+        self.integrity.len()
     }
 }
 
@@ -116,6 +156,13 @@ impl Json {
     fn as_object(&self) -> Option<&[(String, Json)]> {
         match self {
             Self::Object(entries) => Some(entries),
+            _ => None,
+        }
+    }
+
+    fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::String(value) => Some(value.as_str()),
             _ => None,
         }
     }
@@ -338,5 +385,31 @@ impl Parser<'_> {
             self.position += 1;
         }
         byte
+    }
+}
+
+#[cfg(test)]
+mod integrity_tests {
+    use super::*;
+
+    #[test]
+    fn parses_integrity_object_and_rejects_invalid_values() {
+        let map = ImportMap::from_json(
+            r#"{"imports":{"dep":"https://cdn.test/dep.js"},"integrity":{"https://cdn.test/dep.js":"sha384-abc"}}"#,
+        )
+        .expect("parse import map");
+        assert_eq!(map.integrity_len(), 1);
+        assert_eq!(
+            map.integrity_for("https://cdn.test/dep.js"),
+            Some("sha384-abc")
+        );
+        assert!(matches!(
+            ImportMap::from_json(r#"{"integrity":"bad"}"#),
+            Err(JsError::ImportMap(_))
+        ));
+        assert!(matches!(
+            ImportMap::from_json(r#"{"integrity":{"x":123}}"#),
+            Err(JsError::ImportMap(_))
+        ));
     }
 }
