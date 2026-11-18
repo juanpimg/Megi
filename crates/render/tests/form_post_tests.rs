@@ -93,6 +93,7 @@ fn form_post_sends_urlencoded_body_with_content_type() {
 }
 
 #[test]
+#[cfg(feature = "js")]
 fn page_js_form_data_fetch_posts_multipart_to_server() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
     let base_url = format!("http://{}/page.html", listener.local_addr().expect("addr"));

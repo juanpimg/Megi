@@ -208,6 +208,9 @@ const XHR_PRELUDE: &str = r####"
     if (body === undefined || body === null) {
       return "";
     }
+    if (typeof FormData !== "undefined" && body instanceof FormData) {
+      return body._toMultipart();
+    }
     if (typeof body === "string") {
       return body;
     }
@@ -566,6 +569,15 @@ const XHR_PRELUDE: &str = r####"
     var seq = ++this._requestSeq;
     var method = this._method || "GET";
     var url = this._url;
+    if (typeof FormData !== "undefined" && body instanceof FormData) {
+      var hasType = false;
+      for (var hi = 0; hi < this._requestHeaders.length; hi++) {
+        if (String(this._requestHeaders[hi][0]).toLowerCase() === "content-type") { hasType = true; }
+      }
+      if (!hasType) {
+        this._requestHeaders.push(["Content-Type", "multipart/form-data; boundary=" + body._boundary]);
+      }
+    }
     var headerText = "";
     for (var i = 0; i < this._requestHeaders.length; i++) {
       headerText += this._requestHeaders[i][0] + ":" + this._requestHeaders[i][1] + "\n";

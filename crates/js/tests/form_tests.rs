@@ -123,35 +123,46 @@ fn form_data_and_url_search_params_work_with_fetch_and_xhr() {
     let seen = calls.lock().expect("lock");
     assert_eq!(seen.len(), 3, "3 POST requests dispatched");
 
-    for req in &seen[..2] {
+    // XHR dispatches asynchronously via microtasks, so request order is not guaranteed
+    // (the URLSearchParams fetch can complete before XHR's send). Match by shape instead.
+    let multipart: Vec<_> = seen
+        .iter()
+        .filter(|req| {
+            req.headers.iter().any(|(k, v)| {
+                k.eq_ignore_ascii_case("content-type")
+                    && v.starts_with("multipart/form-data; boundary=----megiFormBoundary")
+            })
+        })
+        .collect();
+    assert_eq!(
+        multipart.len(),
+        2,
+        "fetch and XHR must both send FormData as multipart"
+    );
+    for req in multipart {
         assert_eq!(req.method, "POST");
-        let ct = req
-            .headers
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-            .map(|(_, v)| v.as_str())
-            .expect("multipart content-type");
-        assert!(
-            ct.starts_with("multipart/form-data; boundary=----megiFormBoundary"),
-            "unexpected content-type: {ct}"
-        );
         let body = String::from_utf8(req.body.clone().expect("body")).expect("utf8");
         assert!(body.contains("Content-Disposition: form-data; name=\"who\"\r\n\r\nmegi\r\n"));
         assert!(body.contains("Content-Disposition: form-data; name=\"mode\"\r\n\r\nfast\r\n"));
         assert!(body.ends_with("----megiFormBoundary7f3e9a2c--\r\n"));
     }
 
-    let urlencoded = &seen[2];
-    assert!(
-        urlencoded.headers.iter().any(|(k, v)| {
-            k.eq_ignore_ascii_case("content-type")
-                && v.starts_with("application/x-www-form-urlencoded")
-        }),
-        "URLSearchParams must set urlencoded content-type: {:?}",
-        urlencoded.headers
+    let urlencoded: Vec<_> = seen
+        .iter()
+        .filter(|req| {
+            req.headers.iter().any(|(k, v)| {
+                k.eq_ignore_ascii_case("content-type")
+                    && v.starts_with("application/x-www-form-urlencoded")
+            })
+        })
+        .collect();
+    assert_eq!(
+        urlencoded.len(),
+        1,
+        "URLSearchParams must set urlencoded content-type"
     );
     assert_eq!(
-        String::from_utf8_lossy(urlencoded.body.as_deref().unwrap_or_default()),
+        String::from_utf8_lossy(urlencoded[0].body.as_deref().unwrap_or_default()),
         "k=1&v=two%20words"
     );
 }
