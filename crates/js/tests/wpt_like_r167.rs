@@ -303,7 +303,8 @@ fn documented_unsupported_apis_are_absent() {
           typeof structuredClone, typeof atob, typeof btoa,
           typeof div.getBoundingClientRect, typeof fetch,
           typeof Headers, typeof Request, typeof Response,
-          typeof AbortController, typeof AbortSignal, typeof ReadableStream
+          typeof AbortController, typeof AbortSignal, typeof ReadableStream,
+          typeof XMLHttpRequest, typeof ProgressEvent
         ];
         String(
           gaps.every(function (value) { return value === 'undefined'; }) &&
