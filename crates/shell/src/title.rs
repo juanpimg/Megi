@@ -22,11 +22,17 @@ pub const MAX_SHORT_URL_CHARS: usize = 80;
 /// Title used when the document has no usable `<title>` (the engine name).
 pub const FALLBACK_NAME: &str = "Megi";
 /// Marker appended when the rendered page was clipped at the content-height cap.
+///
+/// Kept for compatibility; rendering code uses the localized marker from [`crate::i18n`].
 pub const CAPPED_MARKER: &str = " [recortado]";
 
 /// Collapses runs of ASCII whitespace into single spaces and trims the ends.
 pub fn collapse_whitespace(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn current_strings() -> crate::i18n::Strings {
+    crate::i18n::strings(crate::i18n::Locale::current())
 }
 
 /// Truncates `text` to `max` characters, appending `…` when it was shortened.
@@ -131,7 +137,7 @@ pub fn window_title(page: &str, percent: u32, error: Option<&str>, capped: bool)
     }
     let mut title = format!("{page} — {percent}%");
     if capped {
-        title.push_str(CAPPED_MARKER);
+        title.push_str(current_strings().capped_marker);
     }
     title
 }
@@ -152,8 +158,8 @@ pub struct StatusSummary {
 /// Builds the full window title with zoom/scroll/warning feedback (WP-7.6).
 ///
 /// Errors still take precedence (`"Megi — error: …"`). The normal format is
-/// `"<page> — <zoom%> — <scroll>%"` plus `" [N warning(s)]"` / `" [N script error(s)]"`
-/// when non-zero and the clipping marker.
+/// `"<page> — <zoom%> — <scroll>%"` plus localized warning/script-error counters when
+/// non-zero and the clipping marker.
 pub fn status_title(
     page: &str,
     status: &StatusSummary,
@@ -164,27 +170,30 @@ pub fn status_title(
         let error = collapse_whitespace(error);
         return truncate_chars(&format!("{FALLBACK_NAME} — error: {error}"), 240);
     }
+    let strings = current_strings();
     let mut title = format!(
         "{page} — {} — {}%",
         crate::zoom::zoom_label(status.zoom),
         status.scroll_percent
     );
     if status.warnings > 0 {
-        title.push_str(&format!(
-            " [{count} warning{plural}]",
-            count = status.warnings,
-            plural = if status.warnings == 1 { "" } else { "s" }
-        ));
+        let label = if status.warnings == 1 {
+            strings.warning
+        } else {
+            strings.warnings
+        };
+        title.push_str(&format!(" [{} {}]", status.warnings, label));
     }
     if status.script_errors > 0 {
-        title.push_str(&format!(
-            " [{count} script error{plural}]",
-            count = status.script_errors,
-            plural = if status.script_errors == 1 { "" } else { "s" }
-        ));
+        let label = if status.script_errors == 1 {
+            strings.script_error
+        } else {
+            strings.script_errors
+        };
+        title.push_str(&format!(" [{} {}]", status.script_errors, label));
     }
     if capped {
-        title.push_str(CAPPED_MARKER);
+        title.push_str(strings.capped_marker);
     }
     title
 }
@@ -295,13 +304,17 @@ mod tests {
 
     #[test]
     fn window_title_appends_scroll_and_cap_marker() {
+        let strings = crate::i18n::strings(crate::i18n::Locale::current());
         assert_eq!(
             window_title("My Page — https://example.com/", 0, None, false),
             "My Page — https://example.com/ — 0%"
         );
         assert_eq!(
             window_title("My Page — https://example.com/", 42, None, true),
-            "My Page — https://example.com/ — 42% [recortado]"
+            format!(
+                "My Page — https://example.com/ — 42%{}",
+                strings.capped_marker
+            )
         );
     }
 
@@ -328,6 +341,7 @@ mod tests {
 
     #[test]
     fn status_title_shows_zoom_scroll_and_counters() {
+        let strings = crate::i18n::strings(crate::i18n::Locale::current());
         let status = StatusSummary {
             zoom: 1.25,
             scroll_percent: 40,
@@ -336,7 +350,10 @@ mod tests {
         };
         assert_eq!(
             status_title("Page — https://example.com/", &status, None, false),
-            "Page — https://example.com/ — 125% — 40% [2 warnings] [1 script error]"
+            format!(
+                "Page — https://example.com/ — 125% — 40% [2 {}] [1 {}]",
+                strings.warnings, strings.script_error
+            )
         );
         let clean = StatusSummary {
             zoom: 2.0,
@@ -346,7 +363,7 @@ mod tests {
         };
         assert_eq!(
             status_title("Page", &clean, None, true),
-            "Page — 200% — 0% [recortado]"
+            format!("Page — 200% — 0%{}", strings.capped_marker)
         );
         assert_eq!(
             status_title("Page", &clean, Some("boom"), false),
@@ -364,7 +381,7 @@ mod tests {
                 None,
                 false
             ),
-            "Page — 75% — 10% [1 warning]"
+            format!("Page — 75% — 10% [1 {}]", strings.warning)
         );
     }
 }

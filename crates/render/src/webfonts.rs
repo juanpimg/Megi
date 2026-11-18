@@ -13,7 +13,7 @@
 //!
 //! ## Limits (fixed, non-fatal warnings)
 //!
-//! - at most **8** font faces attempted per render;
+//! - at most **32** font faces attempted per render;
 //! - at most **8 MiB** per decoded source;
 //! - at most **32 MiB** of accepted encoded bytes in total;
 //! - `--no-network` skips `http(s)` sources with a warning and falls back to the bundled
@@ -26,7 +26,7 @@ use fonts::FontDatabase;
 use net::{ResourceLoader, Scheme, Url};
 
 /// Maximum number of `@font-face` sources attempted per render.
-pub const MAX_WEB_FONTS: usize = 8;
+pub const MAX_WEB_FONTS: usize = 32;
 /// Maximum encoded bytes accepted for a single web font.
 pub const MAX_WEB_FONT_BYTES: usize = 8 * 1024 * 1024;
 /// Maximum encoded bytes accepted for all web fonts in one render.

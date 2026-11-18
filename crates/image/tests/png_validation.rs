@@ -164,3 +164,40 @@ fn trailing_bytes_after_iend_are_rejected() {
         other => panic!("expected trailing-data rejection, got {other:?}"),
     }
 }
+
+#[test]
+fn ancillary_text_chunks_after_idat_decode_cleanly() {
+    let (ihdr, idat) = gray_fixture();
+    let data = png(&[
+        (b"IHDR", &ihdr),
+        (b"IDAT", &idat),
+        (b"tEXt", b"Software\0Wikimedia"),
+        (b"iTXt", b"Comment\0\0\0\0\0thumb"),
+        (b"IEND", &[]),
+    ]);
+    let image = decode(&data).expect("trailing tEXt/iTXt after IDAT is valid PNG");
+    assert_eq!(
+        image.as_rgba(),
+        &include_bytes!("fixtures/png/gray8.rgba")[..]
+    );
+}
+
+#[test]
+fn non_consecutive_idat_split_by_text_is_rejected() {
+    let (ihdr, idat) = gray_fixture();
+    assert!(idat.len() > 4);
+    let (first, second) = idat.split_at(idat.len() / 2);
+    let data = png(&[
+        (b"IHDR", &ihdr),
+        (b"IDAT", first),
+        (b"tEXt", b"Split\0bad"),
+        (b"IDAT", second),
+        (b"IEND", &[]),
+    ]);
+    match decode_or_reason(&data) {
+        Err(ImageError::InvalidChunk { reason, .. }) => {
+            assert!(reason.contains("non-consecutive IDAT"), "{reason}");
+        }
+        other => panic!("expected non-consecutive IDAT rejection, got {other:?}"),
+    }
+}

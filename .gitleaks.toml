@@ -24,3 +24,8 @@ rules = ["generic-api-key"]
 description = "RFC 6455 sample Sec-WebSocket-Key in WebSocket tests is a public constant, not a credential"
 paths = ["^crates/net/src/websocket\\.rs$"]
 rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "RFC 6455 §1.3 Sec-WebSocket-Accept example test vector in historical commit (not a secret)"
+commits = ["5c7cd0d942374d27eb3be1600a12cdf1267f8b8c"]
+rules = ["generic-api-key"]
