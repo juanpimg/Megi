@@ -5,10 +5,12 @@
 //! layout/paint path draws it like any other replaced box. Rendering is bounded by depth, count
 //! and pixel caps so a self-referential frame tree cannot exhaust memory or hang the pipeline.
 
+use std::collections::HashMap;
+
 use dom::NodeId;
 use net::Url;
 
-use crate::{RenderError, RenderOptions, Viewport};
+use crate::{FrameRenderContext, RenderError, RenderOptions, Viewport};
 
 /// Maximum nesting depth of frames (a frame at this depth renders no children).
 pub const MAX_FRAME_DEPTH: usize = 4;
@@ -16,6 +18,12 @@ pub const MAX_FRAME_DEPTH: usize = 4;
 pub const MAX_FRAMES_PER_PAGE: usize = 16;
 /// Maximum pixels per frame viewport.
 pub const MAX_FRAME_PIXELS: u64 = 4_000_000;
+
+/// Pre-scripted child `<iframe>` state captured from the parent `JsRuntime` (#1544).
+#[cfg(feature = "js")]
+pub type PreScriptedFrameMap = HashMap<NodeId, (dom::Document, js::SandboxFlags, String)>;
+#[cfg(not(feature = "js"))]
+pub type PreScriptedFrameMap = HashMap<NodeId, ()>;
 
 /// A rendered frame ready to be inserted into the parent's image store.
 pub struct FrameRender {
@@ -36,6 +44,34 @@ pub fn collect_frames(
     depth: usize,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<FrameRender>, RenderError> {
+    let empty_styles = HashMap::new();
+    let empty_frames = PreScriptedFrameMap::new();
+    collect_frames_with_context(
+        document,
+        base_url,
+        options,
+        &empty_styles,
+        None,
+        &empty_frames,
+        depth,
+        warnings,
+    )
+}
+
+/// Like [`collect_frames`], but resolves CSS box sizing (`width`/`height`), enforces CSP
+/// `frame-src`/`child-src`, propagates full `<iframe sandbox>` flags, and renders any
+/// parent-script-mutated child DOMs without re-parsing stale markup (#1544).
+#[allow(clippy::too_many_arguments)]
+pub fn collect_frames_with_context(
+    document: &dom::Document,
+    base_url: &Url,
+    options: &RenderOptions,
+    styles: &HashMap<NodeId, css::ComputedStyle>,
+    csp: Option<&net::csp::ContentSecurityPolicy>,
+    pre_scripted: &PreScriptedFrameMap,
+    depth: usize,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<FrameRender>, RenderError> {
     if depth >= MAX_FRAME_DEPTH {
         return Ok(Vec::new());
     }
@@ -53,34 +89,16 @@ pub fn collect_frames(
         else {
             continue;
         };
-        let (width, height) = frame_size(data.get_attribute("width"), data.get_attribute("height"));
+        let (width, height) = frame_size(
+            styles.get(&element),
+            options.viewport,
+            data.get_attribute("width"),
+            data.get_attribute("height"),
+        );
         if u64::from(width) * u64::from(height) > MAX_FRAME_PIXELS {
             warnings.push(format!("skipping iframe {element:?}: viewport too large"));
             continue;
         }
-
-        let child_input = if let Some(srcdoc) = data.get_attribute("srcdoc") {
-            format!(
-                "data:text/html;base64,{}",
-                net::base64_encode(srcdoc.as_bytes())
-            )
-        } else if let Some(src) = data
-            .get_attribute("src")
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            match base_url.join(src) {
-                Ok(url) => url.as_str().to_owned(),
-                Err(error) => {
-                    warnings.push(format!(
-                        "skipping iframe {element:?}: invalid src ({error})"
-                    ));
-                    continue;
-                }
-            }
-        } else {
-            continue; // about:blank — nothing to render
-        };
 
         let mut child_options = options.clone();
         child_options.viewport = match Viewport::new(width, height) {
@@ -94,10 +112,27 @@ pub fn collect_frames(
         };
         child_options.encode_png = false;
         child_options.host_events = Vec::new();
+        child_options.host_dom_events = Vec::new();
         child_options.form_post = None;
         child_options.base_override = None;
-        // `sandbox` (#1544): without an explicit `allow-scripts` token the framed document
-        // cannot execute scripts. This is the core security guarantee of the attribute.
+
+        #[cfg(feature = "js")]
+        let sandbox_flags = data
+            .get_attribute("sandbox")
+            .map(js::SandboxFlags::from_attribute);
+        #[cfg(feature = "js")]
+        if let Some(flags) = sandbox_flags {
+            if !flags.allow_scripts {
+                child_options.scripting = crate::ScriptingMode::Disabled;
+            }
+            if !flags.allow_same_origin {
+                child_options.cookies = false;
+                child_options.cookie_jar = None;
+                child_options.storage = None;
+                child_options.origin = None;
+            }
+        }
+        #[cfg(not(feature = "js"))]
         if let Some(tokens) = data.get_attribute("sandbox") {
             let allows_scripts = tokens
                 .split_ascii_whitespace()
@@ -105,12 +140,115 @@ pub fn collect_frames(
             if !allows_scripts {
                 child_options.scripting = crate::ScriptingMode::Disabled;
             }
-            // Sandboxed frames cannot navigate the top level or submit forms; the render
-            // pipeline has no top-level navigation from frames, but form POSTs are disabled.
-            child_options.form_post = None;
+            let allows_same_origin = tokens
+                .split_ascii_whitespace()
+                .any(|token| token.eq_ignore_ascii_case("allow-same-origin"));
+            if !allows_same_origin {
+                child_options.cookies = false;
+                child_options.cookie_jar = None;
+                child_options.storage = None;
+                child_options.origin = None;
+            }
         }
 
-        match crate::render_url_inner(&child_input, &child_options, None, depth + 1) {
+        #[cfg(feature = "js")]
+        if let Some((child_doc, child_sandbox, child_url)) = pre_scripted.get(&element) {
+            // Check CSP for external `src` even when pre-initialized in JS.
+            if data.get_attribute("srcdoc").is_none()
+                && let Some(src) = data
+                    .get_attribute("src")
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                && !src.eq_ignore_ascii_case("about:blank")
+                && let Ok(parsed_src) = base_url.join(src)
+                && let Some(policy) = csp
+                && !policy.allows_frame(&parsed_src, base_url)
+            {
+                warnings.push(format!(
+                    "skipping iframe {parsed_src}: blocked by Content-Security-Policy"
+                ));
+                continue;
+            }
+            let parsed_url = Url::parse(child_url).unwrap_or_else(|_| base_url.clone());
+            let child_ctx = FrameRenderContext {
+                sandbox_flags: Some(*child_sandbox),
+                skip_scripts: true,
+            };
+            match crate::render_pre_scripted_document(
+                child_doc.clone(),
+                parsed_url,
+                &child_options,
+                depth + 1,
+                child_ctx,
+            ) {
+                Ok(child) => {
+                    let bytes = child.pixmap.to_rgba_bytes();
+                    match image::RgbaImage::new(width, height, bytes) {
+                        Ok(image) => out.push(FrameRender {
+                            node: element,
+                            image,
+                            size: (width as f32, height as f32),
+                        }),
+                        Err(error) => {
+                            warnings.push(format!("iframe {element:?} raster mismatch: {error}"))
+                        }
+                    }
+                }
+                Err(error) => warnings.push(format!("iframe {element:?} render failed: {error}")),
+            }
+            continue;
+        }
+        #[cfg(not(feature = "js"))]
+        let _ = pre_scripted;
+
+        let child_input = if let Some(srcdoc) = data.get_attribute("srcdoc") {
+            format!(
+                "data:text/html;base64,{}",
+                net::base64_encode(srcdoc.as_bytes())
+            )
+        } else if let Some(src) = data
+            .get_attribute("src")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if src.eq_ignore_ascii_case("about:blank") {
+                continue;
+            }
+            match base_url.join(src) {
+                Ok(url) => {
+                    if let Some(policy) = csp
+                        && !policy.allows_frame(&url, base_url)
+                    {
+                        warnings.push(format!(
+                            "skipping iframe {url}: blocked by Content-Security-Policy"
+                        ));
+                        continue;
+                    }
+                    url.as_str().to_owned()
+                }
+                Err(error) => {
+                    warnings.push(format!(
+                        "skipping iframe {element:?}: invalid src ({error})"
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            continue; // about:blank — nothing to render
+        };
+
+        let child_ctx = FrameRenderContext {
+            #[cfg(feature = "js")]
+            sandbox_flags,
+            skip_scripts: false,
+        };
+        match crate::render_url_with_context(
+            &child_input,
+            &child_options,
+            None,
+            depth + 1,
+            child_ctx,
+        ) {
             Ok(child) => {
                 let bytes = child.pixmap.to_rgba_bytes();
                 match image::RgbaImage::new(width, height, bytes) {
@@ -130,13 +268,36 @@ pub fn collect_frames(
     Ok(out)
 }
 
-fn frame_size(width: Option<&str>, height: Option<&str>) -> (u32, u32) {
-    let parse = |value: Option<&str>, default: u32| -> u32 {
+fn frame_size(
+    style: Option<&css::ComputedStyle>,
+    parent_viewport: Viewport,
+    width_attr: Option<&str>,
+    height_attr: Option<&str>,
+) -> (u32, u32) {
+    let from_css = |len: css::Length, basis: u32| -> Option<u32> {
+        match len {
+            css::Length::Px(px) if px.is_finite() && px >= 1.0 => {
+                Some((px.round() as u32).clamp(1, MAX_FRAME_PIXELS as u32))
+            }
+            css::Length::Percent(pct) if pct.is_finite() && pct > 0.0 => {
+                let px = (pct / 100.0) * (basis as f32);
+                (px >= 1.0).then(|| (px.round() as u32).clamp(1, MAX_FRAME_PIXELS as u32))
+            }
+            _ => None,
+        }
+    };
+    let parse_attr = |value: Option<&str>, default: u32| -> u32 {
         value
             .and_then(|v| v.trim().trim_end_matches("px").parse::<u32>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(default)
             .min(MAX_FRAME_PIXELS as u32)
     };
-    (parse(width, 300), parse(height, 150))
+    let width = style
+        .and_then(|s| from_css(s.width, parent_viewport.width))
+        .unwrap_or_else(|| parse_attr(width_attr, 300));
+    let height = style
+        .and_then(|s| from_css(s.height, parent_viewport.height))
+        .unwrap_or_else(|| parse_attr(height_attr, 150));
+    (width, height)
 }

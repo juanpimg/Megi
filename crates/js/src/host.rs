@@ -215,6 +215,115 @@ pub type WebSocketProvider =
 /// Loads the source text of a worker script URL (the host owns I/O).
 pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
 
+/// Parsed `<iframe sandbox="...">` permission flags (#1544).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SandboxFlags {
+    pub allow_scripts: bool,
+    pub allow_same_origin: bool,
+    pub allow_forms: bool,
+    pub allow_popups: bool,
+    pub allow_top_navigation: bool,
+}
+
+impl Default for SandboxFlags {
+    fn default() -> Self {
+        Self {
+            allow_scripts: true,
+            allow_same_origin: true,
+            allow_forms: true,
+            allow_popups: true,
+            allow_top_navigation: true,
+        }
+    }
+}
+
+impl SandboxFlags {
+    /// Parses a whitespace-separated `<iframe sandbox>` attribute value.
+    /// When `sandbox` is present (even empty), all capabilities start disabled
+    /// and must be explicitly re-enabled by tokens.
+    pub fn from_attribute(tokens: &str) -> Self {
+        let mut flags = Self {
+            allow_scripts: false,
+            allow_same_origin: false,
+            allow_forms: false,
+            allow_popups: false,
+            allow_top_navigation: false,
+        };
+        for token in tokens.split_ascii_whitespace() {
+            if token.eq_ignore_ascii_case("allow-scripts") {
+                flags.allow_scripts = true;
+            } else if token.eq_ignore_ascii_case("allow-same-origin") {
+                flags.allow_same_origin = true;
+            } else if token.eq_ignore_ascii_case("allow-forms") {
+                flags.allow_forms = true;
+            } else if token.eq_ignore_ascii_case("allow-popups") {
+                flags.allow_popups = true;
+            } else if token.eq_ignore_ascii_case("allow-top-navigation")
+                || token.eq_ignore_ascii_case("allow-top-navigation-by-user-activation")
+            {
+                flags.allow_top_navigation = true;
+            }
+        }
+        flags
+    }
+}
+
+/// Loads HTML content for an external `<iframe src="...">` (`resolved_url`, `html`).
+pub type FrameLoader = Box<dyn Fn(&str) -> Result<(String, String), String> + Send + Sync>;
+
+/// Computes the serialized origin (`"scheme://host[:port]"` or `"null"` when opaque/non-network).
+pub fn origin_for_url(url: &str, opaque: bool) -> String {
+    if opaque {
+        return "null".to_string();
+    }
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return "null".to_string();
+    };
+    let lower_scheme = scheme.to_ascii_lowercase();
+    if !matches!(lower_scheme.as_str(), "http" | "https") {
+        return "null".to_string();
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.is_empty() {
+        return "null".to_string();
+    }
+    let normalized = if let Some((host, port)) = authority.rsplit_once(':')
+        && !authority.ends_with(']')
+    {
+        if (lower_scheme == "http" && port == "80") || (lower_scheme == "https" && port == "443") {
+            host.to_ascii_lowercase()
+        } else {
+            format!("{}:{}", host.to_ascii_lowercase(), port)
+        }
+    } else {
+        authority.to_ascii_lowercase()
+    };
+    format!("{lower_scheme}://{normalized}")
+}
+
+/// Returns whether `child_url` is same-origin with `parent_url` given `opaque` sandbox status.
+pub fn is_same_origin_url(parent_url: &str, child_url: &str, opaque: bool) -> bool {
+    if opaque {
+        return false;
+    }
+    if child_url == "about:blank" || child_url.is_empty() {
+        return true;
+    }
+    let parent_scheme = parent_url
+        .split_once("://")
+        .map(|(s, _)| s.to_ascii_lowercase());
+    let child_scheme = child_url
+        .split_once("://")
+        .map(|(s, _)| s.to_ascii_lowercase());
+    match (parent_scheme.as_deref(), child_scheme.as_deref()) {
+        (Some("file"), Some("file")) => true,
+        (Some("http" | "https"), Some("http" | "https")) => {
+            origin_for_url(parent_url, false) == origin_for_url(child_url, false)
+        }
+        _ => parent_url == child_url,
+    }
+}
+
 /// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
 /// (e.g. `display: none` or a node outside the laid-out document).
 pub type LayoutProvider = Box<dyn Fn(dom::NodeId) -> Option<LayoutRect> + Send + Sync>;
@@ -377,6 +486,9 @@ impl FromIterator<(String, String)> for StorageMap {
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 
+/// Outbox queue for child-to-parent `postMessage` (`(json_payload, sender_origin, target_origin)`).
+pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;
+
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
@@ -497,6 +609,30 @@ pub(crate) struct Host {
     pub initial_control_values: HashMap<NodeId, Option<String>>,
     /// Pre-mutation `checked` / `selected` state for form controls/options, used by `form.reset()`.
     pub initial_control_checked: HashMap<NodeId, bool>,
+    /// True when sandboxed without `allow-same-origin` (`origin === "null"`).
+    pub opaque_origin: bool,
+    /// Sandbox `allow-forms` capability flag (true when unsandboxed or explicitly allowed).
+    pub allow_forms: bool,
+    /// Sandbox `allow-popups` capability flag (true when unsandboxed or explicitly allowed).
+    pub allow_popups: bool,
+    /// Current frame nesting depth (`0` for top-level document).
+    pub frame_depth: usize,
+    /// Optional host loader for `<iframe src="...">` documents.
+    pub frame_loader: Option<FrameLoader>,
+    /// True when this host represents a child `<iframe>` browsing context.
+    pub is_child_frame: bool,
+    /// Parent host's serialized origin when `is_child_frame` is true.
+    pub parent_origin: Option<String>,
+    /// Whether this child frame is same-origin with its parent (and not opaque).
+    pub parent_same_origin: bool,
+    /// Outbox for `window.parent.postMessage(...)` (`(json_payload, child_origin, target_origin)`).
+    pub parent_outbox: Option<FrameOutbox>,
+    /// Pending self-targeted `window.postMessage(...)` messages (`(json_payload, origin)`).
+    pub self_messages: VecDeque<(String, String)>,
+    /// Child `<iframe>` browsing contexts owned by this document.
+    pub frames: Vec<Option<Rc<RefCell<crate::runtime::IframeState>>>>,
+    /// Map from `<iframe>` element `NodeId` to index in `frames`.
+    pub frame_by_node: HashMap<NodeId, u32>,
 }
 
 impl Host {
@@ -563,6 +699,18 @@ impl Host {
             import_map: None,
             initial_control_values: HashMap::new(),
             initial_control_checked: HashMap::new(),
+            opaque_origin: false,
+            allow_forms: true,
+            allow_popups: true,
+            frame_depth: 0,
+            frame_loader: None,
+            is_child_frame: false,
+            parent_origin: None,
+            parent_same_origin: false,
+            parent_outbox: None,
+            self_messages: VecDeque::new(),
+            frames: Vec::new(),
+            frame_by_node: HashMap::new(),
         }
     }
 
