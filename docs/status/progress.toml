@@ -32,60 +32,16 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-tests = 2644
-tests_commit = "609730d"
+tests = 2641
+tests_commit = "d93402a"
 tests_date = "2026-11-18"
 crates = 14
-<<<<<<< HEAD
-rust_lines = 192606
-=======
-rust_lines = 192747
->>>>>>> 277d9d5
-=======
-tests = 2646
-tests_commit = "609730d"
-tests_date = "2026-11-18"
-crates = 14
-rust_lines = 192450
->>>>>>> 8b09668
-=======
-tests = 2643
-tests_commit = "609730d"
-tests_date = "2026-11-18"
-crates = 14
-rust_lines = 192488
->>>>>>> 7373248
-=======
-tests = 2646
-tests_commit = "609730d"
-tests_date = "2026-11-18"
-crates = 14
-rust_lines = 192985
->>>>>>> deaa0cb
-=======
-tests = 2645
-tests_commit = "609730d"
-tests_date = "2026-11-18"
-crates = 14
-rust_lines = 192950
->>>>>>> be10326
-=======
-tests = 2646
-tests_commit = "609730d"
-tests_date = "2026-11-18"
-crates = 14
-rust_lines = 193381
->>>>>>> ff63ff0
+rust_lines = 197431
 unsafe_forbidden_crates = 14
 
 [gate]
 status = "PASS"
-verified_commit = "4fac600"
+verified_commit = "30b6ec8"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"

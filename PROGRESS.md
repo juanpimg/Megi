@@ -4,31 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,644** tests · conformance **PASS** · **14** crates · **192,606** lines of Rust
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,644** tests · conformance **PASS** · **14** crates · **192,747** lines of Rust
->>>>>>> 277d9d5
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,646** tests · conformance **PASS** · **14** crates · **192,450** lines of Rust
->>>>>>> 8b09668
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,643** tests · conformance **PASS** · **14** crates · **192,488** lines of Rust
->>>>>>> 7373248
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,646** tests · conformance **PASS** · **14** crates · **192,985** lines of Rust
->>>>>>> deaa0cb
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,645** tests · conformance **PASS** · **14** crates · **192,950** lines of Rust
->>>>>>> be10326
-=======
-**Snapshot** — commit `b25c5ae` (2026-11-18) · coverage **77%** (54/70) · **2,646** tests · conformance **PASS** · **14** crates · **193,381** lines of Rust
->>>>>>> ff63ff0
+**Snapshot** — commit `30b6ec8` (2026-11-18) · coverage **77%** (54/70) · **2,641** tests · conformance **PASS** · **14** crates · **197,431** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -176,39 +152,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `4fac600` (2026-11-18) |
+| Commit | `30b6ec8` (2026-11-18) |
 | Crates in the workspace | 14 |
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-| Lines of Rust (tracked `.rs`) | 192606 |
-=======
-| Lines of Rust (tracked `.rs`) | 192747 |
->>>>>>> 277d9d5
-| Tests (`cargo test --workspace -- --list`) | 2644 |
-=======
-| Lines of Rust (tracked `.rs`) | 192450 |
-| Tests (`cargo test --workspace -- --list`) | 2646 |
->>>>>>> 8b09668
-=======
-| Lines of Rust (tracked `.rs`) | 192488 |
-| Tests (`cargo test --workspace -- --list`) | 2643 |
->>>>>>> 7373248
-=======
-| Lines of Rust (tracked `.rs`) | 192985 |
-| Tests (`cargo test --workspace -- --list`) | 2646 |
->>>>>>> deaa0cb
-=======
-| Lines of Rust (tracked `.rs`) | 192950 |
-| Tests (`cargo test --workspace -- --list`) | 2645 |
->>>>>>> be10326
-=======
-| Lines of Rust (tracked `.rs`) | 193381 |
-| Tests (`cargo test --workspace -- --list`) | 2646 |
->>>>>>> ff63ff0
+| Lines of Rust (tracked `.rs`) | 197431 |
+| Tests (`cargo test --workspace -- --list`) | 2641 |
 | Crates with `#![forbid(unsafe_code)]` | 14 / 14 |
 | Conformance gate | **PASS** |
 
