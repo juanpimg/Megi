@@ -204,6 +204,21 @@ impl ResourceLoader {
         self
     }
 
+    /// Installs a session-scoped HSTS store for every subsequent HTTP(S) fetch (#1529).
+    ///
+    /// When unset, fetches fall back to the process-global HSTS cache. Returns `&mut Self`
+    /// for chaining.
+    pub fn set_hsts_store(&mut self, store: crate::hsts::SharedHstsStore) -> &mut Self {
+        self.options.hsts_store = Some(store);
+        self
+    }
+
+    /// Builder variant of [`Self::set_hsts_store`].
+    pub fn with_hsts_store(mut self, store: crate::hsts::SharedHstsStore) -> Self {
+        self.set_hsts_store(store);
+        self
+    }
+
     /// Lowers the per-response body cap for the next loads and returns the previous value.
     /// Used by the render image loader so the image byte budget is enforced while fetching,
     /// not after buffering every response (#1213).

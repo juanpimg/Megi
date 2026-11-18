@@ -172,6 +172,9 @@ pub struct FetchOptions {
     /// a `rustls::ClientConfig` here.
     #[cfg(feature = "tls")]
     pub tls_config: Option<Arc<rustls::ClientConfig>>,
+    /// Optional session-scoped HSTS store (#1529). When `None` (default), the process-global
+    /// HSTS store is used.
+    pub hsts_store: Option<crate::hsts::SharedHstsStore>,
 }
 
 impl Default for FetchOptions {
@@ -202,6 +205,7 @@ impl Default for FetchOptions {
             proxy: None,
             #[cfg(feature = "tls")]
             tls_config: None,
+            hsts_store: None,
         }
     }
 }
@@ -406,6 +410,8 @@ pub fn fetch_pooled(
     options: &FetchOptions,
     pool: &mut H1Pool,
 ) -> Result<Response, FetchError> {
+    let upgraded_url = crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), url);
+    let url = upgraded_url.as_ref().unwrap_or(url);
     let pool_proxy = options
         .proxy
         .as_deref()
@@ -528,6 +534,17 @@ pub fn fetch_pooled(
             reader.stream.flush().map_err(map_io_error)?;
             let head = reader.read_head(options.max_header_bytes)?;
             let (version, status, reason, headers) = parse_head_verbose(&head)?;
+            if is_https
+                && let Some(header) = headers
+                    .iter()
+                    .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+            {
+                crate::hsts::observe_https_with(
+                    options.hsts_store.as_deref(),
+                    url.host(),
+                    &header.1,
+                );
+            }
             if is_redirect(status) {
                 return Err(FetchError::InvalidResponse(
                     "redirect in pooled fetch".to_owned(),
@@ -620,6 +637,11 @@ pub fn fetch_streaming(
     let mut current = url.clone();
     let mut redirects = 0usize;
     loop {
+        if let Some(upgraded) =
+            crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
+        {
+            current = upgraded;
+        }
         let raw = fetch_once(
             &current,
             options,
@@ -632,6 +654,18 @@ pub fn fetch_streaming(
         )?;
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
+        }
+        if current.scheme() == Scheme::Https
+            && let Some(header) = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+        {
+            crate::hsts::observe_https_with(
+                options.hsts_store.as_deref(),
+                current.host(),
+                &header.1,
+            );
         }
         if !is_redirect(raw.status) {
             if let Some(origin) = options.origin.as_deref() {
@@ -847,7 +881,9 @@ pub fn fetch_with_request_body_and_trailers(
         first_attempt = false;
         // HSTS (#1529): upgrade an `http://` hop to `https://` when an active policy covers the
         // host (also applied to redirect targets, so a downgrade redirect cannot slip through).
-        if let Some(upgraded) = crate::hsts::upgrade_url(&current) {
+        if let Some(upgraded) =
+            crate::hsts::upgrade_url_with(options.hsts_store.as_deref(), &current)
+        {
             current = upgraded;
         }
         let raw = fetch_once(
@@ -862,6 +898,20 @@ pub fn fetch_with_request_body_and_trailers(
         )?;
         if let Some(jar) = &options.cookie_jar {
             lock_jar(jar).store_from_response(&current, &raw.headers);
+        }
+        // HSTS (#1529): remember the policy from any trusted HTTPS response (including redirects)
+        // before `raw` is moved or followed. Only secure origins may set it (RFC 6797 §8.1).
+        if current.scheme() == Scheme::Https
+            && let Some(header) = raw
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
+        {
+            crate::hsts::observe_https_with(
+                options.hsts_store.as_deref(),
+                current.host(),
+                &header.1,
+            );
         }
         if !is_redirect(raw.status) {
             if let Some(origin) = options.origin.as_deref() {
@@ -884,16 +934,6 @@ pub fn fetch_with_request_body_and_trailers(
                         .split(',')
                         .any(|token| token.trim().eq_ignore_ascii_case("bytes"))
             });
-            // HSTS (#1529): remember the policy from a trusted HTTPS response before `raw`
-            // is moved into the Response. Only secure origins may set it (RFC 6797 §8.1).
-            if current.scheme() == Scheme::Https
-                && let Some(header) = raw
-                    .headers
-                    .iter()
-                    .find(|(name, _)| name.eq_ignore_ascii_case("strict-transport-security"))
-            {
-                crate::hsts::observe_https(current.host(), &header.1);
-            }
             return Ok(Response {
                 status: raw.status,
                 reason: raw.reason,
