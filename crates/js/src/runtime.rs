@@ -717,6 +717,7 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     install_browser_features(context)?;
     install_gap_apis(context)?;
     crate::xhr::install_xhr(context)?;
+    crate::websocket::install(context).map_err(|error| JsError::Internal(error.to_string()))?;
     Ok(())
 }
 
@@ -7538,6 +7539,20 @@ impl JsRuntime {
     /// with a `QuotaExceededError` once the document reaches the budget.
     pub fn set_max_dom_nodes(&mut self, max_nodes: usize) {
         self.host.borrow_mut().max_dom_nodes = max_nodes;
+    }
+
+    /// Delivers pending WebSocket transport events to JS handlers (#1534).
+    /// Returns the number of instances that received events.
+    pub fn poll_websockets(&mut self) -> usize {
+        let _scope = HostScope::enter(&self.host);
+        let count = crate::websocket::poll(&mut self.context);
+        drop(_scope);
+        count
+    }
+
+    /// Installs the WebSocket transport provider (the host owns the socket).
+    pub fn set_websocket_provider(&mut self, provider: crate::host::WebSocketProvider) {
+        self.host.borrow_mut().websocket_provider = Some(provider);
     }
 
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).

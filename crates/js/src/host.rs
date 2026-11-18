@@ -187,6 +187,31 @@ pub struct FetchResult {
 pub type FetchProvider =
     Box<dyn Fn(FetchRequest) -> Result<FetchResult, crate::error::JsError> + Send + Sync>;
 
+/// An event delivered by a WebSocket transport (#1534).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WebSocketEvent {
+    /// The connection was established.
+    Open,
+    /// A text message arrived.
+    Message(String),
+    /// The connection closed with the given code.
+    Close(u16),
+    /// A transport error occurred.
+    Error(String),
+}
+
+/// Host-owned WebSocket transport: the JS side sends text and polls for incoming events.
+/// The real implementation (in the shell) drives `net::websocket::WebSocketClient`.
+pub trait WebSocketTransport: Send {
+    fn send(&mut self, text: &str) -> Result<(), crate::error::JsError>;
+    fn poll(&mut self) -> Vec<WebSocketEvent>;
+    fn close(&mut self);
+}
+
+/// Injectable WebSocket provider; without one `new WebSocket(url)` throws a typed error.
+pub type WebSocketProvider =
+    Box<dyn Fn(&str) -> Result<Box<dyn WebSocketTransport>, crate::error::JsError> + Send + Sync>;
+
 /// Loads the source text of a worker script URL (the host owns I/O).
 pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
 
@@ -438,6 +463,12 @@ pub(crate) struct Host {
     pub worker_loader: Option<WorkerLoader>,
     /// `fetch()` provider injected by the host.
     pub fetch_provider: Option<FetchProvider>,
+    /// Injected WebSocket transport provider (#1534).
+    pub websocket_provider: Option<WebSocketProvider>,
+    /// Live WebSocket transports keyed by an opaque handle.
+    pub websockets: std::collections::HashMap<u32, Box<dyn WebSocketTransport>>,
+    /// Monotonic handle counter for WebSocket transports.
+    pub websocket_next_handle: u32,
     /// Shadow DOM (#1541): host element `NodeId` -> shadow-root `NodeId`.
     pub shadow_roots: std::collections::HashMap<NodeId, NodeId>,
     /// Reverse map: shadow-root `NodeId` -> host element `NodeId`.
@@ -510,6 +541,9 @@ impl Host {
             layout_provider: None,
             worker_loader: None,
             fetch_provider: None,
+            websocket_provider: None,
+            websockets: std::collections::HashMap::new(),
+            websocket_next_handle: 1,
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
             canvas_store: crate::canvas::CanvasStore::new(),

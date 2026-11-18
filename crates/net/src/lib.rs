@@ -154,6 +154,7 @@ pub mod range;
 pub mod referrer;
 pub mod socks;
 pub mod url;
+pub mod websocket;
 
 pub use auth::{
     AuthChallenge, CredentialStore, SharedCredentialStore, basic_authorization, parse_challenge,
