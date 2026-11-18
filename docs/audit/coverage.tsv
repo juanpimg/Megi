@@ -244,7 +244,7 @@ crates/js/src/error.rs	69	src	F2	wave1	2026-11-16	covered	#1134-#1147
 crates/js/src/events.rs	1815	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/host.rs	979	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/import_map.rs	415	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/lib.rs	292	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/lib.rs	296	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/runtime.rs	9337	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/xhr.rs	683	src	F2			pending		
 crates/js/tests/browser_api_tests.rs	362	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
@@ -254,7 +254,7 @@ crates/js/tests/cookie_tests.rs	85	test	F1			pending
 crates/js/tests/dialog_tests.rs	60	test	F1			pending		
 crates/js/tests/dom_edges_tests.rs	318	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
-crates/js/tests/es_modules.rs	375	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
+crates/js/tests/es_modules.rs	412	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/es_modules_stub.rs	19	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/event_advanced_tests.rs	680	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/fetch_abort_tests.rs	177	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
