@@ -252,7 +252,7 @@ crates/js/src/events.rs	1815	src	F2	wave1	2026-11-16	covered	#1134-#1147
 crates/js/src/host.rs	979	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/import_map.rs	415	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/lib.rs	296	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/runtime.rs	9337	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/runtime.rs	9370	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/xhr.rs	683	src	F2			pending		
 crates/js/tests/browser_api_tests.rs	362	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/browser_features_r24.rs	514	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
@@ -269,7 +269,7 @@ crates/js/tests/fetch_tests.rs	363	test	F1	waveF1	2026-11-17	covered	#1372-#1378
 crates/js/tests/form_tests.rs	295	test	F1			pending		
 crates/js/tests/gap_apis.rs	330	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/import_maps_r187.rs	229	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
-crates/js/tests/intl_tests.rs	55	test	F1			pending		
+crates/js/tests/intl_tests.rs	66	test	F1			pending		
 crates/js/tests/js_tests.rs	335	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/rust_api_tests.rs	246	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/shadow_dom_tests.rs	56	test	F1			pending		
@@ -472,7 +472,7 @@ crates/render/tests/webp_tests.rs	93	test	F1	waveF1	2026-11-17	covered	#1386,#13
 crates/render/tests/worker_tests.rs	50	test	F1	waveF1	2026-11-17	covered	#1386,#1387,#1390	
 crates/shell/Cargo.toml	26	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/shell/src/a11y.rs	400	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/chrome.rs	3136	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/chrome.rs	3185	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/cli.rs	771	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/convert.rs	92	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/download.rs	606	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -480,7 +480,7 @@ crates/shell/src/error.rs	42	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/favicon.rs	347	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/find.rs	692	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/forms.rs	1579	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/headless.rs	396	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/headless.rs	398	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/history.rs	388	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/lib.rs	269	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -496,11 +496,11 @@ crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/session.rs	1445	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/tabs.rs	473	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/title.rs	370	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/window.rs	3186	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/window.rs	3200	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/worker.rs	1121	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#1379	
-crates/shell/tests/shell_tests.rs	1660	test	F1	waveF1	2026-11-17	covered	#1379	
+crates/shell/tests/shell_tests.rs	1661	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
 crates/svg/src/color.rs	192	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
