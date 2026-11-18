@@ -10,6 +10,8 @@
 //!   `__megi_timer_callbacks`/`__megi_timer_args` arrays. The clock is injectable:
 //!   real elapsed time by default, virtual after `JsRuntime::advance`/`run_until`.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
 use boa_engine::{
@@ -22,24 +24,48 @@ use boa_engine::{
 use megi_core::NodeId;
 
 use crate::error::JsError as CrateJsError;
-use crate::host::{DispatchState, InlineHandler, Listener, TargetKey, TimerEntry, with_host};
+use crate::host::{
+    DispatchState, Host, InlineHandler, Listener, TargetKey, TimerEntry, ViewportInfo, host_cell,
+    host_ref, with_host,
+};
 
 type NativeFn = fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>;
 
+/// Returns the shared host cell installed in `context` by `install_host_cell`.
+///
+/// The guard below needs to restore state in `Drop`, where no `&mut Context` is
+/// available; cloning the handle keeps the borrow local to the drop and lets the
+/// dispatch loop borrow the host normally through `host_cell`/`host_ref`.
+fn host_handle(context: &Context) -> JsResult<Rc<RefCell<Host>>> {
+    context
+        .get_data::<Rc<RefCell<Host>>>()
+        .cloned()
+        .ok_or_else(|| js_error("no JavaScript host installed in this context"))
+}
+
 /// Restores the stacked dispatch state on every exit path, including `?` early returns
 /// after a listener throws or exhausts a budget (#1472).
-struct DispatchStateGuard(Option<DispatchState>);
+struct DispatchStateGuard {
+    previous: Option<DispatchState>,
+    host: Rc<RefCell<Host>>,
+}
 
 impl DispatchStateGuard {
-    fn new(previous: Option<DispatchState>) -> Self {
-        Self(previous)
+    fn new(context: &Context, previous: Option<DispatchState>) -> JsResult<Self> {
+        Ok(Self {
+            previous,
+            host: host_handle(context)?,
+        })
     }
 }
 
 impl Drop for DispatchStateGuard {
     fn drop(&mut self) {
-        let previous = self.0;
-        let _ = with_host(|host| host.dispatch = previous);
+        // Never panic during unwinding: a concurrent borrow simply skips the
+        // restore, matching the previous best-effort `with_host` behaviour.
+        if let Ok(mut host) = self.host.try_borrow_mut() {
+            host.dispatch = self.previous;
+        }
     }
 }
 
@@ -270,13 +296,13 @@ pub(crate) fn node_methods() -> [(&'static str, usize, NativeFn); 3] {
 
 fn inline_get(this: &JsValue, event_type: &str, context: &mut Context) -> JsResult<JsValue> {
     let target = target_key(this, context)?;
-    let slot = with_host(|host| {
+    let slot = {
+        let host = host_ref(context)?;
         host.inline_handlers
             .iter()
             .find(|handler| handler.target == target && handler.event_type == event_type)
             .map(|handler| handler.slot)
-    })
-    .flatten();
+    };
     match slot {
         Some(slot) => array_get(context, "__megi_inline_handlers", u64::from(slot)),
         None => Ok(JsValue::null()),
@@ -292,14 +318,14 @@ fn inline_set(
     let target = target_key(this, context)?;
     let value = args.first().cloned().unwrap_or_else(JsValue::undefined);
     if value.as_object().is_none() {
-        let _ = with_host(|host| {
-            host.inline_handlers
-                .retain(|handler| !(handler.target == target && handler.event_type == event_type));
-        });
+        host_cell(context)?
+            .inline_handlers
+            .retain(|handler| !(handler.target == target && handler.event_type == event_type));
         return Ok(JsValue::undefined());
     }
     let slot = array_push(context, "__megi_inline_handlers", value)?;
-    let _ = with_host(|host| {
+    {
+        let mut host = host_cell(context)?;
         host.inline_handlers
             .retain(|handler| !(handler.target == target && handler.event_type == event_type));
         host.inline_handlers.push(InlineHandler {
@@ -307,7 +333,7 @@ fn inline_set(
             event_type: event_type.to_string(),
             slot,
         });
-    });
+    }
     Ok(JsValue::undefined())
 }
 
@@ -401,10 +427,8 @@ fn target_key(this: &JsValue, context: &mut Context) -> JsResult<TargetKey> {
     Err(js_error("receiver is not an event target"))
 }
 
-fn node_id_of(handle: u32) -> JsResult<NodeId> {
-    with_host(|host| host.node_for_handle(handle))
-        .ok_or_else(|| js_error("no active JavaScript host"))?
-        .map_err(js_error)
+fn node_id_of(context: &Context, handle: u32) -> JsResult<NodeId> {
+    host_ref(context)?.node_for_handle(handle).map_err(js_error)
 }
 
 // ---------------------------------------------------------------------------
@@ -611,14 +635,12 @@ fn event_prevent_default(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     check_event(this, context)?;
-    let _ = with_host(|host| {
-        if let Some(dispatch) = &mut host.dispatch {
-            // `{ passive: true }` listeners cannot cancel the default action.
-            if !dispatch.passive {
-                dispatch.prevent_default = true;
-            }
-        }
-    });
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch
+        && !dispatch.passive
+    {
+        // `{ passive: true }` listeners cannot cancel the default action.
+        dispatch.prevent_default = true;
+    }
     Ok(JsValue::undefined())
 }
 
@@ -628,11 +650,9 @@ fn event_stop_propagation(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     check_event(this, context)?;
-    let _ = with_host(|host| {
-        if let Some(dispatch) = &mut host.dispatch {
-            dispatch.stop_propagation = true;
-        }
-    });
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
+        dispatch.stop_propagation = true;
+    }
     Ok(JsValue::undefined())
 }
 
@@ -642,11 +662,9 @@ fn event_stop_immediate(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     check_event(this, context)?;
-    let _ = with_host(|host| {
-        if let Some(dispatch) = &mut host.dispatch {
-            dispatch.stop_immediate = true;
-        }
-    });
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
+        dispatch.stop_immediate = true;
+    }
     Ok(JsValue::undefined())
 }
 
@@ -686,7 +704,8 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
         }
     }
     // DOM §2.7 step 2: adding the same callback with the same capture flag is a no-op.
-    let (existing, at_cap): (Vec<u32>, bool) = with_host(|host| {
+    let (existing, at_cap): (Vec<u32>, bool) = {
+        let host = host_ref(context)?;
         let slots = host
             .listeners
             .iter()
@@ -698,8 +717,7 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
             .map(|listener| listener.slot)
             .collect();
         (slots, host.listeners.len() >= MAX_EVENT_LISTENERS)
-    })
-    .unwrap_or_default();
+    };
     for slot in existing {
         if array_get(context, "__megi_listeners", u64::from(slot))?.strict_equals(&callback) {
             return Ok(JsValue::undefined());
@@ -708,7 +726,7 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     if at_cap {
         return Err(js_error("event listener limit exceeded"));
     }
-    let reused_slot = with_host(|host| host.free_listener_slots.pop()).flatten();
+    let reused_slot = host_cell(context)?.free_listener_slots.pop();
     let slot = match reused_slot {
         Some(slot) => {
             array_put(context, "__megi_listeners", u64::from(slot), callback)?;
@@ -716,15 +734,13 @@ fn add_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
         }
         None => array_push(context, "__megi_listeners", callback)?,
     };
-    let _ = with_host(|host| {
-        host.listeners.push(Listener {
-            target,
-            event_type,
-            capture,
-            once,
-            passive,
-            slot,
-        });
+    host_cell(context)?.listeners.push(Listener {
+        target,
+        event_type,
+        capture,
+        once,
+        passive,
+        slot,
     });
     Ok(JsValue::undefined())
 }
@@ -749,15 +765,15 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             Some(value.to_boolean())
         }
     });
-    let candidates: Vec<(usize, u32, bool)> = with_host(|host| {
+    let candidates: Vec<(usize, u32, bool)> = {
+        let host = host_ref(context)?;
         host.listeners
             .iter()
             .enumerate()
             .filter(|(_, listener)| listener.target == target && listener.event_type == event_type)
             .map(|(index, listener)| (index, listener.slot, listener.capture))
             .collect()
-    })
-    .unwrap_or_default();
+    };
     let mut remove_index = None;
     for (index, slot, capture) in candidates {
         if let Some(filter) = capture_filter
@@ -772,7 +788,8 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
         }
     }
     if let Some(index) = remove_index {
-        let freed_slot = with_host(|host| {
+        let freed_slot = {
+            let mut host = host_cell(context)?;
             if index < host.listeners.len() {
                 let slot = host.listeners.remove(index).slot;
                 host.free_listener_slots.push(slot);
@@ -780,8 +797,7 @@ fn remove_listener(this: &JsValue, args: &[JsValue], context: &mut Context) -> J
             } else {
                 None
             }
-        })
-        .flatten();
+        };
         if let Some(slot) = freed_slot {
             let _ = array_put(
                 context,
@@ -853,32 +869,33 @@ fn dispatch_event(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
         .unwrap_or(false);
     // `dispatchEvent` is a method on the target wrapper itself, so `this` is the target.
     let _ = event.set(js_string!("target"), this.clone(), false, context);
-    let path = propagation_path(target, bubbles);
+    let path = propagation_path(context, target, bubbles)?;
     // Stack the dispatch state so a nested dispatch cannot clobber the outer one (#648).
-    let previous_dispatch = with_host(|host| host.dispatch.take()).flatten();
-    let _dispatch_guard = DispatchStateGuard::new(previous_dispatch);
-    let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
+    let previous_dispatch = host_cell(context)?.dispatch.take();
+    let _dispatch_guard = DispatchStateGuard::new(context, previous_dispatch)?;
+    host_cell(context)?.dispatch = Some(DispatchState::default());
     let dispatch_result = (|| -> JsResult<bool> {
         for (phase, key) in &path {
-            let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
-                .flatten()
+            let stopped = host_ref(context)?
+                .dispatch
+                .map(|dispatch| dispatch.stop_propagation)
                 .unwrap_or(false);
             if stopped {
                 break;
             }
             deliver(context, *key, *phase, &event_type, &event)?;
-            let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
-                .flatten()
+            let immediate = host_ref(context)?
+                .dispatch
+                .map(|dispatch| dispatch.stop_immediate)
                 .unwrap_or(false);
             if immediate {
                 break;
             }
         }
-        Ok(
-            with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
-                .flatten()
-                .unwrap_or(false),
-        )
+        Ok(host_ref(context)?
+            .dispatch
+            .map(|dispatch| dispatch.prevent_default)
+            .unwrap_or(false))
     })();
     // These fields must be cleared even when a listener throws or exhausts a budget.
     let _ = event.set(js_string!("currentTarget"), JsValue::null(), false, context);
@@ -916,11 +933,15 @@ fn is_budget_message(message: &str) -> bool {
         || lower.contains("stack size")
 }
 
-fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetKey)> {
+fn propagation_path(
+    context: &mut Context,
+    target: TargetKey,
+    bubbles: bool,
+) -> JsResult<Vec<(PropPhase, TargetKey)>> {
     // Dispatch on `window`: the window is the target (`AT_TARGET`, phase 2), with capture
     // and bubble listeners both running there; there are no ancestors above it.
     if target == TargetKey::Window {
-        return vec![(PropPhase::Target, TargetKey::Window)];
+        return Ok(vec![(PropPhase::Target, TargetKey::Window)]);
     }
     // Dispatch on `document`: window is the only capture ancestor; document listeners run
     // at the target (phase 2), then a single bubble leg to window when requested.
@@ -932,13 +953,14 @@ fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetK
         if bubbles {
             path.push((PropPhase::Bubble, TargetKey::Window));
         }
-        return path;
+        return Ok(path);
     }
     let mut ancestors: Vec<TargetKey> = Vec::new();
     if let TargetKey::Node(handle) = target
-        && let Ok(node) = node_id_of(handle)
+        && let Ok(node) = node_id_of(context, handle)
     {
-        let chain = with_host(|host| {
+        let chain = {
+            let host = host_ref(context)?;
             let mut ids = Vec::new();
             let mut current = Some(node);
             while let Some(id) = current {
@@ -946,12 +968,9 @@ fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetK
                 current = host.document.try_node(id).and_then(|node| node.parent);
             }
             ids
-        })
-        .unwrap_or_default();
+        };
         for id in chain.iter().skip(1) {
-            if let Some(handle) =
-                with_host(|host| host.handle_for(*id)).and_then(|result| result.ok())
-            {
+            if let Ok(handle) = host_cell(context)?.handle_for(*id) {
                 ancestors.push(TargetKey::Node(handle));
             }
         }
@@ -980,7 +999,7 @@ fn propagation_path(target: TargetKey, bubbles: bool) -> Vec<(PropPhase, TargetK
             path.push((PropPhase::Bubble, TargetKey::Window));
         }
     }
-    path
+    Ok(path)
 }
 
 /// JS value used as `event.currentTarget`/`this` while visiting `target`.
@@ -1003,19 +1022,17 @@ fn call_listener(
     once: bool,
     slot: u32,
 ) -> JsResult<()> {
-    let _ = with_host(|host| {
-        if let Some(dispatch) = &mut host.dispatch {
-            dispatch.passive = passive;
-        }
-    });
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
+        dispatch.passive = passive;
+    }
+    // No host borrow may survive this call: the callback can re-enter any binding.
     let result = callback.call(current_target, &[JsValue::from(event.clone())], context);
-    let _ = with_host(|host| {
-        if let Some(dispatch) = &mut host.dispatch {
-            dispatch.passive = false;
-        }
-    });
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
+        dispatch.passive = false;
+    }
     if once {
-        let removed = with_host(|host| {
+        let removed = {
+            let mut host = host_cell(context)?;
             let before = host.listeners.len();
             host.listeners.retain(|listener| listener.slot != slot);
             if host.listeners.len() < before {
@@ -1024,8 +1041,7 @@ fn call_listener(
             } else {
                 false
             }
-        })
-        .unwrap_or(false);
+        };
         if removed {
             let _ = array_put(
                 context,
@@ -1042,13 +1058,14 @@ fn call_listener(
             if is_budget_message(&message) {
                 return Err(js_error(message));
             }
-            let _ = with_host(|host| {
+            {
+                let mut host = host_cell(context)?;
                 host.last_event_error = Some(message.clone());
                 host.push_console(crate::host::ConsoleEntry {
                     level: "error".to_string(),
                     message,
                 });
-            });
+            }
             Ok(())
         }
     }
@@ -1075,37 +1092,44 @@ fn deliver(
         context,
     );
     let at_target = phase == PropPhase::Target;
-    let listeners: Vec<(u32, bool, bool)> = with_host(|host| {
-        let mut matching: Vec<(u32, bool, bool)> = host
+    // Snapshot (slot, once, passive, capture) while the borrow is alive. The
+    // capture flag is copied into the tuple so the AT_TARGET sort never needs to
+    // re-scan `host.listeners` from inside the sort closure.
+    let listeners: Vec<(u32, bool, bool, bool)> = {
+        let host = host_ref(context)?;
+        let mut matching: Vec<(u32, bool, bool, bool)> = host
             .listeners
             .iter()
             .filter(|listener| listener.target == target && listener.event_type == event_type)
             .filter(|listener| at_target || listener.capture == (phase == PropPhase::Capture))
-            .map(|listener| (listener.slot, listener.once, listener.passive))
+            .map(|listener| {
+                (
+                    listener.slot,
+                    listener.once,
+                    listener.passive,
+                    listener.capture,
+                )
+            })
             .collect();
         if at_target {
             // AT_TARGET: capture listeners first, then bubble listeners (same phase).
-            matching.sort_by_key(|(slot, _, _)| {
-                !host
-                    .listeners
-                    .iter()
-                    .any(|listener| listener.slot == *slot && listener.capture)
-            });
+            matching.sort_by_key(|(_, _, _, capture)| !capture);
         }
         matching
-    })
-    .unwrap_or_default();
-    for (slot, once, passive) in listeners {
-        let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
-            .flatten()
+    };
+    for (slot, once, passive, _) in listeners {
+        let immediate = host_ref(context)?
+            .dispatch
+            .map(|dispatch| dispatch.stop_immediate)
             .unwrap_or(false);
         if immediate {
             return Ok(());
         }
         // A listener removed by an earlier callback in this dispatch must not run.
-        let registered =
-            with_host(|host| host.listeners.iter().any(|listener| listener.slot == slot))
-                .unwrap_or(false);
+        let registered = host_ref(context)?
+            .listeners
+            .iter()
+            .any(|listener| listener.slot == slot);
         if !registered {
             continue;
         }
@@ -1124,13 +1148,13 @@ fn deliver(
     }
     // Inline `on<event>` handlers run at the target (bubble phase), after regular listeners.
     if phase == PropPhase::Target {
-        let inline_slot = with_host(|host| {
+        let inline_slot = {
+            let host = host_ref(context)?;
             host.inline_handlers
                 .iter()
                 .find(|handler| handler.target == target && handler.event_type == event_type)
                 .map(|handler| handler.slot)
-        })
-        .flatten();
+        };
         if let Some(slot) = inline_slot {
             let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))?;
             if let Some(callback) = callback.as_object() {
@@ -1143,9 +1167,6 @@ fn deliver(
                     false,
                     slot,
                 )?;
-                let returned_false =
-                    with_host(|host| host.dispatch.is_some()).unwrap_or(false) && false;
-                let _ = returned_false;
             }
         }
     }
@@ -1231,8 +1252,9 @@ fn dispatch_built_event(
         JsEventTarget::Window => TargetKey::Window,
         JsEventTarget::Document => TargetKey::Document,
         JsEventTarget::Node(node) => {
-            let handle = with_host(|host| host.handle_for(node))
-                .ok_or_else(|| CrateJsError::Internal("no active JavaScript host".to_string()))?
+            let handle = host_cell(context)
+                .map_err(|error| CrateJsError::Internal(error.to_string()))?
+                .handle_for(node)
                 .map_err(CrateJsError::Dom)?;
             TargetKey::Node(handle)
         }
@@ -1250,22 +1272,33 @@ fn dispatch_built_event(
         ));
     };
     let _ = event_object.set(js_string!("target"), target_js.clone(), false, context);
-    let path = propagation_path(target, bubbles);
+    let path = propagation_path(context, target, bubbles)
+        .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
     // Stack the dispatch state so a nested dispatch cannot clobber the outer one (#648).
-    let previous_dispatch = with_host(|host| host.dispatch.take()).flatten();
-    let _dispatch_guard = DispatchStateGuard::new(previous_dispatch);
-    let _ = with_host(|host| host.dispatch = Some(DispatchState::default()));
+    let previous_dispatch = host_cell(context)
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?
+        .dispatch
+        .take();
+    let _dispatch_guard = DispatchStateGuard::new(context, previous_dispatch)
+        .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
+    host_cell(context)
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?
+        .dispatch = Some(DispatchState::default());
     for (phase, key) in &path {
-        let stopped = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_propagation))
-            .flatten()
+        let stopped = host_ref(context)
+            .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+            .dispatch
+            .map(|dispatch| dispatch.stop_propagation)
             .unwrap_or(false);
         if stopped {
             break;
         }
         deliver(context, *key, *phase, event_type, &event_object)
             .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
-        let immediate = with_host(|host| host.dispatch.map(|dispatch| dispatch.stop_immediate))
-            .flatten()
+        let immediate = host_ref(context)
+            .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+            .dispatch
+            .map(|dispatch| dispatch.stop_immediate)
             .unwrap_or(false);
         if immediate {
             break;
@@ -1273,8 +1306,10 @@ fn dispatch_built_event(
     }
     let _ = event_object.set(js_string!("currentTarget"), JsValue::null(), false, context);
     let _ = event_object.set(js_string!("eventPhase"), JsValue::from(0.0), false, context);
-    let prevented = with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
-        .flatten()
+    let prevented = host_ref(context)
+        .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+        .dispatch
+        .map(|dispatch| dispatch.prevent_default)
         .unwrap_or(false);
     let _ = event_object.set(
         js_string!("defaultPrevented"),
@@ -1317,61 +1352,73 @@ pub(crate) fn dispatch_rust_ui_event(
 // matchMedia / viewport / scroll
 // ---------------------------------------------------------------------------
 
-fn viewport_info() -> crate::host::ViewportInfo {
-    with_host(|host| {
-        let mut info = host
-            .viewport_provider
-            .as_ref()
-            .map(|provider| provider())
-            .unwrap_or_default();
-        info.scroll_x = host.scroll_x;
-        info.scroll_y = host.scroll_y;
-        info
-    })
-    .unwrap_or_default()
+fn viewport_info(context: &mut Context) -> ViewportInfo {
+    // Providers must not run while the host is borrowed: they are allowed to
+    // re-enter JS. Take the boxed provider out, release the borrow, call it,
+    // then put it back for subsequent reads.
+    let (provider, scroll_x, scroll_y) = {
+        let Ok(mut host) = host_cell(context) else {
+            return ViewportInfo::default();
+        };
+        (host.viewport_provider.take(), host.scroll_x, host.scroll_y)
+    };
+    let mut info = provider
+        .as_ref()
+        .map(|provider| provider())
+        .unwrap_or_default();
+    info.scroll_x = scroll_x;
+    info.scroll_y = scroll_y;
+    if let Some(provider) = provider {
+        let _ = host_cell(context).map(|mut host| host.viewport_provider = Some(provider));
+    }
+    info
 }
 
 fn window_inner_width(
     _this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    Ok(JsValue::from(f64::from(viewport_info().width)))
+    Ok(JsValue::from(f64::from(viewport_info(context).width)))
 }
 
 fn window_inner_height(
     _this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    Ok(JsValue::from(f64::from(viewport_info().height)))
+    Ok(JsValue::from(f64::from(viewport_info(context).height)))
 }
 
 fn window_device_pixel_ratio(
     _this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    Ok(JsValue::from(viewport_info().device_pixel_ratio))
+    Ok(JsValue::from(viewport_info(context).device_pixel_ratio))
 }
 
-fn window_page_x(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    Ok(JsValue::from(viewport_info().scroll_x))
+fn window_page_x(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(viewport_info(context).scroll_x))
 }
 
-fn window_page_y(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    Ok(JsValue::from(viewport_info().scroll_y))
+fn window_page_y(_this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    Ok(JsValue::from(viewport_info(context).scroll_y))
 }
 
 fn match_media(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let query = arg_string(args, 0, context)?;
-    let matches = with_host(|host| {
-        host.media_provider
-            .as_ref()
-            .map(|provider| provider(&query))
-            .unwrap_or(false)
-    })
-    .unwrap_or(false);
+    // Snapshot the provider out of the host so it runs with no active borrow.
+    let provider = host_cell(context)
+        .ok()
+        .and_then(|mut host| host.media_provider.take());
+    let matches = provider
+        .as_ref()
+        .map(|provider| provider(&query))
+        .unwrap_or(false);
+    if let Some(provider) = provider {
+        let _ = host_cell(context).map(|mut host| host.media_provider = Some(provider));
+    }
     let add_listener = accessor_fn(context, noop_listener);
     let remove_listener = accessor_fn(context, noop_listener);
     let mut init = ObjectInitializer::new(context);
@@ -1420,20 +1467,18 @@ fn scroll_coordinates(args: &[JsValue], context: &mut Context) -> JsResult<Optio
 
 fn scroll_to(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some((x, y)) = scroll_coordinates(args, context)? {
-        let _ = with_host(|host| {
-            host.scroll_x = x.max(0.0);
-            host.scroll_y = y.max(0.0);
-        });
+        let mut host = host_cell(context)?;
+        host.scroll_x = x.max(0.0);
+        host.scroll_y = y.max(0.0);
     }
     Ok(JsValue::undefined())
 }
 
 fn scroll_by(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some((x, y)) = scroll_coordinates(args, context)? {
-        let _ = with_host(|host| {
-            host.scroll_x = (host.scroll_x + x).max(0.0);
-            host.scroll_y = (host.scroll_y + y).max(0.0);
-        });
+        let mut host = host_cell(context)?;
+        host.scroll_x = (host.scroll_x + x).max(0.0);
+        host.scroll_y = (host.scroll_y + y).max(0.0);
     }
     Ok(JsValue::undefined())
 }
@@ -1450,13 +1495,14 @@ pub(crate) fn report_uncaught(
     let document = global_get(context, "document")
         .map_err(|error| CrateJsError::Internal(error.to_string()))?;
     for (target, this) in [(TargetKey::Window, window), (TargetKey::Document, document)] {
-        let slot = with_host(|host| {
+        let slot = {
+            let host =
+                host_ref(context).map_err(|error| CrateJsError::Runtime(error.to_string()))?;
             host.inline_handlers
                 .iter()
                 .find(|handler| handler.target == target && handler.event_type == "error")
                 .map(|handler| handler.slot)
-        })
-        .flatten();
+        };
         if let Some(slot) = slot {
             let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))
                 .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
@@ -1472,12 +1518,12 @@ pub(crate) fn report_uncaught(
             }
         }
     }
-    let _ = with_host(|host| {
-        host.console.push_back(crate::host::ConsoleEntry {
+    host_cell(context)
+        .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+        .push_console(crate::host::ConsoleEntry {
             level: "error".to_string(),
             message: format!("Uncaught {message}"),
         });
-    });
     Ok(())
 }
 
@@ -1500,16 +1546,21 @@ fn get_computed_style(
                 .map(|value| value as u32)
         })
         .ok_or_else(|| js_error("getComputedStyle expects an element"))?;
-    let node_id = node_id_of(node)?;
-    let pairs = with_host(|host| {
-        host.computed_style_provider
-            .as_ref()
-            .map(|provider| provider(&host.document, node_id))
-    })
-    .flatten()
-    .unwrap_or_else(|| {
-        with_host(|host| {
-            host.document
+    let node_id = node_id_of(context, node)?;
+    // Take the provider out of the host so it runs with no active borrow, and
+    // snapshot the document it reads. `Document: Clone` keeps the handles valid.
+    let (provider, document) = {
+        let mut host = host_cell(context)?;
+        let provider = host.computed_style_provider.take();
+        let document = provider.as_ref().map(|_| host.document.clone());
+        (provider, document)
+    };
+    let pairs = match (&provider, &document) {
+        (Some(provider), Some(document)) => provider(document, node_id),
+        _ => {
+            // Fallback reads the inline `style` attribute with its own short borrow.
+            host_ref(context)?
+                .document
                 .try_node(node_id)
                 .and_then(|node| node.as_element())
                 .and_then(|element| element.get_attribute("style"))
@@ -1519,10 +1570,12 @@ fn get_computed_style(
                         .map(|declaration| (declaration.name, declaration.raw_value))
                         .collect()
                 })
-        })
-        .flatten()
-        .unwrap_or_default()
-    });
+                .unwrap_or_default()
+        }
+    };
+    if let Some(provider) = provider {
+        host_cell(context)?.computed_style_provider = Some(provider);
+    }
     let getter = accessor_fn(context, computed_get_property);
     let setter = accessor_fn(context, computed_set_property);
     let item = accessor_fn(context, computed_item);
@@ -1697,9 +1750,10 @@ fn schedule_timer(
             .unwrap_or(0.0);
         (if raw.is_finite() { raw.max(0.0) } else { 0.0 }) as u64
     };
-    let id = with_host(|host| {
+    let id = {
+        let mut host = host_cell(context)?;
         if host.timers.len() >= MAX_PENDING_TIMERS {
-            return Err("too many pending timers");
+            return Err(js_error("too many pending timers"));
         }
         let id = host.next_timer_id;
         host.next_timer_id += 1;
@@ -1710,10 +1764,8 @@ fn schedule_timer(
             interval_ms: repeat.then_some(delay.max(1)),
             animation,
         });
-        Ok(id)
-    })
-    .ok_or_else(|| js_error("no active JavaScript host"))?
-    .map_err(js_error)?;
+        id
+    };
     array_put(context, "__megi_timer_callbacks", id, callback)?;
     let args_array = JsArray::from_iter([], context);
     for argument in args.iter().skip(2) {
@@ -1751,7 +1803,7 @@ fn cancel_animation_frame(
             return Ok(JsValue::undefined());
         }
         let id = id as u64;
-        let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
+        host_cell(context)?.timers.retain(|timer| timer.id != id);
         release_timer_slots(context, id);
     }
     Ok(JsValue::undefined())
@@ -1763,7 +1815,7 @@ fn clear_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
             return Ok(JsValue::undefined());
         }
         let id = id as u64;
-        let _ = with_host(|host| host.timers.retain(|timer| timer.id != id));
+        host_cell(context)?.timers.retain(|timer| timer.id != id);
         release_timer_slots(context, id);
     }
     Ok(JsValue::undefined())
@@ -1784,7 +1836,9 @@ pub(crate) fn run_due_timers(
 ) -> Result<usize, CrateJsError> {
     let mut executed = 0usize;
     while executed < max_steps {
-        let next = with_host(|host| {
+        let next = {
+            let host =
+                host_ref(context).map_err(|error| CrateJsError::Runtime(error.to_string()))?;
             let effective = host.now_ms().max(deadline_ms);
             host.timers
                 .iter()
@@ -1800,12 +1854,13 @@ pub(crate) fn run_due_timers(
                         timer.animation,
                     )
                 })
-        })
-        .flatten();
+        };
         let Some((index, id, interval, due_ms, animation)) = next else {
             break;
         };
-        let _ = with_host(|host| {
+        {
+            let mut host =
+                host_cell(context).map_err(|error| CrateJsError::Runtime(error.to_string()))?;
             if let Some(interval) = interval {
                 if let Some(timer) = host.timers.get_mut(index) {
                     timer.due_ms = due_ms.saturating_add(interval);
@@ -1813,11 +1868,13 @@ pub(crate) fn run_due_timers(
             } else {
                 host.timers.remove(index);
             }
-        });
+        }
         let callback = array_get(context, "__megi_timer_callbacks", id)
             .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
         if let Some(callback) = callback.as_object() {
-            let timestamp = with_host(|host| host.now_ms()).unwrap_or(0);
+            let timestamp = host_ref(context)
+                .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+                .now_ms();
             let arguments = if animation {
                 // rAF callbacks receive the virtual timestamp in milliseconds.
                 vec![JsValue::from(timestamp as f64)]
@@ -1849,7 +1906,9 @@ pub(crate) fn run_due_timers(
         }
         executed += 1;
     }
-    let _ = with_host(|host| host.set_clock(deadline_ms));
+    host_cell(context)
+        .map_err(|error| CrateJsError::Runtime(error.to_string()))?
+        .set_clock(deadline_ms);
     Ok(executed)
 }
 
@@ -1864,8 +1923,9 @@ pub(crate) fn advance_clock_pumping(
     delta: Duration,
     max_steps: usize,
 ) -> Result<(u64, usize), CrateJsError> {
-    let now = with_host(|host| host.advance_clock(delta))
-        .ok_or_else(|| CrateJsError::Internal("no active JavaScript host".to_string()))?;
+    let now = host_cell(context)
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?
+        .advance_clock(delta);
     let executed = run_due_timers(context, now, max_steps)?;
     Ok((now, executed))
 }
@@ -1876,12 +1936,17 @@ pub(crate) fn run_until(
     deadline_ms: u64,
     max_steps: usize,
 ) -> Result<usize, CrateJsError> {
-    let effective = with_host(|host| host.set_clock(deadline_ms))
-        .ok_or_else(|| CrateJsError::Internal("no active JavaScript host".to_string()))?;
+    let effective = host_cell(context)
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?
+        .set_clock(deadline_ms);
     run_due_timers(context, effective, max_steps)
 }
 
 /// Current scheduler time (virtual or real).
+///
+/// Compatibility helper for callers that do not carry a `Context` (the runtime's
+/// task pump). Event bindings themselves read the clock from the host attached
+/// to the `Context` they already receive.
 pub(crate) fn now_ms() -> u64 {
     with_host(|host| host.now_ms()).unwrap_or(0)
 }
@@ -1889,6 +1954,20 @@ pub(crate) fn now_ms() -> u64 {
 #[cfg(test)]
 mod dispatch_state_guard_tests {
     use super::*;
+    use crate::host::install_host;
+    use megi_core::Document;
+
+    fn context_for_guard_test() -> Context {
+        let mut context = Context::default();
+        install_host(
+            &mut context,
+            Rc::new(RefCell::new(Host::new(
+                Document::new(),
+                "about:blank".into(),
+            ))),
+        );
+        context
+    }
 
     #[test]
     fn guard_restores_stacked_dispatch_state() {
@@ -1898,10 +1977,22 @@ mod dispatch_state_guard_tests {
             stop_immediate: false,
             passive: true,
         };
-        // Constructing and dropping the guard must be panic-free both with and
-        // without an active host scope; the real restore happens inside with_host.
-        let _guard = DispatchStateGuard::new(Some(outer));
-        drop(_guard);
-        let _guard = DispatchStateGuard::new(None);
+        let mut context = context_for_guard_test();
+        host_cell(&mut context).unwrap().dispatch = Some(outer);
+        {
+            let previous = host_cell(&mut context).unwrap().dispatch.take();
+            let _guard = DispatchStateGuard::new(&context, previous).unwrap();
+        }
+        let restored = host_cell(&mut context).unwrap().dispatch.unwrap();
+        assert!(restored.prevent_default);
+        assert!(restored.stop_propagation);
+        assert!(!restored.stop_immediate);
+        assert!(restored.passive);
+    }
+
+    #[test]
+    fn guard_without_host_is_a_typed_error() {
+        let context = Context::default();
+        assert!(DispatchStateGuard::new(&context, None).is_err());
     }
 }
