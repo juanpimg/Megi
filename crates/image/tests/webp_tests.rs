@@ -617,3 +617,20 @@ fn decodes_vp8x_uncompressed_alph_lossy_fixture_exactly() {
     assert_eq!(image.pixel(0, 0).map(|pixel| pixel[3]), Some(0));
     assert_eq!(image.pixel(15, 0).map(|pixel| pixel[3]), Some(255));
 }
+
+#[test]
+fn alph_filtering_methods_2_and_3_decode() {
+    // #1660: WebP ALPH filtering methods 2 (vertical) and 3 (gradient) are valid.
+    let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/audit/findings/wave2/repro-w2-assets");
+    for fixture in ["alph-f1.webp", "alph-f2.webp", "alph-f3.webp"] {
+        let path = base.join(fixture);
+        if !path.exists() {
+            continue;
+        }
+        let bytes = std::fs::read(&path).expect("read fixture");
+        let decoded =
+            image::decode(&bytes).unwrap_or_else(|error| panic!("{fixture} must decode: {error}"));
+        assert_eq!((decoded.width, decoded.height), (16, 16), "{fixture} size");
+    }
+}

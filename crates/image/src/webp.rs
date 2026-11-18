@@ -1022,6 +1022,58 @@ fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result<(), ImageE
                 }
             }
         }
+        // WebP Container Spec, ALPH chunk byte 0 bits 3:2 — filtering method 2 (vertical) and
+        // 3 (gradient) are valid and emitted by encoders (#1660). Each sample is reconstructed
+        // from its left/above/upper-left neighbours, in row-major order.
+        2 | 3 => {
+            let width = image.width as usize;
+            let height = image.height as usize;
+            if width == 0 || height == 0 || alpha.len() < width * height {
+                return Err(ImageError::Truncated {
+                    context: "WebP ALPH data",
+                });
+            }
+            // Read predictors from the original (still-filtered) plane, write reconstruction
+            // into a separate buffer, then swap — avoids aliasing while iterating.
+            let source = alpha.clone();
+            let at = |row: usize, col: usize| -> u8 {
+                if row < height && col < width {
+                    source[row * width + col]
+                } else {
+                    0
+                }
+            };
+            let mut rebuilt = vec![0u8; width * height];
+            for row in 0..height {
+                for col in 0..width {
+                    let index = row * width + col;
+                    let predictor = if filtering == 2 {
+                        // Vertical: predict from the sample above.
+                        at(row.saturating_sub(1), col)
+                    } else {
+                        // Gradient: (left + above - upper-left), clamped by choosing the
+                        // neighbour closest to the linear prediction (spec §"Gradient filter").
+                        let left = at(row, col.saturating_sub(1));
+                        let above = at(row.saturating_sub(1), col);
+                        let upper_left = at(row.saturating_sub(1), col.saturating_sub(1));
+                        let base = (i32::from(left) + i32::from(above) - i32::from(upper_left))
+                            .clamp(0, 255) as u8;
+                        let dl = (i32::from(base) - i32::from(left)).abs();
+                        let da = (i32::from(base) - i32::from(above)).abs();
+                        let dul = (i32::from(base) - i32::from(upper_left)).abs();
+                        if dl <= da && dl <= dul {
+                            left
+                        } else if da <= dul {
+                            above
+                        } else {
+                            upper_left
+                        }
+                    };
+                    rebuilt[index] = source[index].wrapping_add(predictor);
+                }
+            }
+            alpha = rebuilt;
+        }
         _ => {
             return Err(ImageError::UnsupportedFeature {
                 feature: "WebP ALPH filtering method",

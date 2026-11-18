@@ -92,3 +92,23 @@ fn first_number_accepts_px_units() {
         "x=10px must match x=10 ({different} pixels differ)"
     );
 }
+
+#[test]
+fn extended_css_named_colors_paint() {
+    // #1655: the full CSS Color named-color table must resolve (not fall to transparent).
+    for (name, expected) in [
+        ("rebeccapurple", [102, 51, 153, 255]),
+        ("coral", [255, 127, 80, 255]),
+        ("darkblue", [0, 0, 139, 255]),
+        ("lightgray", [211, 211, 211, 255]),
+        ("tomato", [255, 99, 71, 255]),
+        ("goldenrod", [218, 165, 32, 255]),
+    ] {
+        let image = render(&format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
+                 <rect width="10" height="10" fill="{name}"/>
+            </svg>"##
+        ));
+        assert_eq!(px(&image, 5, 5), expected, "named color {name}");
+    }
+}
