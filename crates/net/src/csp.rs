@@ -138,6 +138,22 @@ impl ContentSecurityPolicy {
         self.allows_url_for("font-src", url, document_url)
     }
 
+    /// Whether a nested frame (`<iframe>`) at `url` may load on `document_url`
+    /// (`frame-src`, falling back to `child-src`, then `default-src`).
+    pub fn allows_frame(&self, url: &Url, document_url: &Url) -> bool {
+        self.policies.iter().all(|policy| {
+            let Some(sources) = policy
+                .get("frame-src")
+                .or_else(|| policy.get("child-src"))
+                .or_else(|| policy.get("default-src"))
+                .map(Vec::as_slice)
+            else {
+                return true;
+            };
+            url_allowed_by_sources(sources, url, document_url)
+        })
+    }
+
     /// Whether an inline script may execute (`script-src` with `nonce` / `'sha256-…'` / `'unsafe-inline'`).
     pub fn allows_inline(&self, nonce: Option<&str>, text: &str) -> bool {
         self.allows_inline_for("script-src", nonce, text)
@@ -588,5 +604,21 @@ mod tests {
 
         let none_policy = ContentSecurityPolicy::parse("default-src 'none'");
         assert!(!none_policy.allows_websocket(&same_ws, true, &https_doc));
+    }
+
+    #[test]
+    fn allows_frame_uses_frame_src_and_child_src_fallback() {
+        let same = Url::parse("https://site.test/sub.html").unwrap();
+        let other = Url::parse("https://other.example/embed.html").unwrap();
+        let frame_policy = ContentSecurityPolicy::parse("frame-src 'self'; child-src *");
+        assert!(frame_policy.allows_frame(&same, &doc()));
+        assert!(!frame_policy.allows_frame(&other, &doc()));
+
+        let child_fallback = ContentSecurityPolicy::parse("child-src https://other.example");
+        assert!(!child_fallback.allows_frame(&same, &doc()));
+        assert!(child_fallback.allows_frame(&other, &doc()));
+
+        let default_fallback = ContentSecurityPolicy::parse("default-src 'none'");
+        assert!(!default_fallback.allows_frame(&same, &doc()));
     }
 }

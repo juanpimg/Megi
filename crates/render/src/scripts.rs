@@ -300,6 +300,11 @@ pub struct ScriptingHostContext {
     pub layout_provider: Option<
         Arc<dyn Fn() -> std::collections::HashMap<dom::NodeId, js::host::LayoutRect> + Send + Sync>,
     >,
+    /// Optional `<iframe sandbox>` flags applied when this document is a framed subdocument (#1544).
+    #[cfg(feature = "js")]
+    pub sandbox_flags: Option<js::SandboxFlags>,
+    /// Current nesting depth in the frame tree (`0` for top-level document).
+    pub frame_depth: usize,
 }
 
 impl ScriptingHostContext {
@@ -327,6 +332,9 @@ impl ScriptingHostContext {
             layout: None,
             #[cfg(feature = "js")]
             layout_provider: None,
+            #[cfg(feature = "js")]
+            sandbox_flags: None,
+            frame_depth: 0,
         }
     }
 
@@ -351,6 +359,9 @@ impl ScriptingHostContext {
             layout: None,
             #[cfg(feature = "js")]
             layout_provider: None,
+            #[cfg(feature = "js")]
+            sandbox_flags: None,
+            frame_depth: 0,
         }
     }
 }
@@ -373,6 +384,9 @@ pub struct ScriptExecution {
     /// Only available when the `js` feature is enabled (no canvas without scripts).
     #[cfg(feature = "js")]
     pub canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface>,
+    /// Mutated/initialized child `<iframe>` documents captured during scripting (#1544).
+    #[cfg(feature = "js")]
+    pub frame_documents: Vec<(NodeId, Document, js::SandboxFlags, String)>,
     /// Scripts evaluated without an error.
     pub executed: usize,
     /// Scripts that raised an exception or exhausted a budget.
@@ -800,6 +814,7 @@ pub fn execute_scripts(
     let mut execution = ScriptExecution {
         document,
         canvas_surfaces: std::collections::HashMap::new(),
+        frame_documents: Vec::new(),
         executed: 0,
         failed: 0,
         console: Vec::new(),
@@ -833,6 +848,38 @@ pub fn execute_scripts(
         }
     };
 
+    if let Some(flags) = host.sandbox_flags {
+        runtime.set_sandbox_flags(flags);
+    }
+    runtime.set_frame_depth(host.frame_depth);
+    {
+        let frame_base = document_url.clone();
+        let frame_no_network = host.no_network;
+        let frame_csp = host.csp.clone();
+        let frame_options = host.fetch_options.clone();
+        runtime.set_frame_loader(Box::new(move |raw_url| {
+            let url = Url::parse(raw_url).map_err(|e| format!("invalid frame URL: {e}"))?;
+            if frame_no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+                return Err(format!("frame blocked (--no-network): {url}"));
+            }
+            if let Some(policy) = &frame_csp
+                && !policy.allows_frame(&url, &frame_base)
+            {
+                return Err(format!("frame blocked by Content-Security-Policy: {url}"));
+            }
+            if url.scheme() == Scheme::File && !file_fetch_allowed(&frame_base, &url) {
+                return Err(format!("frame blocked (file access policy): {url}"));
+            }
+            let mut loader = ResourceLoader::with_options(frame_options.clone())
+                .with_allow_file(frame_base.is_file());
+            loader.set_mixed_content_context(Some(frame_base.scheme()));
+            let resource = loader
+                .load_checked(&url, false)
+                .map_err(|e| format!("frame load failed: {e}"))?;
+            let html = String::from_utf8_lossy(&resource.bytes).into_owned();
+            Ok((resource.url.as_str(), html))
+        }));
+    }
     for (iframe, frame_document) in &host.frame_documents {
         runtime.set_frame_document(*iframe, frame_document.clone());
     }
@@ -1554,8 +1601,8 @@ pub fn execute_scripts(
         drain_microtasks(&mut runtime, warnings);
         run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
     }
-    // 5. Deterministic cooperative workers: drain main→worker and worker→main queues,
-    // then pump timers/microtasks scheduled by worker callbacks before the re-render.
+    // 5. Deterministic cooperative workers and cross-frame postMessage delivery (#1544):
+    // drain main<->worker and parent<->child iframe queues, then pump timers/microtasks.
     if host.enable_workers {
         // Worker deliveries get only the *remaining* task budget and are deliberately not
         // added to `loop_state.tasks`: that counter is the documented "timer callbacks"
@@ -1568,6 +1615,13 @@ pub fn execute_scripts(
         drain_microtasks(&mut runtime, warnings);
         run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
     }
+    runtime.init_connected_frames();
+    let frame_budget = limits.max_tasks.saturating_sub(loop_state.tasks).min(256);
+    if let Err(error) = runtime.run_frame_tasks(frame_budget) {
+        warnings.push(format!("frame tasks failed: {error}"));
+    }
+    drain_microtasks(&mut runtime, warnings);
+    run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
     // Final microtask checkpoint: MutationObserver records queued by the last timer/host
     // callback callbacks are delivered **before** the document is handed back, so their
     // own DOM mutations are included in the re-render.
@@ -1595,6 +1649,7 @@ pub fn execute_scripts(
     }
     execution.document = std::mem::take(&mut *runtime.document_mut());
     execution.canvas_surfaces = runtime.canvas_surfaces();
+    execution.frame_documents = runtime.snapshot_frame_documents();
     execution.location_actions = std::mem::take(
         &mut *location_actions
             .lock()
@@ -1735,6 +1790,7 @@ fn run_event_loop(
         // still open but no timer is due, pump briefly so a response can arrive before the
         // render finalizes (bounded to keep the pipeline deterministic and non-hanging).
         runtime.poll_websockets();
+        let _ = runtime.run_frame_tasks(limits.max_tasks.saturating_sub(state.tasks).min(64));
         drain_microtasks(runtime, warnings);
         let remaining = limits.max_tasks.saturating_sub(state.tasks);
         if remaining == 0 {

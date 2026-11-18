@@ -197,6 +197,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
     for (name, length, function) in [
         ("Event", 2usize, event_constructor as NativeFn),
         ("CustomEvent", 2, custom_event_constructor),
+        ("MessageEvent", 2, message_event_constructor),
     ] {
         context
             .register_global_callable(js_string!(name), length, native(function))
@@ -361,6 +362,12 @@ inline_handler_accessors!(
         "invalid"
     ),
     (inline_onreset_get, inline_onreset_set, "onreset", "reset"),
+    (
+        inline_onmessage_get,
+        inline_onmessage_set,
+        "onmessage",
+        "message"
+    ),
 );
 
 /// Inline handler accessor pairs shared with node/document wrappers.
@@ -499,6 +506,66 @@ fn custom_event_constructor(
         })
         .unwrap_or(false);
     Ok(build_event(context, &event_type, bubbles, true, detail))
+}
+
+fn build_message_event(
+    context: &mut Context,
+    event_type: &str,
+    data: JsValue,
+    origin: &str,
+    source: JsValue,
+) -> JsValue {
+    let ev_val = build_event(context, event_type, false, false, JsValue::undefined());
+    if let Some(obj) = ev_val.as_object() {
+        let _ = obj.set(js_string!("data"), data, false, context);
+        let _ = obj.set(js_string!("origin"), js_string!(origin), false, context);
+        let _ = obj.set(js_string!("source"), source, false, context);
+        let _ = obj.set(js_string!("lastEventId"), js_string!(""), false, context);
+    }
+    ev_val
+}
+
+fn message_event_constructor(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let event_type = arg_string(args, 0, context)?;
+    let options = args.get(1).and_then(|value| value.as_object());
+    let data = options
+        .as_ref()
+        .map(|o| prop(o, "data", context).unwrap_or_else(|_| JsValue::null()))
+        .unwrap_or_else(JsValue::null);
+    let origin = options
+        .as_ref()
+        .and_then(|o| prop(o, "origin", context).ok())
+        .and_then(|v| v.to_string(context).ok())
+        .map(|s| s.to_std_string_escaped())
+        .unwrap_or_default();
+    let source = options
+        .as_ref()
+        .map(|o| prop(o, "source", context).unwrap_or_else(|_| JsValue::null()))
+        .unwrap_or_else(JsValue::null);
+    Ok(build_message_event(
+        context,
+        &event_type,
+        data,
+        &origin,
+        source,
+    ))
+}
+
+/// Dispatches a `message` event (`MessageEvent`) directly on `window`.
+pub(crate) fn dispatch_message_event(
+    target: &JsValue,
+    data: JsValue,
+    origin: &str,
+    source: JsValue,
+    context: &mut Context,
+) -> JsResult<bool> {
+    let event = build_message_event(context, "message", data, origin, source);
+    let result = dispatch_event(target, &[event], context)?;
+    Ok(result.to_boolean())
 }
 
 fn check_event(this: &JsValue, context: &mut Context) -> JsResult<JsObject> {
