@@ -48,7 +48,7 @@ pub fn history_page(entries: &[crate::history::HistoryEntry]) -> String {
         rows.push_str("</tbody></table>");
     }
     format!(
-        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>History</title>\
+        "<!DOCTYPE html>\n<html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>History</title>\
          <style>body{{font-family:sans-serif;margin:16px;background:#fff;color:#1f2328;}}\
          h1{{font-size:20px}}table{{border-collapse:collapse;width:100%}}\
          th,td{{border-bottom:1px solid #d0d7de;padding:4px 8px;text-align:left;font-size:13px}}\
@@ -65,7 +65,7 @@ pub fn reader_page(title: &str, paragraphs: &[String], source_url: &str) -> Stri
         let _ = write!(body, "<p>{}</p>", escape_html(paragraph));
     }
     format!(
-        "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>{}</title>\
+        "<!DOCTYPE html>\n<html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{}</title>\
          <style>html{{background:#fbfbf8}}body{{max-width:700px;margin:32px auto;padding:0 20px;\
          font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.65;color:#222;}}\
          h1{{font-size:30px;line-height:1.2;margin:0 0 24px}}p{{margin:0 0 18px}}\
@@ -205,7 +205,7 @@ pub fn listing_html(base_url: &str, path: &Path, entries: &[ListingEntry]) -> St
     let mut html = String::with_capacity(2048);
     let _ = write!(
         html,
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title>\
+        "<!doctype html><html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\"><title>{title}</title>\
 <style>body{{font-family:sans-serif;margin:16px}}h1{{font-size:18px}}table{{border-collapse:collapse}}\
 td,th{{padding:2px 10px;text-align:left;font-size:13px}}a{{color:#0645ad;text-decoration:none}}\
 a:hover{{text-decoration:underline}}.size{{text-align:right;color:#555}}</style></head><body>"
@@ -275,7 +275,7 @@ pub fn error_html(url: &str, code: &str, message: &str) -> String {
     let escaped_code = escape_html(code);
     let escaped_message = escape_html(message);
     format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\">\
+        "<!doctype html><html lang=\"es\" dir=\"ltr\"><head><meta charset=\"utf-8\">\
 <title>Error loading page</title><style>body{{font-family:sans-serif;margin:32px;color:#222}}\
 h1{{font-size:20px;color:#a00}}code{{background:#f2f2f2;padding:1px 4px}}\
 a.button{{display:inline-block;margin-top:12px;padding:6px 14px;background:#0645ad;color:#fff;\
