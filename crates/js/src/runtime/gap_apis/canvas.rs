@@ -1,0 +1,294 @@
+use super::*;
+
+/// Resolves a canvas 2D context receiver to its `<canvas>` node id.
+pub(crate) fn canvas_context_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
+    let object = this
+        .as_object()
+        .ok_or_else(|| js_error("canvas method called with a non-object receiver"))?;
+    let value = object
+        .get(js_string!("__megi_canvas_node"), context)
+        .map_err(|error| js_error(error.to_string()))?;
+    let handle = value
+        .as_number()
+        .filter(|n| *n >= 0.0 && *n <= u32::MAX as f64 && n.fract() == 0.0)
+        .map(|n| n as u32)
+        .ok_or_else(|| js_error("invalid canvas context"))?;
+    with_context_host(context, |host| host.node_for_handle(handle))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)
+}
+
+/// `HTMLCanvasElement.getContext('2d')` (#1545): returns a context object bound to the canvas
+/// node. Repeated calls return a fresh wrapper over the same underlying surface.
+pub(crate) fn canvas_get_context(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let kind = arg_string(args, 0, context)?;
+    if kind != "2d" {
+        return Ok(JsValue::null());
+    }
+    let node = this_node(this, context)?;
+    let (width, height) = with_context_host(context, |host| {
+        let document = &host.document;
+        let element = document.try_node(node).and_then(|n| n.as_element());
+        let dim = |name: &str, default: u32| -> u32 {
+            element
+                .and_then(|e| e.get_attribute(name))
+                .and_then(|v| v.trim().parse::<u32>().ok())
+                .unwrap_or(default)
+                .min(crate::canvas::MAX_CANVAS_DIM)
+        };
+        (dim("width", 300), dim("height", 150))
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let surface_ok = with_context_host(context, |host| {
+        host.canvas_store.surface_for(node, width, height).is_some()
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    if !surface_ok {
+        return Err(js_error("canvas surface exceeds size cap"));
+    }
+    let handle = with_context_host(context, |host| host.handle_for(node))
+        .ok_or_else(|| js_error("no active JavaScript host"))?
+        .map_err(js_error)?;
+
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("__megi_canvas_node"),
+        JsValue::from(handle),
+        Attribute::all(),
+    );
+    for (name, function) in [
+        ("fillRect", canvas_fill_rect as NativeFn),
+        ("clearRect", canvas_clear_rect as NativeFn),
+        ("strokeRect", canvas_stroke_rect as NativeFn),
+        ("getImageData", canvas_get_image_data as NativeFn),
+        ("putImageData", canvas_put_image_data as NativeFn),
+    ] {
+        init.function(native(function), js_string!(name), 4);
+    }
+    let context_object = init.build();
+    // fillStyle/strokeStyle accessors (defined after build via the descriptor API).
+    let get_fill = accessor_fn(context, canvas_fill_style_get);
+    let set_fill = accessor_fn(context, canvas_fill_style_set);
+    let descriptor = PropertyDescriptor::builder()
+        .get(JsValue::from(get_fill))
+        .set(JsValue::from(set_fill))
+        .enumerable(true)
+        .configurable(true)
+        .build();
+    let _ = context_object.define_property_or_throw(js_string!("fillStyle"), descriptor, context);
+    let get_stroke = accessor_fn(context, canvas_stroke_style_get);
+    let set_stroke = accessor_fn(context, canvas_stroke_style_set);
+    let descriptor = PropertyDescriptor::builder()
+        .get(JsValue::from(get_stroke))
+        .set(JsValue::from(set_stroke))
+        .enumerable(true)
+        .configurable(true)
+        .build();
+    let _ = context_object.define_property_or_throw(js_string!("strokeStyle"), descriptor, context);
+    Ok(context_object.into())
+}
+
+pub(crate) fn canvas_fill_rect(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let rect = canvas_rect_args(args, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.fill_rect(rect.0, rect.1, rect.2, rect.3))
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_clear_rect(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let rect = canvas_rect_args(args, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.clear_rect(rect.0, rect.1, rect.2, rect.3))
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_stroke_rect(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let rect = canvas_rect_args(args, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.stroke_rect(rect.0, rect.1, rect.2, rect.3))
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_rect_args(
+    args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<(f64, f64, f64, f64)> {
+    let num = |index: usize| -> JsResult<f64> {
+        args.get(index)
+            .and_then(|v| v.as_number())
+            .ok_or_else(|| js_error("canvas rect expects four finite numbers"))
+    };
+    Ok((num(0)?, num(1)?, num(2)?, num(3)?))
+}
+
+pub(crate) fn canvas_fill_style_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let css = with_context_host(context, |host| {
+        host.canvas_store
+            .get(node)
+            .map(|s| crate::canvas::rgba_to_css(s.fill_style))
+    })
+    .flatten()
+    .unwrap_or_else(|| "#000000".to_owned());
+    Ok(JsValue::from(js_string!(css)))
+}
+
+pub(crate) fn canvas_fill_style_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    if let Some(color) = crate::canvas::Rgba::parse(&value) {
+        with_context_host(context, |host| {
+            host.canvas_store
+                .with_surface_mut(node, |s| s.fill_style = color)
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_stroke_style_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let css = with_context_host(context, |host| {
+        host.canvas_store
+            .get(node)
+            .map(|s| crate::canvas::rgba_to_css(s.stroke_style))
+    })
+    .flatten()
+    .unwrap_or_else(|| "#000000".to_owned());
+    Ok(JsValue::from(js_string!(css)))
+}
+
+pub(crate) fn canvas_stroke_style_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    if let Some(color) = crate::canvas::Rgba::parse(&value) {
+        with_context_host(context, |host| {
+            host.canvas_store
+                .with_surface_mut(node, |s| s.stroke_style = color)
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_get_image_data(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let x = args.first().and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
+    let y = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
+    let w = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
+    let h = args.get(3).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
+    let data = with_context_host(context, |host| {
+        host.canvas_store
+            .get(node)
+            .and_then(|s| s.get_image_data(x, y, w, h))
+    })
+    .flatten();
+    let Some(data) = data else {
+        return Ok(JsValue::null());
+    };
+    // Return an object { width, height, data: Uint8ClampedArray }.
+    let array =
+        boa_engine::object::builtins::JsUint8ClampedArray::from_iter(data.iter().copied(), context)
+            .map_err(|error| js_error(error.to_string()))?;
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("width"), JsValue::from(w), Attribute::all());
+    init.property(js_string!("height"), JsValue::from(h), Attribute::all());
+    init.property(js_string!("data"), JsValue::from(array), Attribute::all());
+    Ok(init.build().into())
+}
+
+pub(crate) fn canvas_put_image_data(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let image = args
+        .first()
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| js_error("putImageData expects ImageData"))?;
+    let dx = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
+    let dy = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
+    let w = image
+        .get(js_string!("width"), context)
+        .ok()
+        .and_then(|v| v.as_number())
+        .unwrap_or(0.0) as u32;
+    let h = image
+        .get(js_string!("height"), context)
+        .ok()
+        .and_then(|v| v.as_number())
+        .unwrap_or(0.0) as u32;
+    let data_obj = image
+        .get(js_string!("data"), context)
+        .ok()
+        .and_then(|v| v.as_object());
+    let bytes: Vec<u8> = data_obj
+        .as_ref()
+        .and_then(|obj| {
+            obj.get(js_string!("length"), context)
+                .ok()
+                .and_then(|v| v.as_number())
+        })
+        .map(|len| {
+            let obj = data_obj.as_ref().expect("obj");
+            (0..len as u32)
+                .filter_map(|i| {
+                    obj.get(js_string!(i.to_string()), context)
+                        .ok()
+                        .and_then(|v| v.as_number())
+                })
+                .map(|n| n.clamp(0.0, 255.0) as u8)
+                .collect()
+        })
+        .unwrap_or_default();
+    with_context_host(context, |host| {
+        host.canvas_store.with_surface_mut(node, |s| {
+            let _ = s.put_image_data(dx, dy, w, h, &bytes);
+        })
+    });
+    Ok(JsValue::undefined())
+}

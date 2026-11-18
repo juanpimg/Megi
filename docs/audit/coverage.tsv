@@ -366,20 +366,52 @@ crates/image/tests/webp_tests.rs	636	test	F1	waveF1	2026-11-17	covered	#1364,#13
 crates/js/Cargo.toml	22	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/js/src/canvas.rs	474	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/js/src/error.rs	69	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/events.rs	2035	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/host.rs	1187	src	F2	wave1	2026-11-16	covered	#1134-#1147	
-crates/js/src/import_map.rs	540	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/events.rs	98	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/events/computed_style.rs	185	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/core.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/dispatch.rs	443	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/event.rs	272	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/inline.rs	112	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/install.rs	107	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/listeners.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/timers.rs	258	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/host.rs	284	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/host/context.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/host/impl_host.rs	306	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/host/state.rs	152	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/host/types.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/import_map.rs	298	src	F2	wave1	2026-11-16	covered	#1134-#1147	
+crates/js/src/import_map/parser.rs	246	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/lib.rs	314	src	F2	wave1	2026-11-16	covered	#1134-#1147	
 crates/js/src/providers.rs	136	src	F2			pending		
 crates/js/src/runtime.rs	242	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/api.rs	528	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/api.rs	40	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/api/core.rs	258	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/api/runtime_impl.rs	238	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/cssom.rs	466	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/document.rs	638	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/document.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/document/parse.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/document/query.rs	238	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/dom_utils.rs	306	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/frames.rs	1270	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/gap_apis.rs	1845	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/frames.rs	11	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/frames/bridge.rs	348	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/frames/state.rs	262	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis.rs	31	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/canvas.rs	294	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/install.rs	45	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/prelude_a.js	385	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/prelude_b.js	385	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/gap_apis/slots.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/globals.rs	848	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/globals/builders.rs	302	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/globals/features.rs	429	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/globals/install.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/location_storage.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/module_eval.rs	280	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
@@ -387,13 +419,28 @@ crates/js/src/runtime/module_parse.rs	123	src	F2	wave-max-mod	2026-11-19	covered
 crates/js/src/runtime/modules.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/network.rs	213	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/node_accessors.rs	352	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/node_methods.rs	1442	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods.rs	16	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/attributes.rs	115	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/dialog.rs	195	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/forms.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/mutations.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/properties.rs	276	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/node_methods/validation.rs	379	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/runtime/node_wrappers.rs	366	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/observers.rs	633	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/tla.rs	617	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
-crates/js/src/runtime/workers.rs	607	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/observers.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/observers/delivery.rs	105	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/observers/registration.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/tla.rs	8	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/tla/accessors.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/tla/loader.rs	257	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/workers.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/workers/api.rs	240	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/workers/messaging.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/runtime/workers/state.rs	292	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/src/websocket.rs	254	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
-crates/js/src/xhr.rs	683	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/js/src/xhr.rs	32	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+crates/js/src/xhr/prelude_a.js	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
+crates/js/src/xhr/prelude_b.js	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	mechanical split, tests green
 crates/js/tests/browser_api_tests.rs	363	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/browser_features_r24.rs	514	test	F1	waveF1	2026-11-17	covered	#1372-#1378	
 crates/js/tests/canvas_tests.rs	100	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
