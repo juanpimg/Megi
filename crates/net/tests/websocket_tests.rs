@@ -55,7 +55,7 @@ fn serve() -> (u16, JoinHandle<()>) {
                     .map(|(_, value)| value.trim().to_owned())
             })
             .expect("client key");
-        let accept = net::websocket::accept_value(&key);
+        let accept = accept_value(&key);
         let response = format!(
             "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
         );
