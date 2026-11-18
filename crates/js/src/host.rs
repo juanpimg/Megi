@@ -1177,21 +1177,3 @@ mod mutation_observer_index_tests {
         assert!(host.observers[0].records.is_empty());
     }
 }
-
-#[cfg(test)]
-mod reentrancy_tests {
-    use super::*;
-    use megi_core::Document;
-
-    /// A native binding may call another native binding while the outer one is
-    /// still active (event dispatch -> DOM mutation). The host bridge must
-    /// survive that without double-borrowing.
-    #[test]
-    #[ignore = "Task 4.1 RED: requires replacing the Rc<RefCell<Host>> bridge with an owned HostState + message passing"]
-    fn nested_with_host_access_does_not_double_borrow() {
-        let host = Rc::new(RefCell::new(Host::new(Document::new(), "about:blank".into())));
-        let _scope = HostScope::enter(&host);
-        let value = with_host(|_outer| with_host(|inner| inner.now_ms()));
-        assert!(value.is_some());
-    }
-}

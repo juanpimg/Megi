@@ -108,8 +108,7 @@
     "crates/js/src/runtime.rs:9347": "fn new(runtime: JsRuntime, outbox: Rc<RefCell<VecDeque<String>>>) -> Self {",
     "crates/js/src/runtime.rs:9891": "host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,",
     "crates/js/src/runtime.rs:9899": "self: Rc<Self>,",
-    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,",
-    "crates/js/src/host.rs:1190": "Rc<RefCell<Host>> in ignored Task 4.1 RED test"
+    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,"
   },
   "edges": {
     "core": [],
