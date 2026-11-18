@@ -899,6 +899,8 @@ fn render_url_inner(
     let mut script_bytes = 0usize;
     let mut scripting_execution: Option<scripts::ScriptExecution> = None;
     // Canvas 2D surfaces painted by scripts (#1545); inserted into the image store after images load.
+    // The map is only meaningful with the `js` feature: without scripts there is no canvas.
+    #[cfg(feature = "js")]
     let mut canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface> =
         std::collections::HashMap::new();
     if script_requested && !cfg!(feature = "js") {
@@ -963,7 +965,10 @@ fn render_url_inner(
             &mut script_warnings,
         );
         document = std::mem::take(&mut execution.document);
-        canvas_surfaces = std::mem::take(&mut execution.canvas_surfaces);
+        #[cfg(feature = "js")]
+        {
+            canvas_surfaces = std::mem::take(&mut execution.canvas_surfaces);
+        }
         warnings.extend(script_warnings);
         scripting_execution = Some(execution);
     } else {
@@ -1095,11 +1100,14 @@ fn render_url_inner(
 
     // Blit script-painted canvas surfaces into the replaced-element image store (#1545). They
     // are keyed by `<canvas>` NodeId, so the painter's existing replaced-element path draws them.
-    for (node, surface) in canvas_surfaces {
-        if let Ok(rgba) = image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
-            let size = (surface.width as f32, surface.height as f32);
-            loaded_images.store.insert(node, std::sync::Arc::new(rgba));
-            loaded_images.sizes.insert(node, size);
+    #[cfg(feature = "js")]
+    {
+        for (node, surface) in canvas_surfaces {
+            if let Ok(rgba) = image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
+                let size = (surface.width as f32, surface.height as f32);
+                loaded_images.store.insert(node, std::sync::Arc::new(rgba));
+                loaded_images.sizes.insert(node, size);
+            }
         }
     }
 
