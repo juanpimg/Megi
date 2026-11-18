@@ -45,3 +45,44 @@ fn event_without_type_throws_type_error() {
         "Event() without a type must throw TypeError: {out}"
     );
 }
+
+#[test]
+fn document_title_setter_updates_dom_title() {
+    // #1645: assigning document.title must update the DOM <title> element so the window/tab
+    // title (composed from the DOM) reflects it.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "document.title = 'Updated Title'; String(document.title);",
+            "t",
+        )
+        .expect("title setter");
+    let doc = runtime.document();
+    let title = doc
+        .get_elements_by_tag_name("title")
+        .first()
+        .map(|node| doc.text_content(*node))
+        .unwrap_or_default();
+    assert_eq!(
+        title, "Updated Title",
+        "DOM <title> must reflect the setter: {title:?}"
+    );
+}
+
+#[test]
+fn worker_error_does_not_leak_local_paths() {
+    // #1646: errors delivered to page scripts must not echo absolute file:// paths.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var msg = ''; \
+             try { new Worker('file:///tmp/sito/secreto/worker.js'); } \
+             catch (e) { msg = e.message; } String(msg);",
+            "t",
+        )
+        .expect("worker");
+    assert!(
+        !out.contains("/tmp") && !out.contains("secreto") && !out.contains("file:///"),
+        "worker error leaked a local path: {out}"
+    );
+}

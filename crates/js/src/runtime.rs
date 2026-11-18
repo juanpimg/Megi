@@ -3800,7 +3800,32 @@ fn document_title_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let title = arg_string(args, 0, context)?;
-    with_host(|host| host.title = title);
+    with_host(|host| {
+        host.title = title.clone();
+        // #1645: the window/tab title is composed from the DOM <title> element. Update (or
+        // create) it so the assignment has an observable effect beyond the internal field.
+        let existing = host
+            .document
+            .get_elements_by_tag_name("title")
+            .into_iter()
+            .next();
+        if let Some(node) = existing {
+            let _ = host.document.set_text_content(node, &title);
+        } else {
+            let title_node = host
+                .document
+                .create_element(Namespace::Html, "title", Vec::new());
+            let text_node = host.document.create_text_node(&title);
+            host.document.append_child(title_node, text_node);
+            let parent = host
+                .document
+                .head()
+                .or_else(|| host.document.document_element());
+            if let Some(parent) = parent {
+                host.document.append_child(parent, title_node);
+            }
+        }
+    });
     Ok(JsValue::undefined())
 }
 
