@@ -931,9 +931,15 @@ pub fn execute_scripts(
                         .iter()
                         .map(|(name, value)| (name.as_str(), value.as_str()))
                         .collect();
+                    let mut req_options = options.clone();
+                    match request.redirect.as_deref() {
+                        Some("manual") => req_options.redirect_mode = net::RedirectMode::Manual,
+                        Some("error") => req_options.redirect_mode = net::RedirectMode::Error,
+                        _ => req_options.redirect_mode = net::RedirectMode::Follow,
+                    }
                     let response = net::http::fetch_with_method(
                         &url,
-                        &options,
+                        &req_options,
                         &request.method,
                         &header_refs,
                         request.body.as_deref(),

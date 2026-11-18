@@ -6760,7 +6760,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     this.statusText = data.statusText || "";
     this.ok = data.status >= 200 && data.status < 300;
     this.url = data.url || "";
-    this.redirected = false;
+    this.redirected = Boolean(data.redirected);
     this.headers = new Headers(data.headers || []);
     this._body = data.bodyText || "";
     this._bytes = data.bodyBytes || [];
@@ -6778,203 +6778,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     return Promise.resolve(new Uint8Array(this._bytes.slice()));
   };
   Response.prototype.clone = function () {
-    return new Response({ status: this.status, statusText: this.statusText, url: this.url, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
+    return new Response({ status: this.status, statusText: this.statusText, url: this.url, redirected: this.redirected, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
   };
   define("Response", Response);
-  define("__megi_test_pattern", function (pattern, value) {
-    var re;
-    try { re = new RegExp("^(?:" + pattern + ")$", "u"); }
-    catch (_e1) {
-      try { re = new RegExp("^(?:" + pattern + ")$"); }
-      catch (_e2) { return true; }
+  function normalizeRedirect(value) {
+    if (value === undefined) { return "follow"; }
+    var s = String(value);
+    if (s !== "follow" && s !== "manual" && s !== "error") {
+      throw new TypeError("Invalid Request redirect mode: " + s);
     }
-    return re.test(value);
-  });
-  function formControlDisabled(el, form) {
-    if (el.disabled || (el.hasAttribute && el.hasAttribute("disabled"))) { return true; }
-    var cur = el.parentNode;
-    var child = el;
-    while (cur && cur !== form) {
-      if (cur.tagName && cur.tagName.toUpperCase() === "FIELDSET" && (cur.disabled || (cur.hasAttribute && cur.hasAttribute("disabled")))) {
-        var firstLegend = null;
-        var fsChildren = cur.children || [];
-        for (var i = 0; i < fsChildren.length; i++) {
-          if (fsChildren[i].tagName && fsChildren[i].tagName.toUpperCase() === "LEGEND") { firstLegend = fsChildren[i]; break; }
-        }
-        if (child !== firstLegend) { return true; }
-      }
-      child = cur;
-      cur = cur.parentNode;
-    }
-    return false;
+    return s;
   }
-  function collectFormControls(root, form, list) {
-    var kids = root.children || [];
-    for (var i = 0; i < kids.length; i++) {
-      var el = kids[i];
-      if (!el || !el.tagName) { continue; }
-      var tag = el.tagName.toUpperCase();
-      if (tag === "DATALIST") { continue; }
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") {
-        list.push(el);
-      }
-      collectFormControls(el, form, list);
-    }
-  }
-  function FormData(form, submitter) {
-    this._list = [];
-    this._boundary = "----megiFormBoundary7f3e9a2c";
-    if (form !== undefined && form !== null) {
-      if (!form.tagName || form.tagName.toUpperCase() !== "FORM") {
-        throw new TypeError("Failed to construct 'FormData': parameter 1 is not of type 'HTMLFormElement'");
-      }
-      var controls = [];
-      collectFormControls(form, form, controls);
-      for (var i = 0; i < controls.length; i++) {
-        var el = controls[i];
-        if (formControlDisabled(el, form)) { continue; }
-        var tag = el.tagName.toUpperCase();
-        var name = el.getAttribute ? el.getAttribute("name") : null;
-        if (!name) { continue; }
-        if (tag === "BUTTON") {
-          var btnType = (el.getAttribute("type") || "submit").toLowerCase();
-          if (el === submitter && btnType !== "reset" && btnType !== "button") {
-            this._list.push([name, String(el.value || "")]);
-          }
-          continue;
-        }
-        if (tag === "INPUT") {
-          var type = (el.getAttribute("type") || "text").toLowerCase();
-          if (type === "submit" || type === "reset" || type === "button" || type === "image") {
-            if (el === submitter && type !== "reset" && type !== "button") {
-              this._list.push([name, String(el.value || "")]);
-            }
-            continue;
-          }
-          if (type === "checkbox" || type === "radio") {
-            if (!el.checked) { continue; }
-            var rawVal = el.getAttribute("value");
-            this._list.push([name, rawVal === null ? "on" : String(rawVal)]);
-            continue;
-          }
-          if (type === "file") { continue; }
-          this._list.push([name, String(el.value || "")]);
-          continue;
-        }
-        if (tag === "TEXTAREA") {
-          this._list.push([name, String(el.value || "")]);
-          continue;
-        }
-        if (tag === "SELECT") {
-          var multiple = el.hasAttribute && el.hasAttribute("multiple");
-          var opts = el.options || [];
-          if (multiple) {
-            for (var j = 0; j < opts.length; j++) {
-              if (opts[j].selected && !opts[j].disabled) {
-                this._list.push([name, String(opts[j].value || "")]);
-              }
-            }
-          } else {
-            var picked = null;
-            for (var j = 0; j < opts.length; j++) {
-              if (opts[j].selected && !opts[j].disabled) { picked = opts[j]; break; }
-            }
-            if (!picked) {
-              for (var j = 0; j < opts.length; j++) {
-                if (!opts[j].disabled) { picked = opts[j]; break; }
-              }
-            }
-            if (picked) {
-              this._list.push([name, String(picked.value || "")]);
-            }
-          }
-        }
-      }
-    }
-  }
-  function makeFormDataIter(list, mapFn) {
-    var idx = 0;
-    var iter = {
-      next: function () {
-        if (idx >= list.length) { return { value: undefined, done: true }; }
-        return { value: mapFn(list[idx++]), done: false };
-      }
-    };
-    if (typeof Symbol === "function" && Symbol.iterator) {
-      iter[Symbol.iterator] = function () { return this; };
-    }
-    return iter;
-  }
-  FormData.prototype.append = function (name, value) {
-    this._list.push([String(name), String(value)]);
-  };
-  FormData.prototype["delete"] = function (name) {
-    var key = String(name);
-    this._list = this._list.filter(function (pair) { return pair[0] !== key; });
-  };
-  FormData.prototype.get = function (name) {
-    var key = String(name);
-    for (var i = 0; i < this._list.length; i++) {
-      if (this._list[i][0] === key) { return this._list[i][1]; }
-    }
-    return null;
-  };
-  FormData.prototype.getAll = function (name) {
-    var key = String(name);
-    var out = [];
-    for (var i = 0; i < this._list.length; i++) {
-      if (this._list[i][0] === key) { out.push(this._list[i][1]); }
-    }
-    return out;
-  };
-  FormData.prototype.has = function (name) { return this.get(name) !== null; };
-  FormData.prototype.set = function (name, value) {
-    var key = String(name);
-    var val = String(value);
-    var found = false;
-    var out = [];
-    for (var i = 0; i < this._list.length; i++) {
-      if (this._list[i][0] === key) {
-        if (!found) { out.push([key, val]); found = true; }
-      } else {
-        out.push(this._list[i]);
-      }
-    }
-    if (!found) { out.push([key, val]); }
-    this._list = out;
-  };
-  FormData.prototype.keys = function () {
-    return makeFormDataIter(this._list, function (pair) { return pair[0]; });
-  };
-  FormData.prototype.values = function () {
-    return makeFormDataIter(this._list, function (pair) { return pair[1]; });
-  };
-  FormData.prototype.entries = function () {
-    return makeFormDataIter(this._list, function (pair) { return [pair[0], pair[1]]; });
-  };
-  FormData.prototype.forEach = function (callback, thisArg) {
-    for (var i = 0; i < this._list.length; i++) {
-      callback.call(thisArg, this._list[i][1], this._list[i][0], this);
-    }
-  };
-  if (typeof Symbol === "function" && Symbol.iterator) {
-    FormData.prototype[Symbol.iterator] = FormData.prototype.entries;
-  }
-  FormData.prototype._toMultipart = function () {
-    var b = this._boundary;
-    var out = "";
-    for (var i = 0; i < this._list.length; i++) {
-      var escapedName = this._list[i][0].replace(/[\r\n"]/g, function (c) {
-        return c === '"' ? "%22" : (c === "\r" ? "%0D" : "%0A");
-      });
-      out += "--" + b + "\r\n";
-      out += 'Content-Disposition: form-data; name="' + escapedName + '"\r\n\r\n';
-      out += this._list[i][1] + "\r\n";
-    }
-    out += "--" + b + "--\r\n";
-    return out;
-  };
-  define("FormData", FormData);
   function Request(input, init) {
     init = init || {};
     if (input && typeof input === "object" && typeof input.url === "string") {
@@ -6984,6 +6798,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.body = init.body !== undefined ? init.body : (input.body || null);
       if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || input.signal || null;
+      this.redirect = normalizeRedirect(init.redirect !== undefined ? init.redirect : input.redirect);
     } else {
       this.url = new URL(String(input), location.href).href;
       this.method = String(init.method || "GET").toUpperCase();
@@ -6991,6 +6806,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.body = init.body !== undefined && init.body !== null ? init.body : null;
       if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || null;
+      this.redirect = normalizeRedirect(init.redirect);
     }
     if (this.body !== null && typeof this.body === "object") {
       if (this.body instanceof FormData) {
@@ -7019,12 +6835,15 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       try {
         var headerText = "";
         request.headers.forEach(function (value, name) { headerText += name + ":" + value + "\n"; });
-        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body);
+        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body, request.redirect);
         Promise.resolve().then(function () {
           if (settled) { return; }
           settled = true;
           if (signal) { signal.removeEventListener("abort", onAbort); }
           var response = new Response(raw);
+          if (request.redirect === "follow" && response.url && response.url !== request.url) {
+            response.redirected = true;
+          }
           if (request.method === "HEAD") { response._bytes = []; response._body = ""; response.body = new ReadableStream([]); }
           resolve(response);
         });
@@ -8009,12 +7828,18 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             "fetch supports GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS",
         ));
     }
+    let redirect = if args.len() > 4 && !args[4].is_undefined() {
+        Some(arg_string(args, 4, context)?)
+    } else {
+        None
+    };
     let request = crate::host::FetchRequest {
         url,
         method: method.clone(),
         headers,
         body: (!body_text.is_empty() && method != "GET" && method != "HEAD")
             .then(|| body_text.into_bytes()),
+        redirect,
     };
     let result = with_host(|host| {
         host.fetch_provider
