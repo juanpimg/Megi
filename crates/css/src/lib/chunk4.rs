@@ -3,15 +3,14 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests_part3 {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use megi_core::{Attribute, Document, Namespace};
-    #[allow(unused_imports)]
     use crate::lib_tests_helpers::*;
+    #[allow(unused_imports)]
+    use megi_core::{Attribute, Document, Namespace};
     #[test]
     fn test_is_where_not_matching_and_specificity() {
         let mut doc = Document::new();

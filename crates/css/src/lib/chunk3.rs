@@ -3,15 +3,14 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests_part2 {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use megi_core::{Attribute, Document, Namespace};
-    #[allow(unused_imports)]
     use crate::lib_tests_helpers::*;
+    #[allow(unused_imports)]
+    use megi_core::{Attribute, Document, Namespace};
     #[test]
     fn test_border_shorthand_four_value_expansion() {
         let style = style_with_inline(

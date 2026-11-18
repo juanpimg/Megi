@@ -3,13 +3,11 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Maximum number of tracks kept per template (anti-DoS).
 pub(crate) const MAX_TRACKS: usize = 1024;
 
 /// Maximum `repeat()` count accepted.
 pub(crate) const MAX_REPEAT: usize = 1024;
-
 
 /// Minimum of a `minmax()` track (`<length>`/`<percentage>` or `auto`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -18,7 +16,6 @@ pub enum TrackMin {
     Auto,
 }
 
-
 /// Maximum of a `minmax()` track (`<length>`/`<percentage>`, `<number>fr` or `auto`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TrackMax {
@@ -26,7 +23,6 @@ pub enum TrackMax {
     Fraction(f32),
     Auto,
 }
-
 
 /// One grid track size.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,14 +37,12 @@ pub enum TrackSize {
     MinMax { min: TrackMin, max: TrackMax },
 }
 
-
 /// `auto-fill` or `auto-fit` repeat mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AutoRepeatKind {
     Fill,
     Fit,
 }
-
 
 /// An `auto-fill`/`auto-fit` track repetition, expanded at layout time from the
 /// available space.
@@ -57,7 +51,6 @@ pub struct AutoRepeat {
     pub kind: AutoRepeatKind,
     pub tracks: Vec<TrackSize>,
 }
-
 
 /// A `<grid-line>` value for explicit placement.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -72,7 +65,6 @@ pub enum GridLine {
     Name(String),
 }
 
-
 /// `grid-auto-flow` packing mode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GridAutoFlow {
@@ -82,7 +74,6 @@ pub enum GridAutoFlow {
     RowDense,
     ColumnDense,
 }
-
 
 /// `justify-content`/`align-content` distribution for grid tracks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -97,7 +88,6 @@ pub enum GridContentDistribution {
     SpaceEvenly,
 }
 
-
 /// Parsed `grid-template-areas`: row/column count plus row-major optional names.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GridTemplateAreas {
@@ -106,7 +96,6 @@ pub struct GridTemplateAreas {
     /// Row-major cells (`None` for `.`).
     pub cells: Vec<Option<String>>,
 }
-
 
 /// A parsed grid template (empty = `none`).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -120,14 +109,12 @@ pub struct GridTemplate {
     pub line_names: Vec<Vec<String>>,
 }
 
-
 impl GridTemplate {
     /// True when the template declares no explicit tracks.
     pub fn is_none(&self) -> bool {
         self.tracks.is_empty()
     }
 }
-
 
 /// Computed grid-related values for one element.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -160,7 +147,6 @@ pub struct ComputedGrid {
     /// `align-content` for grid track distribution.
     pub align_content: GridContentDistribution,
 }
-
 
 /// Computes the grid values from the cascaded declarations.
 pub(crate) fn compute_grid(
@@ -235,7 +221,6 @@ pub(crate) fn compute_grid(
     grid
 }
 
-
 /// Parses `grid-auto-flow`: `row|column [dense]` (also bare `dense`).
 pub(crate) fn parse_auto_flow(raw: &str) -> GridAutoFlow {
     let mut column = false;
@@ -256,7 +241,6 @@ pub(crate) fn parse_auto_flow(raw: &str) -> GridAutoFlow {
     }
 }
 
-
 /// Parses `justify-content`/`align-content` (grid track distribution).
 pub(crate) fn parse_content_distribution(raw: &str) -> GridContentDistribution {
     match raw.trim().to_ascii_lowercase().as_str() {
@@ -270,7 +254,6 @@ pub(crate) fn parse_content_distribution(raw: &str) -> GridContentDistribution {
         _ => GridContentDistribution::Stretch,
     }
 }
-
 
 /// Parses `grid-template-areas`: quoted rows of `.`/names; invalid ⇒ `None`.
 pub(crate) fn parse_template_areas(raw: &str) -> Option<GridTemplateAreas> {
@@ -333,7 +316,6 @@ pub(crate) fn parse_template_areas(raw: &str) -> Option<GridTemplateAreas> {
     })
 }
 
-
 /// Parses `grid-area`: `<name>` or `<row-start> / <col-start> / <row-end> / <col-end>`.
 pub(crate) fn parse_grid_area(raw: &str, grid: &mut ComputedGrid) {
     let components: Vec<&str> = raw
@@ -365,7 +347,6 @@ pub(crate) fn parse_grid_area(raw: &str, grid: &mut ComputedGrid) {
         grid.column_end = parse_grid_line(component);
     }
 }
-
 
 /// Parses `grid-column`/`grid-row` (`<start> / <end>`, end optional).
 pub(crate) fn parse_placement(

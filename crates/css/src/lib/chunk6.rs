@@ -3,15 +3,14 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests_part5 {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use megi_core::{Attribute, Document, Namespace};
-    #[allow(unused_imports)]
     use crate::lib_tests_helpers::*;
+    #[allow(unused_imports)]
+    use megi_core::{Attribute, Document, Namespace};
     #[test]
     fn test_cascade_media_queries_full() {
         let mut doc = Document::new();
@@ -174,8 +173,6 @@ pub(crate) mod tests_part5 {
         assert_eq!(initial.list_style_image, None);
     }
 }
-
-
 
 #[cfg(test)]
 pub(crate) mod background_geometry_tests {

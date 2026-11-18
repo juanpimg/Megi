@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Matches `compounds[index]` relative to `current` through `combinator`, recursing forward.
 pub(crate) fn relative_chain_matches(
     doc: &Document,
@@ -100,13 +99,11 @@ pub(crate) fn relative_chain_matches(
     false
 }
 
-
 /// A comma-separated list of complex selectors (`h1, h2, .title`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectorList {
     pub selectors: Vec<ComplexSelector>,
 }
-
 
 impl SelectorList {
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
@@ -139,7 +136,6 @@ impl SelectorList {
     }
 }
 
-
 /// Parses a selector string into a [`SelectorList`].
 ///
 /// Commas only split the list at the top level: commas inside attribute values, functional
@@ -169,7 +165,6 @@ pub fn parse_selectors(input: &str) -> SelectorList {
     }
     SelectorList { selectors }
 }
-
 
 /// Decodes one CSS escape whose introducing `\` has already been consumed
 /// (CSS Syntax §4.3.7). Returns `U+FFFD` for an invalid or out-of-range escape.
@@ -206,11 +201,12 @@ pub(crate) fn consume_escape(chars: &mut std::iter::Peekable<std::str::Chars<'_>
     }
 }
 
-
 /// Reads a CSS identifier from the raw selector text, decoding escapes, so that an
 /// author's `md\:flex` becomes the class name `md:flex` instead of `md` followed by a
 /// `:flex` pseudo-class. Used for type names, ids, classes and pseudo-class names.
-pub(crate) fn read_identifier(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
+pub(crate) fn read_identifier(
+    chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+) -> Option<String> {
     let mut out = String::new();
     loop {
         match chars.peek().copied() {
@@ -229,7 +225,6 @@ pub(crate) fn read_identifier(chars: &mut std::iter::Peekable<std::str::Chars<'_
     }
     if out.is_empty() { None } else { Some(out) }
 }
-
 
 /// Splits a selector list on top-level commas, ignoring commas nested in blocks or strings.
 pub(crate) fn split_top_level_commas(input: &str) -> Vec<String> {
@@ -276,14 +271,12 @@ pub(crate) fn split_top_level_commas(input: &str) -> Vec<String> {
     parts
 }
 
-
 /// Forward-only cursor over selector parts. `Vec::remove(0)` shifts every
 /// remaining `String` header, making an n-part selector O(n²) (#1414).
 pub(crate) struct SelectorTokens {
     pub(crate) parts: Vec<String>,
     pub(crate) pos: usize,
 }
-
 
 impl SelectorTokens {
     pub(crate) fn new(parts: Vec<String>) -> Self {
@@ -300,7 +293,6 @@ impl SelectorTokens {
         Some(part)
     }
 }
-
 
 /// Parses a single complex selector string.
 pub(crate) fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
@@ -330,7 +322,6 @@ pub(crate) fn parse_complex_selector(input: &str) -> Option<ComplexSelector> {
     Some(ComplexSelector { compounds })
 }
 
-
 /// Appends the currently accumulated selector chunk to `parts`, if it is not blank.
 pub(crate) fn push_selector_chunk(parts: &mut Vec<String>, current: &mut String) {
     let trimmed = current.trim();
@@ -341,7 +332,6 @@ pub(crate) fn push_selector_chunk(parts: &mut Vec<String>, current: &mut String)
         current.clear();
     }
 }
-
 
 /// Splits a complex selector into compound-selector chunks and combinator tokens.
 ///

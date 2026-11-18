@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

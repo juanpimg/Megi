@@ -2,16 +2,13 @@
 
 use super::*;
 
-
 /// Maximum accepted `color-mix()` nesting. Deeper input is rejected as an invalid color,
 /// preventing stack exhaustion from adversarial CSS.
 pub(crate) const MAX_COLOR_MIX_DEPTH: u32 = 16;
 
-
 thread_local! {
     pub(crate) static COLOR_MIX_DEPTH: Cell<u32> = const { Cell::new(0) };
 }
-
 
 /// Tries the CSS Color 4/5 function forms (`color()`, `lab()`, `color-mix()`, ...).
 pub(crate) fn parse_modern(input: &str) -> Option<Color> {
@@ -55,7 +52,6 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Small parsing helpers
 // ---------------------------------------------------------------------------
@@ -63,7 +59,6 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
 pub(crate) fn parse_number(token: &str) -> Option<f32> {
     token.trim().parse::<f32>().ok().filter(|v| v.is_finite())
 }
-
 
 /// Parses `<number> | <percentage>`; percentages are returned as `pct / 100`.
 pub(crate) fn number_or_percentage(token: &str) -> Option<(f32, bool)> {
@@ -75,7 +70,6 @@ pub(crate) fn number_or_percentage(token: &str) -> Option<(f32, bool)> {
     }
 }
 
-
 pub(crate) fn parse_alpha(token: &str) -> Option<f32> {
     let (value, is_pct) = number_or_percentage(token)?;
     if is_pct {
@@ -86,7 +80,6 @@ pub(crate) fn parse_alpha(token: &str) -> Option<f32> {
         Some(value)
     }
 }
-
 
 pub(crate) fn parse_hue(token: &str) -> Option<f32> {
     let token = token.trim().to_ascii_lowercase();
@@ -104,7 +97,6 @@ pub(crate) fn parse_hue(token: &str) -> Option<f32> {
     }
     parse_number(&token)
 }
-
 
 /// Splits `text` at a top-level `/` (outside parentheses), returning both sides.
 pub(crate) fn split_at_slash(text: &str) -> (String, Option<String>) {
@@ -125,11 +117,9 @@ pub(crate) fn split_at_slash(text: &str) -> (String, Option<String>) {
     (text.trim().to_string(), None)
 }
 
-
 pub(crate) fn clamp_channel(value: f32) -> u8 {
     (value * 255.0).round().clamp(0.0, 255.0) as u8
 }
-
 
 // ---------------------------------------------------------------------------
 // Matrices (CSS Color 4 §10–§13, reference conversions)
@@ -175,7 +165,6 @@ pub(crate) const D50_TO_D65: [[f32; 3]; 3] = [
 /// D50 reference white (CSS Color 4 §10).
 pub(crate) const D50_WHITE: [f32; 3] = [0.964_295_67, 1.0, 0.825_104_6];
 
-
 pub(crate) fn mul3(matrix: [[f32; 3]; 3], vector: [f32; 3]) -> [f32; 3] {
     [
         matrix[0][0] * vector[0] + matrix[0][1] * vector[1] + matrix[0][2] * vector[2],
@@ -183,7 +172,6 @@ pub(crate) fn mul3(matrix: [[f32; 3]; 3], vector: [f32; 3]) -> [f32; 3] {
         matrix[2][0] * vector[0] + matrix[2][1] * vector[1] + matrix[2][2] * vector[2],
     ]
 }
-
 
 pub(crate) fn srgb_to_linear(channel: f32) -> f32 {
     if channel <= 0.04045 {
@@ -193,7 +181,6 @@ pub(crate) fn srgb_to_linear(channel: f32) -> f32 {
     }
 }
 
-
 pub(crate) fn linear_to_srgb(channel: f32) -> f32 {
     if channel <= 0.003_130_8 {
         channel * 12.92
@@ -201,7 +188,6 @@ pub(crate) fn linear_to_srgb(channel: f32) -> f32 {
         1.055 * channel.powf(1.0 / 2.4) - 0.055
     }
 }
-
 
 pub(crate) fn color_from_linear_srgb(linear: [f32; 3], alpha: f32) -> Color {
     Color::new(
@@ -212,16 +198,13 @@ pub(crate) fn color_from_linear_srgb(linear: [f32; 3], alpha: f32) -> Color {
     )
 }
 
-
 pub(crate) fn color_from_xyz_d65(xyz: [f32; 3], alpha: f32) -> Color {
     color_from_linear_srgb(mul3(XYZ_D65_TO_SRGB_LINEAR, xyz), alpha)
 }
 
-
 pub(crate) fn color_from_xyz_d50(xyz: [f32; 3], alpha: f32) -> Color {
     color_from_xyz_d65(mul3(D50_TO_D65, xyz), alpha)
 }
-
 
 // ---------------------------------------------------------------------------
 // color(<space> c1 c2 c3 [/ alpha])
@@ -274,7 +257,6 @@ pub(crate) fn parse_color_function(inner: &str) -> Option<Color> {
     Some(color)
 }
 
-
 // ---------------------------------------------------------------------------
 // lab()/lch() and oklab()/oklch()
 // ---------------------------------------------------------------------------
@@ -312,7 +294,6 @@ pub(crate) fn parse_lab(inner: &str, polar: bool) -> Option<Color> {
     Some(color_from_xyz_d50(xyz, alpha))
 }
 
-
 pub(crate) fn lab_to_xyz_d50(lightness: f32, a: f32, b: f32) -> [f32; 3] {
     let fy = (lightness + 16.0) / 116.0;
     let fx = fy + a / 500.0;
@@ -331,7 +312,6 @@ pub(crate) fn lab_to_xyz_d50(lightness: f32, a: f32, b: f32) -> [f32; 3] {
         inverse(fz) * D50_WHITE[2],
     ]
 }
-
 
 pub(crate) fn parse_oklab(inner: &str, polar: bool) -> Option<Color> {
     let (channels_text, alpha_text) = split_at_slash(inner);
@@ -361,7 +341,6 @@ pub(crate) fn parse_oklab(inner: &str, polar: bool) -> Option<Color> {
     Some(color_from_linear_srgb(linear, alpha))
 }
 
-
 pub(crate) fn oklab_to_linear_srgb(lightness: f32, a: f32, b: f32) -> [f32; 3] {
     let l_ = lightness + 0.396_337_78 * a + 0.215_803_76 * b;
     let m_ = lightness - 0.105_561_346 * a - 0.063_854_17 * b;
@@ -376,7 +355,6 @@ pub(crate) fn oklab_to_linear_srgb(lightness: f32, a: f32, b: f32) -> [f32; 3] {
     ]
 }
 
-
 pub(crate) fn linear_srgb_to_oklab(linear: [f32; 3]) -> [f32; 3] {
     let l = 0.412_221_46 * linear[0] + 0.536_332_55 * linear[1] + 0.051_445_995 * linear[2];
     let m = 0.211_903_5 * linear[0] + 0.680_699_5 * linear[1] + 0.107_396_96 * linear[2];
@@ -390,7 +368,6 @@ pub(crate) fn linear_srgb_to_oklab(linear: [f32; 3]) -> [f32; 3] {
         0.025_904_037 * l_ + 0.782_771_77 * m_ - 0.808_675_77 * s_,
     ]
 }
-
 
 pub(crate) fn color_to_linear_srgb(color: Color) -> [f32; 3] {
     [

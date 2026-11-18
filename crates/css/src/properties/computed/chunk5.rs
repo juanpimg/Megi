@@ -3,9 +3,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl ComputedStyle {
-
     /// Computes the `background-image` layers (CSS Backgrounds 3 §3).
     ///
     /// Returns the layers **top-first** and whether any background geometry was
@@ -142,13 +140,15 @@ impl ComputedStyle {
         (layers, explicit)
     }
 
-
     /// Extracts the background color from `background-color` or the `background` shorthand.
     ///
     /// The `background` shorthand accepts a `<color>` in any position (CSS Backgrounds 3 §3:
     /// e.g. `background: #eee`, `background: url(bg.png) no-repeat red`); a missing or
     /// unsupported color component computes to `transparent`.
-    pub(crate) fn compute_background_color(entries: &[(&str, &Declaration)], current_color: Color) -> Color {
+    pub(crate) fn compute_background_color(
+        entries: &[(&str, &Declaration)],
+        current_color: Color,
+    ) -> Color {
         if let Some(decl) = find_declaration(entries, "background-color")
             && let Some(color) = parse_color_component(&decl.raw_value, current_color)
         {
@@ -163,7 +163,6 @@ impl ComputedStyle {
         }
         Color::TRANSPARENT
     }
-
 
     /// Computes the four border widths, colors and styles per CSS 2.2 §8.5.
     ///

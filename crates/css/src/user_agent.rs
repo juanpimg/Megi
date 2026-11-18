@@ -17,8 +17,12 @@ use crate::cascade::{Origin, StyleCollection};
 use crate::rule::Stylesheet;
 
 mod chunk1;
-#[allow(unused_imports)] pub use chunk1::USER_AGENT_STYLESHEET;
-#[allow(unused_imports)] pub use chunk1::parse_user_agent_stylesheet;
-#[allow(unused_imports)] pub(crate) use chunk1::cached_user_agent_stylesheet;
-#[allow(unused_imports)] pub use chunk1::create_user_agent_style_collection;
+#[allow(unused_imports)]
+pub use chunk1::USER_AGENT_STYLESHEET;
+#[allow(unused_imports)]
+pub(crate) use chunk1::cached_user_agent_stylesheet;
+#[allow(unused_imports)]
+pub use chunk1::create_user_agent_style_collection;
+#[allow(unused_imports)]
+pub use chunk1::parse_user_agent_stylesheet;
 mod chunk2;

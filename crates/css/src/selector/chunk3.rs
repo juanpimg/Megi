@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl CompoundSelector {
     /// Calculates the specificity of this compound selector according to Selectors Level 4 §16.
     pub fn specificity(&self) -> Specificity {
@@ -48,7 +47,12 @@ impl CompoundSelector {
         self.pseudo_element == Some(pseudo) && self.matches_inner(doc, node_id, false)
     }
 
-    pub(crate) fn matches_inner(&self, doc: &Document, node_id: NodeId, allow_backdrop: bool) -> bool {
+    pub(crate) fn matches_inner(
+        &self,
+        doc: &Document,
+        node_id: NodeId,
+        allow_backdrop: bool,
+    ) -> bool {
         if self.never_matches {
             return false;
         }
@@ -107,7 +111,6 @@ impl CompoundSelector {
     }
 }
 
-
 /// Combinator joining two compound selectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Combinator {
@@ -121,7 +124,6 @@ pub enum Combinator {
     SubsequentSibling,
 }
 
-
 /// A complex selector chain (e.g. `body > div.main p + span`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComplexSelector {
@@ -129,7 +131,6 @@ pub struct ComplexSelector {
     /// The last compound selector has `None` as combinator and matches the target element.
     pub compounds: Vec<(CompoundSelector, Option<Combinator>)>,
 }
-
 
 impl ComplexSelector {
     /// Returns `true` when this selector targets the `::backdrop` pseudo-element on its subject.
@@ -225,7 +226,12 @@ impl ComplexSelector {
         spec
     }
 
-    pub(crate) fn matches_from_right(&self, doc: &Document, current_node: NodeId, index: usize) -> bool {
+    pub(crate) fn matches_from_right(
+        &self,
+        doc: &Document,
+        current_node: NodeId,
+        index: usize,
+    ) -> bool {
         if !spend_match_step() {
             return false;
         }
@@ -293,7 +299,6 @@ impl ComplexSelector {
     }
 }
 
-
 /// A relative selector as accepted by `:has()`: a combinator from the anchor element followed
 /// by a complex selector (Selectors Level 4 §4.2).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -303,7 +308,6 @@ pub struct RelativeSelector {
     /// Complex selector whose subject must be reachable from the anchor element.
     pub selector: ComplexSelector,
 }
-
 
 impl RelativeSelector {
     /// Returns whether `anchor` has a descendant/child/sibling matching this relative selector.

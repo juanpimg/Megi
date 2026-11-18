@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 // ---------------------------------------------------------------------------
 // List-style shorthand
 // ---------------------------------------------------------------------------
@@ -49,7 +48,6 @@ pub(crate) fn expand_list_style(value: &str) -> Option<Vec<(String, String)>> {
         ),
     ])
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

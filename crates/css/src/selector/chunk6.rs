@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Selectors 4 §12.1: the element's language is the `lang` of the nearest ancestor-or-self.
 /// A range matches when it equals the language or is a hyphen-prefix of it, case-insensitively.
 pub(crate) fn matches_language(doc: &Document, node_id: NodeId, range: &str) -> bool {
@@ -20,7 +19,6 @@ pub(crate) fn matches_language(doc: &Document, node_id: NodeId, range: &str) -> 
     false
 }
 
-
 pub(crate) fn parse_selector_argument(argument: &Option<String>) -> Option<SelectorList> {
     let selectors = parse_selectors(argument.as_deref()?);
     if selectors.selectors.is_empty() {
@@ -29,7 +27,6 @@ pub(crate) fn parse_selector_argument(argument: &Option<String>) -> Option<Selec
         Some(selectors)
     }
 }
-
 
 /// Parses the argument of `:has()`: a comma-separated list of relative selectors.
 ///
@@ -63,7 +60,6 @@ pub(crate) fn parse_relative_selector_list(input: &str) -> Option<Vec<RelativeSe
     }
     Some(relatives)
 }
-
 
 pub(crate) fn parse_attribute_selector(spec: &str) -> Option<AttributeSelector> {
     let spec = spec.trim();
@@ -149,7 +145,6 @@ pub(crate) fn parse_attribute_selector(spec: &str) -> Option<AttributeSelector> 
     })
 }
 
-
 /// Returns whether `name` looks like a valid attribute local name for a selector.
 pub(crate) fn is_valid_attribute_name(name: &str) -> bool {
     !name.is_empty()
@@ -162,7 +157,6 @@ pub(crate) fn is_valid_attribute_name(name: &str) -> bool {
         })
 }
 
-
 /// Splits a trailing `i`/`s` case-sensitivity flag from an attribute selector value.
 pub(crate) fn split_case_flag(value: &str) -> Option<(&str, bool)> {
     let (rest, flag) = value.trim_end().rsplit_once(char::is_whitespace)?;
@@ -173,7 +167,6 @@ pub(crate) fn split_case_flag(value: &str) -> Option<(&str, bool)> {
     };
     Some((rest.trim_end(), case_insensitive))
 }
-
 
 /// Removes the surrounding quotes of an attribute selector value, validating unquoted values.
 pub(crate) fn strip_attribute_value_quotes(value: &str) -> Option<String> {
@@ -190,7 +183,6 @@ pub(crate) fn strip_attribute_value_quotes(value: &str) -> Option<String> {
     }
     Some(value.to_string())
 }
-
 
 #[cfg(test)]
 pub(crate) mod id_list_tests {
@@ -235,7 +227,6 @@ pub(crate) mod id_list_tests {
     }
 }
 
-
 #[cfg(test)]
 pub(crate) mod sibling_cache_tests {
     use super::*;
@@ -264,7 +255,6 @@ pub(crate) mod sibling_cache_tests {
     }
 }
 
-
 #[cfg(test)]
 pub(crate) mod specificity_overflow_tests {
     use super::Specificity;
@@ -280,7 +270,6 @@ pub(crate) mod specificity_overflow_tests {
     }
 }
 
-
 #[cfg(test)]
 pub(crate) mod anplusb_tests {
     use super::*;
@@ -295,7 +284,6 @@ pub(crate) mod anplusb_tests {
         let _ = formula.matches(i32::MIN);
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod style_pass_budget_tests {
@@ -337,7 +325,6 @@ pub(crate) mod style_pass_budget_tests {
         assert_eq!(MATCH_STEPS.with(|steps| steps.get()), 1);
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod selector_budget_tests {

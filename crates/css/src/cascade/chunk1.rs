@@ -3,11 +3,9 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Fast non-cryptographic hasher for short CSS property names in the per-element cascade map.
 #[derive(Default)]
 pub(crate) struct FastHasher(u64);
-
 
 impl std::hash::Hasher for FastHasher {
     fn finish(&self) -> u64 {
@@ -23,10 +21,8 @@ impl std::hash::Hasher for FastHasher {
     }
 }
 
-
 #[derive(Default, Clone, Copy)]
 pub(crate) struct FastBuildHasher;
-
 
 impl std::hash::BuildHasher for FastBuildHasher {
     type Hasher = FastHasher;
@@ -35,17 +31,14 @@ impl std::hash::BuildHasher for FastBuildHasher {
     }
 }
 
-
 /// Computed styles for generated pseudo-elements (`::before` / `::after`), keyed by
 /// `(originating_element, pseudo_element)`.
 pub type PseudoStyles = HashMap<(NodeId, PseudoElement), crate::properties::ComputedStyle>;
-
 
 /// Layer rank for declarations that do not belong to any `@layer`. Normal unlayered
 /// declarations outrank every layer; important unlayered declarations are the lowest
 /// (the order is inverted for `!important`).
 pub const UNLAYERED_LAYER: u32 = u32::MAX;
-
 
 /// Origin of a CSS declaration per W3C Cascading and Inheritance Level 4 §6.1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +50,6 @@ pub enum Origin {
     /// Author stylesheet (`<style>`, `<link>`, or `style="..."` attribute).
     Author,
 }
-
 
 /// Cascade precedence rank per W3C Cascading and Inheritance Level 4 §6.2:
 ///
@@ -77,7 +69,6 @@ pub enum CascadeOriginImportance {
     UserAgentImportant = 5,
 }
 
-
 impl CascadeOriginImportance {
     #[inline]
     pub fn new(origin: Origin, important: bool) -> Self {
@@ -91,7 +82,6 @@ impl CascadeOriginImportance {
         }
     }
 }
-
 
 /// A matched declaration along with its cascade priority metadata.
 #[derive(Clone, Debug, PartialEq)]
@@ -107,9 +97,7 @@ pub struct MatchedDeclaration<'a> {
     pub declaration_order: u32,
 }
 
-
 impl<'a> Eq for MatchedDeclaration<'a> {}
-
 
 impl<'a> PartialOrd for MatchedDeclaration<'a> {
     #[inline]
@@ -117,7 +105,6 @@ impl<'a> PartialOrd for MatchedDeclaration<'a> {
         Some(self.cmp(other))
     }
 }
-
 
 impl<'a> Ord for MatchedDeclaration<'a> {
     #[inline]
@@ -144,7 +131,6 @@ impl<'a> Ord for MatchedDeclaration<'a> {
     }
 }
 
-
 /// A compiled CSS rule with pre-parsed selectors and declarations for fast matching.
 #[derive(Clone, Debug)]
 pub struct CompiledRule {
@@ -156,14 +142,12 @@ pub struct CompiledRule {
     pub layer_rank: u32,
 }
 
-
 /// One compiled `@container` rule: query + nested style rule (selectors/declarations).
 #[derive(Clone, Debug)]
 pub struct ContainerRule {
     pub query: crate::container::ContainerQuery,
     pub rule: CompiledRule,
 }
-
 
 /// Bucket key derived from the rightmost compound of a complex selector.
 ///
@@ -179,7 +163,6 @@ pub(crate) enum RuleKey {
     /// folded name second, keeping foreign (SVG/MathML) case-sensitive matching a superset.
     Tag(String),
 }
-
 
 /// One indexed candidate: a specific selector inside a rule.
 ///
@@ -197,7 +180,6 @@ pub(crate) struct Candidate {
     pub(crate) ancestor_mask: u64,
 }
 
-
 /// One bit of the ancestor-class Bloom filter for `class`.
 ///
 /// The hash deliberately folds ASCII case even though class matching is case-sensitive
@@ -211,7 +193,6 @@ pub(crate) fn class_hash_bit(class: &str) -> u64 {
     }
     1u64 << (hash & 63)
 }
-
 
 /// Classes that `selector` requires on ancestors of the target element.
 ///
@@ -230,7 +211,6 @@ pub(crate) fn ancestor_class_mask(selector: &ComplexSelector) -> u64 {
     mask
 }
 
-
 /// Bloom mask of every class on the ancestor chain of `node_id`.
 pub(crate) fn ancestor_classes_mask(doc: &Document, node_id: NodeId) -> u64 {
     let mut mask = 0u64;
@@ -248,7 +228,6 @@ pub(crate) fn ancestor_classes_mask(doc: &Document, node_id: NodeId) -> u64 {
     mask
 }
 
-
 /// Index of selectors by the key of their rightmost compound.
 ///
 /// Rules whose rightmost compound has no id/class/tag key (universal `*`, standalone
@@ -265,7 +244,6 @@ pub(crate) struct RuleIndex {
     /// whose public `rules` vector was mutated directly falls back to the brute-force path.
     pub(crate) indexed_rules: usize,
 }
-
 
 impl RuleIndex {
     /// Adds the selectors of `rule` to the buckets for their rightmost-compound key.
@@ -295,7 +273,12 @@ impl RuleIndex {
     }
 
     /// Collects and sorts the candidate selectors that may match `node_id`.
-    pub(crate) fn collect_candidates(&self, doc: &Document, node_id: NodeId, out: &mut Vec<Candidate>) {
+    pub(crate) fn collect_candidates(
+        &self,
+        doc: &Document,
+        node_id: NodeId,
+        out: &mut Vec<Candidate>,
+    ) {
         out.clear();
         out.extend_from_slice(&self.slow);
         let Some(element) = doc.node(node_id).as_element() else {
@@ -339,7 +322,6 @@ impl RuleIndex {
     }
 }
 
-
 /// Returns the candidate key of the rightmost compound, or `None` when the compound has no
 /// id/class/tag (universal or pseudo-class-only rightmost compound).
 ///
@@ -363,7 +345,6 @@ pub(crate) fn selector_key(selector: &ComplexSelector) -> Option<RuleKey> {
     }
     None
 }
-
 
 /// A collection of compiled stylesheets ready for cascade resolution.
 #[derive(Clone, Debug, Default)]

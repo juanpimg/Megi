@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Parses `linear-gradient()`/`radial-gradient()`/`conic-gradient()` and their
 /// `repeating-` forms, including color hints and `in <color-space>`.
 ///
@@ -146,7 +145,6 @@ pub(crate) fn parse_gradient_component(
     })
 }
 
-
 /// Extracts an optional `in <space>` clause from a gradient prefix, removing the
 /// tokens. Returns `Err(())` for an unknown/malformed interpolation space.
 pub(crate) fn take_interpolation_space(tokens: &mut Vec<String>) -> Result<InterpolationSpace, ()> {
@@ -173,7 +171,6 @@ pub(crate) fn take_interpolation_space(tokens: &mut Vec<String>) -> Result<Inter
     }
     Ok(space)
 }
-
 
 /// Parses `conic-gradient()`'s `[from <angle>]? [at <position>]?` prefix.
 pub(crate) fn parse_conic_prefix(
@@ -217,7 +214,6 @@ pub(crate) fn parse_conic_prefix(
     }
     Some((from_angle, position))
 }
-
 
 /// Parses the color stops (and color hints) of a gradient.
 pub(crate) fn parse_gradient_stop_list(
@@ -318,7 +314,6 @@ pub(crate) fn parse_gradient_stop_list(
     Some((stops, hints))
 }
 
-
 pub(crate) fn push_gradient_stop(
     stops: &mut Vec<GradientStop>,
     hints: &mut Vec<Option<Length>>,
@@ -335,7 +330,6 @@ pub(crate) fn push_gradient_stop(
     stops.push(stop);
     Some(())
 }
-
 
 /// Parses one gradient stop position: percentages/lengths for linear/radial
 /// gradients, angles or percentages of the full turn for conic gradients.
@@ -363,18 +357,15 @@ pub(crate) fn parse_gradient_stop_position(
     }
 }
 
-
 pub(crate) fn parse_stop_color(component: &str, current_color: Color) -> Option<Color> {
     parse_color_component(component.trim(), current_color)
 }
-
 
 pub(crate) fn starts_with_color_stop(component: &str, current_color: Color) -> bool {
     split_components(component)
         .first()
         .is_some_and(|first| parse_stop_color(first, current_color).is_some())
 }
-
 
 /// Parses a `linear-gradient()` direction argument.
 pub(crate) fn parse_linear_direction(value: &str) -> Option<LinearDirection> {

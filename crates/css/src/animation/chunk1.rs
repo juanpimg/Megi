@@ -2,14 +2,11 @@
 
 use super::*;
 
-
 /// Maximum accepted duration/delay (10,000 s) to keep frame math finite.
 pub const MAX_TIME_MS: f32 = 10_000_000.0;
 
-
 /// Maximum accepted `animation-iteration-count`.
 pub const MAX_ITERATIONS: f32 = 1_000_000.0;
-
 
 /// `animation-timing-function` / `transition-timing-function` value.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,7 +27,6 @@ pub enum TimingFunction {
     Steps(u32, StepPosition),
 }
 
-
 /// Step position of `steps()`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepPosition {
@@ -43,7 +39,6 @@ pub enum StepPosition {
     /// `jump-both`
     JumpBoth,
 }
-
 
 /// `animation-direction`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +53,6 @@ pub enum AnimationDirection {
     AlternateReverse,
 }
 
-
 /// `animation-fill-mode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FillMode {
@@ -72,7 +66,6 @@ pub enum FillMode {
     Both,
 }
 
-
 /// `animation-play-state`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayState {
@@ -82,7 +75,6 @@ pub enum PlayState {
     Paused,
 }
 
-
 /// `animation-iteration-count` value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IterationCount {
@@ -91,7 +83,6 @@ pub enum IterationCount {
     /// `infinite`
     Infinite,
 }
-
 
 /// One animation described by the longhand property lists (matched by index, cycling).
 #[derive(Clone, Debug, PartialEq)]
@@ -114,7 +105,6 @@ pub struct AnimationSpec {
     pub play_state: PlayState,
 }
 
-
 /// `transition-property` entry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransitionProperty {
@@ -125,7 +115,6 @@ pub enum TransitionProperty {
     /// One longhand property name (as authored, lowercased by the parser).
     Property(String),
 }
-
 
 /// One transition described by the longhand property lists (matched by index, cycling).
 #[derive(Clone, Debug, PartialEq)]
@@ -139,7 +128,6 @@ pub struct TransitionSpec {
     /// Delay in milliseconds (may be negative).
     pub delay_ms: f32,
 }
-
 
 /// Parses a `<time>` (`0`, `300ms`, `0.3s`); returns milliseconds.
 pub fn parse_time_ms(value: &str) -> Option<f32> {
@@ -155,7 +143,6 @@ pub fn parse_time_ms(value: &str) -> Option<f32> {
     };
     time.is_finite().then_some(time)
 }
-
 
 /// Parses a `<timing-function>`.
 pub fn parse_timing_function(value: &str) -> Option<TimingFunction> {
@@ -211,7 +198,6 @@ pub fn parse_timing_function(value: &str) -> Option<TimingFunction> {
     None
 }
 
-
 /// Parses `animation-iteration-count`.
 pub fn parse_iteration_count(value: &str) -> Option<IterationCount> {
     let value = value.trim();
@@ -221,7 +207,6 @@ pub fn parse_iteration_count(value: &str) -> Option<IterationCount> {
     let count = value.parse::<f32>().ok()?;
     (count.is_finite() && count >= 0.0).then(|| IterationCount::Number(count.min(MAX_ITERATIONS)))
 }
-
 
 /// Parses `animation-direction`.
 pub fn parse_direction(value: &str) -> Option<AnimationDirection> {
@@ -234,7 +219,6 @@ pub fn parse_direction(value: &str) -> Option<AnimationDirection> {
     })
 }
 
-
 /// Parses `animation-fill-mode`.
 pub fn parse_fill_mode(value: &str) -> Option<FillMode> {
     Some(match value.trim().to_ascii_lowercase().as_str() {
@@ -246,7 +230,6 @@ pub fn parse_fill_mode(value: &str) -> Option<FillMode> {
     })
 }
 
-
 /// Parses `animation-play-state`.
 pub fn parse_play_state(value: &str) -> Option<PlayState> {
     Some(match value.trim().to_ascii_lowercase().as_str() {
@@ -255,7 +238,6 @@ pub fn parse_play_state(value: &str) -> Option<PlayState> {
         _ => return None,
     })
 }
-
 
 /// Parses a `transition-property` entry.
 pub fn parse_transition_property(value: &str) -> Option<TransitionProperty> {
@@ -268,7 +250,6 @@ pub fn parse_transition_property(value: &str) -> Option<TransitionProperty> {
     }
     (!value.is_empty()).then(|| TransitionProperty::Property(value.to_ascii_lowercase()))
 }
-
 
 /// Extracts the arguments of `name(...)` (case-insensitive) when `value` is exactly that call.
 pub(crate) fn function_args<'a>(value: &'a str, name: &str) -> Option<&'a str> {
@@ -290,7 +271,6 @@ pub(crate) fn function_args<'a>(value: &'a str, name: &str) -> Option<&'a str> {
     }
     Some(&value[name.len() + 1..value.len() - 1])
 }
-
 
 /// Splits a whitespace-separated component list at top level (space inside functions does
 /// not split, so `cubic-bezier(0.1, 0.2, 0.9, 1)` stays one component).
@@ -320,7 +300,6 @@ pub(crate) fn split_top_level_components(value: &str) -> Vec<&str> {
     parts
 }
 
-
 /// Splits a comma-separated list at top level (commas inside functions do not split).
 pub(crate) fn split_top_level_commas(value: &str) -> Vec<&str> {
     let mut parts = Vec::new();
@@ -341,8 +320,10 @@ pub(crate) fn split_top_level_commas(value: &str) -> Vec<&str> {
     parts
 }
 
-
-pub(crate) fn declaration_value<'a>(entries: &[(&str, &'a Declaration)], name: &str) -> Option<&'a str> {
+pub(crate) fn declaration_value<'a>(
+    entries: &[(&str, &'a Declaration)],
+    name: &str,
+) -> Option<&'a str> {
     entries
         .iter()
         .find(|(key, _)| *key == name)
@@ -350,9 +331,12 @@ pub(crate) fn declaration_value<'a>(entries: &[(&str, &'a Declaration)], name: &
         .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("initial"))
 }
 
-
 /// Value of the `name` list at `index`, cycling the list as CSS requires.
-pub(crate) fn list_item<'a>(entries: &[(&str, &'a Declaration)], name: &str, index: usize) -> Option<&'a str> {
+pub(crate) fn list_item<'a>(
+    entries: &[(&str, &'a Declaration)],
+    name: &str,
+    index: usize,
+) -> Option<&'a str> {
     let raw = declaration_value(entries, name)?;
     let items = split_top_level_commas(raw);
     if items.is_empty() {
@@ -360,7 +344,6 @@ pub(crate) fn list_item<'a>(entries: &[(&str, &'a Declaration)], name: &str, ind
     }
     Some(items[index % items.len()].trim())
 }
-
 
 /// Builds the animation list from the longhand declarations.
 pub(crate) fn parse_animations(entries: &[(&str, &Declaration)]) -> Vec<AnimationSpec> {

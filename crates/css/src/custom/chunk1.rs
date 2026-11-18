@@ -2,17 +2,14 @@
 
 use super::*;
 
-
 /// Maximum nested `var()` substitutions.
 pub const MAX_SUBSTITUTION_DEPTH: usize = 32;
-
 
 /// Maximum bytes a single `var()` expansion may produce (about 64× the input, clamped).
 ///
 /// Every reference re-expands its variable, so a chain like `--aN: var(--aN-1) var(--aN-1)`
 /// is exponential: 31 doublings asked for ~4 GiB. The budget bounds the work and memory.
 pub const MAX_SUBSTITUTION_BYTES: usize = 1024 * 1024;
-
 
 /// Maximum number of custom properties retained in a single element's map.
 ///
@@ -21,13 +18,11 @@ pub const MAX_SUBSTITUTION_BYTES: usize = 1024 * 1024;
 /// carried forward, so cascade resolution stays linear in the document size.
 pub const MAX_CUSTOM_PROPERTIES: usize = 256;
 
-
 /// Result of [`resolve_declarations`]: owned declarations + shared custom-property map.
 pub(crate) type ResolvedDeclarations = (
     Vec<(String, Declaration)>,
     Option<Arc<HashMap<String, String>>>,
 );
-
 
 /// Returns whether `value` contains a `var()` function (case-insensitive).
 ///
@@ -43,7 +38,6 @@ pub(crate) fn contains_var(value: &str) -> bool {
         .any(|window| window[..3].eq_ignore_ascii_case(b"var") && window[3] == b'(')
 }
 
-
 /// Returns whether style computation needs the custom-property machinery for this element.
 ///
 /// `false` means: no local `--*` declarations and no declaration value references `var()`.
@@ -55,7 +49,6 @@ pub(crate) fn needs_resolution(cascaded: &HashMap<String, &Declaration>) -> bool
             .values()
             .any(|declaration| contains_var(&declaration.raw_value))
 }
-
 
 /// Expands every `var()` reference in `value` using `custom`.
 ///
@@ -71,7 +64,6 @@ pub fn expand_variables(value: &str, custom: &HashMap<String, String>) -> Option
     expand_inner(value, custom, 0, &mut visiting, &mut budget)
 }
 
-
 /// Reserves `bytes` from the substitution budget (returns false when exhausted).
 pub(crate) fn spend(budget: &mut usize, bytes: usize) -> bool {
     if bytes > *budget {
@@ -80,7 +72,6 @@ pub(crate) fn spend(budget: &mut usize, bytes: usize) -> bool {
     *budget -= bytes;
     true
 }
-
 
 /// Returns the byte index of the next `var(` function token outside strings and comments.
 ///
@@ -169,7 +160,6 @@ pub(crate) fn next_var_function(value: &str, from: usize) -> Option<usize> {
     None
 }
 
-
 /// Whether `byte` can be part of a CSS identifier (so `myvar(` is not `var(`).
 pub(crate) fn is_ident_byte(byte: u8) -> bool {
     // Accept ASCII ident chars and any byte that is part of a valid UTF-8
@@ -177,7 +167,6 @@ pub(crate) fn is_ident_byte(byte: u8) -> bool {
     // while still rejecting pure ASCII punctuation.
     byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte >= 0x80
 }
-
 
 /// Skips a balanced function body starting at the `(` byte; returns the index after `)`.
 pub(crate) fn skip_function(value: &str, open: usize) -> Option<usize> {
@@ -220,7 +209,6 @@ pub(crate) fn skip_function(value: &str, open: usize) -> Option<usize> {
     }
     None
 }
-
 
 pub(crate) fn expand_inner(
     value: &str,
@@ -339,7 +327,6 @@ pub(crate) fn expand_inner(
     Some(out)
 }
 
-
 /// Splits `arg, fallback` on the first top-level comma (quotes/parentheses aware).
 pub(crate) fn split_first_comma(inner: &str) -> (String, Option<String>) {
     let mut depth = 0usize;
@@ -375,7 +362,6 @@ pub(crate) fn split_first_comma(inner: &str) -> (String, Option<String>) {
     }
     (inner.to_string(), None)
 }
-
 
 pub(crate) fn normalize_custom_value(value: &str) -> Option<String> {
     let trimmed = value.trim();

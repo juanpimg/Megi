@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 pub(crate) fn tokenize_selector_parts(input: &str) -> Vec<String> {
     if input.len() > MAX_SELECTOR_BYTES {
         return Vec::new();
@@ -117,7 +116,6 @@ pub(crate) fn tokenize_selector_parts(input: &str) -> Vec<String> {
     parts
 }
 
-
 /// Dynamic pseudo-classes whose state this engine does not track yet.
 ///
 /// They are accepted by the parser but mapped to [`PseudoClass::Never`]: a rule such as
@@ -155,7 +153,6 @@ pub(crate) const DYNAMIC_PSEUDO_CLASSES: &[&str] = &[
     "playing",
     "paused",
 ];
-
 
 pub(crate) fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelector> {
     if tokens.is_empty() {
@@ -370,7 +367,6 @@ pub(crate) fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<Com
 
     Some(compound)
 }
-
 
 /// Parses the argument of `:is()`, `:where()` or `:not()` into a selector list.
 /// Parses the first language range of `:lang(en, fr)`, trimming quotes and normalising case.

@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod round19_tests {
     use super::*;
@@ -90,7 +89,6 @@ pub(crate) mod round19_tests {
         assert_eq!(longhands.row_end, GridLine::Auto);
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod round22_tests {

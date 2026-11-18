@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Expands the `animation` shorthand into its longhands (CSS Animations 1 §4).
 ///
 /// Grammar per entry: `[ <time> || <easing> || <time> || <iteration-count> ||
@@ -105,7 +104,6 @@ pub(crate) fn expand_animation(value: &str) -> Option<Vec<(String, String)>> {
     ])
 }
 
-
 /// Expands the `transition` shorthand (CSS Transitions 1 §2).
 ///
 /// Grammar per entry: `[ <property> || <time> || <easing> || <time> ]`, comma-separated.
@@ -167,7 +165,6 @@ pub(crate) fn expand_transition(value: &str) -> Option<Vec<(String, String)>> {
         ("transition-delay".to_string(), delays.join(", ")),
     ])
 }
-
 
 /// Expands `background` to the modelled longhands for **all layers**
 /// (`background-color`, `background-image`, `background-repeat`,
@@ -235,7 +232,6 @@ pub(crate) fn expand_background(value: &str) -> Option<Vec<(String, String)>> {
     ])
 }
 
-
 // ---------------------------------------------------------------------------
 // Font shorthand
 // ---------------------------------------------------------------------------
@@ -268,7 +264,6 @@ pub(crate) fn is_font_size(component: &str) -> bool {
     lower == "0"
 }
 
-
 /// Returns whether `component` is a valid `<line-height>` in the `font` shorthand.
 pub(crate) fn is_font_line_height(component: &str) -> bool {
     let lower = component.trim().to_ascii_lowercase();
@@ -286,7 +281,6 @@ pub(crate) fn is_font_line_height(component: &str) -> bool {
         Some(Length::Percent(pct)) if pct >= 0.0
     )
 }
-
 
 /// Expands the `font` shorthand into the modelled font longhands.
 ///

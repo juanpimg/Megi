@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod background_layers_tests {
     //! `background-origin`/`clip`/`attachment`, multi-layer lists and layered
@@ -154,7 +153,6 @@ pub(crate) mod background_layers_tests {
         assert!(!style.background_geometry_explicit);
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod decoration_tests {

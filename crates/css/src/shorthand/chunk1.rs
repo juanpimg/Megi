@@ -3,15 +3,12 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Physical sides in CSS expansion order (top, right, bottom, left).
 pub(crate) const SIDES: [&str; 4] = ["top", "right", "bottom", "left"];
-
 
 pub(crate) const FONT_SIZE_KEYWORDS: [&str; 9] = [
     "xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "smaller", "larger",
 ];
-
 
 pub(crate) const FONT_STRETCH_KEYWORDS: [&str; 7] = [
     "ultra-condensed",
@@ -23,7 +20,6 @@ pub(crate) const FONT_STRETCH_KEYWORDS: [&str; 7] = [
     "extra-expanded",
 ];
 
-
 pub(crate) const SYSTEM_FONT_KEYWORDS: [&str; 6] = [
     "caption",
     "icon",
@@ -32,7 +28,6 @@ pub(crate) const SYSTEM_FONT_KEYWORDS: [&str; 6] = [
     "small-caption",
     "status-bar",
 ];
-
 
 /// Expands every declaration in `declarations` into longhand declarations.
 ///
@@ -55,7 +50,6 @@ pub fn expand_declarations(declarations: &[Declaration]) -> Vec<Declaration> {
     }
     expanded
 }
-
 
 /// Returns `Some(longhands)` for a supported shorthand, `Some(vec![])` for an invalid or
 /// unsupported shorthand (dropped), and `None` when the declaration is not a shorthand.
@@ -94,7 +88,6 @@ pub(crate) fn expand_properties(declaration: &Declaration) -> Option<Vec<(String
     }
 }
 
-
 /// Returns whether the component is a CSS-wide keyword (`inherit`, `initial`, ...).
 pub(crate) fn is_css_wide_keyword(component: &str) -> bool {
     matches!(
@@ -102,7 +95,6 @@ pub(crate) fn is_css_wide_keyword(component: &str) -> bool {
         "inherit" | "initial" | "unset" | "revert" | "revert-layer"
     )
 }
-
 
 /// Expands one to four values into top/right/bottom/left order (CSS 2.2 §8.5).
 pub(crate) fn four_values<T: Clone>(values: &[T]) -> Option<[T; 4]> {
@@ -127,7 +119,6 @@ pub(crate) fn four_values<T: Clone>(values: &[T]) -> Option<[T; 4]> {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Border shorthands
 // ---------------------------------------------------------------------------
@@ -139,7 +130,6 @@ pub(crate) struct BorderParts {
     pub(crate) style: Option<String>,
     pub(crate) color: Option<String>,
 }
-
 
 /// Parses `<width> || <style> || <color>` in any order (CSS 2.2 §8.5.4).
 pub(crate) fn parse_border_parts(value: &str) -> Option<BorderParts> {
@@ -170,7 +160,6 @@ pub(crate) fn parse_border_parts(value: &str) -> Option<BorderParts> {
     Some(parts)
 }
 
-
 pub(crate) fn border_longhands(parts: BorderParts, sides: &[&str]) -> Vec<(String, String)> {
     let width = parts.width.unwrap_or_else(|| "medium".to_string());
     let style = parts.style.unwrap_or_else(|| "none".to_string());
@@ -184,7 +173,6 @@ pub(crate) fn border_longhands(parts: BorderParts, sides: &[&str]) -> Vec<(Strin
     longhands
 }
 
-
 pub(crate) fn expand_border(value: &str, side: Option<&str>) -> Option<Vec<(String, String)>> {
     let parts = parse_border_parts(value)?;
     let sides: Vec<&str> = match side {
@@ -193,7 +181,6 @@ pub(crate) fn expand_border(value: &str, side: Option<&str>) -> Option<Vec<(Stri
     };
     Some(border_longhands(parts, &sides))
 }
-
 
 /// Expands `border-width`, `border-style` and `border-color` (1-4 values) to per-side longhands.
 pub(crate) fn expand_border_edges(name: &str, value: &str) -> Option<Vec<(String, String)>> {
@@ -227,7 +214,6 @@ pub(crate) fn expand_border_edges(name: &str, value: &str) -> Option<Vec<(String
         (format!("border-left-{suffix}"), left),
     ])
 }
-
 
 // ---------------------------------------------------------------------------
 // Box-edge shorthands (margin / padding)
@@ -295,7 +281,6 @@ pub(crate) fn expand_box_edges(value: &str, name: &str) -> Option<Vec<(String, S
     Some(longhands)
 }
 
-
 // ---------------------------------------------------------------------------
 // Background shorthand
 // ---------------------------------------------------------------------------
@@ -309,7 +294,6 @@ pub(crate) fn is_image_component(component: &str) -> bool {
         || lower.starts_with("image-set(")
         || lower.starts_with("cross-fade(")
 }
-
 
 /// Expands `border-radius` into the four corner longhands.
 ///
@@ -359,7 +343,6 @@ pub(crate) fn expand_border_radius(value: &str) -> Option<Vec<(String, String)>>
     }
     Some(declarations)
 }
-
 
 /// Maximum comma-separated entries accepted in an `animation`/`transition` shorthand.
 pub(crate) const MAX_TIMELINE_ENTRIES: usize = 64;

@@ -24,29 +24,53 @@ use crate::properties::{
 use crate::rule::Declaration;
 
 mod chunk1;
-#[allow(unused_imports)] pub(crate) use chunk1::SIDES;
-#[allow(unused_imports)] pub(crate) use chunk1::FONT_SIZE_KEYWORDS;
-#[allow(unused_imports)] pub(crate) use chunk1::FONT_STRETCH_KEYWORDS;
-#[allow(unused_imports)] pub(crate) use chunk1::SYSTEM_FONT_KEYWORDS;
-#[allow(unused_imports)] pub use chunk1::expand_declarations;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_properties;
-#[allow(unused_imports)] pub(crate) use chunk1::is_css_wide_keyword;
-#[allow(unused_imports)] pub(crate) use chunk1::four_values;
-#[allow(unused_imports)] pub(crate) use chunk1::BorderParts;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_border_parts;
-#[allow(unused_imports)] pub(crate) use chunk1::border_longhands;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_border;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_border_edges;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_box_edges;
-#[allow(unused_imports)] pub(crate) use chunk1::is_image_component;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_border_radius;
-#[allow(unused_imports)] pub(crate) use chunk1::MAX_TIMELINE_ENTRIES;
+#[allow(unused_imports)]
+pub(crate) use chunk1::BorderParts;
+#[allow(unused_imports)]
+pub(crate) use chunk1::FONT_SIZE_KEYWORDS;
+#[allow(unused_imports)]
+pub(crate) use chunk1::FONT_STRETCH_KEYWORDS;
+#[allow(unused_imports)]
+pub(crate) use chunk1::MAX_TIMELINE_ENTRIES;
+#[allow(unused_imports)]
+pub(crate) use chunk1::SIDES;
+#[allow(unused_imports)]
+pub(crate) use chunk1::SYSTEM_FONT_KEYWORDS;
+#[allow(unused_imports)]
+pub(crate) use chunk1::border_longhands;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_border;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_border_edges;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_border_radius;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_box_edges;
+#[allow(unused_imports)]
+pub use chunk1::expand_declarations;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_properties;
+#[allow(unused_imports)]
+pub(crate) use chunk1::four_values;
+#[allow(unused_imports)]
+pub(crate) use chunk1::is_css_wide_keyword;
+#[allow(unused_imports)]
+pub(crate) use chunk1::is_image_component;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_border_parts;
 mod chunk2;
-#[allow(unused_imports)] pub(crate) use chunk2::expand_animation;
-#[allow(unused_imports)] pub(crate) use chunk2::expand_transition;
-#[allow(unused_imports)] pub(crate) use chunk2::expand_background;
-#[allow(unused_imports)] pub(crate) use chunk2::is_font_size;
-#[allow(unused_imports)] pub(crate) use chunk2::is_font_line_height;
-#[allow(unused_imports)] pub(crate) use chunk2::expand_font;
+#[allow(unused_imports)]
+pub(crate) use chunk2::expand_animation;
+#[allow(unused_imports)]
+pub(crate) use chunk2::expand_background;
+#[allow(unused_imports)]
+pub(crate) use chunk2::expand_font;
+#[allow(unused_imports)]
+pub(crate) use chunk2::expand_transition;
+#[allow(unused_imports)]
+pub(crate) use chunk2::is_font_line_height;
+#[allow(unused_imports)]
+pub(crate) use chunk2::is_font_size;
 mod chunk3;
-#[allow(unused_imports)] pub(crate) use chunk3::expand_list_style;
+#[allow(unused_imports)]
+pub(crate) use chunk3::expand_list_style;

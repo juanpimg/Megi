@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl ComputedStyle {
     /// Returns the initial computed style before any CSS rules are applied.
     pub fn initial() -> Self {
@@ -128,13 +127,11 @@ impl ComputedStyle {
         }
     }
 
-
     /// Sets `backdrop_color` and refreshes the cached style fingerprint.
     pub fn set_backdrop_color(&mut self, color: Option<Color>) {
         self.backdrop_color = color;
         self.style_fingerprint = StyleFingerprint::new(self.compute_fingerprint());
     }
-
 
     /// Returns the cached value fingerprint used by layout's style interning.
     ///
@@ -145,7 +142,6 @@ impl ComputedStyle {
     pub fn fingerprint(&self) -> u64 {
         self.style_fingerprint.0
     }
-
 
     /// Computes the cheap value fingerprint that layout's style interning uses as a bucket
     /// key. [`ComputedStyle::compute`] caches it in the returned style, so the layout tree

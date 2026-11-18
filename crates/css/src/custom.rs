@@ -17,19 +17,30 @@ use std::sync::Arc;
 use crate::rule::Declaration;
 
 mod chunk1;
-pub use chunk1::MAX_SUBSTITUTION_DEPTH;
-pub use chunk1::MAX_SUBSTITUTION_BYTES;
 pub use chunk1::MAX_CUSTOM_PROPERTIES;
-#[allow(unused_imports)] pub(crate) use chunk1::ResolvedDeclarations;
-#[allow(unused_imports)] pub(crate) use chunk1::contains_var;
-#[allow(unused_imports)] pub(crate) use chunk1::needs_resolution;
+pub use chunk1::MAX_SUBSTITUTION_BYTES;
+pub use chunk1::MAX_SUBSTITUTION_DEPTH;
+#[allow(unused_imports)]
+pub(crate) use chunk1::ResolvedDeclarations;
+#[allow(unused_imports)]
+pub(crate) use chunk1::contains_var;
+#[allow(unused_imports)]
+pub(crate) use chunk1::expand_inner;
 pub use chunk1::expand_variables;
-#[allow(unused_imports)] pub(crate) use chunk1::spend;
-#[allow(unused_imports)] pub(crate) use chunk1::next_var_function;
-#[allow(unused_imports)] pub(crate) use chunk1::is_ident_byte;
-#[allow(unused_imports)] pub(crate) use chunk1::skip_function;
-#[allow(unused_imports)] pub(crate) use chunk1::expand_inner;
-#[allow(unused_imports)] pub(crate) use chunk1::split_first_comma;
-#[allow(unused_imports)] pub(crate) use chunk1::normalize_custom_value;
+#[allow(unused_imports)]
+pub(crate) use chunk1::is_ident_byte;
+#[allow(unused_imports)]
+pub(crate) use chunk1::needs_resolution;
+#[allow(unused_imports)]
+pub(crate) use chunk1::next_var_function;
+#[allow(unused_imports)]
+pub(crate) use chunk1::normalize_custom_value;
+#[allow(unused_imports)]
+pub(crate) use chunk1::skip_function;
+#[allow(unused_imports)]
+pub(crate) use chunk1::spend;
+#[allow(unused_imports)]
+pub(crate) use chunk1::split_first_comma;
 mod chunk2;
-#[allow(unused_imports)] pub(crate) use chunk2::resolve_declarations;
+#[allow(unused_imports)]
+pub(crate) use chunk2::resolve_declarations;

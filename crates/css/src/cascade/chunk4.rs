@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Applies embedded CSS animations to already-resolved computed styles at `time_ms`.
 ///
 /// The base styles are used as the underlying values; animated styles are not
@@ -40,7 +39,6 @@ pub fn apply_animations_to_styles(
     }
 }
 
-
 /// Applies embedded CSS animations to already-resolved pseudo-element styles at `time_ms`.
 pub fn apply_animations_to_pseudo_styles(
     pseudo_styles: &mut PseudoStyles,
@@ -63,7 +61,6 @@ pub fn apply_animations_to_pseudo_styles(
     }
 }
 
-
 /// Resolves computed styles for all elements in the DOM document.
 ///
 /// Pre-loads the default WHATWG HTML User-Agent stylesheet, then compiles and cascades
@@ -77,7 +74,6 @@ pub fn resolve_document_styles(
     resolve_document_styles_with_media(doc, author_css, MediaContext::default())
 }
 
-
 /// Resolves computed styles with `@media` width/height features evaluated for a viewport.
 pub fn resolve_document_styles_with_viewport(
     doc: &Document,
@@ -87,7 +83,6 @@ pub fn resolve_document_styles_with_viewport(
 ) -> HashMap<NodeId, crate::properties::ComputedStyle> {
     resolve_document_styles_with_media(doc, author_css, MediaContext::with_viewport(width, height))
 }
-
 
 /// Hashes an element's winning declarations (and its parent identity) into a 128-bit
 /// style-cache key.
@@ -113,7 +108,6 @@ pub(crate) fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Decl
     }
     u128::from(low) << 64 | u128::from(high)
 }
-
 
 /// Resolves the computed `background-color` for a `::backdrop` pseudo-element of `node_id`
 /// when `node_id` is a modal `<dialog>` (`crate::state::is_modal(doc, node_id)`).
@@ -167,7 +161,6 @@ pub fn resolve_backdrop_color(
     Some(computed.background_color)
 }
 
-
 /// Resolves computed styles and pseudo-element (`::before` / `::after`) styles with a fully
 /// specified [`MediaContext`].
 pub fn resolve_document_styles_with_pseudos(
@@ -186,7 +179,6 @@ pub fn resolve_document_styles_with_pseudos(
     resolve_document_styles_from_collection(doc, &collection)
 }
 
-
 /// Resolves computed styles and pseudo-element styles against a prebuilt [`StyleCollection`].
 pub fn resolve_document_styles_from_collection(
     doc: &Document,
@@ -197,7 +189,6 @@ pub fn resolve_document_styles_from_collection(
 ) {
     resolve_document_styles_from_collection_inner(doc, collection, true)
 }
-
 
 /// Resolves computed styles with a fully specified [`MediaContext`] for `@media` evaluation.
 pub fn resolve_document_styles_with_media(
@@ -212,7 +203,6 @@ pub fn resolve_document_styles_with_media(
     }
     resolve_document_styles_from_collection_inner(doc, &collection, false).0
 }
-
 
 pub(crate) fn resolve_document_styles_from_collection_inner(
     doc: &Document,
@@ -352,14 +342,12 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
     (styles, pseudo_styles)
 }
 
-
 /// Maximum byte length parsed from a single inline `style="..."` attribute.
 ///
 /// Bounding inline styles caps CPU and allocation cost on attacker-controlled documents;
 /// multi-byte UTF-8 code points that straddle this limit are excluded by backing up to a
 /// UTF-8 character boundary via `floor_char_boundary_utf8`.
 pub const MAX_INLINE_STYLE_BYTES: usize = 64 * 1024;
-
 
 /// Returns the greatest byte offset `<= max_bytes` on a UTF-8 `char` boundary in `text`.
 #[inline]
@@ -371,7 +359,6 @@ pub(crate) fn floor_char_boundary_utf8(text: &str, max_bytes: usize) -> usize {
     end
 }
 
-
 /// Parses an inline `style="..."` attribute bounded to [`MAX_INLINE_STYLE_BYTES`] on a UTF-8
 /// character boundary, returning unexpanded declarations.
 pub fn parse_inline_declarations(style: &str) -> Vec<Declaration> {
@@ -382,7 +369,6 @@ pub fn parse_inline_declarations(style: &str) -> Vec<Declaration> {
     };
     crate::parser::parse_list_of_declarations(bounded)
 }
-
 
 /// Parses and shorthand-expands an inline `style="..."` attribute bounded to
 /// [`MAX_INLINE_STYLE_BYTES`] on a UTF-8 character boundary.

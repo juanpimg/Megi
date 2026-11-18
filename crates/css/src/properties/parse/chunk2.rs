@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Splits a comma-separated CSS list at top level (parentheses/quotes aware).
 pub(crate) fn split_top_level_commas(value: &str) -> Vec<String> {
     let mut components = Vec::new();
@@ -56,7 +55,6 @@ pub(crate) fn split_top_level_commas(value: &str) -> Vec<String> {
     components
 }
 
-
 /// Parses a comma-separated property list and repeats it cyclically to `count`
 /// entries (CSS Backgrounds 3 §3.1), falling back to `default` for the whole list
 /// when the declaration is missing/empty.
@@ -88,7 +86,6 @@ pub(crate) fn cycle_property_list<T: Clone>(
         .collect()
 }
 
-
 /// Tokenised components of one `background` shorthand layer.
 ///
 /// Values are kept as raw CSS text: shorthand expansion runs *before* the cascade,
@@ -105,7 +102,6 @@ pub(crate) struct BackgroundShorthandTokens {
     pub clip: Option<String>,
     pub attachment: Option<String>,
 }
-
 
 /// Splits `value` at the first top-level `,` (only the first background layer is
 /// modelled) and returns the part before it.
@@ -137,7 +133,6 @@ pub(crate) fn first_background_layer(value: &str) -> &str {
     value
 }
 
-
 /// Splits a background layer at the top-level `/` separator (`<position> / <size>`).
 pub(crate) fn split_background_layer_at_slash(value: &str) -> (&str, Option<&str>) {
     let mut depth = 0usize;
@@ -167,7 +162,6 @@ pub(crate) fn split_background_layer_at_slash(value: &str) -> (&str, Option<&str
     (value, None)
 }
 
-
 /// Classification helpers shared by the `background` shorthand parser.
 pub(crate) fn is_background_repeat_keyword(token: &str) -> bool {
     matches!(
@@ -176,14 +170,12 @@ pub(crate) fn is_background_repeat_keyword(token: &str) -> bool {
     )
 }
 
-
 pub(crate) fn is_background_attachment_keyword(token: &str) -> bool {
     matches!(
         token.trim().to_ascii_lowercase().as_str(),
         "scroll" | "fixed" | "local"
     )
 }
-
 
 pub(crate) fn is_background_box_keyword(token: &str) -> bool {
     matches!(
@@ -192,14 +184,12 @@ pub(crate) fn is_background_box_keyword(token: &str) -> bool {
     )
 }
 
-
 pub(crate) fn is_background_position_keyword(token: &str) -> bool {
     matches!(
         token.trim().to_ascii_lowercase().as_str(),
         "left" | "center" | "right" | "top" | "bottom"
     )
 }
-
 
 /// Heuristic `<length-percentage>` test used only for shorthand token classification.
 pub(crate) fn looks_like_length(token: &str) -> bool {
@@ -220,7 +210,6 @@ pub(crate) fn looks_like_length(token: &str) -> bool {
     token.parse::<f32>().is_ok()
 }
 
-
 pub(crate) fn is_background_image_token(token: &str) -> bool {
     let lower = token.trim().to_ascii_lowercase();
     lower.starts_with("url(")
@@ -229,7 +218,6 @@ pub(crate) fn is_background_image_token(token: &str) -> bool {
         || lower.starts_with("image-set(")
         || lower.starts_with("cross-fade(")
 }
-
 
 /// Parses the components of a `background` shorthand (first layer only).
 ///
@@ -350,7 +338,6 @@ pub(crate) fn parse_background_shorthand_tokens(value: &str) -> Option<Backgroun
     }
     Some(tokens)
 }
-
 
 /// Parses every `background` shorthand layer (comma-separated).
 ///

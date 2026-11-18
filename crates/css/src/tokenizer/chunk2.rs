@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl CssTokenizer {
     /// Creates a tokenizer from a raw string, performing §3.3 preprocessing.
     pub fn new(input: &str) -> Self {

@@ -18,23 +18,37 @@ use crate::properties::{Color, ComputedStyle, Length};
 use crate::rule::{Keyframe, KeyframesRule};
 
 mod chunk1;
-#[allow(unused_imports)] pub(crate) use chunk1::MAX_KEYFRAME_STEPS;
-pub use chunk1::evaluate_timing_function;
-#[allow(unused_imports)] pub(crate) use chunk1::cubic_bezier;
-#[allow(unused_imports)] pub(crate) use chunk1::steps;
+#[allow(unused_imports)]
+pub(crate) use chunk1::ANIMATABLE_PROPERTIES;
+#[allow(unused_imports)]
+pub(crate) use chunk1::AnimatableValue;
+#[allow(unused_imports)]
+pub(crate) use chunk1::EvaluatedKeyframe;
+#[allow(unused_imports)]
+pub(crate) use chunk1::MAX_KEYFRAME_STEPS;
 pub use chunk1::animation_progress;
 pub use chunk1::apply_animations;
-#[allow(unused_imports)] pub(crate) use chunk1::EvaluatedKeyframe;
-#[allow(unused_imports)] pub(crate) use chunk1::apply_keyframes;
-#[allow(unused_imports)] pub(crate) use chunk1::ANIMATABLE_PROPERTIES;
-#[allow(unused_imports)] pub(crate) use chunk1::is_animatable;
-pub use chunk1::transition_progress;
+#[allow(unused_imports)]
+pub(crate) use chunk1::apply_keyframes;
 pub use chunk1::apply_transitions;
-#[allow(unused_imports)] pub(crate) use chunk1::AnimatableValue;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_animatable;
+#[allow(unused_imports)]
+pub(crate) use chunk1::cubic_bezier;
+pub use chunk1::evaluate_timing_function;
+#[allow(unused_imports)]
+pub(crate) use chunk1::is_animatable;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_animatable;
+#[allow(unused_imports)]
+pub(crate) use chunk1::steps;
+pub use chunk1::transition_progress;
 mod chunk2;
-#[allow(unused_imports)] pub(crate) use chunk2::base_animatable;
-#[allow(unused_imports)] pub(crate) use chunk2::interpolate_property;
-#[allow(unused_imports)] pub(crate) use chunk2::interpolate_animatable;
-#[allow(unused_imports)] pub(crate) use chunk2::lerp_color;
-#[allow(unused_imports)] pub(crate) use chunk2::write_property;
+#[allow(unused_imports)]
+pub(crate) use chunk2::base_animatable;
+#[allow(unused_imports)]
+pub(crate) use chunk2::interpolate_animatable;
+#[allow(unused_imports)]
+pub(crate) use chunk2::interpolate_property;
+#[allow(unused_imports)]
+pub(crate) use chunk2::lerp_color;
+#[allow(unused_imports)]
+pub(crate) use chunk2::write_property;

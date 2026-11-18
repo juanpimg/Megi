@@ -3,9 +3,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl ComputedStyle {
-
     /// Inherits properties from a parent style according to CSS cascading rules.
     pub fn inherit_from(&mut self, parent: &ComputedStyle) {
         self.color = parent.color;
@@ -30,7 +28,6 @@ impl ComputedStyle {
         // `border-radius` are not.
         self.text_shadows = parent.text_shadows.clone();
     }
-
 
     pub(crate) fn compute_font_size(val: &str, parent_size: f32, root_size: f32) -> f32 {
         let val = val.trim().to_ascii_lowercase();
@@ -58,7 +55,6 @@ impl ComputedStyle {
         }
     }
 
-
     pub(crate) fn parse_font_weight(val: &str) -> u16 {
         match val.trim().to_ascii_lowercase().as_str() {
             "normal" => 400,
@@ -74,7 +70,6 @@ impl ComputedStyle {
         }
     }
 
-
     /// Returns the unitless `<number>` factor of a `line-height` declaration, if any.
     pub(crate) fn parse_line_height_factor(val: &str) -> Option<f32> {
         let val = val.trim();
@@ -86,7 +81,6 @@ impl ComputedStyle {
             .ok()
             .filter(|factor| factor.is_finite() && *factor >= 0.0)
     }
-
 
     pub(crate) fn parse_line_height(val: &str, font_size: f32) -> Option<f32> {
         let val = val.trim().to_ascii_lowercase();
@@ -108,7 +102,6 @@ impl ComputedStyle {
             _ => None,
         }
     }
-
 
     pub(crate) fn compute_edges(
         entries: &[(&str, &Declaration)],
@@ -188,7 +181,6 @@ impl ComputedStyle {
         }
     }
 
-
     /// Computes `filter` (with the `-webkit-filter` alias) and `mix-blend-mode`.
     ///
     /// Neither property is inherited (Filter Effects 1 §2 / Compositing 1 §5).
@@ -238,7 +230,6 @@ impl ComputedStyle {
         (filter, mix_blend_mode, backdrop_filter)
     }
 
-
     /// Computes `aspect-ratio`, `object-fit` and `object-position` (CSS Box Sizing
     /// 4 §5 / CSS Images 3 §5.5). None of them is inherited.
     pub(crate) fn compute_replaced_properties(
@@ -259,7 +250,6 @@ impl ComputedStyle {
             });
         (aspect_ratio, object_fit, object_position)
     }
-
 
     /// Computes `border-radius`, `box-shadow` and `text-shadow` (CSS Backgrounds 3
     /// §5 and CSS Text Decoration 3 §3).

@@ -2,10 +2,8 @@
 
 use super::*;
 
-
 /// Maximum number of keyframe intervals/properties evaluated per animation application.
 pub(crate) const MAX_KEYFRAME_STEPS: usize = 4096;
-
 
 /// Evaluates a timing function at progress `x` in `0..=1`.
 pub fn evaluate_timing_function(timing: &TimingFunction, x: f32) -> f32 {
@@ -25,7 +23,6 @@ pub fn evaluate_timing_function(timing: &TimingFunction, x: f32) -> f32 {
     }
 }
 
-
 /// Solves the x component of a cubic Bézier with `P0=(0,0)`, `P3=(1,1)` by bisection.
 pub(crate) fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     let bezier = |t: f32, p1: f32, p2: f32| {
@@ -44,7 +41,6 @@ pub(crate) fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     }
     bezier((low + high) * 0.5, y1, y2)
 }
-
 
 /// Evaluates a `steps()` function.
 pub(crate) fn steps(count: u32, position: StepPosition, x: f32) -> f32 {
@@ -70,7 +66,6 @@ pub(crate) fn steps(count: u32, position: StepPosition, x: f32) -> f32 {
     };
     (value / divisor).clamp(0.0, 1.0)
 }
-
 
 /// Local progress (`0..=1`) of `spec` at `time_ms`, honoring delay, iterations, direction
 /// and fill mode; `None` when the animation does not affect the element at that time.
@@ -113,7 +108,6 @@ pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
     Some(fraction)
 }
 
-
 /// Applies every animation in `specs` to a clone of `base` at `time_ms`.
 ///
 /// Animations are applied in list order (later ones override earlier ones for the same
@@ -141,13 +135,11 @@ pub fn apply_animations(
     style
 }
 
-
 /// One evaluated keyframe: normalized offset plus the properties it declares.
 pub(crate) struct EvaluatedKeyframe {
     pub(crate) offset: f32,
     pub(crate) values: Vec<(String, String)>,
 }
-
 
 /// Interpolates `rule` into `style` at `progress` using `timing` easing.
 pub(crate) fn apply_keyframes(
@@ -240,7 +232,6 @@ pub(crate) fn apply_keyframes(
     }
 }
 
-
 /// Whether the property participates in the animation interpolation.
 pub(crate) const ANIMATABLE_PROPERTIES: &[&str] = &[
     "opacity",
@@ -273,12 +264,10 @@ pub(crate) const ANIMATABLE_PROPERTIES: &[&str] = &[
     "word-spacing",
 ];
 
-
 /// Returns `true` when `property` is one of the supported animatable properties.
 pub(crate) fn is_animatable(property: &str) -> bool {
     ANIMATABLE_PROPERTIES.contains(&property)
 }
-
 
 /// Evaluates a transition's eased progress (`0..=1`) at `elapsed_ms`, or `None` when the
 /// transition is inactive (zero duration) or already finished (`elapsed >= delay + duration`).
@@ -296,7 +285,6 @@ pub fn transition_progress(spec: &TransitionSpec, elapsed_ms: f32) -> Option<(f3
     let linear = (local / spec.duration_ms).clamp(0.0, 1.0);
     Some((evaluate_timing_function(&spec.timing, linear), linear))
 }
-
 
 /// Interpolates CSS transitions between `from` and `to` at `elapsed_ms`.
 pub fn apply_transitions(
@@ -338,7 +326,6 @@ pub fn apply_transitions(
     style
 }
 
-
 /// A value that can be interpolated for the supported properties.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum AnimatableValue {
@@ -347,9 +334,12 @@ pub(crate) enum AnimatableValue {
     Color(Color),
 }
 
-
 /// Parses `raw` for `property` (using `base` for `em`/`rem` resolution).
-pub(crate) fn parse_animatable(property: &str, raw: &str, base: &ComputedStyle) -> Option<AnimatableValue> {
+pub(crate) fn parse_animatable(
+    property: &str,
+    raw: &str,
+    base: &ComputedStyle,
+) -> Option<AnimatableValue> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;

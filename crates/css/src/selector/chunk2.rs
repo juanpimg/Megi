@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl PseudoClass {
     /// Specificity contribution of this pseudo-class (Selectors Level 4 §16).
     ///
@@ -87,7 +86,6 @@ impl PseudoClass {
     }
 }
 
-
 /// Returns `true` when both nodes are elements of the same type (namespace plus a name that is
 /// case-insensitive for HTML elements and case-sensitive for foreign SVG/MathML elements).
 pub(crate) fn same_element_type(doc: &Document, a: NodeId, b: NodeId) -> bool {
@@ -102,7 +100,6 @@ pub(crate) fn same_element_type(doc: &Document, a: NodeId, b: NodeId) -> bool {
         }
 }
 
-
 thread_local! {
     /// Active document-wide sibling-index cache (one style resolution pass).
     pub(crate) static SIBLING_CACHE: RefCell<Option<SiblingCache>> = const { RefCell::new(None) };
@@ -113,20 +110,17 @@ thread_local! {
     pub(crate) static SIBLING_TABLES_BUILT: Cell<usize> = const { Cell::new(0) };
 }
 
-
 pub(crate) struct SiblingCache {
     /// Address of the document the cache applies to (avoids cross-document id collisions).
     pub(crate) document: usize,
     pub(crate) tables: HashMap<NodeId, SiblingTable>,
 }
 
-
 pub(crate) struct SiblingTable {
     /// For each element child: (index from start, index from end, same-type index from
     /// start, same-type index from end); all 1-based.
     pub(crate) entries: HashMap<NodeId, (usize, usize, usize, usize)>,
 }
-
 
 impl SiblingTable {
     pub(crate) fn build(doc: &Document, parent: NodeId) -> Self {
@@ -167,14 +161,12 @@ impl SiblingTable {
     }
 }
 
-
 /// Opens a document-wide sibling-index cache for one style resolution pass.
 ///
 /// `:nth-child`/`:nth-of-type`/`:first-child`... used to scan the sibling chain for every
 /// element; the cache builds one table per parent on first use, making them O(1) afterwards.
 /// It is valid only while the DOM does not mutate (style resolution never does).
 pub(crate) struct DocumentScope;
-
 
 /// Opens a [`DocumentScope`]; drop it to end the scope.
 pub(crate) fn document_scope() -> DocumentScope {
@@ -194,7 +186,6 @@ pub(crate) fn document_scope() -> DocumentScope {
     DocumentScope
 }
 
-
 impl Drop for DocumentScope {
     fn drop(&mut self) {
         SIBLING_SCOPE_DEPTH.with(|depth| {
@@ -207,9 +198,11 @@ impl Drop for DocumentScope {
     }
 }
 
-
 /// Cached indices for `node`, when a document scope is active for this document.
-pub(crate) fn cached_sibling_indices(doc: &Document, node: NodeId) -> Option<(usize, usize, usize, usize)> {
+pub(crate) fn cached_sibling_indices(
+    doc: &Document,
+    node: NodeId,
+) -> Option<(usize, usize, usize, usize)> {
     let parent = doc.node(node).parent?;
     let document = std::ptr::from_ref(doc) as usize;
     SIBLING_CACHE.with(|cache| {
@@ -227,7 +220,6 @@ pub(crate) fn cached_sibling_indices(doc: &Document, node: NodeId) -> Option<(us
         table.entries.get(&node).copied()
     })
 }
-
 
 /// 1-based index of `node_id` among the element children of its parent, from the start.
 pub(crate) fn element_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
@@ -249,7 +241,6 @@ pub(crate) fn element_index_from_start(doc: &Document, node_id: NodeId) -> Optio
     None
 }
 
-
 /// 1-based index of `node_id` among the element children of its parent, from the end.
 pub(crate) fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
     if let Some((_, index, _, _)) = cached_sibling_indices(doc, node_id) {
@@ -269,7 +260,6 @@ pub(crate) fn element_index_from_end(doc: &Document, node_id: NodeId) -> Option<
     }
     None
 }
-
 
 /// 1-based index of `node_id` among its same-type element siblings, from the start.
 pub(crate) fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<usize> {
@@ -291,7 +281,6 @@ pub(crate) fn type_index_from_start(doc: &Document, node_id: NodeId) -> Option<u
     None
 }
 
-
 /// 1-based index of `node_id` among its same-type element siblings, from the end.
 pub(crate) fn type_index_from_end(doc: &Document, node_id: NodeId) -> Option<usize> {
     if let Some((_, _, _, index)) = cached_sibling_indices(doc, node_id) {
@@ -312,7 +301,6 @@ pub(crate) fn type_index_from_end(doc: &Document, node_id: NodeId) -> Option<usi
     None
 }
 
-
 /// Specificity of a selector per W3C Selectors Level 4 §16.
 /// Represented as a 3-tuple `(a, b, c)`:
 /// - `a`: ID selectors (`#id`)
@@ -327,7 +315,6 @@ pub struct Specificity {
     pub c: u32,
 }
 
-
 impl Specificity {
     pub const ZERO: Self = Self { a: 0, b: 0, c: 0 };
 
@@ -335,7 +322,6 @@ impl Specificity {
         Self { a, b, c }
     }
 }
-
 
 impl std::ops::Add for Specificity {
     type Output = Self;
@@ -352,7 +338,6 @@ impl std::ops::Add for Specificity {
     }
 }
 
-
 impl std::ops::AddAssign for Specificity {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
@@ -362,13 +347,11 @@ impl std::ops::AddAssign for Specificity {
     }
 }
 
-
 impl std::fmt::Display for Specificity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {}, {})", self.a, self.b, self.c)
     }
 }
-
 
 /// Supported CSS pseudo-elements (#1540).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -378,7 +361,6 @@ pub enum PseudoElement {
     /// `::after` / `:after`
     After,
 }
-
 
 /// A compound selector without combinators (e.g. `div#main.active[data-kind]:first-child`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

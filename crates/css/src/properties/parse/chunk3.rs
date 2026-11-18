@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Splits a CSS value into top-level whitespace-separated components.
 ///
 /// Whitespace inside `<function>()`/blocks or quoted strings is preserved, so values such as
@@ -56,7 +55,6 @@ pub(crate) fn split_components(value: &str) -> Vec<String> {
     components
 }
 
-
 /// Parses `border-spacing`: `<length> | <length> <length>` (horizontal, vertical).
 ///
 /// Percentages, `auto` and negative lengths are invalid (CSS 2.1 §17.6.1). Both lengths are
@@ -88,7 +86,6 @@ pub(crate) fn parse_border_spacing(
         _ => Some((lengths[0], lengths[1])),
     }
 }
-
 
 /// Extracts the URL of an `<image>` value for `background-image` / `list-style-image`.
 ///
@@ -139,7 +136,6 @@ pub(crate) fn parse_image_set_url(value: &str, prefix_len: usize) -> Option<Stri
     best.map(|(_, url)| url)
 }
 
-
 /// Strips a leading/trailing single or double quote from a string token.
 pub(crate) fn strip_quoted_string(component: &str) -> Option<String> {
     let bytes = component.as_bytes();
@@ -152,7 +148,6 @@ pub(crate) fn strip_quoted_string(component: &str) -> Option<String> {
     }
     None
 }
-
 
 /// Parses `aspect-ratio: auto || <ratio>` (CSS Box Sizing 4 §5).
 pub(crate) fn parse_aspect_ratio(value: &str) -> Option<AspectRatio> {
@@ -195,7 +190,6 @@ pub(crate) fn parse_aspect_ratio(value: &str) -> Option<AspectRatio> {
     })
 }
 
-
 /// Parses a `filter` function list; invalid values produce an empty list (`none`).
 pub(crate) fn parse_filter_list(
     value: &str,
@@ -225,7 +219,6 @@ pub(crate) fn parse_filter_list(
     filters
 }
 
-
 /// Splits `name(args)` into the lowercase function name and its inner argument text.
 pub(crate) fn split_function_token(token: &str) -> Option<(String, String)> {
     let token = token.trim();
@@ -238,7 +231,6 @@ pub(crate) fn split_function_token(token: &str) -> Option<(String, String)> {
     Some((name, args))
 }
 
-
 pub(crate) fn parse_number_or_percent(value: &str) -> Option<f32> {
     let value = value.trim();
     let number = if let Some(percentage) = value.strip_suffix('%') {
@@ -250,7 +242,6 @@ pub(crate) fn parse_number_or_percent(value: &str) -> Option<f32> {
     number.filter(|number| number.is_finite())
 }
 
-
 /// Parses a non-negative filter length (`px`/`em`/...; percentages invalid).
 pub(crate) fn parse_filter_length(value: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
     match Length::parse(value, font_size, root_font_size)? {
@@ -258,7 +249,6 @@ pub(crate) fn parse_filter_length(value: &str, font_size: f32, root_font_size: f
         _ => None,
     }
 }
-
 
 pub(crate) fn parse_filter_function(
     name: &str,
@@ -328,7 +318,6 @@ pub(crate) fn parse_filter_function(
     }
 }
 
-
 /// Parses one `background-image` layer: a plain `url(...)` or a CSS gradient.
 ///
 /// Returns `(url, gradient)`; both are `None` for `none` and unsupported image
@@ -373,7 +362,6 @@ pub(crate) fn parse_background_image_component(
     }
     (None, None)
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum GradientForm {

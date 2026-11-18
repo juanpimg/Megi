@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Parses a CSS angle (`deg`, `grad`, `rad`, `turn`) into degrees.
 pub(crate) fn parse_angle_degrees(value: &str) -> Option<f32> {
     let value = value.trim().to_ascii_lowercase();
@@ -26,7 +25,6 @@ pub(crate) fn parse_angle_degrees(value: &str) -> Option<f32> {
     // and filters downstream, so reject it like every other length parser (#audit).
     degrees.filter(|angle| angle.is_finite())
 }
-
 
 /// Parses the optional `radial-gradient()` prefix: `[<shape> || <size>]? [at <position>]?`.
 pub(crate) fn parse_radial_prefix(
@@ -110,7 +108,6 @@ pub(crate) fn parse_radial_prefix(
     Some((shape, extent, position))
 }
 
-
 pub(crate) fn parse_image_value(value: &str) -> Option<String> {
     let value = value.trim();
     if value.is_empty() || value.eq_ignore_ascii_case("none") {
@@ -124,7 +121,6 @@ pub(crate) fn parse_image_value(value: &str) -> Option<String> {
     }
     None
 }
-
 
 /// Parses a single `url(...)` component into its inner URL (quotes removed).
 pub(crate) fn parse_url_component(component: &str) -> Option<String> {
@@ -151,7 +147,6 @@ pub(crate) fn parse_url_component(component: &str) -> Option<String> {
     }
 }
 
-
 /// Parses a `<color>` component, resolving the `currentColor` keyword to the element color.
 pub(crate) fn parse_color_component(component: &str, current_color: Color) -> Option<Color> {
     let component = component.trim();
@@ -160,7 +155,6 @@ pub(crate) fn parse_color_component(component: &str, current_color: Color) -> Op
     }
     Color::parse(component)
 }
-
 
 /// Parses a `<line-width>` component (length, `thin`/`medium`/`thick`, or zero).
 ///
@@ -180,7 +174,6 @@ pub(crate) fn parse_border_width(
         },
     }
 }
-
 
 /// Expands one to four values into top/right/bottom/left edges (CSS 2.2 §8.5).
 pub(crate) fn expand_four<T: Copy>(values: &[T]) -> Option<RectEdges<T>> {
@@ -208,7 +201,6 @@ pub(crate) fn expand_four<T: Copy>(values: &[T]) -> Option<RectEdges<T>> {
     }
 }
 
-
 pub(crate) fn parse_border_width_edges(
     value: &str,
     font_size: f32,
@@ -221,7 +213,6 @@ pub(crate) fn parse_border_width_edges(
     expand_four(&widths)
 }
 
-
 pub(crate) fn parse_border_style_edges(value: &str) -> Option<RectEdges<BorderStyle>> {
     let styles = split_components(value)
         .iter()
@@ -229,7 +220,6 @@ pub(crate) fn parse_border_style_edges(value: &str) -> Option<RectEdges<BorderSt
         .collect::<Option<Vec<BorderStyle>>>()?;
     expand_four(&styles)
 }
-
 
 pub(crate) fn parse_border_color_edges(
     value: &str,
@@ -242,7 +232,6 @@ pub(crate) fn parse_border_color_edges(
     expand_four(&colors)
 }
 
-
 /// Partially specified border side produced by parsing a `border`/`border-{side}` shorthand.
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct BorderSpec {
@@ -250,7 +239,6 @@ pub(crate) struct BorderSpec {
     pub(crate) style: Option<BorderStyle>,
     pub(crate) color: Option<Color>,
 }
-
 
 /// Parses `<width> || <style> || <color>` in any order (CSS 2.2 §8.5.4).
 ///

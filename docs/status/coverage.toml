@@ -55,7 +55,7 @@ area = "F1"
 name = "ParseOptions anti-DoS (profundidad/nodos/atributos)"
 source = "ROADMAP F1"
 state = "done"
-evidence = "test:crates/html/tests/robustness.rs::default_parse_options_do_not_fire_on_normal_documents"
+evidence = "test:crates/html/tests/robustness/parse_limits.rs::default_parse_options_do_not_fire_on_normal_documents"
 
 [[capability]]
 id = "F1-ATTRDUP"
@@ -63,7 +63,7 @@ area = "F1"
 name = "Deduplicación de atributos en tiempo lineal"
 source = "ROADMAP F1"
 state = "done"
-evidence = "test:crates/html/tests/robustness.rs::tokenizer_still_reports_duplicate_attributes_and_keeps_the_first"
+evidence = "test:crates/html/tests/robustness/tokenizer.rs::tokenizer_still_reports_duplicate_attributes_and_keeps_the_first"
 
 [[capability]]
 id = "F2-SYNTAX"
@@ -111,7 +111,7 @@ area = "F2"
 name = "CSS Color 4/5 (lab/lch/oklch/color-mix)"
 source = "CSS Color 4/5"
 state = "done"
-evidence = "test:crates/css/tests/color4.rs::test_lab_and_lch"
+evidence = "test:crates/css/tests/color4/parse.rs::test_lab_and_lch"
 
 [[capability]]
 id = "F2-GRADIENTS"
@@ -152,7 +152,7 @@ area = "F3"
 name = "Grid (tracks, fr, gaps, auto-placement)"
 source = "CSS Grid L1"
 state = "done"
-evidence = "test:crates/layout/tests/grid.rs::test_fr_tracks_share_free_space_with_gaps"
+evidence = "test:crates/layout/tests/grid/basic.rs::test_fr_tracks_share_free_space_with_gaps"
 
 [[capability]]
 id = "F3-FLEX"
@@ -160,7 +160,7 @@ area = "F3"
 name = "Flexbox (grow/shrink, gap, wrap, align)"
 source = "CSS Flexbox L1"
 state = "done"
-evidence = "test:crates/layout/tests/flex.rs::test_flex_grow_and_shrink_with_basis"
+evidence = "test:crates/layout/tests/flex/placement.rs::test_flex_grow_and_shrink_with_basis"
 
 [[capability]]
 id = "F3-TABLES"
@@ -168,7 +168,7 @@ area = "F3"
 name = "Tablas (fixed/auto, colspan/rowspan, anónimas)"
 source = "CSS 2.1 §17"
 state = "done"
-evidence = "test:crates/layout/tests/tables.rs::test_table_2x2_fixed_width_layout"
+evidence = "test:crates/layout/tests/tables/basic.rs::test_table_2x2_fixed_width_layout"
 
 [[capability]]
 id = "F3-BIDI"
@@ -257,7 +257,7 @@ area = "F4"
 name = "Motor tipográfico (métricas, shaping LTR, raster)"
 source = "crates/fonts"
 state = "done"
-evidence = "test:crates/fonts/tests/font_engine.rs::shape_hello_matches_advances_and_keeps_byte_clusters"
+evidence = "test:crates/fonts/tests/font_engine/shaping.rs::shape_hello_matches_advances_and_keeps_byte_clusters"
 
 [[capability]]
 id = "F4-BACKGROUND-GEOMETRY"
@@ -265,7 +265,7 @@ area = "F4"
 name = "background-size cover/contain y geometría"
 source = "CSS Backgrounds L4"
 state = "done"
-evidence = "test:crates/paint/tests/background_geometry.rs::test_cover_and_contain_keep_aspect_ratio"
+evidence = "test:crates/paint/tests/background_geometry/tiling.rs::test_cover_and_contain_keep_aspect_ratio"
 
 [[capability]]
 id = "F4-INLINE-SVG"
@@ -324,7 +324,7 @@ area = "F5"
 name = "HTTP/2 multiplexado, flow control y ALPN"
 source = "RFC 9113"
 state = "done"
-evidence = "test:crates/net/tests/h2_flow_multiplex_tests.rs::multiplexes_two_streams_with_interleaved_frames"
+evidence = "test:crates/net/tests/h2_flow_multiplex_tests/flow_control.rs::multiplexes_two_streams_with_interleaved_frames"
 
 [[capability]]
 id = "F5-H2C"
@@ -340,7 +340,7 @@ area = "F5"
 name = "Cookies RFC 6265 + SameSite/PSL"
 source = "RFC 6265"
 state = "done"
-evidence = "test:crates/net/tests/advanced_tests.rs::cookie_is_stored_and_sent_on_the_next_request"
+evidence = "test:crates/net/tests/advanced_tests/cookies.rs::cookie_is_stored_and_sent_on_the_next_request"
 
 [[capability]]
 id = "F5-COMPRESSION"
@@ -348,7 +348,7 @@ area = "F5"
 name = "gzip/deflate con anti-bomb"
 source = "RFC 1951/1952"
 state = "done"
-evidence = "test:crates/net/tests/advanced_tests.rs::gzip_is_negotiated_decoded_and_header_preserved"
+evidence = "test:crates/net/tests/advanced_tests/compression.rs::gzip_is_negotiated_decoded_and_header_preserved"
 
 [[capability]]
 id = "F5-STREAMING"
@@ -372,7 +372,7 @@ area = "F5"
 name = "Errores tipados de codificación no soportada"
 source = "crates/net"
 state = "done"
-evidence = "test:crates/net/tests/advanced_tests.rs::unsupported_content_encoding_is_rejected"
+evidence = "test:crates/net/tests/advanced_tests/compression.rs::unsupported_content_encoding_is_rejected"
 
 [[capability]]
 id = "F5-PROXY-PAC"
@@ -404,7 +404,7 @@ area = "F6"
 name = "Event loop presupuestado (reloj virtual, timers)"
 source = "crates/render"
 state = "done"
-evidence = "test:crates/render/tests/event_loop_tests.rs::no_scripting_skips_timers_and_events"
+evidence = "test:crates/render/tests/event_loop_tests/lifecycle.rs::no_scripting_skips_timers_and_events"
 
 [[capability]]
 id = "F6-HISTORY"
@@ -412,7 +412,7 @@ area = "F6"
 name = "History/location con providers"
 source = "HTML Living Standard"
 state = "done"
-evidence = "test:crates/js/tests/browser_features_r24.rs::history_provider_push_replace_back_forward_go"
+evidence = "test:crates/js/tests/browser_features_r24/history_location.rs::history_provider_push_replace_back_forward_go"
 
 [[capability]]
 id = "F6-STORAGE"
@@ -420,7 +420,7 @@ area = "F6"
 name = "Web Storage (localStorage/sessionStorage)"
 source = "HTML Living Standard"
 state = "done"
-evidence = "test:crates/js/tests/browser_features_r24.rs::web_storage_api_and_isolation"
+evidence = "test:crates/js/tests/browser_features_r24/storage.rs::web_storage_api_and_isolation"
 
 [[capability]]
 id = "F6-MUTATION"
@@ -428,7 +428,7 @@ area = "F6"
 name = "MutationObserver subset"
 source = "DOM Living Standard"
 state = "done"
-evidence = "test:crates/js/tests/browser_features_r24.rs::mutation_observer_child_list_delivers_on_microtasks"
+evidence = "test:crates/js/tests/browser_features_r24/mutation_observer.rs::mutation_observer_child_list_delivers_on_microtasks"
 
 [[capability]]
 id = "F6-FETCH"
@@ -484,7 +484,7 @@ area = "F7"
 name = "Ventana winit+softbuffer y render en worker"
 source = "crates/browser"
 state = "done"
-evidence = "test:crates/browser/tests/shell_tests.rs::headless_screenshot_of_fixture_writes_a_valid_png"
+evidence = "test:crates/browser/tests/shell_tests/basics.rs::headless_screenshot_of_fixture_writes_a_valid_png"
 
 [[capability]]
 id = "F7-NAVIGATION"
@@ -492,7 +492,7 @@ area = "F7"
 name = "Navegación (clic, historial, back/forward)"
 source = "crates/browser"
 state = "done"
-evidence = "test:crates/browser/tests/shell_tests.rs::click_navigation_sequence_pushes_and_back_returns"
+evidence = "test:crates/browser/tests/shell_tests/worker.rs::click_navigation_sequence_pushes_and_back_returns"
 
 [[capability]]
 id = "F7-SCROLL-ZOOM"
@@ -500,7 +500,7 @@ area = "F7"
 name = "Scroll, HiDPI y zoom"
 source = "crates/browser"
 state = "done"
-evidence = "test:crates/browser/tests/shell_tests.rs::scroll_state_is_clamped_and_usable"
+evidence = "test:crates/browser/tests/shell_tests/basics.rs::scroll_state_is_clamped_and_usable"
 
 [[capability]]
 id = "F7-BACKGROUNDS"
@@ -516,7 +516,7 @@ area = "F7"
 name = "Find-in-page, pestañas y chrome del shell"
 source = "crates/browser"
 state = "done"
-evidence = "test:crates/browser/tests/shell_tests.rs::find_request_reports_hits_and_highlight_rects"
+evidence = "test:crates/browser/tests/shell_tests/find.rs::find_request_reports_hits_and_highlight_rects"
 
 [[capability]]
 id = "F7-CHROME-OVERLAY"

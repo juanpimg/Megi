@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// A stream of CSS tokens or component values supporting lookahead, marks, and rollback (§5.3).
 #[derive(Clone, Debug)]
 pub struct TokenStream {
@@ -11,7 +10,6 @@ pub struct TokenStream {
     pub(crate) pos: usize,
     pub(crate) marks: Vec<usize>,
 }
-
 
 impl TokenStream {
     pub fn new(tokens: Vec<CssToken>) -> Self {
@@ -79,14 +77,12 @@ impl TokenStream {
     }
 }
 
-
 /// Maximum nesting of simple blocks and functions accepted while parsing component values.
 ///
 /// The grammar is recursive (§5.5.8-§5.5.10); without a bound a ~100 KB stylesheet of `(`
 /// overflows the host stack before any declaration is validated. Deeper content is
 /// consumed iteratively and dropped, so the surrounding declarations still parse.
 pub const MAX_COMPONENT_NESTING: usize = 256;
-
 
 /// Maximum nesting depth of qualified style rules (CSS Nesting).
 ///
@@ -96,12 +92,10 @@ pub const MAX_COMPONENT_NESTING: usize = 256;
 /// consumed iteratively and dropped, so the surrounding rules still parse.
 pub const MAX_RULE_NESTING: usize = 32;
 
-
 /// Consumes a component value from the stream (§5.5.8).
 pub fn consume_component_value(stream: &mut TokenStream) -> ComponentValue {
     consume_component_value_at(stream, 0)
 }
-
 
 pub(crate) fn consume_component_value_at(stream: &mut TokenStream, depth: usize) -> ComponentValue {
     match stream.consume() {
@@ -117,12 +111,10 @@ pub(crate) fn consume_component_value_at(stream: &mut TokenStream, depth: usize)
     }
 }
 
-
 /// Consumes a simple block from the stream (§5.5.9).
 pub fn consume_simple_block(stream: &mut TokenStream, associated_token: CssToken) -> SimpleBlock {
     consume_simple_block_at(stream, associated_token, 0)
 }
-
 
 pub(crate) fn consume_simple_block_at(
     stream: &mut TokenStream,
@@ -158,14 +150,16 @@ pub(crate) fn consume_simple_block_at(
     }
 }
 
-
 /// Consumes a function from the stream (§5.5.10).
 pub fn consume_function(stream: &mut TokenStream, name: String) -> FunctionCall {
     consume_function_at(stream, name, 0)
 }
 
-
-pub(crate) fn consume_function_at(stream: &mut TokenStream, name: String, depth: usize) -> FunctionCall {
+pub(crate) fn consume_function_at(
+    stream: &mut TokenStream,
+    name: String,
+    depth: usize,
+) -> FunctionCall {
     if depth >= MAX_COMPONENT_NESTING {
         skip_to_matching(stream, b')');
         return FunctionCall {
@@ -185,7 +179,6 @@ pub(crate) fn consume_function_at(stream: &mut TokenStream, name: String, depth:
     }
     FunctionCall { name, values }
 }
-
 
 /// Iteratively consumes tokens up to the close that matches `mirror`, tracking nesting.
 ///
@@ -211,7 +204,6 @@ pub(crate) fn skip_to_matching(stream: &mut TokenStream, mirror: u8) {
     }
 }
 
-
 pub(crate) fn closing_byte(token: &CssToken) -> Option<u8> {
     match token {
         CssToken::RightBrace => Some(b'}'),
@@ -221,7 +213,6 @@ pub(crate) fn closing_byte(token: &CssToken) -> Option<u8> {
     }
 }
 
-
 pub(crate) fn opening_byte(token: &CssToken) -> Option<u8> {
     match token {
         CssToken::LeftBrace => Some(b'}'),
@@ -230,7 +221,6 @@ pub(crate) fn opening_byte(token: &CssToken) -> Option<u8> {
         _ => None,
     }
 }
-
 
 /// Consumes a list of component values until EOF or `stop_token` (§5.5.7).
 pub fn consume_list_of_component_values(
@@ -247,7 +237,6 @@ pub fn consume_list_of_component_values(
     }
     values
 }
-
 
 /// Consumes an at-rule from the stream (§5.5.2). Assumes `@` keyword was already seen.
 pub fn consume_at_rule(stream: &mut TokenStream, _nested: bool) -> Option<AtRule> {
@@ -288,7 +277,6 @@ pub fn consume_at_rule(stream: &mut TokenStream, _nested: bool) -> Option<AtRule
         }
     }
 }
-
 
 /// Consumes a declaration from the stream (§5.5.6).
 pub fn consume_declaration(stream: &mut TokenStream) -> Option<Declaration> {
@@ -345,12 +333,10 @@ pub fn consume_declaration(stream: &mut TokenStream) -> Option<Declaration> {
     Some(Declaration::new(name, values, important))
 }
 
-
 /// Consumes block contents (declarations and child rules) (§5.5.5).
 pub fn consume_block_contents(stream: &mut TokenStream) -> (Vec<Declaration>, Vec<Rule>) {
     consume_block_contents_at(stream, 0)
 }
-
 
 pub(crate) fn consume_block_contents_at(
     stream: &mut TokenStream,
@@ -396,7 +382,6 @@ pub(crate) fn consume_block_contents_at(
 
     (decls, rules)
 }
-
 
 /// Consumes a qualified rule from the stream (§5.5.3).
 pub fn consume_qualified_rule(

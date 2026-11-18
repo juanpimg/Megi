@@ -1,7 +1,7 @@
 //! CSS Grid MVP layout tests (`display: grid` / `inline-grid`).
 
-mod common;
 mod basic;
-mod placement;
+mod common;
 mod flow_areas;
+mod placement;
 mod regressions;

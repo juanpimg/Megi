@@ -2,7 +2,6 @@
 
 use super::*;
 
-
 /// Builds the transition list from the longhand declarations (last entry per property wins).
 pub(crate) fn parse_transitions(entries: &[(&str, &Declaration)]) -> Vec<TransitionSpec> {
     let Some(raw_properties) = declaration_value(entries, "transition-property") else {
@@ -44,7 +43,6 @@ pub(crate) fn parse_transitions(entries: &[(&str, &Declaration)]) -> Vec<Transit
     transitions
 }
 
-
 #[cfg(test)]
 pub(crate) mod boundary_tests {
     use super::*;
@@ -58,7 +56,6 @@ pub(crate) mod boundary_tests {
         assert_eq!(function_args("steps(4)", "steps"), Some("4"));
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

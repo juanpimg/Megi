@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// A basic compound selector (tag name, `#id`, `.class`) for matching DOM elements.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SimpleSelector {
@@ -11,7 +10,6 @@ pub struct SimpleSelector {
     pub id: Option<String>,
     pub classes: Vec<String>,
 }
-
 
 impl SimpleSelector {
     /// Evaluates whether the element at `node_id` in `doc` matches this selector.
@@ -30,15 +28,14 @@ impl SimpleSelector {
     }
 }
 
-
 #[cfg(test)]
 pub(crate) mod lib_tests_helpers {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-        use super::*;
+    use super::*;
     #[allow(unused_imports)]
-        use megi_core::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     /// Computes the style of `body > <tag style="...">` and returns it.
     pub(crate) fn style_with_inline(tag: &str, inline: &str) -> ComputedStyle {
         let mut doc = Document::new();
@@ -52,7 +49,10 @@ pub(crate) mod lib_tests_helpers {
     }
 
     /// Computes the styles of `body > div[style=parent] > p[style=child]`.
-    pub(crate) fn style_pair(parent_inline: &str, child_inline: &str) -> (ComputedStyle, ComputedStyle) {
+    pub(crate) fn style_pair(
+        parent_inline: &str,
+        child_inline: &str,
+    ) -> (ComputedStyle, ComputedStyle) {
         let mut doc = Document::new();
         let body = doc.create_element(Namespace::Html, "body", vec![]);
         let parent = doc.create_element(

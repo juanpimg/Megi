@@ -2,7 +2,6 @@
 
 use super::*;
 
-
 /// Environment used to evaluate media queries.
 ///
 /// `viewport` is `None` by default, which makes width/height/orientation features evaluate to
@@ -14,7 +13,6 @@ pub enum ColorScheme {
     Light,
     Dark,
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaContext {
@@ -28,7 +26,6 @@ pub struct MediaContext {
     pub reduced_motion: bool,
 }
 
-
 impl Default for MediaContext {
     fn default() -> Self {
         Self {
@@ -39,7 +36,6 @@ impl Default for MediaContext {
         }
     }
 }
-
 
 impl MediaContext {
     /// Creates a screen medium with a known viewport size.
@@ -52,7 +48,6 @@ impl MediaContext {
         }
     }
 }
-
 
 /// Media type targeted by a query.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,7 +62,6 @@ pub enum MediaType {
     Other(String),
 }
 
-
 /// Qualifier preceding the media type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaQualifier {
@@ -77,14 +71,12 @@ pub enum MediaQualifier {
     Only,
 }
 
-
 /// Orientation values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Orientation {
     Portrait,
     Landscape,
 }
-
 
 /// A single media feature (`(min-width: 600px)`, `(orientation: landscape)`, ...).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -102,7 +94,6 @@ pub enum MediaFeature {
     /// always evaluates to `false`.
     Unsupported,
 }
-
 
 impl MediaFeature {
     /// Evaluates this feature against `context` (viewport in CSS px).
@@ -126,7 +117,6 @@ impl MediaFeature {
     }
 }
 
-
 /// Boolean combination of media conditions.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MediaCondition {
@@ -135,7 +125,6 @@ pub enum MediaCondition {
     And(Box<MediaCondition>, Box<MediaCondition>),
     Or(Box<MediaCondition>, Box<MediaCondition>),
 }
-
 
 impl MediaCondition {
     /// Evaluates this condition against `context`.
@@ -149,7 +138,6 @@ impl MediaCondition {
     }
 }
 
-
 /// One media query: `[not | only]? <media-type> [and <condition>]?` or a condition alone.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaQuery {
@@ -160,7 +148,6 @@ pub struct MediaQuery {
     /// The condition part (`and <condition>` after a type, or the whole condition).
     pub condition: Option<MediaCondition>,
 }
-
 
 impl MediaQuery {
     /// Returns a query that never matches (used for invalid entries in a forgiving list).
@@ -192,13 +179,11 @@ impl MediaQuery {
     }
 }
 
-
 /// A comma-separated media query list.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MediaQueryList {
     pub queries: Vec<MediaQuery>,
 }
-
 
 impl MediaQueryList {
     /// Returns whether the list is empty (an empty list matches every context).
@@ -206,7 +191,6 @@ impl MediaQueryList {
         self.queries.is_empty()
     }
 }
-
 
 /// Evaluates a media query list against a media context.
 ///
@@ -220,7 +204,6 @@ pub fn evaluate(query_list: &MediaQueryList, context: &MediaContext) -> bool {
         .iter()
         .any(|query| query.matches(context))
 }
-
 
 /// Parses a comma-separated media query list (forgiving: invalid entries never match).
 pub fn parse_media_query_list(input: &str) -> MediaQueryList {
@@ -242,7 +225,6 @@ pub fn parse_media_query_list(input: &str) -> MediaQueryList {
     list
 }
 
-
 /// Splits a media query list on commas that are not inside parentheses.
 pub(crate) fn split_top_level_commas(input: &str) -> Vec<&str> {
     let mut parts = Vec::new();
@@ -263,13 +245,11 @@ pub(crate) fn split_top_level_commas(input: &str) -> Vec<&str> {
     parts
 }
 
-
 /// Token cursor used by the media query parser.
 pub(crate) struct MediaParser<'a> {
     pub(crate) tokens: &'a [CssToken],
     pub(crate) pos: usize,
 }
-
 
 impl<'a> MediaParser<'a> {
     pub(crate) fn new(tokens: &'a [CssToken]) -> Self {
@@ -292,7 +272,6 @@ impl<'a> MediaParser<'a> {
             .is_some_and(|ident| ident.eq_ignore_ascii_case(keyword))
     }
 }
-
 
 /// Parses one media query from its token slice (must consume all tokens).
 pub(crate) fn parse_media_query(tokens: &[CssToken]) -> Option<MediaQuery> {
@@ -367,15 +346,16 @@ pub(crate) fn parse_media_query(tokens: &[CssToken]) -> Option<MediaQuery> {
     })
 }
 
-
 /// Maximum nesting of parenthesized media conditions accepted from a raw string entry
 /// point (`<style media>`/`<link media>`/`matchMedia`), which bypasses the parser's
 /// component-nesting cap.
 pub const MAX_MEDIA_NESTING: usize = 32;
 
-
 /// Parses a `<media-condition>`: `not <group>` or `<group> (('and'|'or') <group>)*`.
-pub(crate) fn parse_condition(parser: &mut MediaParser<'_>, depth: usize) -> Option<MediaCondition> {
+pub(crate) fn parse_condition(
+    parser: &mut MediaParser<'_>,
+    depth: usize,
+) -> Option<MediaCondition> {
     if depth > MAX_MEDIA_NESTING {
         return None;
     }

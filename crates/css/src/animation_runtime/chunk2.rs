@@ -2,7 +2,6 @@
 
 use super::*;
 
-
 /// Underlying (base) value of a supported property.
 pub(crate) fn base_animatable(property: &str, base: &ComputedStyle) -> Option<AnimatableValue> {
     Some(match property {
@@ -38,7 +37,6 @@ pub(crate) fn base_animatable(property: &str, base: &ComputedStyle) -> Option<An
     })
 }
 
-
 /// Interpolates one property into `style` (discrete at 50 % when the types do not match).
 pub(crate) fn interpolate_property(
     style: &mut ComputedStyle,
@@ -61,7 +59,6 @@ pub(crate) fn interpolate_property(
     };
     interpolate_animatable(style, property, from, to, eased, local);
 }
-
 
 pub(crate) fn interpolate_animatable(
     style: &mut ComputedStyle,
@@ -105,7 +102,6 @@ pub(crate) fn interpolate_animatable(
     write_property(style, property, value);
 }
 
-
 pub(crate) fn lerp_color(a: Color, b: Color, progress: f32) -> Color {
     let lerp = |start: u8, end: u8| {
         let value = start as f32 + (end as f32 - start as f32) * progress;
@@ -118,7 +114,6 @@ pub(crate) fn lerp_color(a: Color, b: Color, progress: f32) -> Color {
         a: lerp(a.a, b.a),
     }
 }
-
 
 pub(crate) fn write_property(style: &mut ComputedStyle, property: &str, value: AnimatableValue) {
     match (property, value) {
@@ -161,7 +156,6 @@ pub(crate) fn write_property(style: &mut ComputedStyle, property: &str, value: A
         _ => {}
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

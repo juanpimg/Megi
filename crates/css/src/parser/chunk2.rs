@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 pub(crate) fn consume_qualified_rule_at(
     stream: &mut TokenStream,
     stop_token: Option<&CssToken>,
@@ -44,7 +43,6 @@ pub(crate) fn consume_qualified_rule_at(
     }
 }
 
-
 /// Consumes a stylesheet's contents (§5.5.1).
 pub fn consume_stylesheet_contents(stream: &mut TokenStream) -> Vec<Rule> {
     let mut rules = Vec::new();
@@ -71,7 +69,6 @@ pub fn consume_stylesheet_contents(stream: &mut TokenStream) -> Vec<Rule> {
     }
     rules
 }
-
 
 /// Parses a complete CSS stylesheet from a string (§5.4.3).
 ///
@@ -124,7 +121,6 @@ pub fn parse_stylesheet(input: &str) -> Stylesheet {
     }
 }
 
-
 /// Parses an `@keyframes <name> { <selector> { ... } ... }` rule (CSS Animations 1 §3).
 ///
 /// Invalid keyframe selectors are skipped (the rest of the rule is kept); a rule with no
@@ -165,7 +161,6 @@ pub(crate) fn parse_keyframes_rule(at: &AtRule) -> Option<crate::rule::Keyframes
     Some(crate::rule::KeyframesRule { name, frames })
 }
 
-
 /// Parses a keyframe selector list (`from`, `to`, percentages; comma-separated).
 pub(crate) fn parse_keyframe_offsets(selector: &str) -> Option<Vec<f32>> {
     let mut offsets = Vec::new();
@@ -186,7 +181,6 @@ pub(crate) fn parse_keyframe_offsets(selector: &str) -> Option<Vec<f32>> {
     }
     (!offsets.is_empty()).then_some(offsets)
 }
-
 
 /// Parses an `@font-face` at-rule (CSS Fonts 4 §4.1). Missing `font-family`/`src` or a
 /// `src` with no usable URL makes the rule invalid (returns `None`), and unknown
@@ -226,7 +220,6 @@ pub(crate) fn parse_font_face_rule(at: &AtRule) -> Option<crate::rule::FontFaceR
     })
 }
 
-
 pub(crate) fn strip_quotes(value: &str) -> String {
     let value = value.trim();
     if value.len() >= 2 {
@@ -240,7 +233,6 @@ pub(crate) fn strip_quotes(value: &str) -> String {
     value.to_string()
 }
 
-
 pub(crate) fn normalize_font_weight(value: &str) -> String {
     match value.to_ascii_lowercase().as_str() {
         "normal" | "" => String::from("400"),
@@ -249,8 +241,9 @@ pub(crate) fn normalize_font_weight(value: &str) -> String {
     }
 }
 
-
-pub(crate) fn function_string_argument(values: &[crate::component_value::ComponentValue]) -> Option<String> {
+pub(crate) fn function_string_argument(
+    values: &[crate::component_value::ComponentValue],
+) -> Option<String> {
     use crate::component_value::ComponentValue;
     use crate::token::CssToken;
     for value in values {
@@ -263,9 +256,10 @@ pub(crate) fn function_string_argument(values: &[crate::component_value::Compone
     None
 }
 
-
 /// Parses the `src` descriptor into `(url, format)` entries in authored order.
-pub(crate) fn parse_font_sources(values: &[crate::component_value::ComponentValue]) -> Vec<(String, String)> {
+pub(crate) fn parse_font_sources(
+    values: &[crate::component_value::ComponentValue],
+) -> Vec<(String, String)> {
     use crate::component_value::ComponentValue;
     use crate::token::CssToken;
     let mut sources = Vec::new();
@@ -300,7 +294,6 @@ pub(crate) fn parse_font_sources(values: &[crate::component_value::ComponentValu
     sources
 }
 
-
 /// Parses the prelude of an `@import` at-rule into an [`crate::rule::ImportRule`].
 ///
 /// Accepted forms: `@import "<url>" [media-list];` and `@import url("<url>") [media-list];`
@@ -322,7 +315,6 @@ pub(crate) fn parse_import_rule(at: &AtRule) -> Option<crate::rule::ImportRule> 
     let media = crate::media::parse_media_query_list(&media_text);
     Some(crate::rule::ImportRule { url, media })
 }
-
 
 /// Extracts the URL of an `@import` prelude component.
 pub(crate) fn import_url(component: &ComponentValue) -> Option<String> {
@@ -346,7 +338,6 @@ pub(crate) fn import_url(component: &ComponentValue) -> Option<String> {
         _ => None,
     }
 }
-
 
 /// Parses a list of declarations from a string (e.g. for HTML `style="..."` attributes) (§5.4.5).
 pub fn parse_list_of_declarations(input: &str) -> Vec<Declaration> {

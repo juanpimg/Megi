@@ -2,7 +2,6 @@
 
 use super::*;
 
-
 // ---------------------------------------------------------------------------
 // hwb()
 // ---------------------------------------------------------------------------
@@ -47,7 +46,6 @@ pub(crate) fn parse_hwb(inner: &str) -> Option<Color> {
         clamp_channel(alpha),
     ))
 }
-
 
 pub(crate) fn parse_hsl(inner: &str) -> Option<Color> {
     let (tokens, alpha): (Vec<String>, f32) = if inner.contains(',') {
@@ -97,7 +95,6 @@ pub(crate) fn parse_hsl(inner: &str) -> Option<Color> {
     ))
 }
 
-
 // ---------------------------------------------------------------------------
 // color-mix()
 // ---------------------------------------------------------------------------
@@ -106,13 +103,11 @@ pub(crate) fn parse_hsl(inner: &str) -> Option<Color> {
 /// unwinding through `parse_color_mix_inner` (#1474).
 pub(crate) struct ColorMixDepthGuard(u32);
 
-
 impl Drop for ColorMixDepthGuard {
     fn drop(&mut self) {
         COLOR_MIX_DEPTH.with(|cell| cell.set(self.0));
     }
 }
-
 
 pub(crate) fn parse_color_mix(inner: &str) -> Option<Color> {
     let depth = COLOR_MIX_DEPTH.with(Cell::get);
@@ -123,7 +118,6 @@ pub(crate) fn parse_color_mix(inner: &str) -> Option<Color> {
     let _guard = ColorMixDepthGuard(depth);
     parse_color_mix_inner(inner)
 }
-
 
 pub(crate) fn parse_color_mix_inner(inner: &str) -> Option<Color> {
     let parts = crate::properties::split_top_level_commas(inner);
@@ -155,7 +149,6 @@ pub(crate) fn parse_color_mix_inner(inner: &str) -> Option<Color> {
     mix_colors(color1, color2, weight1, weight2, &space)
 }
 
-
 /// Parses one `color-mix()` argument: `<color> [<percentage>]?`.
 pub(crate) fn parse_mix_argument(part: &str) -> Option<(Color, Option<f32>)> {
     let components = split_components(part.trim());
@@ -175,7 +168,6 @@ pub(crate) fn parse_mix_argument(part: &str) -> Option<(Color, Option<f32>)> {
     let color = Color::parse(&color_text)?;
     Some((color, percent))
 }
-
 
 pub(crate) fn mix_colors(
     color1: Color,
@@ -267,7 +259,6 @@ pub(crate) fn mix_colors(
     }
 }
 
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -295,7 +286,6 @@ pub(crate) mod tests {
         assert!(Color::parse("color-mix(in srgb, red 50%, blue)").is_some());
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod color_mix_depth_tests {

@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 pub(crate) fn resolve_pseudo_cascaded_with_candidates<'a>(
     doc: &Document,
     node_id: NodeId,
@@ -31,7 +30,6 @@ pub(crate) fn resolve_pseudo_cascaded_with_candidates<'a>(
     owned_declarations(best)
 }
 
-
 /// Shared cascade resolution over the candidate rules selected by the index.
 ///
 /// `candidates` is a superset of the selectors that can match `node_id`, in ascending source
@@ -53,7 +51,6 @@ pub(crate) fn resolve_base_cascaded_properties<'a>(
         candidates,
     )
 }
-
 
 pub(crate) fn resolve_base_cascaded_properties_for<'a>(
     doc: &Document,
@@ -135,7 +132,6 @@ pub(crate) fn resolve_base_cascaded_properties_for<'a>(
     best_candidates
 }
 
-
 /// Reference implementation used by cascade-equivalence tests (no `@container` rules).
 #[cfg(test)]
 pub(crate) fn resolve_cascaded_properties_from_candidates<'a>(
@@ -153,7 +149,6 @@ pub(crate) fn resolve_cascaded_properties_from_candidates<'a>(
         candidates,
     ))
 }
-
 
 /// Applies the collection's `@container` rules to `best` (already resolved base cascade).
 pub(crate) fn merge_container_rules_for<'a>(
@@ -207,14 +202,12 @@ pub(crate) fn merge_container_rules_for<'a>(
     }
 }
 
-
 pub(crate) fn is_revert_layer(declaration: &Declaration) -> bool {
     declaration
         .raw_value
         .trim()
         .eq_ignore_ascii_case("revert-layer")
 }
-
 
 pub(crate) fn is_important(origin_importance: CascadeOriginImportance) -> bool {
     matches!(
@@ -224,7 +217,6 @@ pub(crate) fn is_important(origin_importance: CascadeOriginImportance) -> bool {
             | CascadeOriginImportance::UserAgentImportant
     )
 }
-
 
 /// Applies `revert-layer`: the winner rolls back to the previous cascade layer (not the UA
 /// origin). Candidates from the same layer are skipped; a missing previous layer removes the
@@ -350,7 +342,6 @@ pub(crate) fn apply_revert_layer_for<'a>(
     }
 }
 
-
 pub(crate) fn owned_declarations<'a>(
     best: HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
 ) -> HashMap<String, &'a Declaration> {
@@ -358,7 +349,6 @@ pub(crate) fn owned_declarations<'a>(
         .map(|(name, matched)| (name.to_string(), matched.declaration))
         .collect()
 }
-
 
 /// Resolves only the unconditional cascade (no `@container` rules); used by container size
 /// prediction so it cannot recurse through itself.
@@ -378,7 +368,6 @@ pub(crate) fn resolve_cascaded_properties_base<'a>(
         &candidates,
     ))
 }
-
 
 /// Resolves computed styles with an explicit interaction [`crate::StateContext`] for dynamic
 /// pseudo-classes (`:focus`, `:hover`, `:checked`, ...). `render`/shell should call this so a

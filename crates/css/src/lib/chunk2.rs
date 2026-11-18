@@ -3,15 +3,14 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests_part1 {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use megi_core::{Attribute, Document, Namespace};
-    #[allow(unused_imports)]
     use crate::lib_tests_helpers::*;
+    #[allow(unused_imports)]
+    use megi_core::{Attribute, Document, Namespace};
     #[test]
     fn test_simple_selector_matches_dom_element() {
         let mut doc = Document::new();

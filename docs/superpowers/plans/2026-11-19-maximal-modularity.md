@@ -30,6 +30,10 @@
 
 ---
 
+## Estado final: COMPLETO — 0 archivos >500 líneas
+
+Todas las oleadas (1-4) terminaron. Verificación final en verde: cargo test --workspace, clippy -D warnings, fmt --check, no-default-features, conformance gate PASS, check_arch OK, PNG byte-idéntico.
+
 ## Current inventory (110 files, 130,935 lines)
 
 | Crate | Files | Lines | Largest |

@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Preprocesses the raw CSS input string per W3C CSS Syntax Level 3 §3.3.
 ///
 /// - Replaces `\r\n`, `\r`, and `\x0C` (FF) with `\n`.
@@ -33,7 +32,6 @@ pub fn preprocess_css_input(input: &str) -> Vec<char> {
     }
     out
 }
-
 
 /// Preprocesses arbitrary Unicode code points per W3C CSS Syntax Level 3 §3.3.
 /// Allows direct verification of surrogate code points (`0xD800..=0xDFFF`) as tested in W3C WPT.
@@ -65,30 +63,25 @@ pub fn preprocess_css_codepoints(codepoints: &[u32]) -> Vec<char> {
     out
 }
 
-
 #[inline]
 pub fn is_whitespace(ch: char) -> bool {
     matches!(ch, '\n' | '\t' | ' ')
 }
-
 
 #[inline]
 pub fn is_digit(ch: char) -> bool {
     ch.is_ascii_digit()
 }
 
-
 #[inline]
 pub fn is_hex_digit(ch: char) -> bool {
     ch.is_ascii_hexdigit()
 }
 
-
 #[inline]
 pub fn is_letter(ch: char) -> bool {
     ch.is_ascii_alphabetic()
 }
-
 
 #[inline]
 pub fn is_non_ascii_ident(ch: char) -> bool {
@@ -113,18 +106,15 @@ pub fn is_non_ascii_ident(ch: char) -> bool {
     )
 }
 
-
 #[inline]
 pub fn is_ident_start(ch: char) -> bool {
     is_letter(ch) || is_non_ascii_ident(ch) || ch == '_'
 }
 
-
 #[inline]
 pub fn is_ident(ch: char) -> bool {
     is_ident_start(ch) || is_digit(ch) || ch == '-'
 }
-
 
 #[inline]
 pub fn is_non_printable(ch: char) -> bool {
@@ -132,12 +122,10 @@ pub fn is_non_printable(ch: char) -> bool {
     cp <= 0x08 || cp == 0x0B || (0x0E..=0x1F).contains(&cp) || cp == 0x7F
 }
 
-
 #[inline]
 pub fn is_valid_escape(cp1: Option<char>, cp2: Option<char>) -> bool {
     cp1 == Some('\\') && cp2 != Some('\n') && cp2.is_some()
 }
-
 
 #[inline]
 pub fn starts_ident_sequence(cp1: Option<char>, cp2: Option<char>, cp3: Option<char>) -> bool {
@@ -151,7 +139,6 @@ pub fn starts_ident_sequence(cp1: Option<char>, cp2: Option<char>, cp3: Option<c
     }
 }
 
-
 #[inline]
 pub fn starts_number(cp1: Option<char>, cp2: Option<char>, cp3: Option<char>) -> bool {
     match cp1 {
@@ -163,7 +150,6 @@ pub fn starts_number(cp1: Option<char>, cp2: Option<char>, cp3: Option<char>) ->
         _ => false,
     }
 }
-
 
 /// Tokenizer for W3C CSS Syntax Level 3.
 pub struct CssTokenizer {

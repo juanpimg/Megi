@@ -2,9 +2,11 @@
 
 use super::*;
 
-
 /// Parses a parenthesized condition group or feature (`(...)`, `((...) and (...))`).
-pub(crate) fn parse_condition_group(parser: &mut MediaParser<'_>, depth: usize) -> Option<MediaCondition> {
+pub(crate) fn parse_condition_group(
+    parser: &mut MediaParser<'_>,
+    depth: usize,
+) -> Option<MediaCondition> {
     if !matches!(parser.peek(), Some(CssToken::LeftParen)) {
         return None;
     }
@@ -21,7 +23,6 @@ pub(crate) fn parse_condition_group(parser: &mut MediaParser<'_>, depth: usize) 
     parser.pos += 1;
     Some(inner)
 }
-
 
 /// Parses a single feature inside parentheses, e.g. `min-width: 600px`.
 pub(crate) fn parse_feature(parser: &mut MediaParser<'_>) -> Option<MediaCondition> {
@@ -71,7 +72,6 @@ pub(crate) fn parse_feature(parser: &mut MediaParser<'_>) -> Option<MediaConditi
     Some(MediaCondition::Feature(feature))
 }
 
-
 /// Extracts the single identifier of a feature value (`(orientation: landscape)`).
 pub(crate) fn single_ident(tokens: &[CssToken]) -> Option<&str> {
     match tokens {
@@ -79,7 +79,6 @@ pub(crate) fn single_ident(tokens: &[CssToken]) -> Option<&str> {
         _ => None,
     }
 }
-
 
 /// Converts a media feature length token to CSS pixels.
 ///
@@ -104,7 +103,6 @@ pub(crate) fn parse_length_value(tokens: &[CssToken]) -> Option<f32> {
         _ => None,
     }
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

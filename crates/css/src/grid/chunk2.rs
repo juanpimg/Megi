@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Parses one `<grid-line>`: `auto`, a signed integer or `span N`.
 pub(crate) fn parse_grid_line(raw: &str) -> GridLine {
     let raw = raw.trim();
@@ -38,7 +37,6 @@ pub(crate) fn parse_grid_line(raw: &str) -> GridLine {
     }
 }
 
-
 pub(crate) fn parse_align_items(value: &str) -> AlignItems {
     match value.to_ascii_lowercase().as_str() {
         "start" | "flex-start" | "left" | "self-start" => AlignItems::FlexStart,
@@ -48,7 +46,6 @@ pub(crate) fn parse_align_items(value: &str) -> AlignItems {
         _ => AlignItems::Stretch,
     }
 }
-
 
 pub(crate) fn parse_align_self(value: &str) -> AlignSelf {
     match value.to_ascii_lowercase().as_str() {
@@ -60,7 +57,6 @@ pub(crate) fn parse_align_self(value: &str) -> AlignSelf {
         _ => AlignSelf::Auto,
     }
 }
-
 
 /// Parses a grid track list (`none` yields an empty template).
 pub(crate) fn parse_template(raw: &str, font_size: f32, root_font_size: f32) -> GridTemplate {
@@ -90,7 +86,6 @@ pub(crate) fn parse_template(raw: &str, font_size: f32, root_font_size: f32) -> 
         line_names,
     }
 }
-
 
 pub(crate) fn parse_track_list(
     raw: &str,
@@ -177,7 +172,6 @@ pub(crate) fn parse_track_list(
     }
 }
 
-
 /// Splits one token, keeping balanced parentheses for `repeat()`.
 pub(crate) fn split_token(raw: &str) -> (&str, usize) {
     let bytes = raw.as_bytes();
@@ -193,7 +187,6 @@ pub(crate) fn split_token(raw: &str) -> (&str, usize) {
     }
     (raw.trim(), raw.len())
 }
-
 
 pub(crate) fn parse_track(token: &str, font_size: f32, root_font_size: f32) -> Option<TrackSize> {
     let token = token.trim();
@@ -224,7 +217,6 @@ pub(crate) fn parse_track(token: &str, font_size: f32, root_font_size: f32) -> O
     Length::parse(token, font_size, root_font_size).map(TrackSize::Fixed)
 }
 
-
 /// Parses `minmax(<min>, <max>)`.
 pub(crate) fn parse_minmax(body: &str, font_size: f32, root_font_size: f32) -> Option<TrackSize> {
     let (min, max) = body.split_once(',')?;
@@ -244,7 +236,6 @@ pub(crate) fn parse_minmax(body: &str, font_size: f32, root_font_size: f32) -> O
     };
     Some(TrackSize::MinMax { min, max })
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

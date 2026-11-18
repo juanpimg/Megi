@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// The normative default HTML5 User-Agent stylesheet string.
 pub const USER_AGENT_STYLESHEET: &str = r#"
 /* WHATWG HTML §15.3.1 Display types */
@@ -365,12 +364,10 @@ dialog:modal::backdrop {
 
 "#;
 
-
 /// Parses the default User-Agent stylesheet into a [`Stylesheet`].
 pub fn parse_user_agent_stylesheet() -> Stylesheet {
     crate::parser::parse_stylesheet(USER_AGENT_STYLESHEET)
 }
-
 
 /// Creates a [`StyleCollection`] pre-loaded with the default HTML5 User-Agent stylesheet.
 /// Parsed User-Agent stylesheet cached for the lifetime of the process.
@@ -382,7 +379,6 @@ pub(crate) fn cached_user_agent_stylesheet() -> &'static crate::rule::Stylesheet
     static CACHE: OnceLock<crate::rule::Stylesheet> = OnceLock::new();
     CACHE.get_or_init(parse_user_agent_stylesheet)
 }
-
 
 pub fn create_user_agent_style_collection() -> StyleCollection {
     let mut collection = StyleCollection::new();

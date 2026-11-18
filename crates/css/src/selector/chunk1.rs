@@ -3,11 +3,9 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Maximum selector-match steps for one element resolution (cascade) or one top-level
 /// match (direct API use).
 pub const MAX_MATCH_STEPS: u32 = 200_000;
-
 
 /// Maximum selector-match steps for one whole style pass over a document.
 ///
@@ -18,14 +16,12 @@ pub const MAX_MATCH_STEPS: u32 = 200_000;
 /// many elements it has.
 pub const MAX_PASS_MATCH_STEPS: u32 = 50_000_000;
 
-
 /// Maximum nesting depth of functional pseudo-class arguments while parsing: `:is(:is(…))`.
 ///
 /// The selector grammar is recursive (`:is()`/`:where()`/`:not()` arguments are selector
 /// lists), so a stylesheet of `:is(` repeated tens of thousands of times used to overflow the
 /// host stack before any declaration was validated (#376).
 pub const MAX_SELECTOR_NESTING: usize = 32;
-
 
 thread_local! {
     pub(crate) static MATCH_STEPS: Cell<u32> = const { Cell::new(0) };
@@ -35,10 +31,8 @@ thread_local! {
     pub(crate) static PARSER_NESTING: Cell<usize> = const { Cell::new(0) };
 }
 
-
 /// Tracks the [`MAX_SELECTOR_NESTING`] recursion depth of [`parse_selectors`].
 pub(crate) struct ParserNestingGuard;
-
 
 impl ParserNestingGuard {
     /// Returns `None` once the nesting limit is reached, so the caller can reject the
@@ -55,23 +49,19 @@ impl ParserNestingGuard {
     }
 }
 
-
 impl Drop for ParserNestingGuard {
     fn drop(&mut self) {
         PARSER_NESTING.with(|depth| depth.set(depth.get().saturating_sub(1)));
     }
 }
 
-
 pub(crate) struct MatchDepthGuard;
-
 
 impl Drop for MatchDepthGuard {
     fn drop(&mut self) {
         MATCH_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
     }
 }
-
 
 pub(crate) fn with_match_budget(f: impl FnOnce() -> bool) -> bool {
     let outermost = MATCH_DEPTH.with(|depth| {
@@ -91,11 +81,9 @@ pub(crate) fn with_match_budget(f: impl FnOnce() -> bool) -> bool {
     result
 }
 
-
 pub(crate) struct MatchScope {
     pub(crate) _guard: MatchDepthGuard,
 }
-
 
 pub(crate) fn match_scope() -> MatchScope {
     MATCH_DEPTH.with(|depth| depth.set(depth.get() + 1));
@@ -110,7 +98,6 @@ pub(crate) fn match_scope() -> MatchScope {
     }
 }
 
-
 /// Scope for resolving the styles of a whole document: every element resolution inside it
 /// shares one [`MAX_PASS_MATCH_STEPS`] budget instead of resetting it per element.
 ///
@@ -120,16 +107,13 @@ pub struct StylePassScope {
     pub(crate) _guard: MatchPassGuard,
 }
 
-
 pub(crate) struct MatchPassGuard;
-
 
 impl Drop for MatchPassGuard {
     fn drop(&mut self) {
         MATCH_PASS_DEPTH.with(|depth| depth.set(depth.get().saturating_sub(1)));
     }
 }
-
 
 /// Returns a nested style-pass scope; see [`StylePassScope`].
 #[must_use]
@@ -148,7 +132,6 @@ pub fn style_pass_scope() -> StylePassScope {
     }
 }
 
-
 pub(crate) fn spend_match_step() -> bool {
     MATCH_STEPS.with(|steps| {
         let remaining = steps.get();
@@ -161,7 +144,6 @@ pub(crate) fn spend_match_step() -> bool {
         }
     })
 }
-
 
 /// Operator for attribute selectors (`[attr=value]`, `[attr~=value]`, etc.).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,7 +162,6 @@ pub enum AttrOperator {
     Substring,
 }
 
-
 /// An attribute selector requirement.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AttributeSelector {
@@ -189,7 +170,6 @@ pub struct AttributeSelector {
     pub value: Option<String>,
     pub case_insensitive: bool,
 }
-
 
 impl AttributeSelector {
     pub fn matches(&self, doc: &Document, node_id: NodeId) -> bool {
@@ -260,14 +240,12 @@ impl AttributeSelector {
     }
 }
 
-
 /// Formula $An+B$ for `:nth-child(An+B)` pseudo-classes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AnPlusB {
     pub a: i32,
     pub b: i32,
 }
-
 
 impl AnPlusB {
     pub fn matches(&self, index_1_based: i32) -> bool {
@@ -281,7 +259,6 @@ impl AnPlusB {
         diff % a == 0 && diff / a >= 0
     }
 }
-
 
 /// Parses an An+B formula according to W3C CSS Syntax Level 3 §3.3 & Selectors Level 4 §15.
 pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
@@ -320,7 +297,6 @@ pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
 
     Some(AnPlusB { a, b })
 }
-
 
 /// Supported pseudo-classes in Selectors Level 4.
 ///

@@ -2,7 +2,6 @@
 
 use super::*;
 
-
 /// Merges inherited/cascaded custom properties and expands `var()` in all declarations.
 ///
 /// Returns the owned, name-sorted declarations used by
@@ -94,7 +93,6 @@ pub(crate) fn resolve_declarations(
     };
     (resolved, custom_properties)
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

@@ -3,7 +3,6 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Cached value fingerprint used by layout's `StyleCache` to pick an interning bucket.
 ///
 /// This is a **pure cache hint**, not a style value: `PartialEq` always returns `true` so it
@@ -17,14 +16,12 @@ use super::*;
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct StyleFingerprint(pub(crate) u64);
 
-
 impl StyleFingerprint {
     /// Stores `fingerprint`, remapping `0` to `1` so it cannot be confused with "unset".
     pub(crate) fn new(fingerprint: u64) -> Self {
         Self(if fingerprint == 0 { 1 } else { fingerprint })
     }
 }
-
 
 impl PartialEq for StyleFingerprint {
     #[inline(always)]
@@ -33,7 +30,6 @@ impl PartialEq for StyleFingerprint {
         true
     }
 }
-
 
 /// Complete computed style for an element in the DOM tree.
 #[derive(Clone, Debug, PartialEq)]
@@ -265,13 +261,11 @@ pub struct ComputedStyle {
     pub(crate) style_fingerprint: StyleFingerprint,
 }
 
-
 impl Default for ComputedStyle {
     fn default() -> Self {
         Self::initial()
     }
 }
-
 
 /// Linear lookup over the cascaded declarations of one element.
 ///

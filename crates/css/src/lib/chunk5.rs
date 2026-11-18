@@ -3,15 +3,14 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 #[cfg(test)]
 pub(crate) mod tests_part4 {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use megi_core::{Attribute, Document, Namespace};
-    #[allow(unused_imports)]
     use crate::lib_tests_helpers::*;
+    #[allow(unused_imports)]
+    use megi_core::{Attribute, Document, Namespace};
     #[test]
     fn test_line_height_number_factor_and_inheritance() {
         // Parent: font-size 16px, line-height 1.5 (unitless factor, computed px 24).

@@ -3,10 +3,12 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Compiles one style rule (selectors + expanded declarations) without assigning a source
 /// order; callers set `source_order` before inserting it.
-pub(crate) fn compile_style_rule(style_rule: &crate::rule::StyleRule, origin: Origin) -> Option<CompiledRule> {
+pub(crate) fn compile_style_rule(
+    style_rule: &crate::rule::StyleRule,
+    origin: Origin,
+) -> Option<CompiledRule> {
     let selector_str = serialize_component_values(&style_rule.prelude);
     let selectors = parse_selectors(&selector_str);
     if selectors.selectors.is_empty() {
@@ -24,7 +26,6 @@ pub(crate) fn compile_style_rule(style_rule: &crate::rule::StyleRule, origin: Or
         layer_rank: UNLAYERED_LAYER,
     })
 }
-
 
 impl StyleCollection {
     pub fn new() -> Self {
@@ -273,7 +274,12 @@ impl StyleCollection {
     /// The result is a superset of the matching selectors: rules keyed by id/class/tag whose
     /// key the element does not carry are skipped, while universal/slow selectors are always
     /// included.
-    pub(crate) fn candidate_selectors(&self, doc: &Document, node_id: NodeId, out: &mut Vec<Candidate>) {
+    pub(crate) fn candidate_selectors(
+        &self,
+        doc: &Document,
+        node_id: NodeId,
+        out: &mut Vec<Candidate>,
+    ) {
         if self.index.indexed_rules != self.rules.len() {
             // `rules` was mutated outside the `add_*` API: brute-force to stay correct.
             out.clear();
@@ -320,7 +326,6 @@ impl StyleCollection {
     }
 }
 
-
 /// Resolves the cascaded property declarations for a DOM element node.
 #[inline]
 pub(crate) fn selector_matches(
@@ -334,7 +339,6 @@ pub(crate) fn selector_matches(
         None => selector.matches(doc, node_id),
     }
 }
-
 
 pub fn resolve_cascaded_properties<'a>(
     doc: &Document,
@@ -356,7 +360,6 @@ pub fn resolve_cascaded_properties<'a>(
     apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
     owned_declarations(best)
 }
-
 
 /// Resolves the cascaded property declarations for a pseudo-element (`::before`/`::after`)
 /// targeting originating element `node_id`.

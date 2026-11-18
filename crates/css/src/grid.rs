@@ -29,32 +29,59 @@ use crate::properties::{Length, find_declaration};
 use crate::rule::Declaration;
 
 mod chunk1;
-#[allow(unused_imports)] pub(crate) use chunk1::MAX_TRACKS;
-#[allow(unused_imports)] pub(crate) use chunk1::MAX_REPEAT;
-#[allow(unused_imports)] pub use chunk1::TrackMin;
-#[allow(unused_imports)] pub use chunk1::TrackMax;
-#[allow(unused_imports)] pub use chunk1::TrackSize;
-#[allow(unused_imports)] pub use chunk1::AutoRepeatKind;
-#[allow(unused_imports)] pub use chunk1::AutoRepeat;
-#[allow(unused_imports)] pub use chunk1::GridLine;
-#[allow(unused_imports)] pub use chunk1::GridAutoFlow;
-#[allow(unused_imports)] pub use chunk1::GridContentDistribution;
-#[allow(unused_imports)] pub use chunk1::GridTemplateAreas;
-#[allow(unused_imports)] pub use chunk1::GridTemplate;
-#[allow(unused_imports)] pub use chunk1::ComputedGrid;
-#[allow(unused_imports)] pub(crate) use chunk1::compute_grid;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_auto_flow;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_content_distribution;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_template_areas;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_grid_area;
-#[allow(unused_imports)] pub(crate) use chunk1::parse_placement;
+#[allow(unused_imports)]
+pub use chunk1::AutoRepeat;
+#[allow(unused_imports)]
+pub use chunk1::AutoRepeatKind;
+#[allow(unused_imports)]
+pub use chunk1::ComputedGrid;
+#[allow(unused_imports)]
+pub use chunk1::GridAutoFlow;
+#[allow(unused_imports)]
+pub use chunk1::GridContentDistribution;
+#[allow(unused_imports)]
+pub use chunk1::GridLine;
+#[allow(unused_imports)]
+pub use chunk1::GridTemplate;
+#[allow(unused_imports)]
+pub use chunk1::GridTemplateAreas;
+#[allow(unused_imports)]
+pub(crate) use chunk1::MAX_REPEAT;
+#[allow(unused_imports)]
+pub(crate) use chunk1::MAX_TRACKS;
+#[allow(unused_imports)]
+pub use chunk1::TrackMax;
+#[allow(unused_imports)]
+pub use chunk1::TrackMin;
+#[allow(unused_imports)]
+pub use chunk1::TrackSize;
+#[allow(unused_imports)]
+pub(crate) use chunk1::compute_grid;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_auto_flow;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_content_distribution;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_grid_area;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_placement;
+#[allow(unused_imports)]
+pub(crate) use chunk1::parse_template_areas;
 mod chunk2;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_grid_line;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_align_items;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_align_self;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_template;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_track_list;
-#[allow(unused_imports)] pub(crate) use chunk2::split_token;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_track;
-#[allow(unused_imports)] pub(crate) use chunk2::parse_minmax;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_align_items;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_align_self;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_grid_line;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_minmax;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_template;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_track;
+#[allow(unused_imports)]
+pub(crate) use chunk2::parse_track_list;
+#[allow(unused_imports)]
+pub(crate) use chunk2::split_token;
 mod chunk3;

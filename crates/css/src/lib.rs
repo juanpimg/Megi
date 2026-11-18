@@ -97,25 +97,44 @@ pub use user_agent::{
 
 #[path = "lib/chunk1.rs"]
 mod chunk1;
-#[allow(unused_imports)] pub use chunk1::SimpleSelector;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk1::lib_tests_helpers;
+#[allow(unused_imports)]
+pub use chunk1::SimpleSelector;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk1::lib_tests_helpers;
 #[path = "lib/chunk2.rs"]
 mod chunk2;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk2::tests_part1;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk2::tests_part1;
 #[path = "lib/chunk3.rs"]
 mod chunk3;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk3::tests_part2;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk3::tests_part2;
 #[path = "lib/chunk4.rs"]
 mod chunk4;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk4::tests_part3;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk4::tests_part3;
 #[path = "lib/chunk5.rs"]
 mod chunk5;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk5::tests_part4;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk5::tests_part4;
 #[path = "lib/chunk6.rs"]
 mod chunk6;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk6::tests_part5;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk6::background_geometry_tests;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk6::background_geometry_tests;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk6::tests_part5;
 #[path = "lib/chunk7.rs"]
 mod chunk7;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk7::background_layers_tests;
-#[cfg(test)] #[allow(unused_imports)] pub(crate) use chunk7::decoration_tests;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk7::background_layers_tests;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use chunk7::decoration_tests;

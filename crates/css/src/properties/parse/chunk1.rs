@@ -3,13 +3,11 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 /// Hard cap on the number of `box-shadow` layers kept in a computed style.
 pub const MAX_BOX_SHADOWS: usize = 32;
 
 /// Hard cap on the number of `text-shadow` layers kept in a computed style.
 pub const MAX_TEXT_SHADOWS: usize = 32;
-
 
 /// Parses `border-radius`: 1–4 values, optionally followed by `/ 1–4` vertical values.
 pub(crate) fn parse_border_radius_shorthand(
@@ -56,7 +54,6 @@ pub(crate) fn parse_border_radius_shorthand(
     })
 }
 
-
 /// Splits a `border-radius` value at the top-level `/` separator.
 pub(crate) fn split_border_radius_value(value: &str) -> (String, Option<String>) {
     let mut depth = 0usize;
@@ -75,7 +72,6 @@ pub(crate) fn split_border_radius_value(value: &str) -> (String, Option<String>)
     }
     (value.trim().to_string(), None)
 }
-
 
 /// Expands 1–4 radius lengths into the four corners (CSS Backgrounds 3 §5.1).
 pub(crate) fn expand_radius_values(
@@ -110,7 +106,6 @@ pub(crate) fn expand_radius_values(
     Some(())
 }
 
-
 /// Parses a shadow `<length>`: only px/em/rem/pt/... units are valid (no `auto`
 /// and no percentages, per CSS Backgrounds 3 §6).
 pub(crate) fn parse_shadow_length(value: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
@@ -119,7 +114,6 @@ pub(crate) fn parse_shadow_length(value: &str, font_size: f32, root_font_size: f
         _ => None,
     }
 }
-
 
 /// Parses `box-shadow` (`none` or a comma-separated list of shadows).
 ///
@@ -217,7 +211,6 @@ pub(crate) fn parse_box_shadows(
     Some(shadows)
 }
 
-
 /// Parses `text-shadow` (`none` or a comma-separated list of shadows).
 ///
 /// Per CSS Text Decoration 3 §4, if any layer is invalid or `none` is mixed in a list,
@@ -299,7 +292,6 @@ pub(crate) fn parse_text_shadows(
     }
     Some(shadows)
 }
-
 
 /// Splits a comma-separated CSS list at top level, returning `None` if any comma-delimited
 /// segment is empty (e.g. `1px 1px, , 2px 2px`).

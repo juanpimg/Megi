@@ -3,9 +3,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-
 impl ComputedStyle {
-
     /// Computes values given the cascaded declarations for an element and its parent's style.
     pub fn compute(
         cascaded: &HashMap<String, &Declaration>,
