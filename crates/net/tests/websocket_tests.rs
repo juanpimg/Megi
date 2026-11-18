@@ -94,3 +94,149 @@ fn non_ws_scheme_is_rejected() {
         Err(WebSocketError::UnsupportedScheme)
     ));
 }
+
+#[cfg(feature = "tls")]
+mod secure {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::thread::JoinHandle;
+
+    use net::FetchOptions;
+    use net::websocket::{self, WebSocketClient};
+    use rcgen::generate_simple_self_signed;
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use rustls::{ClientConfig, RootCertStore, ServerConfig};
+
+    fn provider() -> Arc<rustls::crypto::CryptoProvider> {
+        Arc::new(rustls::crypto::ring::default_provider())
+    }
+
+    fn cert() -> (CertificateDer<'static>, PrivateKeyDer<'static>) {
+        let generated = generate_simple_self_signed(vec!["localhost".to_owned()]).expect("cert");
+        (
+            generated.cert.der().clone(),
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+                generated.signing_key.serialize_der(),
+            )),
+        )
+    }
+
+    fn client_config(cert: CertificateDer<'static>) -> Arc<ClientConfig> {
+        let mut roots = RootCertStore::empty();
+        roots.add(cert).expect("root");
+        Arc::new(
+            ClientConfig::builder_with_provider(provider())
+                .with_safe_default_protocol_versions()
+                .expect("versions")
+                .with_root_certificates(roots)
+                .with_no_client_auth(),
+        )
+    }
+
+    /// TLS loopback server that completes a WS handshake and echoes one text frame.
+    fn spawn_wss(
+        cert: CertificateDer<'static>,
+        key: PrivateKeyDer<'static>,
+    ) -> (u16, JoinHandle<()>) {
+        let config = Arc::new(
+            ServerConfig::builder_with_provider(provider())
+                .with_safe_default_protocol_versions()
+                .expect("versions")
+                .with_no_client_auth()
+                .with_single_cert(vec![cert], key)
+                .expect("cert/key"),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let handle = std::thread::spawn(move || {
+            let Ok((tcp, _)) = listener.accept() else {
+                return;
+            };
+            let mut tls = rustls::StreamOwned::new(
+                rustls::ServerConnection::new(Arc::clone(&config)).expect("server conn"),
+                tcp,
+            );
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                if tls.read(&mut byte).unwrap_or(0) == 0 {
+                    return;
+                }
+                head.push(byte[0]);
+            }
+            let key = String::from_utf8_lossy(&head)
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(n, v)| {
+                        if n.eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(v.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .expect("key");
+            let response = format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+                websocket::accept_value(&key)
+            );
+            let _ = tls.write_all(response.as_bytes());
+            let _ = tls.flush();
+            let mut frame = [0u8; 2];
+            if tls.read_exact(&mut frame).is_err() {
+                return;
+            }
+            let len = (frame[1] & 0x7F) as usize;
+            let mut rest = vec![0u8; 4 + len];
+            if tls.read_exact(&mut rest).is_err() {
+                return;
+            }
+            let mut payload = rest[4..].to_vec();
+            websocket::mask(&mut payload, [rest[0], rest[1], rest[2], rest[3]]);
+            let mut echo = vec![0x81, len as u8];
+            echo.extend_from_slice(&payload);
+            let _ = tls.write_all(&echo);
+            let _ = tls.flush();
+        });
+        (port, handle)
+    }
+
+    #[test]
+    fn wss_handshake_and_text_roundtrip() {
+        let (certificate, key) = cert();
+        let tls_config = client_config(certificate.clone());
+        let (port, server) = spawn_wss(certificate, key);
+
+        let url =
+            websocket::parse_ws_url(&format!("wss://localhost:{port}/secure")).expect("wss url");
+        assert_eq!(
+            url.scheme().as_str(),
+            "https",
+            "wss maps to https internally"
+        );
+        let options = FetchOptions {
+            tls_config: Some(tls_config),
+            connect_timeout: std::time::Duration::from_secs(2),
+            read_timeout: std::time::Duration::from_secs(2),
+            ..FetchOptions::default()
+        };
+        let mut client = WebSocketClient::connect(&url, &options).expect("wss connect");
+        client.send_text("secure hello").expect("send");
+        let frame = client.recv().expect("recv");
+        assert_eq!(frame.opcode, websocket::Opcode::Text);
+        assert_eq!(frame.payload, b"secure hello");
+        server.join().expect("server");
+    }
+
+    #[test]
+    fn wss_rejects_untrusted_certificate() {
+        let (certificate, key) = cert();
+        let (port, server) = spawn_wss(certificate, key);
+        let url = websocket::parse_ws_url(&format!("wss://localhost:{port}/")).expect("wss url");
+        // No tls_config => webpki-roots cannot validate the self-signed test cert.
+        let result = WebSocketClient::connect(&url, &FetchOptions::default());
+        assert!(result.is_err(), "untrusted wss certificate must fail");
+        let _ = server.join();
+    }
+}

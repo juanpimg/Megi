@@ -1,11 +1,12 @@
-//! WebSocket framing (RFC 6455, #1534): pure encode/decode of frames plus the HTTP upgrade
-//! handshake helpers. This module performs no I/O — the host owns the socket — so it is fully
-//! deterministic and unit-testable. The JS `WebSocket` class is layered over a host provider
-//! that uses these primitives.
+//! WebSocket (RFC 6455, #1534): pure frame encode/decode plus a client that owns the byte-stream
+//! transport (plain TCP for `ws://`, rustls for `wss://`) and performs the HTTP upgrade handshake.
+//! The frame codec itself is pure and unit-testable; the JS `WebSocket` class is layered over a
+//! host provider that drives the client from a pump thread.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use crate::error::FetchError;
@@ -15,26 +16,109 @@ use crate::url::{Scheme, Url};
 /// Default maximum payload accepted for a single WebSocket message.
 pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 
-/// An open WebSocket connection (client side). Owns the TCP stream and performs RFC 6455
-/// framing; the host drives `recv` from its event loop. Only plaintext `ws://` is wired here —
-/// `wss://` requires a TLS stream and is rejected with a typed error rather than silently
-/// downgrading (fail closed).
+/// Byte-stream transport for one WebSocket connection: plain TCP (`ws://`) or a rustls session
+/// (`wss://`). Implements `Read`/`Write` so the framing code is transport-agnostic.
+#[derive(Debug)]
+enum WsTransport {
+    Plain(TcpStream),
+    #[cfg(feature = "tls")]
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl Read for WsTransport {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.read(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for WsTransport {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Plain(stream) => stream.write(buffer),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.flush(),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.flush(),
+        }
+    }
+}
+
+impl WsTransport {
+    fn set_read_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.set_read_timeout(Some(timeout)),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.sock.set_read_timeout(Some(timeout)),
+        }
+    }
+
+    fn set_write_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        match self {
+            Self::Plain(stream) => stream.set_write_timeout(Some(timeout)),
+            #[cfg(feature = "tls")]
+            Self::Tls(stream) => stream.sock.set_write_timeout(Some(timeout)),
+        }
+    }
+}
+
+/// Builds the default rustls client config (webpki-roots trust anchors) for `wss://`, mirroring
+/// the HTTP client's configuration.
+#[cfg(feature = "tls")]
+fn default_wss_config() -> Result<Arc<rustls::ClientConfig>, FetchError> {
+    static CACHE: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
+    if let Some(config) = CACHE.get() {
+        return Ok(Arc::clone(config));
+    }
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = Arc::new(
+        rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|error| FetchError::Tls(error.to_string()))?
+            .with_root_certificates(roots)
+            .with_no_client_auth(),
+    );
+    let _ = CACHE.set(Arc::clone(&config));
+    Ok(config)
+}
+
+/// An open WebSocket connection (client side). Owns the byte-stream transport and performs
+/// RFC 6455 framing; the host drives `recv` from its event loop. Both `ws://` and `wss://`
+/// (TLS) are supported; a failed TLS handshake is a typed error, never a plaintext downgrade.
 pub struct WebSocketClient {
-    stream: TcpStream,
+    stream: WsTransport,
     max_message: usize,
 }
 
 impl WebSocketClient {
     /// Performs the HTTP Upgrade handshake and returns an open client.
     pub fn connect(url: &Url, options: &FetchOptions) -> Result<Self, FetchError> {
-        if url.scheme() != Scheme::Http {
-            return Err(FetchError::UnsupportedScheme(format!(
-                "{} (expected ws)",
-                url.scheme().as_str()
-            )));
-        }
+        let secure = match url.scheme() {
+            Scheme::Http => false,
+            #[cfg(feature = "tls")]
+            Scheme::Https => true,
+            other => {
+                return Err(FetchError::UnsupportedScheme(format!(
+                    "{} (expected ws/wss)",
+                    other.as_str()
+                )));
+            }
+        };
         let host = url.host();
-        let port = url.port_or_default().unwrap_or(80);
+        let port = url
+            .port_or_default()
+            .unwrap_or(if secure { 443 } else { 80 });
         let addresses: Vec<SocketAddr> = (host, port)
             .to_socket_addrs()
             .map_err(|error| FetchError::Dns(format!("{host}: {error}")))?
@@ -50,16 +134,52 @@ impl WebSocketClient {
                 Err(error) => last_error = Some(error),
             }
         }
-        let mut stream = stream.ok_or_else(|| {
+        let mut tcp = stream.ok_or_else(|| {
             FetchError::Connect(last_error.unwrap_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address")
             }))
         })?;
+        #[allow(unused_mut)]
+        let mut stream: WsTransport = if secure {
+            #[cfg(feature = "tls")]
+            {
+                // `wss://`: TLS with SNI, certificate validation against webpki-roots (or the
+                // caller's injected config), exactly like the HTTP client. Never downgrade.
+                let config = match &options.tls_config {
+                    Some(config) => Arc::clone(config),
+                    None => default_wss_config()?,
+                };
+                let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
+                    .map_err(|error| {
+                        FetchError::Tls(format!("invalid server name `{host}`: {error}"))
+                    })?
+                    .to_owned();
+                let mut connection =
+                    rustls::ClientConnection::new(config, server_name).map_err(|error| {
+                        FetchError::Tls(format!("cannot create TLS client: {error}"))
+                    })?;
+                // Complete the handshake eagerly (SNI + certificate validation) before the WS
+                // upgrade; timeouts are configured on the socket below.
+                while connection.is_handshaking() {
+                    connection
+                        .complete_io(&mut tcp)
+                        .map_err(|error| FetchError::Tls(error.to_string()))?;
+                }
+                WsTransport::Tls(Box::new(rustls::StreamOwned::new(connection, tcp)))
+            }
+            #[cfg(not(feature = "tls"))]
+            {
+                let _ = tcp;
+                return Err(FetchError::TlsUnsupported);
+            }
+        } else {
+            WsTransport::Plain(tcp)
+        };
         stream
-            .set_read_timeout(Some(options.read_timeout))
+            .set_read_timeout(options.read_timeout)
             .map_err(FetchError::Io)?;
         stream
-            .set_write_timeout(Some(options.read_timeout))
+            .set_write_timeout(options.read_timeout)
             .map_err(FetchError::Io)?;
 
         static NONCE: AtomicU64 = AtomicU64::new(0);
@@ -129,7 +249,7 @@ impl WebSocketClient {
     /// frames without blocking the JS event loop, while the handshake keeps its original budget.
     pub fn set_read_timeout(&mut self, timeout: Duration) -> Result<(), FetchError> {
         self.stream
-            .set_read_timeout(Some(timeout))
+            .set_read_timeout(timeout)
             .map_err(FetchError::Io)
     }
 
@@ -434,9 +554,8 @@ fn protocol(reason: &str) -> FetchError {
 pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
     let input = input.trim();
     if let Some(rest) = input.strip_prefix("wss://") {
-        return Err(FetchError::UnsupportedScheme(format!(
-            "wss://{rest} (TLS not supported)"
-        )));
+        return Url::parse(&format!("https://{rest}"))
+            .map_err(|error| FetchError::InvalidResponse(format!("invalid wss URL: {error}")));
     }
     if let Some(rest) = input.strip_prefix("ws://") {
         return Url::parse(&format!("http://{rest}"))
@@ -444,9 +563,9 @@ pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
     }
     let url = Url::parse(input)
         .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")))?;
-    if url.scheme() != Scheme::Http {
+    if url.scheme() != Scheme::Http && url.scheme() != Scheme::Https {
         return Err(FetchError::UnsupportedScheme(format!(
-            "{} (expected ws)",
+            "{} (expected ws/wss)",
             url.scheme().as_str()
         )));
     }
@@ -600,7 +719,7 @@ pub enum WebSocketError {
 impl std::fmt::Display for WebSocketError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedScheme => write!(f, "WebSocket requires the ws: scheme"),
+            Self::UnsupportedScheme => write!(f, "WebSocket requires the ws: or wss: scheme"),
             Self::Io(error) => write!(f, "WebSocket I/O error: {error}"),
             Self::InvalidHandshake(reason) => write!(f, "invalid WebSocket handshake: {reason}"),
             Self::UpgradeRejected(status) => write!(f, "WebSocket upgrade rejected ({status})"),
@@ -641,7 +760,8 @@ pub struct WebSocket {
 
 impl WebSocket {
     pub fn connect(url: &str) -> Result<Self, WebSocketError> {
-        if !url.trim().to_ascii_lowercase().starts_with("ws://") {
+        let lower = url.trim().to_ascii_lowercase();
+        if !lower.starts_with("ws://") && !lower.starts_with("wss://") {
             return Err(WebSocketError::UnsupportedScheme);
         }
         let parsed =
