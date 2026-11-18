@@ -219,6 +219,18 @@ impl ResourceLoader {
         self
     }
 
+    /// Installs a session-scoped credential store for Basic auth challenge retries (#1533).
+    pub fn set_credential_store(&mut self, store: crate::auth::SharedCredentialStore) -> &mut Self {
+        self.options.credential_store = Some(store);
+        self
+    }
+
+    /// Builder variant of [`Self::set_credential_store`].
+    pub fn with_credential_store(mut self, store: crate::auth::SharedCredentialStore) -> Self {
+        self.set_credential_store(store);
+        self
+    }
+
     /// Lowers the per-response body cap for the next loads and returns the previous value.
     /// Used by the render image loader so the image byte budget is enforced while fetching,
     /// not after buffering every response (#1213).

@@ -147,6 +147,9 @@ pub struct FetchOptions {
     pub max_header_bytes: usize,
     /// `User-Agent` request header value.
     pub user_agent: String,
+    /// Optional per-origin credential store used to retry `401` challenges with Basic auth
+    /// (#1533). `None` (default) disables challenge-response authentication.
+    pub credential_store: Option<crate::auth::SharedCredentialStore>,
     /// Optional cookie jar. When set, `Set-Cookie` response headers are stored for every
     /// hop and the matching `Cookie` request header is sent. `None` (default) means the
     /// client is cookie-less; setting a jar also enables credentialed CORS mode.
@@ -218,6 +221,7 @@ impl Default for FetchOptions {
             max_pushed_total: 4 * 1024 * 1024,
             max_header_bytes: DEFAULT_MAX_HEADER_BYTES,
             user_agent: DEFAULT_USER_AGENT.to_owned(),
+            credential_store: None,
             cookie_jar: None,
             request_site: RequestSite::default(),
             origin: None,
@@ -905,6 +909,92 @@ pub fn fetch_with_request_body(
 
 /// Like [`fetch_with_request_body`] but also sends **request trailers** after the body.
 ///
+/// When [`FetchOptions::credential_store`] has credentials for the request origin, a `401`
+/// response carrying a Basic `WWW-Authenticate` challenge is retried once with an
+/// `Authorization` header (#1533). A request that already carried an `Authorization` header
+/// is never retried.
+pub fn fetch_with_request_body_and_trailers(
+    url: &Url,
+    options: &FetchOptions,
+    method: &str,
+    extra_headers: &[(&str, &str)],
+    body: Option<RequestBody>,
+    trailers: &[(String, String)],
+) -> Result<Response, FetchError> {
+    // Streaming bodies are single-shot: send the original and never retry. Buffered
+    // bodies can be cloned so the first attempt and the auth retry each get a copy.
+    let retry_body = body.as_ref().and_then(|body| body.try_clone());
+    let retryable = body.is_none() || retry_body.is_some();
+    let first_body = if retryable {
+        body.as_ref().and_then(|body| body.try_clone())
+    } else {
+        body
+    };
+    let first = fetch_with_request_body_and_trailers_once(
+        url,
+        options,
+        method,
+        extra_headers,
+        first_body,
+        trailers,
+    )?;
+    if !retryable
+        || first.status != 401
+        || extra_headers
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+    {
+        return Ok(first);
+    }
+    if !crate::auth::www_authenticate(&first.headers)
+        .is_some_and(|challenge| challenge.scheme == "basic")
+    {
+        return Ok(first);
+    }
+    let Some(store) = options.credential_store.as_ref() else {
+        return Ok(first);
+    };
+    let origin = format!(
+        "{}://{}:{}",
+        url.scheme().as_str(),
+        url.host(),
+        url.port_or_default().unwrap_or(0)
+    );
+    let credentials = store
+        .lock()
+        .ok()
+        .and_then(|guard| guard.get(&origin))
+        .or_else(|| url_basic_authorization(url).map(|_| (String::new(), String::new())));
+    let Some((user, password)) = credentials else {
+        return Ok(first);
+    };
+    if user.is_empty() && password.is_empty() {
+        return Ok(first);
+    }
+    let mut auth_headers: Vec<(&str, String)> = extra_headers
+        .iter()
+        .map(|(name, value)| (*name, (*value).to_owned()))
+        .collect();
+    auth_headers.push((
+        "Authorization",
+        crate::auth::basic_authorization(&user, &password),
+    ));
+    let header_refs: Vec<(&str, &str)> = auth_headers
+        .iter()
+        .map(|(name, value)| (*name, value.as_str()))
+        .collect();
+    fetch_with_request_body_and_trailers_once(
+        url,
+        options,
+        method,
+        &header_refs,
+        retry_body,
+        trailers,
+    )
+}
+
+/// Like [`fetch_with_request_body`] but also sends **request trailers** after the body.
+///
 /// HTTP/2: a final HEADERS block with END_STREAM after the DATA (requires a body).
 /// Validates the final request header list right before it is written to the wire.
 ///
@@ -938,7 +1028,7 @@ fn validate_request_headers(
 /// HTTP/1.1: chunked trailers after the `0\r\n` terminator (forces
 /// `Transfer-Encoding: chunked`). Trailer names/values are validated (no pseudo-headers,
 /// no control characters) and total size is capped by `max_header_bytes`.
-pub fn fetch_with_request_body_and_trailers(
+fn fetch_with_request_body_and_trailers_once(
     url: &Url,
     options: &FetchOptions,
     method: &str,

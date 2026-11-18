@@ -129,6 +129,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod auth;
 pub mod body;
 pub mod cache;
 pub mod compression;
@@ -154,6 +155,10 @@ pub mod referrer;
 pub mod socks;
 pub mod url;
 
+pub use auth::{
+    AuthChallenge, CredentialStore, SharedCredentialStore, basic_authorization, parse_challenge,
+    proxy_authenticate, www_authenticate,
+};
 pub use body::{BodyProducer, RequestBody};
 pub use cache::{CachePolicy, parse_cache_policy, parse_http_date};
 pub use compression::{
