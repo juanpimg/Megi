@@ -116,17 +116,35 @@ fn decodes_gif_palette_and_first_frame() {
 fn decodes_gif_transparency_and_frame_offset() {
     let image = decode(&fixture("gif/transparent.gif")).expect("transparent gif");
     assert_eq!(image.dimensions(), (20, 12));
-    // Pixels outside the 8x6 frame at (4,3) are transparent.
+    // Pixels outside the frame at (0,0)-(19,11) are transparent.
     assert_eq!(
         image.pixel(0, 0).expect("pixel")[3],
         0,
         "outside frame is transparent"
     );
     assert_eq!(image.pixel(19, 11).expect("pixel")[3], 0);
-    // Inside the frame the transparent palette index 0 is honoured (alpha 0), while other
-    // palette indices are opaque.
-    let inside = image.pixel(6, 5).expect("pixel in frame");
-    assert_eq!(inside[3], 255, "coloured frame pixel is opaque: {inside:?}");
+    // The frame at (0,0) covers the full canvas and uses a transparent palette index 0 at
+    // some pixels; those pixels must decode as alpha 0. Other palette indices are opaque.
+    let mut saw_transparent_inside = false;
+    let mut saw_opaque_inside = false;
+    for y in 0..12u32 {
+        for x in 0..20u32 {
+            let px = image.pixel(x, y).expect("pixel inside canvas");
+            match px[3] {
+                0 => saw_transparent_inside = true,
+                255 => saw_opaque_inside = true,
+                alpha => panic!("unexpected GIF alpha {alpha} at ({x},{y}): {px:?}"),
+            }
+        }
+    }
+    assert!(
+        saw_transparent_inside,
+        "fixture must contain at least one pixel with transparent palette index inside the frame"
+    );
+    assert!(
+        saw_opaque_inside,
+        "fixture must contain at least one opaque pixel inside the frame"
+    );
 }
 
 #[test]
