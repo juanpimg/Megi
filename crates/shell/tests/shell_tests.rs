@@ -1342,7 +1342,10 @@ fn headless_directory_listing_renders_names_and_is_deterministic() {
     let text = first
         .document
         .text_content(first.document.document_element().expect("document element"));
-    assert!(text.contains("Index of"), "listing header: {text}");
+    assert!(
+        text.contains("Index of") || text.contains("Índice de"),
+        "localized listing header: {text}"
+    );
     assert!(text.contains("alpha.txt"), "file name in listing: {text}");
     assert!(
         text.contains("sub dir"),
@@ -1362,7 +1365,10 @@ fn headless_missing_file_renders_a_deterministic_error_page() {
     let text = first
         .document
         .text_content(first.document.document_element().expect("document element"));
-    assert!(text.contains("Error loading page"), "error title: {text}");
+    assert!(
+        text.contains("Error loading page") || text.contains("Error al cargar la página"),
+        "localized error title: {text}"
+    );
     assert!(text.contains("Reintentar"), "retry link: {text}");
     assert!(text.contains(url), "failed URL shown: {text}");
     let second = render_target(url, 320, 200).expect("second error render");
@@ -1498,12 +1504,18 @@ fn headless_about_history_renders_known_entries_and_dimensions() {
     let text = output
         .document
         .text_content(output.document.body().expect("body"));
-    assert!(text.contains("History"), "page text: {text}");
+    assert!(
+        text.contains("History") || text.contains("Historial"),
+        "localized history title: {text}"
+    );
     assert!(text.contains("Example A"), "page text: {text}");
     assert!(text.contains("https://a.test/"), "page text: {text}");
     assert!(text.contains("Example B"), "page text: {text}");
     assert!(text.contains("https://b.test/page"), "page text: {text}");
-    assert!(!text.contains("No history yet"), "page text: {text}");
+    assert!(
+        !text.contains("No history yet") && !text.contains("Aún no hay historial"),
+        "page text: {text}"
+    );
 }
 
 #[test]
