@@ -357,7 +357,7 @@ text-decoration:none;border-radius:3px}}</style></head><body>\
         error = strings.error_loading,
         error_code = strings.error_code,
         retry = strings.retry,
-        press_r = strings.press_r
+        press_r = strings.press_r_html
     )
 }
 
