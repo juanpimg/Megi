@@ -335,3 +335,29 @@ fn header_values_reject_newline_injection() {
     let request = seen.last().expect("a request reached the provider");
     assert_eq!(request.headers, vec![("X-A".to_string(), "ok".to_string())]);
 }
+
+#[test]
+fn fetch_validates_and_forwards_redirect_mode() {
+    let (mut runtime, calls) = mock_runtime(ok_result());
+    runtime
+        .eval(
+            "window.__bad = '';\
+             fetch('data.json', { redirect: 'bogus' }).catch(function (e) { window.__bad = String(e); });\
+             fetch('data.json', { redirect: 'manual' });\
+             fetch('data.json', { redirect: 'error' });",
+            "t",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert!(
+        runtime
+            .eval("window.__bad", "t")
+            .unwrap()
+            .contains("TypeError"),
+        "invalid redirect mode must reject with TypeError"
+    );
+    let seen = calls.lock().expect("lock");
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[0].redirect.as_deref(), Some("manual"));
+    assert_eq!(seen[1].redirect.as_deref(), Some("error"));
+}

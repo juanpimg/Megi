@@ -89,6 +89,10 @@ pub enum FetchError {
     RedirectWithoutLocation,
     /// The `Location` header could not be resolved against the current URL.
     InvalidRedirect(UrlError),
+    /// A `3xx` redirect was encountered when [`crate::RedirectMode::Error`] was configured (#1536).
+    RedirectDisallowed(u16),
+    /// A redirect attempted to downgrade `https:` to `http:` (#1536).
+    HttpsDowngradeBlocked(String),
     /// A `file:` URL pointed at a path that does not exist.
     FileNotFound(PathBuf),
     /// A `file:` URL pointed at a path without read permission.
@@ -173,6 +177,12 @@ impl fmt::Display for FetchError {
                 write!(f, "redirect response without a Location header")
             }
             Self::InvalidRedirect(err) => write!(f, "invalid redirect target: {err}"),
+            Self::RedirectDisallowed(status) => {
+                write!(f, "redirect ({status}) disallowed by redirect policy")
+            }
+            Self::HttpsDowngradeBlocked(url) => {
+                write!(f, "blocked insecure HTTPS-to-HTTP redirect to `{url}`")
+            }
             Self::FileNotFound(path) => write!(f, "file not found: {}", path.display()),
             Self::FilePermissionDenied(path) => {
                 write!(f, "permission denied reading file: {}", path.display())

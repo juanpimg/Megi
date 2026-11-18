@@ -6125,7 +6125,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     this.statusText = data.statusText || "";
     this.ok = data.status >= 200 && data.status < 300;
     this.url = data.url || "";
-    this.redirected = false;
+    this.redirected = Boolean(data.redirected);
     this.headers = new Headers(data.headers || []);
     this._body = data.bodyText || "";
     this._bytes = data.bodyBytes || [];
@@ -6143,9 +6143,17 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     return Promise.resolve(new Uint8Array(this._bytes.slice()));
   };
   Response.prototype.clone = function () {
-    return new Response({ status: this.status, statusText: this.statusText, url: this.url, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
+    return new Response({ status: this.status, statusText: this.statusText, url: this.url, redirected: this.redirected, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
   };
   define("Response", Response);
+  function normalizeRedirect(value) {
+    if (value === undefined) { return "follow"; }
+    var s = String(value);
+    if (s !== "follow" && s !== "manual" && s !== "error") {
+      throw new TypeError("Invalid Request redirect mode: " + s);
+    }
+    return s;
+  }
   function Request(input, init) {
     init = init || {};
     if (input && typeof input === "object" && typeof input.url === "string") {
@@ -6155,6 +6163,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.body = init.body !== undefined ? init.body : (input.body || null);
       if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || input.signal || null;
+      this.redirect = normalizeRedirect(init.redirect !== undefined ? init.redirect : input.redirect);
     } else {
       this.url = new URL(String(input), location.href).href;
       this.method = String(init.method || "GET").toUpperCase();
@@ -6162,6 +6171,7 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       this.body = init.body !== undefined && init.body !== null ? init.body : null;
       if (this.body !== null && (this.method === "GET" || this.method === "HEAD")) { throw new TypeError("Request with GET/HEAD method cannot have body"); }
       this.signal = init.signal || null;
+      this.redirect = normalizeRedirect(init.redirect);
     }
   }
   define("Request", Request);
@@ -6177,12 +6187,15 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
       try {
         var headerText = "";
         request.headers.forEach(function (value, name) { headerText += name + ":" + value + "\n"; });
-        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body);
+        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body, request.redirect);
         Promise.resolve().then(function () {
           if (settled) { return; }
           settled = true;
           if (signal) { signal.removeEventListener("abort", onAbort); }
           var response = new Response(raw);
+          if (request.redirect === "follow" && response.url && response.url !== request.url) {
+            response.redirected = true;
+          }
           if (request.method === "HEAD") { response._bytes = []; response._body = ""; response.body = new ReadableStream([]); }
           resolve(response);
         });
@@ -7167,12 +7180,18 @@ fn fetch_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             "fetch supports GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS",
         ));
     }
+    let redirect = if args.len() > 4 && !args[4].is_undefined() {
+        Some(arg_string(args, 4, context)?)
+    } else {
+        None
+    };
     let request = crate::host::FetchRequest {
         url,
         method: method.clone(),
         headers,
         body: (!body_text.is_empty() && method != "GET" && method != "HEAD")
             .then(|| body_text.into_bytes()),
+        redirect,
     };
     let result = with_host(|host| {
         host.fetch_provider

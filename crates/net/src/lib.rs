@@ -169,8 +169,8 @@ pub use data::{DataUrl, base64_decode, base64_encode, decode_data_url};
 pub use error::{FetchError, LoadError, UrlError};
 pub use file::{MAX_FILE_BYTES, load_file_url, load_file_url_with_limit};
 pub use http::{
-    FetchOptions, Response, fetch, fetch_streaming, fetch_with_headers, fetch_with_method,
-    preflight,
+    FetchOptions, RedirectMode, Response, fetch, fetch_streaming, fetch_with_headers,
+    fetch_with_method, preflight,
 };
 pub use integrity::{IntegrityError, IntegrityHash, parse_integrity, verify_integrity};
 pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
