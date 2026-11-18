@@ -806,12 +806,35 @@ pub fn render_url_cached(
     render_url_inner(input, options, Some(cache), 0, &mut budget)
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FrameRenderContext {
+    #[cfg(feature = "js")]
+    pub sandbox_flags: Option<js::SandboxFlags>,
+    pub skip_scripts: bool,
+}
+
 fn render_url_inner(
     input: &str,
     options: &RenderOptions,
     cache: Option<&mut RenderCache>,
     frame_depth: usize,
-    budget: &mut frames::FrameBudget,
+    _budget: &mut frames::FrameBudget,
+) -> Result<RenderOutput, RenderError> {
+    render_url_with_context(
+        input,
+        options,
+        cache,
+        frame_depth,
+        FrameRenderContext::default(),
+    )
+}
+
+pub(crate) fn render_url_with_context(
+    input: &str,
+    options: &RenderOptions,
+    cache: Option<&mut RenderCache>,
+    frame_depth: usize,
+    frame_ctx: FrameRenderContext,
 ) -> Result<RenderOutput, RenderError> {
     let total_start = Instant::now();
     let url = Url::parse(input)?;
@@ -820,14 +843,26 @@ fn render_url_inner(
         return Err(RenderError::NetworkDisabled { url: url.as_str() });
     }
 
+    #[cfg(feature = "js")]
+    let opaque_origin = frame_ctx
+        .sandbox_flags
+        .is_some_and(|flags| !flags.allow_same_origin);
+    #[cfg(not(feature = "js"))]
+    let opaque_origin = false;
+
     let fetch_start = Instant::now();
     // One cookie jar per render (or a caller-owned shared one): the document, its
     // subresources and redirect hops all use it. A jar also enables CORS credentials.
-    let cookie_jar = options.cookie_jar.clone().or_else(|| {
-        options
-            .cookies
-            .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
-    });
+    // Sandboxed frames without `allow-same-origin` use an opaque origin and cannot access jars.
+    let cookie_jar = if opaque_origin {
+        None
+    } else {
+        options.cookie_jar.clone().or_else(|| {
+            options
+                .cookies
+                .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
+        })
+    };
     let mut document_fetch_options = options.fetch_options.clone();
     document_fetch_options.cookie_jar = cookie_jar.clone();
     // The top-level navigation request carries no `Origin` header.
@@ -842,13 +877,19 @@ fn render_url_inner(
         options.form_post.as_ref(),
     )?;
     // Subresource fetches send the document's origin (CORS) and its cookies.
-    let subresource_origin = options
-        .origin
-        .clone()
-        .or_else(|| match loaded.url.scheme() {
-            Scheme::Http | Scheme::Https => net::Origin::from_url(&loaded.url).map(|o| o.as_str()),
-            Scheme::File | Scheme::Data => None,
-        });
+    let subresource_origin = if opaque_origin {
+        None
+    } else {
+        options
+            .origin
+            .clone()
+            .or_else(|| match loaded.url.scheme() {
+                Scheme::Http | Scheme::Https => {
+                    net::Origin::from_url(&loaded.url).map(|o| o.as_str())
+                }
+                Scheme::File | Scheme::Data => None,
+            })
+    };
     let mut subresource_fetch_options = document_fetch_options.clone();
     subresource_fetch_options.origin = subresource_origin;
     let mut loader = ResourceLoader::with_options(subresource_fetch_options);
@@ -892,11 +933,165 @@ fn render_url_inner(
         referrer_policy,
     )));
     let parse = html::parse_document_with_options(&decoded.text, false, &options.parse_options);
-    let mut document = parse.document;
+    let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let decode_parse_time = decode_start.elapsed();
 
+    let mut frame_budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    render_parsed_document_inner(ParsedDocumentInput {
+        budget: &mut frame_budget,
+        document: parse.document,
+        document_url: loaded.url,
+        document_headers: &loaded.headers,
+        options,
+        loader,
+        cookie_jar,
+        referrer_policy,
+        source_mentions_svg,
+        document_bytes: loaded.bytes.len(),
+        charset: decoded.charset,
+        status: loaded.status,
+        content_encoding: loaded.content_encoding,
+        limit_violations: parse.limit_violations,
+        cache,
+        frame_depth,
+        frame_ctx,
+        fetch_time,
+        decode_parse_time,
+        total_start,
+    })
+}
+
+pub(crate) fn render_pre_scripted_document(
+    document: Document,
+    document_url: Url,
+    options: &RenderOptions,
+    frame_depth: usize,
+    frame_ctx: FrameRenderContext,
+) -> Result<RenderOutput, RenderError> {
+    let total_start = Instant::now();
+    #[cfg(feature = "js")]
+    let opaque_origin = frame_ctx
+        .sandbox_flags
+        .is_some_and(|flags| !flags.allow_same_origin);
+    #[cfg(not(feature = "js"))]
+    let opaque_origin = false;
+
+    let cookie_jar = if opaque_origin {
+        None
+    } else {
+        options.cookie_jar.clone().or_else(|| {
+            options
+                .cookies
+                .then(|| Arc::new(Mutex::new(net::CookieJar::new())))
+        })
+    };
+    let subresource_origin = if opaque_origin {
+        None
+    } else {
+        options
+            .origin
+            .clone()
+            .or_else(|| match document_url.scheme() {
+                Scheme::Http | Scheme::Https => {
+                    net::Origin::from_url(&document_url).map(|o| o.as_str())
+                }
+                Scheme::File | Scheme::Data => None,
+            })
+    };
+    let mut subresource_fetch_options = options.fetch_options.clone();
+    subresource_fetch_options.cookie_jar = cookie_jar.clone();
+    subresource_fetch_options.origin = subresource_origin;
+    let mut loader = ResourceLoader::with_options(subresource_fetch_options);
+    loader.set_allow_file(document_url.is_file());
+    loader.set_mixed_content_context(Some(document_url.scheme()));
+    let referrer_policy = net::ReferrerPolicy::default();
+    loader.set_referrer(Some(net::ReferrerConfig::with_policy(
+        document_url.clone(),
+        referrer_policy,
+    )));
+
+    let mut frame_budget = frames::FrameBudget::new(frames::MAX_FRAMES_PER_PAGE);
+    render_parsed_document_inner(ParsedDocumentInput {
+        budget: &mut frame_budget,
+        document,
+        document_url,
+        document_headers: &[],
+        options,
+        loader,
+        cookie_jar,
+        referrer_policy,
+        source_mentions_svg: true,
+        document_bytes: 0,
+        charset: "utf-8".to_owned(),
+        status: None,
+        content_encoding: None,
+        limit_violations: html::LimitViolations::default(),
+        cache: None,
+        frame_depth,
+        frame_ctx,
+        fetch_time: Duration::ZERO,
+        decode_parse_time: Duration::ZERO,
+        total_start,
+    })
+}
+
+struct ParsedDocumentInput<'a> {
+    document: Document,
+    document_url: Url,
+    document_headers: &'a [(String, String)],
+    options: &'a RenderOptions,
+    loader: ResourceLoader,
+    cookie_jar: Option<Arc<Mutex<net::CookieJar>>>,
+    referrer_policy: net::ReferrerPolicy,
+    source_mentions_svg: bool,
+    document_bytes: usize,
+    charset: String,
+    status: Option<u16>,
+    content_encoding: Option<String>,
+    limit_violations: html::LimitViolations,
+    cache: Option<&'a mut RenderCache>,
+    frame_depth: usize,
+    frame_ctx: FrameRenderContext,
+    budget: &'a mut frames::FrameBudget,
+    fetch_time: Duration,
+    decode_parse_time: Duration,
+    total_start: Instant,
+}
+
+fn render_parsed_document_inner(
+    input: ParsedDocumentInput<'_>,
+) -> Result<RenderOutput, RenderError> {
+    let ParsedDocumentInput {
+        mut document,
+        document_url,
+        document_headers,
+        options,
+        mut loader,
+        cookie_jar,
+        referrer_policy,
+        source_mentions_svg,
+        document_bytes,
+        charset,
+        status,
+        content_encoding,
+        limit_violations,
+        cache,
+        frame_depth,
+        frame_ctx,
+        budget,
+        fetch_time,
+        decode_parse_time,
+        total_start,
+    } = input;
+
+    #[cfg(feature = "js")]
+    let opaque_origin = frame_ctx
+        .sandbox_flags
+        .is_some_and(|flags| !flags.allow_same_origin);
+    #[cfg(not(feature = "js"))]
+    let opaque_origin = false;
+
     // Base URL for every relative subresource (scripts, stylesheets, images, backgrounds).
-    let document_url = loaded.url.clone();
     // `<base href>` (or `--base`) sets the URL used for every relative resource.
     let mut warnings = Vec::new();
     let override_base = match &options.base_override {
@@ -910,7 +1105,7 @@ fn render_url_inner(
         // `--base` should win over a missing `<base>`; keep the explicit value.
         base_url = override_base.clone().unwrap_or(document_url.clone());
     }
-    let csp = document_csp(&loaded.headers, &document);
+    let csp = document_csp(document_headers, &document);
 
     // Media context shared by the stylesheet cascade, the pre-script style snapshot and
     // the script `matchMedia`/viewport providers (same viewport as layout).
@@ -923,7 +1118,7 @@ fn render_url_inner(
     // snapshot is only computed for pages that will actually run scripts. Discovery
     // warnings are collected once and merged with the scripting stage warnings.
     let mut script_warnings = Vec::new();
-    let script_requested = options.scripting == ScriptingMode::Enabled;
+    let script_requested = !frame_ctx.skip_scripts && options.scripting == ScriptingMode::Enabled;
     let script_candidates = if script_requested && cfg!(feature = "js") {
         scripts::discover_scripts(
             &document,
@@ -1057,9 +1252,19 @@ fn render_url_inner(
                     rects
                 }));
             }
+            host_context.sandbox_flags = frame_ctx.sandbox_flags;
         }
-        host_context.storage = options.storage.clone();
-        host_context.cookie_jar = cookie_jar.clone();
+        host_context.frame_depth = frame_depth;
+        host_context.storage = if opaque_origin {
+            None
+        } else {
+            options.storage.clone()
+        };
+        host_context.cookie_jar = if opaque_origin {
+            None
+        } else {
+            cookie_jar.clone()
+        };
         host_context.enable_workers = options.enable_workers;
         host_context.host_events = options.host_events.clone();
         host_context.host_dom_events = options.host_dom_events.clone();
@@ -1085,6 +1290,18 @@ fn render_url_inner(
         warnings.extend(script_warnings);
     }
     let scripting_time = scripting_start.elapsed();
+    #[cfg(feature = "js")]
+    let pre_scripted_frames: frames::PreScriptedFrameMap = scripting_execution
+        .as_mut()
+        .map(|execution| {
+            std::mem::take(&mut execution.frame_documents)
+                .into_iter()
+                .map(|(node, doc, sandbox, url)| (node, (doc, sandbox, url)))
+                .collect()
+        })
+        .unwrap_or_default();
+    #[cfg(not(feature = "js"))]
+    let pre_scripted_frames = frames::PreScriptedFrameMap::new();
     let (
         scripts_executed,
         scripts_failed,
@@ -1135,7 +1352,6 @@ fn render_url_inner(
     // Render-glue fast path: with no executed scripts the DOM is exactly what the parser
     // produced, so an inline <svg> can only exist if the source markup contains "<svg".
     // Skipping the full 30k-node scan is output-identical (bench document: no scripts/svg).
-    let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let inline_svg_report = if scripts_executed == 0 && !source_mentions_svg {
         inline_svg::InlineSvgReport::default()
     } else {
@@ -1230,10 +1446,13 @@ fn render_url_inner(
 
     // Nested browsing contexts (#1544): render each <iframe>'s document into its own viewport
     // and blit it as a replaced element. Depth/count caps keep self-referential trees bounded.
-    for frame in frames::collect_frames(
+    for frame in frames::collect_frames_with_context(
         &document,
         &base_url,
         options,
+        &styles,
+        csp.as_ref(),
+        &pre_scripted_frames,
         frame_depth,
         &mut warnings,
         budget,
@@ -1345,7 +1564,6 @@ fn render_url_inner(
                 .len()
         })
         .unwrap_or(0);
-    let content_encoding = loaded.content_encoding.clone();
     let referrer_policy_name = Some(referrer_policy.as_str().to_owned());
     let console_errors = console
         .iter()
@@ -1366,9 +1584,9 @@ fn render_url_inner(
         location_actions,
         history_actions,
         stats: RenderStats {
-            document_bytes: loaded.bytes.len(),
-            charset: decoded.charset,
-            status: loaded.status,
+            document_bytes,
+            charset,
+            status,
             external_stylesheets: style_summary.external_stylesheets,
             inline_stylesheets: style_summary.inline_stylesheets,
             css_bytes: style_summary.css_bytes,
@@ -1407,7 +1625,7 @@ fn render_url_inner(
             cookies_stored,
             content_encoding,
             referrer_policy: referrer_policy_name,
-            limit_violations: parse.limit_violations,
+            limit_violations,
             cache_layout_hit,
             timings: RenderTimings {
                 fetch: fetch_time,
