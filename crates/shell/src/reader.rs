@@ -78,12 +78,78 @@ fn visible_text(document: &Document, node: NodeId) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Character/word counts of the whitespace-normalized visible text of a subtree.
+#[derive(Clone, Copy, Default)]
+struct TextStats {
+    chars: usize,
+    words: usize,
+}
+
+impl TextStats {
+    /// Length of `visible_text(...).chars().count()`: words plus the single spaces joining them.
+    fn normalized_len(self) -> usize {
+        self.chars + self.words.saturating_sub(1)
+    }
+
+    fn add(&mut self, other: TextStats) {
+        self.chars += other.chars;
+        self.words += other.words;
+    }
+}
+
+/// Computes the visible-text length of every descendant in one bottom-up pass, reusing each
+/// child's result instead of re-walking nested subtrees for every container (#1690).
+fn all_text_lengths(document: &Document, body: NodeId) -> std::collections::HashMap<NodeId, usize> {
+    let nodes: Vec<NodeId> = document.descendants(body).collect();
+    let mut stats: std::collections::HashMap<NodeId, TextStats> =
+        std::collections::HashMap::with_capacity(nodes.len());
+    // Reverse document order visits children before their parents (pre-order reversed), so
+    // each node's stats are the sum of its already-computed children in O(children).
+    for &node in nodes.iter().rev() {
+        let mut own = TextStats::default();
+        // A skipped element contributes no visible text at all (matching `collect_text`).
+        if document
+            .try_node(node)
+            .and_then(|n| n.as_element())
+            .is_some_and(|element| is_skipped(&element.local_name))
+        {
+            stats.insert(node, own);
+            continue;
+        }
+        if let Some(text) = document.try_node(node).and_then(|n| n.as_text()) {
+            for word in text.split_whitespace() {
+                own.chars += word.chars().count();
+                own.words += 1;
+            }
+        } else {
+            for child in document.children(node) {
+                if document
+                    .try_node(child)
+                    .and_then(|n| n.as_element())
+                    .is_some_and(|element| is_skipped(&element.local_name))
+                {
+                    continue;
+                }
+                if let Some(child_stats) = stats.get(&child) {
+                    own.add(*child_stats);
+                }
+            }
+        }
+        stats.insert(node, own);
+    }
+    stats
+        .into_iter()
+        .map(|(node, stats)| (node, stats.normalized_len()))
+        .collect()
+}
+
 /// Extracts the main article from `document` (returns `None` for empty/too-short pages).
 pub fn extract(document: &Document) -> Option<Article> {
     let body = document.body()?;
     let mut best: Option<(NodeId, usize)> = None;
-    // Memoize visible text lengths to avoid O(N^2) re-walks of nested containers.
-    let mut cache: std::collections::HashMap<NodeId, usize> = std::collections::HashMap::new();
+    // One bottom-up pass computes every node's visible-text length (#1690); the old
+    // `or_insert_with(|| visible_text(...))` re-walked each nested subtree before caching.
+    let lengths = all_text_lengths(document, body);
     for (node_count, node) in document.descendants(body).enumerate() {
         if node_count >= MAX_READER_NODES {
             break;
@@ -94,9 +160,7 @@ pub fn extract(document: &Document) -> Option<Article> {
         if is_skipped(&element.local_name) || !CONTAINERS.contains(&element.local_name.as_str()) {
             continue;
         }
-        let length = *cache
-            .entry(node)
-            .or_insert_with(|| visible_text(document, node).chars().count());
+        let length = lengths.get(&node).copied().unwrap_or(0);
         if length > best.map_or(0, |(_, best)| best) {
             best = Some((node, length));
         }
@@ -221,6 +285,25 @@ mod tests {
         assert!(page.contains("Body &lt;b&gt;bold&lt;/b&gt; &amp; more"));
         assert!(page.contains("https://example.com/a?x=1&amp;y=2"));
         assert!(!page.to_lowercase().contains("javascript:"));
+    }
+
+    #[test]
+    fn bottom_up_lengths_match_visible_text() {
+        // #1690: the one-pass, bottom-up length computation must agree with the reference
+        // `visible_text(...).chars().count()` for every container in a nested document.
+        let document = doc(
+            "<article><p>Hello   world</p><div><p>nested text</p><span>tail</span></div>\
+             <nav>ignored navigation words</nav></article>",
+        );
+        let body = document.body().expect("body");
+        let lengths = all_text_lengths(&document, body);
+        for node in document.descendants(body) {
+            assert_eq!(
+                lengths.get(&node).copied().unwrap_or(0),
+                visible_text(&document, node).chars().count(),
+                "length mismatch for {node:?}"
+            );
+        }
     }
 
     #[test]
