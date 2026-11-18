@@ -97,10 +97,16 @@ pub mod gif;
 pub mod inflate;
 pub mod jpeg;
 pub mod png;
+mod scaled;
 pub mod vp8;
 mod vp8_decoder;
 mod vp8_tables;
 pub mod webp;
+
+#[cfg(test)]
+mod orientation_tests;
+#[cfg(test)]
+mod tests;
 
 pub use error::ImageError;
 pub use inflate::{
@@ -108,6 +114,7 @@ pub use inflate::{
     inflate_gzip_streaming, inflate_zlib, inflate_zlib_streaming,
 };
 pub use png::{PngLimits, decode_png};
+pub use scaled::{decode_scaled, decode_scaled_with_limits};
 
 /// The 8-byte PNG file signature.
 pub const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1A, b'\n'];
@@ -308,35 +315,6 @@ pub fn exif_thumbnail(bytes: &[u8]) -> Option<RgbaImage> {
     decode_with_limits(thumbnail, &limits).ok()
 }
 
-/// Nearest-neighbour resize to exact `(target_width, target_height)` dimensions.
-pub(crate) fn resize_nearest_dims(
-    image: &RgbaImage,
-    target_width: u32,
-    target_height: u32,
-) -> Result<RgbaImage, ImageError> {
-    if target_width == 0 || target_height == 0 {
-        return Err(ImageError::InvalidDimensions {
-            width: target_width,
-            height: target_height,
-        });
-    }
-    if image.width == target_width && image.height == target_height {
-        return RgbaImage::new(image.width, image.height, image.data.clone());
-    }
-    let mut data = Vec::with_capacity((target_width as usize) * (target_height as usize) * 4);
-    for y in 0..target_height {
-        let source_y = (y as u64 * image.height as u64 / target_height as u64) as u32;
-        let source_y = source_y.min(image.height - 1);
-        for x in 0..target_width {
-            let source_x = (x as u64 * image.width as u64 / target_width as u64) as u32;
-            let source_x = source_x.min(image.width - 1);
-            let offset = ((source_y as usize) * (image.width as usize) + source_x as usize) * 4;
-            data.extend_from_slice(&image.data[offset..offset + 4]);
-        }
-    }
-    RgbaImage::new(target_width, target_height, data)
-}
-
 /// Decodes an image from `bytes` using the format's default limits.
 ///
 /// Decodes PNG, JPEG (baseline + progressive), the first frame of GIF, the WebP VP8L
@@ -345,140 +323,6 @@ pub(crate) fn resize_nearest_dims(
 /// (dimensions/pixels/chunk budgets shared by all formats).
 pub fn decode(bytes: &[u8]) -> Result<RgbaImage, ImageError> {
     decode_with_limits(bytes, &PngLimits::default())
-}
-
-/// Decodes an image downscaled so that neither dimension exceeds `max_dim`.
-///
-/// Additive companion to [`decode`] for rendering large photos/backgrounds that are
-/// displayed much smaller than their intrinsic size:
-///
-/// - **PNG**: row/column subsampling is performed while unfiltering scanlines
-///   (including Adam7), so the full-resolution RGBA buffer is never allocated and only
-///   the sampled pixels are converted to RGBA.
-/// - **JPEG**: baseline streams use a **reduced IDCT** (4x4/2x2/1x1 per block for
-///   scale 2/4/8, discarding the AC coefficients the smaller block cannot represent);
-///   output dimensions are `ceil(width / 2^k) x ceil(height / 2^k)`. When an EXIF
-///   (IFD1) JPEG thumbnail exists and is at least as large as the requested output, it
-///   is decoded instead and nearest-resized to the exact target size (policy in
-///   `decode_jpeg_scaled`). Progressive JPEGs fall back to a full decode + nearest
-///   resize (documented; no reduced progressive/ROI decode).
-/// - **GIF / WebP**: decoded with the existing caps and row/column subsampled.
-///
-/// The factor is `ceil(longest_side / max_dim)` and the output dimensions are
-/// `ceil(width / factor) x ceil(height / factor)`, preserving the aspect ratio
-/// approximately. Results are deterministic. `max_dim == 0` is a typed error and a
-/// `max_dim` larger than the image decodes at full size.
-///
-/// Limitations: nearest-neighbour sampling aliases high-frequency detail (no bilinear
-/// filtering), no EXIF thumbnail fast path and no progressive/region decoding; the
-/// render pipeline applies its own bilinear scaling to the final display size.
-pub fn decode_scaled(bytes: &[u8], max_dim: u32) -> Result<RgbaImage, ImageError> {
-    decode_scaled_with_limits(bytes, &PngLimits::default(), max_dim)
-}
-
-/// Like [`decode_scaled`], but with explicit defensive limits.
-pub fn decode_scaled_with_limits(
-    bytes: &[u8],
-    limits: &PngLimits,
-    max_dim: u32,
-) -> Result<RgbaImage, ImageError> {
-    if max_dim == 0 {
-        return Err(ImageError::InvalidData {
-            reason: "max_dim must be greater than zero",
-        });
-    }
-    match detect_format(bytes) {
-        ImageFormat::Png => png::decode_png_scaled(bytes, limits, max_dim),
-        ImageFormat::Jpeg => decode_jpeg_scaled(bytes, limits, max_dim),
-        _ => {
-            let image = decode_with_limits(bytes, limits)?;
-            downsample_nearest(&image, max_dim)
-        }
-    }
-}
-
-/// Scaled JPEG path: reduced IDCT (baseline) or EXIF thumbnail / full decode + exact
-/// nearest resize (progressive), see [`decode_scaled`] documentation.
-fn decode_jpeg_scaled(
-    bytes: &[u8],
-    limits: &PngLimits,
-    max_dim: u32,
-) -> Result<RgbaImage, ImageError> {
-    let (width, height, progressive) = jpeg::jpeg_dimensions(bytes, limits)?;
-    let factor = width.max(height).div_ceil(max_dim.max(1)).max(1) as usize;
-    let scale = factor.next_power_of_two().min(8) as u32;
-    let target_width = width.div_ceil(scale);
-    let target_height = height.div_ceil(scale);
-    // EXIF thumbnail policy: only for a real downscale, and only when the thumbnail
-    // already has at least the requested output resolution (its longest side ≥ target
-    // longest side). The decoded thumbnail is nearest-resized to the exact target dims;
-    // thumbnails are capped by the `exif_thumbnail` limits.
-    if scale > 1
-        && let Some(thumbnail) = exif::thumbnail(bytes)
-        && let Ok(decoded) = {
-            // Derive thumbnail limits from caller limits (clamp to hardcoded caps).
-            let thumb_limits = PngLimits::new(
-                limits.max_dimension.min(2048),
-                limits.max_pixels.min(4 * 1024 * 1024),
-                limits.max_chunk_bytes.min(4 * 1024 * 1024),
-                limits.max_total_idat_bytes.min(16 * 1024 * 1024),
-            );
-            decode_with_limits(thumbnail, &thumb_limits)
-        }
-        && decoded.width.max(decoded.height) >= target_width.max(target_height)
-    {
-        let resized = resize_nearest_dims(&decoded, target_width, target_height)?;
-        return apply_orientation(resized, exif::orientation(bytes));
-    }
-    if progressive {
-        // Documented limitation: no reduced progressive decode; full decode + resize.
-        let image = decode_with_limits(bytes, limits)?;
-        let resized = resize_nearest_dims(&image, target_width, target_height)?;
-        return apply_orientation(resized, exif::orientation(bytes));
-    }
-    let image = jpeg::decode_jpeg_scaled(bytes, limits, max_dim)?;
-    apply_orientation(image, exif::orientation(bytes))
-}
-
-/// Nearest-neighbour row/column subsampling so that `longest_side <= max_dim`.
-///
-/// Used by [`decode_scaled_with_limits`] for formats decoded at full size (JPEG/GIF/
-/// WebP). The PNG path performs the same sampling while unfiltering scanlines. Output
-/// pixel `(ox, oy)` comes from source `(ox * factor, oy * factor)`; this is deterministic
-/// but aliases high-frequency detail (no bilinear filtering, documented limitation).
-pub(crate) fn downsample_nearest(image: &RgbaImage, max_dim: u32) -> Result<RgbaImage, ImageError> {
-    let factor = image
-        .width
-        .max(image.height)
-        .div_ceil(max_dim.max(1))
-        .max(1);
-    if factor <= 1 {
-        return RgbaImage::new(image.width, image.height, image.data.clone());
-    }
-    let out_width = image.width.div_ceil(factor);
-    let out_height = image.height.div_ceil(factor);
-    let out_pixels =
-        (out_width as u64)
-            .checked_mul(out_height as u64)
-            .ok_or(ImageError::InvalidDimensions {
-                width: out_width,
-                height: out_height,
-            })?;
-    let out_pixels = usize::try_from(out_pixels).map_err(|_| ImageError::LimitExceeded {
-        what: "scaled output pixels",
-        limit: usize::MAX as u64,
-        actual: out_pixels,
-    })?;
-    let mut data = Vec::with_capacity(out_pixels * 4);
-    for out_y in 0..out_height {
-        let source_y = (out_y * factor).min(image.height - 1);
-        for out_x in 0..out_width {
-            let source_x = (out_x * factor).min(image.width - 1);
-            let offset = ((source_y as usize) * (image.width as usize) + source_x as usize) * 4;
-            data.extend_from_slice(&image.data[offset..offset + 4]);
-        }
-    }
-    RgbaImage::new(out_width, out_height, data)
 }
 
 /// One composited frame of an animated image.
@@ -560,106 +404,4 @@ pub fn decode_animated_with_limits(
         loop_count: 1,
         frames: vec![AnimatedFrame { image, delay_ms: 0 }],
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn detects_known_signatures() {
-        assert_eq!(detect_format(b"\x89PNG\r\n\x1a\nrest"), ImageFormat::Png);
-        assert_eq!(detect_format(b"GIF89a...."), ImageFormat::Gif);
-        assert_eq!(detect_format(b"GIF87a...."), ImageFormat::Gif);
-        assert_eq!(detect_format(&[0xFF, 0xD8, 0xFF, 0xE0]), ImageFormat::Jpeg);
-        assert_eq!(detect_format(b"RIFF\0\0\0\0WEBPVP8 "), ImageFormat::WebP);
-        assert_eq!(detect_format(b"not an image"), ImageFormat::Unknown);
-        assert_eq!(detect_format(b""), ImageFormat::Unknown);
-    }
-
-    #[test]
-    fn rgba_image_accessors_are_bounds_checked() {
-        let image = RgbaImage::new(2, 2, vec![0; 16]).unwrap();
-        assert_eq!(image.dimensions(), (2, 2));
-        assert!(!image.is_empty());
-        assert_eq!(image.pixel(1, 1), Some([0, 0, 0, 0]));
-        assert_eq!(image.pixel(2, 0), None);
-        assert_eq!(image.pixel(0, 2), None);
-        assert_eq!(image.row(1).map(<[u8]>::len), Some(8));
-        assert_eq!(image.row(2), None);
-        assert_eq!(image.len_bytes(), 16);
-        assert!(RgbaImage::new(2, 2, vec![0; 15]).is_err());
-        assert!(RgbaImage::new(0, 2, Vec::new()).is_err());
-    }
-
-    #[test]
-    fn unsupported_and_truncated_formats_are_typed_errors() {
-        // GIF/JPEG are decoded now: malformed headers are data/truncation errors.
-        assert!(matches!(
-            decode(b"GIF89a....").unwrap_err(),
-            ImageError::Truncated { .. } | ImageError::InvalidData { .. }
-        ));
-        assert!(matches!(
-            decode(&[0xFF, 0xD8, 0xFF, 0xE0]).unwrap_err(),
-            ImageError::Truncated { .. } | ImageError::InvalidData { .. }
-        ));
-        // WebP chunks are parsed now: an empty/truncated container is a typed data error
-        // (a complete VP8 lossy chunk decodes to pixels instead).
-        assert!(matches!(
-            decode(b"RIFF\0\0\0\0WEBPVP8 ").unwrap_err(),
-            ImageError::InvalidData { .. } | ImageError::Truncated { .. }
-        ));
-        assert_eq!(
-            decode(b"garbage").unwrap_err(),
-            ImageError::InvalidSignature
-        );
-    }
-}
-
-#[cfg(test)]
-mod orientation_tests {
-    use super::{RgbaImage, apply_orientation};
-
-    /// 4x2 image whose red channel encodes the source index, so every transform
-    /// can be checked against its exact destination pixel.
-    fn indexed_image() -> RgbaImage {
-        let mut data = Vec::new();
-        for y in 0..2u8 {
-            for x in 0..4u8 {
-                let index = y * 4 + x;
-                data.extend_from_slice(&[index, index, index, 255]);
-            }
-        }
-        RgbaImage::new(4, 2, data).expect("valid image")
-    }
-
-    fn reds(image: &RgbaImage) -> Vec<u8> {
-        image.data.chunks(4).map(|pixel| pixel[0]).collect()
-    }
-
-    #[test]
-    fn applies_all_eight_orientations() {
-        // Source indices: [0 1 2 3 / 4 5 6 7]
-        let cases: &[(u8, u32, u32, &[u8])] = &[
-            (1, 4, 2, &[0, 1, 2, 3, 4, 5, 6, 7]),
-            (2, 4, 2, &[3, 2, 1, 0, 7, 6, 5, 4]),
-            (3, 4, 2, &[7, 6, 5, 4, 3, 2, 1, 0]),
-            (4, 4, 2, &[4, 5, 6, 7, 0, 1, 2, 3]),
-            (5, 2, 4, &[0, 4, 1, 5, 2, 6, 3, 7]),
-            (6, 2, 4, &[4, 0, 5, 1, 6, 2, 7, 3]),
-            (7, 2, 4, &[7, 3, 6, 2, 5, 1, 4, 0]),
-            (8, 2, 4, &[3, 7, 2, 6, 1, 5, 0, 4]),
-        ];
-        for &(orientation, width, height, expected) in cases {
-            let image = apply_orientation(indexed_image(), Some(orientation)).expect("transform");
-            assert_eq!(
-                (image.width, image.height),
-                (width, height),
-                "orientation {orientation} size"
-            );
-            assert_eq!(reds(&image), expected, "orientation {orientation}");
-        }
-        let identity = apply_orientation(indexed_image(), None).expect("identity");
-        assert_eq!(reds(&identity), [0, 1, 2, 3, 4, 5, 6, 7]);
-    }
 }

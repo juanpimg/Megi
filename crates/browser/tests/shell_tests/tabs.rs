@@ -1,0 +1,285 @@
+use super::common::*;
+
+#[test]
+fn navigation_home_target_is_the_first_entry() {
+    let mut nav = megi_browser::NavigationState::new();
+    nav.navigate_to(megi_webview::net::Url::parse("file:///home/index.html").expect("url"));
+    nav.navigate_to(megi_webview::net::Url::parse("https://example.com/page").expect("url"));
+    assert_eq!(
+        nav.home_target().map(megi_webview::net::Url::as_str),
+        Some("file:///home/index.html".to_string())
+    );
+    assert_eq!(
+        nav.current_url().as_deref(),
+        Some("https://example.com/page")
+    );
+}
+
+#[test]
+fn screenshot_with_tabs_renders_the_active_first_tab() {
+    let first = "data:text/html,%3Ch1%3EFirst%20tab%3C%2Fh1%3E";
+    let second = "data:text/html,%3Ch1%3ESecond%20tab%3C%2Fh1%3E";
+    let tabs_png = temp_path("tabs-active.png");
+    let direct_png = temp_path("tabs-direct.png");
+    let tabs_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            first,
+            "--tabs",
+            second,
+            "--screenshot",
+            tabs_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(tabs_run.success());
+    let direct_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            first,
+            "--screenshot",
+            direct_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(direct_run.success());
+    let tabs_bytes = std::fs::read(&tabs_png).expect("tabs PNG");
+    let direct_bytes = std::fs::read(&direct_png).expect("direct PNG");
+    assert_eq!(
+        tabs_bytes, direct_bytes,
+        "headless renders the active/first tab"
+    );
+    assert_eq!(png_dimensions(&tabs_bytes), (240, 160));
+    let _ = std::fs::remove_file(&tabs_png);
+    let _ = std::fs::remove_file(&direct_png);
+}
+
+#[test]
+fn cli_tabs_flag_builds_multiple_tabs_and_documents_headless_policy() {
+    let cli = megi_browser::parse_cli(
+        [
+            "data:text/html,one",
+            "--tabs",
+            "data:text/html,two",
+            "--tabs",
+            "data:text/html,three",
+        ]
+        .into_iter()
+        .map(str::to_string),
+    )
+    .expect("parse CLI");
+    assert_eq!(cli.tabs.len(), 3);
+    assert_eq!(cli.input, "data:text/html,one");
+    let state = megi_browser::TabsState::from_urls(cli.tabs.clone());
+    assert_eq!(state.len(), 3);
+    assert_eq!(state.active_index(), 0);
+    assert_eq!(state.active().url, "data:text/html,one");
+    let (output, hits) = megi_browser::headless::render_target_with_find(
+        &cli.input,
+        240,
+        160,
+        &megi_webview::render::RenderOptions::default(),
+        "",
+    )
+    .expect("render active tab");
+    assert_eq!(output.dimensions(), (240, 160));
+    assert_eq!(hits, 0);
+}
+
+#[test]
+fn chrome_overlay_paints_tab_strip_and_address_bar() {
+    let plain =
+        megi_browser::render_target("data:text/html,<h1>chrome</h1>", 640, 400).expect("plain");
+    let chromed = megi_browser::headless::render_target_with_chrome(
+        "data:text/html,<h1>chrome</h1>",
+        640,
+        400,
+        &megi_webview::render::RenderOptions::default(),
+        None,
+    )
+    .expect("chrome");
+    assert_eq!(
+        plain.dimensions(),
+        chromed.dimensions(),
+        "chrome is an overlay"
+    );
+    let tab_strip = megi_browser::chrome::COLOR_TAB_STRIP;
+    let address = megi_browser::chrome::COLOR_ADDRESS_BG;
+    let count = |output: &megi_webview::render::RenderOutput, color: megi_webview::paint::Color| {
+        output
+            .pixmap
+            .pixels
+            .iter()
+            .filter(|pixel| pixel.r == color.r && pixel.g == color.g && pixel.b == color.b)
+            .count()
+    };
+    assert_eq!(count(&plain, tab_strip), 0, "plain renders have no chrome");
+    assert!(count(&chromed, tab_strip) > 1000, "tab strip painted");
+    assert!(count(&chromed, address) > 1000, "address bar painted");
+    // The page below the chrome is unchanged (overlay only occludes the top band).
+    let offset = ((megi_browser::chrome::CHROME_HEIGHT as u32 + 10) * 640) as usize;
+    assert_eq!(
+        plain.pixmap.pixels[offset..offset + 100],
+        chromed.pixmap.pixels[offset..offset + 100]
+    );
+}
+
+#[test]
+fn screenshot_with_chrome_writes_a_valid_png() {
+    let plain_path = temp_path("chrome-plain.png");
+    let chrome_path = temp_path("chrome-on.png");
+    let input = "data:text/html,<h1>chrome png</h1>";
+    megi_browser::headless::screenshot_with_options(
+        input,
+        320,
+        220,
+        &plain_path,
+        &megi_webview::render::RenderOptions::default(),
+    )
+    .expect("plain screenshot");
+    megi_browser::headless::screenshot_with_chrome(
+        input,
+        320,
+        220,
+        &chrome_path,
+        &megi_webview::render::RenderOptions::default(),
+        None,
+    )
+    .expect("chrome screenshot");
+    let plain = std::fs::read(&plain_path).expect("plain PNG");
+    let chromed = std::fs::read(&chrome_path).expect("chrome PNG");
+    assert_eq!(png_dimensions(&plain), (320, 220));
+    assert_eq!(png_dimensions(&chromed), (320, 220));
+    assert_ne!(plain, chromed, "chrome changes the screenshot");
+    assert!(chromed.starts_with(&[0x89, b'P', b'N', b'G']));
+    let _ = std::fs::remove_file(&plain_path);
+    let _ = std::fs::remove_file(&chrome_path);
+}
+
+#[test]
+fn cli_chrome_flag_is_accepted_for_screenshots() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let plain = temp_path("cli-plain.png");
+    let chromed = temp_path("cli-chrome.png");
+    let run = |args: &[&str], path: &PathBuf| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&fixture)
+            .args(args)
+            .arg("--screenshot")
+            .arg(path)
+            .args(["--width", "320", "--height", "220"])
+            .status()
+            .expect("shell binary runs")
+    };
+    assert!(run(&[], &plain).success());
+    assert!(run(&["--chrome"], &chromed).success());
+    let plain_bytes = std::fs::read(&plain).expect("plain PNG");
+    let chrome_bytes = std::fs::read(&chromed).expect("chrome PNG");
+    assert_eq!(png_dimensions(&plain_bytes), (320, 220));
+    assert_eq!(png_dimensions(&chrome_bytes), (320, 220));
+    assert_ne!(plain_bytes, chrome_bytes);
+    let _ = std::fs::remove_file(&plain);
+    let _ = std::fs::remove_file(&chromed);
+}
+
+#[test]
+fn select_options_survive_a_patched_rerender() {
+    let request = RenderRequest {
+        generation: 1,
+        input: forms_fixture_url(),
+        css_width: 320,
+        css_height: 240,
+        base_override: None,
+        scripting: true,
+        find_query: None,
+        host_events: Vec::new(),
+        host_dom_events: Vec::new(),
+        form_post: None,
+    };
+    let frame = megi_browser::worker::render_document(&request).expect("forms render");
+    let select = frame
+        .forms
+        .iter()
+        .find(|control| control.kind == megi_browser::FormControlKind::Select)
+        .cloned()
+        .expect("select control");
+    assert_eq!(select.options.len(), 2, "fixture select has two options");
+    assert_eq!(select.options[0].label, "One");
+    let mut document = (*frame.document).clone();
+    megi_browser::forms::assign_form_ids(&mut document);
+    assert!(megi_browser::forms::patch_select(
+        &mut document,
+        select.form_id,
+        1
+    ));
+    let snapshot = megi_browser::forms::snapshot_data_url(&document);
+    let patched_request = RenderRequest {
+        generation: 2,
+        input: snapshot,
+        css_width: 320,
+        css_height: 240,
+        base_override: Some(request.input.clone()),
+        scripting: false,
+        find_query: None,
+        host_events: Vec::new(),
+        host_dom_events: Vec::new(),
+        form_post: None,
+    };
+    let patched = megi_browser::worker::render_document(&patched_request).expect("patched render");
+    let patched_select = patched
+        .forms
+        .iter()
+        .find(|control| control.form_id == select.form_id)
+        .expect("select persisted");
+    assert!(patched_select.options[1].selected, "second option selected");
+    assert_eq!(patched_select.value, "Two");
+}
+
+#[test]
+fn chrome_geometry_scales_with_the_device_scale() {
+    let address = megi_browser::chrome::AddressBar::new();
+    let tabs = vec!["Megi".to_string()];
+    let view = megi_browser::chrome::ChromeView {
+        favicons: &[],
+        tabs: &tabs,
+        active_tab: 0,
+        address: &address,
+        fallback_url: "about:blank",
+        dropdown: None,
+        scroll_y: 0,
+        css_viewport_height: 200,
+        css_width: 320.0,
+        completion: None,
+        loading: false,
+        overflow: None,
+        hover_url: None,
+        menu: None,
+        can_go_back: false,
+        can_go_forward: false,
+        history_menu: None,
+        download_status: None,
+        history_button: false,
+        ime_preedit: "",
+    };
+    let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
+    let painted = megi_browser::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
+    assert!(painted > 0);
+    // The whole chrome band is 58 CSS px ⇒ 116 physical rows.
+    let band = dest[..(116 * 640) as usize]
+        .iter()
+        .filter(|pixel| **pixel != 0x00FF_FFFF)
+        .count();
+    assert!(band > 1000, "scaled chrome painted: {band}");
+    assert_eq!(
+        dest[(119 * 640) as usize],
+        0x00FF_FFFF,
+        "page below chrome intact"
+    );
+}

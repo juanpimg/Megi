@@ -1,0 +1,299 @@
+//! RFC 6455 frame codec: opcodes, masking, encode/decode and close codes.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use crate::error::FetchError;
+
+/// RFC 6455 frame opcodes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Opcode {
+    Continuation,
+    Text,
+    Binary,
+    Close,
+    Ping,
+    Pong,
+}
+
+impl Opcode {
+    fn from_nibble(nibble: u8) -> Option<Self> {
+        Some(match nibble {
+            0x0 => Self::Continuation,
+            0x1 => Self::Text,
+            0x2 => Self::Binary,
+            0x8 => Self::Close,
+            0x9 => Self::Ping,
+            0xA => Self::Pong,
+            _ => return None,
+        })
+    }
+
+    fn nibble(self) -> u8 {
+        match self {
+            Self::Continuation => 0x0,
+            Self::Text => 0x1,
+            Self::Binary => 0x2,
+            Self::Close => 0x8,
+            Self::Ping => 0x9,
+            Self::Pong => 0xA,
+        }
+    }
+
+    /// Whether this opcode carries application data (as opposed to a control frame).
+    pub fn is_data(self) -> bool {
+        matches!(self, Self::Continuation | Self::Text | Self::Binary)
+    }
+}
+
+/// A decoded WebSocket frame.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Frame {
+    /// FIN bit: the final fragment of a message.
+    pub fin: bool,
+    pub opcode: Opcode,
+    /// Whether the payload was masked (clients must mask; servers must not).
+    pub masked: bool,
+    pub payload: Vec<u8>,
+}
+
+/// WebSocket close codes used by the JS API and control-frame handling.
+pub mod close_code {
+    pub const NORMAL: u16 = 1000;
+    pub const GOING_AWAY: u16 = 1001;
+    pub const PROTOCOL_ERROR: u16 = 1002;
+    pub const UNSUPPORTED_DATA: u16 = 1003;
+    pub const NO_STATUS: u16 = 1005;
+    pub const ABNORMAL: u16 = 1006;
+    pub const INVALID_PAYLOAD: u16 = 1007;
+    pub const POLICY_VIOLATION: u16 = 1008;
+    pub const MESSAGE_TOO_BIG: u16 = 1009;
+    pub const INTERNAL_ERROR: u16 = 1011;
+
+    /// Valid codes a client may send in a Close frame (RFC 6455 §7.4).
+    pub fn is_valid_outgoing(code: u16) -> bool {
+        matches!(code, 1000..=1011 | 3000..=4999) && !matches!(code, 1004 | 1005 | 1006 | 1015)
+    }
+}
+
+/// Generates an unpredictable 4-byte client masking key (RFC 6455 §5.3).
+///
+/// No extra dependencies: a per-call random [`std::collections::hash_map::RandomState`]
+/// hash over an atomic counter, wall-clock time and process id. Consecutive calls differ
+/// with overwhelming probability (counter + fresh random hash keys).
+pub fn client_mask() -> [u8; 4] {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hash, Hasher};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let mut hasher = RandomState::new().build_hasher();
+    counter.hash(&mut hasher);
+    now.hash(&mut hasher);
+    (std::process::id() as u64).hash(&mut hasher);
+    hasher.finish().to_le_bytes()[..4]
+        .try_into()
+        .expect("u64 yields four bytes")
+}
+
+/// Applies/removes the RFC 6455 masking transform (XOR with the repeating 4-byte key).
+pub fn mask(payload: &mut [u8], key: [u8; 4]) {
+    for (index, byte) in payload.iter_mut().enumerate() {
+        *byte ^= key[index & 3];
+    }
+}
+
+/// Encodes a client-to-server frame. Clients MUST mask, so a fixed/random key is applied.
+pub fn encode_frame(frame: &Frame, key: [u8; 4]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(14 + frame.payload.len());
+    let first = (if frame.fin { 0x80 } else { 0x00 }) | frame.opcode.nibble();
+    bytes.push(first);
+    let len = frame.payload.len();
+    // #1637: honor the frame's MASK flag instead of always masking. Server-side frames
+    // (and tests) use masked=false and must carry the raw payload with no masking key.
+    let mask_bit = if frame.masked { 0x80 } else { 0x00 };
+    if len < 126 {
+        bytes.push(mask_bit | len as u8);
+    } else if len <= u16::MAX as usize {
+        bytes.push(mask_bit | 126);
+        bytes.extend_from_slice(&(len as u16).to_be_bytes());
+    } else {
+        bytes.push(mask_bit | 127);
+        bytes.extend_from_slice(&(len as u64).to_be_bytes());
+    }
+    if frame.masked {
+        bytes.extend_from_slice(&key);
+        let mut masked = frame.payload.clone();
+        mask(&mut masked, key);
+        bytes.extend_from_slice(&masked);
+    } else {
+        bytes.extend_from_slice(&frame.payload);
+    }
+    bytes
+}
+
+/// Result of a successful [`decode_frame`].
+pub struct DecodedFrame {
+    pub frame: Frame,
+    /// Number of bytes consumed from the input slice.
+    pub consumed: usize,
+}
+
+/// Decodes one server-to-client frame from the start of `bytes`.
+///
+/// Rejects masked server frames, reserved opcodes, control frames with FIN=0 or length > 125,
+/// and payloads that need more bytes than available. `max_payload` bounds application frames.
+pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, FetchError> {
+    if bytes.len() < 2 {
+        return Err(protocol("truncated frame header"));
+    }
+    // #1625: RSV1/2/3 must be zero unless an extension negotiated them (none here).
+    if bytes[0] & 0x70 != 0 {
+        return Err(protocol(
+            "reserved RSV bits set without a negotiated extension",
+        ));
+    }
+    let fin = bytes[0] & 0x80 != 0;
+    let opcode = Opcode::from_nibble(bytes[0] & 0x0F).ok_or_else(|| protocol("reserved opcode"))?;
+    let masked = bytes[1] & 0x80 != 0;
+    if masked {
+        return Err(protocol("server frame must not be masked"));
+    }
+    let mut length = (bytes[1] & 0x7F) as u64;
+    let mut offset: usize = 2;
+    match bytes[1] & 0x7F {
+        126 => {
+            if bytes.len() < 4 {
+                return Err(protocol("truncated 16-bit length"));
+            }
+            length = u16::from_be_bytes([bytes[2], bytes[3]]) as u64;
+            // RFC 6455 §5.2: extended length encodings MUST use the shortest form (#1642).
+            if length < 126 {
+                return Err(protocol("non-minimal 16-bit length"));
+            }
+            offset = 4;
+        }
+        127 => {
+            if bytes.len() < 10 {
+                return Err(protocol("truncated 64-bit length"));
+            }
+            let mut array = [0u8; 8];
+            array.copy_from_slice(&bytes[2..10]);
+            length = u64::from_be_bytes(array);
+            if length <= u16::MAX as u64 {
+                return Err(protocol("non-minimal 64-bit length"));
+            }
+            offset = 10;
+        }
+        _ => {}
+    }
+    if !fin && !opcode.is_data() {
+        return Err(protocol("fragmented control frame"));
+    }
+    // #1630: a Close frame carries either no payload or a 2-byte status code.
+    // #1631: validate the incoming code — reserved codes (1005/1006/1015, ...) are illegal on
+    // the wire and must not propagate to callers as legitimate.
+    if opcode == Opcode::Close {
+        if length != 0 && length != 2 {
+            return Err(protocol("Close frame payload must be 0 or 2 bytes"));
+        }
+        if length == 2 {
+            let code = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]);
+            if !close_code::is_valid_outgoing(code) {
+                return Err(protocol("reserved WebSocket close code from peer"));
+            }
+        }
+    }
+    if opcode.is_data() && length > max_payload as u64 {
+        return Err(protocol("frame payload exceeds cap"));
+    }
+    if !opcode.is_data() && length > 125 {
+        return Err(protocol("control frame too large"));
+    }
+    let end = offset
+        .checked_add(length as usize)
+        .ok_or_else(|| protocol("frame length overflow"))?;
+    if bytes.len() < end {
+        return Err(protocol("truncated frame payload"));
+    }
+    // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. Binary and
+    // continuation frames may carry arbitrary bytes (fragmented reassembly is separate).
+    if opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
+        return Err(protocol("text frame payload is not valid UTF-8"));
+    }
+    Ok(DecodedFrame {
+        frame: Frame {
+            fin,
+            opcode,
+            masked: false,
+            payload: bytes[offset..end].to_vec(),
+        },
+        consumed: end,
+    })
+}
+
+/// Total bytes needed for the frame at the start of `bytes`, or `None` if the header itself is
+/// incomplete. Lets stream decoders stop cleanly at a partial frame.
+fn frame_total_len(bytes: &[u8]) -> Option<usize> {
+    if bytes.len() < 2 {
+        return None;
+    }
+    let mask_bit = bytes[1] & 0x80 != 0; // server frames: false
+    let mut length = (bytes[1] & 0x7F) as usize;
+    let mut offset: usize = 2;
+    match bytes[1] & 0x7F {
+        126 => {
+            if bytes.len() < 4 {
+                return None;
+            }
+            length = u16::from_be_bytes([bytes[2], bytes[3]]) as usize;
+            if length < 126 {
+                return None;
+            } // non-minimal encoding (#1642)
+            offset = 4;
+        }
+        127 => {
+            if bytes.len() < 10 {
+                return None;
+            }
+            let mut array = [0u8; 8];
+            array.copy_from_slice(&bytes[2..10]);
+            let wide = u64::from_be_bytes(array);
+            if wide <= u16::MAX as u64 {
+                return None;
+            } // non-minimal encoding (#1642)
+            // #1643: reject lengths that cannot fit `usize` (e.g. on 32-bit) instead of wrapping.
+            length = usize::try_from(wide).ok()?;
+            offset = 10;
+        }
+        _ => {}
+    }
+    if mask_bit {
+        offset += 4;
+    }
+    offset.checked_add(length)
+}
+
+/// Splits a stream of bytes into all complete frames at its start, returning the remainder.
+pub fn decode_frames(bytes: &[u8], max_payload: usize) -> Result<(Vec<Frame>, &[u8]), FetchError> {
+    let mut frames = Vec::new();
+    let mut rest = bytes;
+    while !rest.is_empty() {
+        let Some(total) = frame_total_len(rest) else {
+            break;
+        }; // partial header
+        if rest.len() < total {
+            break;
+        } // partial payload — wait for more bytes
+        let decoded = decode_frame(rest, max_payload)?;
+        frames.push(decoded.frame);
+        rest = &rest[decoded.consumed..];
+    }
+    Ok((frames, rest))
+}
+
+pub(super) fn protocol(reason: &str) -> FetchError {
+    FetchError::InvalidResponse(format!("websocket: {reason}"))
+}

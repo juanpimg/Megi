@@ -12,9 +12,11 @@ cumplirlas, para y pregunta. Mantén este archivo por debajo de 200 líneas.
 4. No edites artefactos generados: `PROGRESS.md`, `docs/status/*`, `docs/audit/FINDINGS.md`.
 
 ## 2. Vetos absolutos
-- `#![forbid(unsafe_code)]` en los 14 crates. Cero `unsafe`.
+- `#![forbid(unsafe_code)]` en los 17 crates. Cero `unsafe`.
 - Cero `Rc<`, `Rc<RefCell<`, `Weak<` en código nuevo. Usa `NodeId` + arena,
   `Arc<T>` solo para payload inmutable `Send + Sync`, o `mpsc` para mutación.
+  Excepción documentada: el `ContextHost` (`Rc<RefCell<Host>>`) guardado en el
+  `HostDefined` de Boa es el único dueño del estado JS; no es estado TLS ni global.
 - Cero lifetimes propios ('a) en tipos públicos que crucen crates. Préstamos
   cortos dentro de un módulo están bien.
 - Cero dependencias que implementen parseo HTML/CSS, layout o pintado

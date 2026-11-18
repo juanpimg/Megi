@@ -1,0 +1,389 @@
+//! PNG signature, checksums, scanline filters and stream writers.
+
+#[allow(unused_imports)]
+use super::*;
+
+/// The 8-byte PNG magic signature (PNG spec §5.2): `\x89PNG\r\n\x1a\n`.
+pub const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+/// CRC-32 lookup table for the IEEE polynomial, computed at compile time.
+pub(crate) const CRC_TABLE: [u32; 256] = build_crc_table();
+
+/// Builds the CRC-32 (IEEE 802.3) lookup table in a `const` context.
+pub(crate) const fn build_crc_table() -> [u32; 256] {
+    let mut table = [0u32; 256];
+    let mut n = 0usize;
+    while n < 256 {
+        let mut c = n as u32;
+        let mut k = 0u32;
+        while k < 8 {
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
+            k += 1;
+        }
+        table[n] = c;
+        n += 1;
+    }
+    table
+}
+
+/// Feeds one byte into a running CRC-32 register.
+pub(crate) fn crc32_update(mut crc: u32, bytes: &[u8]) -> u32 {
+    for &byte in bytes {
+        let index = ((crc ^ u32::from(byte)) & 0xFF) as usize;
+        crc = CRC_TABLE[index] ^ (crc >> 8);
+    }
+    crc
+}
+
+/// Computes the standardized CRC-32 of `bytes` (as used by PNG chunks).
+pub fn crc32(bytes: &[u8]) -> u32 {
+    crc32_update(0xFFFF_FFFF, bytes) ^ 0xFFFF_FFFF
+}
+
+/// Computes the Adler-32 checksum of `bytes` (RFC 1950 §9).
+pub fn adler32(bytes: &[u8]) -> u32 {
+    const MOD: u32 = 65_521;
+    const CHUNK: usize = 5_552;
+    let mut a = 1u32;
+    let mut b = 0u32;
+    for chunk in bytes.chunks(CHUNK) {
+        let mut tail = chunk;
+        while tail.len() >= 8 {
+            // b += 8*a + 8*b0 + 7*b1 + ... + 1*b7  (adler recurrence over 8
+            // bytes); computed in u64 then reduced per chunk as before.
+            let block: &[u8; 8] = tail[..8].try_into().expect("slice of 8");
+            let sum: u32 = block.iter().map(|&byte| u32::from(byte)).sum();
+            let weighted: u32 = block
+                .iter()
+                .enumerate()
+                .map(|(index, &byte)| (8 - index as u32) * u32::from(byte))
+                .sum();
+            b += 8 * a + weighted;
+            a += sum;
+            tail = &tail[8..];
+        }
+        for &byte in tail {
+            a += u32::from(byte);
+            b += a;
+        }
+        a %= MOD;
+        b %= MOD;
+    }
+    (b << 16) | a
+}
+
+/// Appends a PNG chunk (`length`, `type`, `data`, `CRC`) to `out`.
+pub(crate) fn write_chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    out.extend_from_slice(kind);
+
+    let mut crc = crc32_update(0xFFFF_FFFF, kind);
+    crc = crc32_update(crc, data);
+    crc ^= 0xFFFF_FFFF;
+
+    out.extend_from_slice(data);
+    out.extend_from_slice(&crc.to_be_bytes());
+}
+
+/// PNG `Paeth` predictor (PNG spec §6.6) for one byte position.
+#[inline]
+pub(crate) fn paeth_predictor(left: u8, above: u8, upper_left: u8) -> u8 {
+    let p = i32::from(left) + i32::from(above) - i32::from(upper_left);
+    let pa = (p - i32::from(left)).abs();
+    let pb = (p - i32::from(above)).abs();
+    let pc = (p - i32::from(upper_left)).abs();
+    if pa <= pb && pa <= pc {
+        left
+    } else if pb <= pc {
+        above
+    } else {
+        upper_left
+    }
+}
+
+/// Builds the filtered PNG image data (one filter byte + filtered row per
+/// scanline), choosing the cheapest of the five standard PNG filters per row.
+pub fn filter_scanlines(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || rgba.len() != expected_len {
+        return Vec::new();
+    }
+    let stride = width as usize * 4;
+    let mut filtered = Vec::with_capacity(height as usize * (stride + 1));
+    let mut previous = vec![0u8; stride];
+    for row_index in 0..height as usize {
+        let row = &rgba[row_index * stride..(row_index + 1) * stride];
+        filter_row(row, previous.as_slice(), stride, &mut filtered);
+        previous.copy_from_slice(row);
+    }
+    filtered
+}
+
+/// Encodes a [`Pixmap`](crate::Pixmap)'s pixels directly, avoiding the
+/// intermediate raw-RGBA buffer used by [`encode_rgba`].
+///
+/// The resulting PNG is **byte-identical** to
+/// `encode_rgba(width, height, &pixmap.to_rgba_bytes())`; only the number of
+/// memory passes changes (rows are materialized into a small reusable buffer).
+pub fn encode_pixels(width: u32, height: u32, pixels: &[Color]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || pixels.len() != expected_len {
+        return Vec::new();
+    }
+    let stride = width as usize * 4;
+    ENCODE_SCRATCH.with(|scratch| {
+        let scratch = &mut *scratch.borrow_mut();
+        let EncodeScratch {
+            filtered,
+            row,
+            previous,
+        } = scratch;
+        filtered.clear();
+        filtered.reserve(height as usize * (stride + 1));
+        row.clear();
+        row.resize(stride, 0);
+        previous.clear();
+        previous.resize(stride, 0);
+        for chunk in pixels.chunks(width as usize) {
+            let (row_pixels, _) = row.as_chunks_mut::<4>();
+            for (destination, pixel) in row_pixels.iter_mut().zip(chunk) {
+                *destination = [pixel.r, pixel.g, pixel.b, pixel.a];
+            }
+            filter_row(row, previous.as_slice(), stride, filtered);
+            previous.copy_from_slice(row);
+        }
+        let out = finalize_png(width, height, filtered);
+        const MAX_RETAINED_BYTES: usize = 4 * 1024 * 1024;
+        if filtered.capacity() > MAX_RETAINED_BYTES {
+            *filtered = Vec::new();
+        }
+        if row.capacity() > 64 * 1024 {
+            *row = Vec::new();
+        }
+        if previous.capacity() > 64 * 1024 {
+            *previous = Vec::new();
+        }
+        out
+    })
+}
+
+/// Reusable row/filtered buffers for [`encode_pixels`] (R231).
+#[derive(Default)]
+pub(crate) struct EncodeScratch {
+    filtered: Vec<u8>,
+    row: Vec<u8>,
+    previous: Vec<u8>,
+}
+
+thread_local! {
+    static ENCODE_SCRATCH: RefCell<EncodeScratch> = RefCell::new(EncodeScratch::default());
+}
+
+/// Filters one scanline and appends its filter byte + bytes to `filtered`.
+pub(crate) fn filter_row(row: &[u8], previous: &[u8], stride: usize, filtered: &mut Vec<u8>) {
+    // Fast path: an identical row makes the `Up` filter all-zero. For a
+    // non-zero row the heuristic then chooses `Up` without computing the
+    // remaining candidates (None/Sub have positive cost), and for an all-zero
+    // row `None` already has cost 0 and wins the index tie-break. Both cases
+    // produce exactly the same filter byte as the general path.
+    if row == previous {
+        if row.iter().all(|&byte| byte == 0) {
+            filtered.push(0);
+        } else {
+            filtered.push(2);
+        }
+        filtered.resize(filtered.len() + stride, 0);
+        return;
+    }
+    // Fast path: an all-zero row always wins the tie-break with filter `None` (cost 0,
+    // first in selection order), even when the previous row is not zero. Skipping the
+    // five-candidate score scan is byte-safe: the emitted filter byte is still 0.
+    if row.iter().all(|&byte| byte == 0) {
+        filtered.push(0);
+        filtered.resize(filtered.len() + stride, 0);
+        return;
+    }
+
+    // General path, pass 1: candidate costs in a single scan. Each score is
+    // accumulated with exactly the same per-byte operations and order as the
+    // separate `*_score` helpers, so the chosen filter byte is unchanged; only
+    // the number of scans over the row drops from five to one (R181).
+    let (none_score, sub_score, up_score, average_score, paeth_score) =
+        row_filter_scores(row, previous);
+    let mut best_filter = 0usize;
+    let mut best_score = none_score;
+    for (filter, score) in [
+        (1usize, sub_score),
+        (2, up_score),
+        (3, average_score),
+        (4, paeth_score),
+    ] {
+        if score < best_score {
+            best_score = score;
+            best_filter = filter;
+            if score == 0 {
+                break;
+            }
+        }
+    }
+    let _ = best_score;
+
+    // Pass 2: write the chosen filter byte + filtered row directly.
+    filtered.push(best_filter as u8);
+    let start = filtered.len();
+    filtered.resize(start + stride, 0);
+    apply_filter(best_filter, row, previous, &mut filtered[start..]);
+}
+
+/// Computes the five filter costs for one row in a single scan.
+///
+/// The per-byte contributions (including the first four bytes, where left/upper
+/// neighbours are zero) are identical to the separate score helpers, so the
+/// selected filter and the resulting PNG bytes do not change.
+#[inline]
+pub(crate) fn row_filter_scores(row: &[u8], previous: &[u8]) -> (u64, u64, u64, u64, u64) {
+    // u32 accumulators are enough (a row of 4-byte pixels times 127 is far below
+    // u32::MAX) and the split loops hoist the `x >= 4` left-pixel branch out of the
+    // hot loop (R213; the summed values and therefore the chosen filter are identical).
+    let mut none_score = 0u32;
+    let mut sub_score = 0u32;
+    let mut up_score = 0u32;
+    let mut average_score = 0u32;
+    let mut paeth_score = 0u32;
+    let stride = row.len();
+    let mut x = 0usize;
+    while x < stride.min(4) {
+        let byte = row[x];
+        let above = previous[x];
+        none_score += u32::from((byte as i8).unsigned_abs());
+        sub_score += u32::from((byte as i8).unsigned_abs());
+        up_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        average_score += u32::from((byte.wrapping_sub(above / 2) as i8).unsigned_abs());
+        paeth_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        x += 1;
+    }
+    while x < stride {
+        let byte = row[x];
+        let left = row[x - 4];
+        let above = previous[x];
+        let upper_left = previous[x - 4];
+        none_score += u32::from((byte as i8).unsigned_abs());
+        sub_score += u32::from((byte.wrapping_sub(left) as i8).unsigned_abs());
+        up_score += u32::from((byte.wrapping_sub(above) as i8).unsigned_abs());
+        let average = ((u16::from(left) + u16::from(above)) / 2) as u8;
+        average_score += u32::from((byte.wrapping_sub(average) as i8).unsigned_abs());
+        paeth_score += u32::from(
+            (byte.wrapping_sub(paeth_predictor(left, above, upper_left)) as i8).unsigned_abs(),
+        );
+        x += 1;
+    }
+    (
+        u64::from(none_score),
+        u64::from(sub_score),
+        u64::from(up_score),
+        u64::from(average_score),
+        u64::from(paeth_score),
+    )
+}
+
+/// Writes the filtered bytes of `filter` into `output` (same length as `row`).
+#[inline]
+pub(crate) fn apply_filter(filter: usize, row: &[u8], previous: &[u8], output: &mut [u8]) {
+    let stride = row.len();
+    let first = 4.min(stride);
+    match filter {
+        0 => output.copy_from_slice(row),
+        1 => {
+            output[..first].copy_from_slice(&row[..first]);
+            for x in 4..stride {
+                output[x] = row[x].wrapping_sub(row[x - 4]);
+            }
+        }
+        2 => {
+            for (out, (&byte, &above)) in output.iter_mut().zip(row.iter().zip(previous.iter())) {
+                *out = byte.wrapping_sub(above);
+            }
+        }
+        3 => {
+            for (out, (&byte, &above)) in output
+                .iter_mut()
+                .zip(row.iter().zip(previous.iter()))
+                .take(first)
+            {
+                *out = byte.wrapping_sub(above / 2);
+            }
+            for x in 4..stride {
+                let left = row[x - 4];
+                let above = previous[x];
+                output[x] = row[x].wrapping_sub(((u16::from(left) + u16::from(above)) / 2) as u8);
+            }
+        }
+        _ => {
+            for (out, (&byte, &above)) in output
+                .iter_mut()
+                .zip(row.iter().zip(previous.iter()))
+                .take(first)
+            {
+                *out = byte.wrapping_sub(above);
+            }
+            for x in 4..stride {
+                let left = row[x - 4];
+                let above = previous[x];
+                let upper_left = previous[x - 4];
+                output[x] = row[x].wrapping_sub(paeth_predictor(left, above, upper_left));
+            }
+        }
+    }
+}
+
+/// Encodes raw `rgba` bytes (row-major, 4 bytes per pixel) as a PNG file.
+///
+/// Returns an empty vector when `width`/`height` are zero or when
+/// `rgba.len() != width * height * 4`; the caller is expected to uphold the
+/// pixel-buffer invariants (`Pixmap` always does).
+pub fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return Vec::new();
+    };
+    if width == 0 || height == 0 || rgba.len() != expected_len {
+        return Vec::new();
+    }
+
+    let filtered = filter_scanlines(width, height, rgba);
+    finalize_png(width, height, &filtered)
+}
+
+/// Wraps already-filtered image data into a complete PNG stream.
+pub(crate) fn finalize_png(width: u32, height: u32, filtered: &[u8]) -> Vec<u8> {
+    let compressed = deflate::zlib_compress(filtered);
+    let mut out = Vec::with_capacity(compressed.len() + 128);
+    out.extend_from_slice(&PNG_SIGNATURE);
+
+    // IHDR: width, height, bit depth 8, color type 6 (RGBA), compression 0,
+    // filter 0, interlace 0.
+    let mut ihdr = [0u8; 13];
+    ihdr[0..4].copy_from_slice(&width.to_be_bytes());
+    ihdr[4..8].copy_from_slice(&height.to_be_bytes());
+    ihdr[8] = 8;
+    ihdr[9] = 6;
+    write_chunk(&mut out, b"IHDR", &ihdr);
+
+    write_chunk(&mut out, b"IDAT", &compressed);
+    write_chunk(&mut out, b"IEND", &[]);
+
+    out
+}

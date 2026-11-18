@@ -1,0 +1,245 @@
+use super::common::*;
+
+#[test]
+fn cli_parses_window_and_screenshot_modes() {
+    let window = parse_cli(args(&["data:text/html,<p>x</p>", "--width", "640"]))
+        .expect("window mode parses");
+    assert_eq!(window.mode, LaunchMode::Window);
+    assert_eq!((window.width, window.height), (640, 600));
+    assert!(window.input.starts_with("data:"));
+
+    let shot = parse_cli(args(&[
+        "data:text/html,<p>x</p>",
+        "--screenshot",
+        "/tmp/x.png",
+        "--height",
+        "200",
+        "--title",
+        "Test",
+    ]))
+    .expect("screenshot mode parses");
+    assert_eq!(
+        shot.mode,
+        LaunchMode::Screenshot(PathBuf::from("/tmp/x.png"))
+    );
+    assert_eq!(shot.title, "Test");
+    assert_eq!((shot.width, shot.height), (800, 200));
+}
+
+#[test]
+fn cli_rejects_usage_errors() {
+    assert!(parse_cli(args(&[])).is_err());
+    assert!(parse_cli(args(&["data:,x", "--width", "0"])).is_err());
+    assert!(parse_cli(args(&["data:,x", "--nope"])).is_err());
+    let raw = parse_args(args(&["--help"])).expect("raw args");
+    assert!(raw.help);
+}
+
+#[test]
+fn pixel_conversion_is_0rgb() {
+    let mut pixmap = megi_webview::paint::Pixmap::new(2, 2);
+    pixmap.set_pixel(0, 0, Color::new(0xAB, 0xCD, 0xEF, 0xFF));
+    pixmap.set_pixel(1, 1, Color::WHITE);
+    let frame = pixmap_to_0rgb(&pixmap);
+    assert_eq!(PIXEL_FORMAT, "0RGB");
+    assert_eq!(frame.len(), expected_buffer_len(2, 2).expect("len"));
+    assert_eq!(frame[0], 0x00AB_CDEF);
+    assert_eq!(frame[3], 0x00FF_FFFF);
+}
+
+#[test]
+fn headless_screenshot_of_fixture_writes_a_valid_png() {
+    let path = temp_path("fixture.png");
+    let info = screenshot(&fixture_url(), 320, 200, &path).expect("screenshot");
+    assert_eq!((info.width, info.height), (320, 200));
+    let png = std::fs::read(&info.path).expect("read screenshot");
+    assert_eq!(png.len(), info.png_bytes);
+    assert_eq!(png_dimensions(&png), (320, 200));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn headless_screenshot_is_deterministic() {
+    let first_path = temp_path("det1.png");
+    let second_path = temp_path("det2.png");
+    screenshot(&fixture_url(), 256, 160, &first_path).expect("first");
+    screenshot(&fixture_url(), 256, 160, &second_path).expect("second");
+    let first = std::fs::read(&first_path).expect("read first");
+    let second = std::fs::read(&second_path).expect("read second");
+    assert_eq!(first, second, "two headless renders must be byte-identical");
+    let _ = std::fs::remove_file(&first_path);
+    let _ = std::fs::remove_file(&second_path);
+}
+
+#[test]
+fn headless_screenshot_works_for_data_urls() {
+    let path = temp_path("data.png");
+    let info = screenshot(
+        "data:text/html,<html><body style=\"background:red\"><h1>Hi</h1></body></html>",
+        120,
+        80,
+        &path,
+    )
+    .expect("data URL screenshot");
+    assert_eq!((info.width, info.height), (120, 80));
+    let png = std::fs::read(&info.path).expect("read");
+    assert_eq!(png_dimensions(&png), (120, 80));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn render_errors_are_typed() {
+    let error = render_target("not a url", 100, 100).expect_err("bad URL");
+    assert!(matches!(error, ShellError::Render(_)), "{error:?}");
+
+    let error = render_target("data:text/html,<p>x</p>", 0, 100).expect_err("bad viewport");
+    assert!(matches!(error, ShellError::Render(_)), "{error:?}");
+
+    let base = temp_path("write-error.png");
+    let error = screenshot(&fixture_url(), 100, 100, base.join("nested/missing.png"))
+        .expect_err("unwritable path");
+    assert!(matches!(error, ShellError::Io { .. }), "{error:?}");
+}
+
+#[test]
+fn cli_binary_renders_headless_without_a_display() {
+    let path = temp_path("cli.png");
+    let command = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .arg(fixture_url())
+        .args(["--screenshot", path.to_str().expect("utf-8 path")])
+        .args(["--width", "300", "--height", "180", "--title", "CI"])
+        .output()
+        .expect("run megi CLI");
+    assert!(
+        command.status.success(),
+        "headless CLI failed: {}\n{}",
+        String::from_utf8_lossy(&command.stdout),
+        String::from_utf8_lossy(&command.stderr)
+    );
+    let png = std::fs::read(&path).expect("CLI screenshot exists");
+    assert_eq!(png_dimensions(&png), (300, 180));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn cli_help_exits_successfully() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .arg("--help")
+        .output()
+        .expect("run megi --help");
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("usage: megi"));
+}
+
+#[test]
+fn scroll_state_is_clamped_and_usable() {
+    let mut state = ScrollState::new(1200, 400);
+    assert_eq!(state.max_offset(), 800);
+    assert!(state.page_down());
+    assert_eq!(state.offset(), 360);
+    assert!(state.end());
+    assert_eq!((state.offset(), state.percent()), (800, 100));
+    assert!(state.home());
+    assert_eq!(state.offset(), 0);
+    assert!(!state.scroll_by(-100), "already at the top");
+    assert_eq!(MAX_CONTENT_HEIGHT, 8192);
+}
+
+#[test]
+fn viewport_presentation_selects_the_visible_region() {
+    const RED: u32 = 0x00FF_0000;
+    const GREEN: u32 = 0x0000_FF00;
+    const BLUE: u32 = 0x0000_00FF;
+    let frame = vec![RED, RED, GREEN, GREEN, BLUE, BLUE];
+    assert_eq!(
+        viewport_slice(&frame, 2, 3, 1, 2, 2),
+        vec![GREEN, GREEN, BLUE, BLUE]
+    );
+    let mut dest = vec![0u32; 4];
+    assert!(present_region(Some((&frame, 2, 3)), 1, 2, &mut dest, 2, 2));
+    assert_eq!(dest, vec![GREEN, GREEN, BLUE, BLUE]);
+}
+
+#[test]
+fn hidpi_metrics_convert_between_physical_and_css_pixels() {
+    let metrics = window_metrics(1600, 1200, 2.0);
+    assert_eq!((metrics.css_width, metrics.css_height), (800, 600));
+    assert_eq!(logical_to_physical(800, 2.0), 1600);
+    assert_eq!(physical_to_logical(1600, 2.0), 800);
+    // Invalid scale factors fall back to 1.0 instead of panicking.
+    assert_eq!(window_metrics(320, 200, f64::NAN).css_width, 320);
+}
+
+#[test]
+fn worker_channel_applies_only_the_latest_generation() {
+    let (sender, receiver, handle) = spawn_worker(
+        |request: &RenderRequest| {
+            Ok(megi_browser::RenderFrame {
+                generation: request.generation,
+                width: 1,
+                height: 1,
+                pixels: vec![0x00FF_FFFF],
+                png_bytes: vec![0x89, b'P', b'N', b'G'],
+                content_height: 1,
+                capped: false,
+                links: Vec::new(),
+                images: Vec::new(),
+                title: None,
+                document_url: "data:,x".to_string(),
+                scripts_executed: 0,
+                script_timers_pending: 0,
+                warnings: 0,
+                script_errors: 0,
+                forms: Vec::new(),
+                document: std::sync::Arc::new(megi_webview::core::Document::new()),
+                find_matches: Vec::new(),
+                find_rects: Vec::new(),
+            })
+        },
+        || {},
+    );
+    let mut store = FrameStore::new();
+    let first = store.begin_request("data:,x", 10, 10);
+    sender.send(first).expect("send first");
+    let message = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("first message");
+    assert!(store.accept(message));
+
+    let second = store.begin_request("data:,y", 20, 20);
+    sender.send(second).expect("send second");
+    let stale = WorkerMessage::Frame(megi_browser::RenderFrame {
+        generation: 1,
+        width: 1,
+        height: 1,
+        pixels: vec![0],
+        png_bytes: vec![0x89, b'P', b'N', b'G'],
+        content_height: 1,
+        capped: false,
+        links: Vec::new(),
+        images: Vec::new(),
+        title: None,
+        document_url: "data:,x".to_string(),
+        scripts_executed: 0,
+        script_timers_pending: 0,
+        warnings: 0,
+        script_errors: 0,
+        forms: Vec::new(),
+        document: std::sync::Arc::new(megi_webview::core::Document::new()),
+        find_matches: Vec::new(),
+        find_rects: Vec::new(),
+    });
+    assert!(!store.accept(stale), "stale generation must be dropped");
+    let message = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("second message");
+    assert!(store.accept(message));
+    assert_eq!(store.frame().map(|frame| frame.generation), Some(2));
+
+    let mut debounce = Debounce::new(std::time::Duration::from_millis(100));
+    let deadline = debounce.schedule(std::time::Instant::now());
+    assert!(debounce.take_due(deadline));
+
+    drop(sender);
+    handle.join().expect("worker join");
+}

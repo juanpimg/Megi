@@ -13,7 +13,21 @@ use std::sync::Arc;
 use megi_js::JsRuntime;
 use megi_js::host::ViewportInfo;
 
-const EVENTS_SRC: &str = include_str!("../src/events.rs");
+// The events bindings live in the `events` module; after the mechanical split the
+// facade is thin and the bindings are spread across its submodules, so the guard
+// must scan the whole module to keep checking the same property.
+const EVENTS_SRC: &str = concat!(
+    include_str!("../src/events.rs"),
+    include_str!("../src/events/core.rs"),
+    include_str!("../src/events/install.rs"),
+    include_str!("../src/events/inline.rs"),
+    include_str!("../src/events/event.rs"),
+    include_str!("../src/events/listeners.rs"),
+    include_str!("../src/events/dispatch.rs"),
+    include_str!("../src/events/window.rs"),
+    include_str!("../src/events/computed_style.rs"),
+    include_str!("../src/events/timers.rs"),
+);
 
 #[test]
 fn events_module_borrows_host_from_context_not_tls() {
