@@ -108,7 +108,8 @@
     "crates/js/src/runtime.rs:9347": "fn new(runtime: JsRuntime, outbox: Rc<RefCell<VecDeque<String>>>) -> Self {",
     "crates/js/src/runtime.rs:9891": "host: Rc<RefCell<Option<Rc<RefCell<Host>>>>>,",
     "crates/js/src/runtime.rs:9899": "self: Rc<Self>,",
-    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,"
+    "crates/js/src/runtime.rs:10012": "self: Rc<Self>,",
+    "crates/js/src/host.rs:992": "interim spec-mandated Rc in Context bridge; removed in Task 5"
   },
   "edges": {
     "core": [],

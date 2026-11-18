@@ -6,7 +6,7 @@
 
 **Architecture:** Three independent designs were debated by subagents (field-level cells, command parking, Boa `HostDefined`). The chosen design uses Boa `HostDefined` as the single owner of `Host`; bindings borrow it from the `&mut Context` they already receive, so the compiler prevents holding a borrow across re-entrant JS calls. Domain splitting (`EventState`, `ObserverState`) and immutable `Arc` providers handle the few cases that genuinely need re-entry.
 
-**Tech Stack:** Rust Edition 2024, `boa_engine` 0.22 (`Context::insert_data`, `HostDefined::get_mut`), `std::cell::RefCell`/`RefMut`, `Arc` for providers, no `unsafe`, no new dependency.
+**Tech Stack:** Rust Edition 2024, `boa_engine` 0.22 (`Context::insert_data`, `Context::get_data`, `HostDefined::get_mut`), `std::cell::RefCell`/`RefMut`, `Arc` for providers, no `unsafe`, no new dependency.
 
 **Spec:** `docs/superpowers/specs/2026-11-18-js-host-bridge-design.md`
 
@@ -39,7 +39,7 @@
 
 **Interfaces:**
 - Consumes: `Host::new(document, url)` (`host.rs:646`).
-- Produces: `install_host(&mut Context, Host)`, `host_cell(&mut Context) -> JsResult<RefMut<'_, Host>>`, `host_ref(&Context) -> JsResult<Ref<'_, Host>>`.
+- Produces: `install_host(&mut Context, Rc<RefCell<Host>>)`, `host_cell(&mut Context) -> JsResult<RefMut<'_, Host>>`, `host_ref(&Context) -> JsResult<Ref<'_, Host>>`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -57,10 +57,10 @@ fn host_is_reachable_from_the_context_and_not_from_tls() {
 }
 ```
 
-`demo_host()` builds `Host::new(Document::new(), "about:blank".into())`. Add a `#[doc(hidden)] pub mod host_for_test` in `lib.rs` re-exporting the three functions only for integration tests.
+`demo_host()` builds the same `Rc<RefCell<Host>>` that the runtime owns. Put this test in `#[cfg(test)] mod tests` inside `host.rs` (the functions are `pub(crate)`; a public test-only module would violate the no-lifetime rule).
 
 - [ ] **Step 2: Run `cargo test -p megi-js --test host_cell`** → FAIL: `install_host` not found.
-- [ ] **Step 3: Implement the three functions in `host.rs` using `Context::insert_data(RefCell::new(host))` and `host_defined_mut().get_mut::<RefCell<Host>>()`.** Call `install_host` in both realm-construction paths (`with_document_realm`, `install_bare_worker_globals`) while keeping the old TLS bridge intact.
+- [ ] **Step 3: Implement the three functions in `host.rs` using `Context::insert_data(RefCell::new(host))` and `host_defined_mut().get_mut::<RefCell<Host>>()`.** Call `install_host` ONCE at `runtime.rs:219` in `with_document_realm`, passing the same `Rc<RefCell<Host>>`. Do NOT install a second Host; `install_bare_worker_globals` receives no Host and cannot call it.
 - [ ] **Step 4: Run the test** → PASS. Run `cargo test -p megi-js` → all existing tests PASS (parallel bridge changes nothing).
 - [ ] **Step 5: Commit** `refactor(js): install host cell in Boa context`.
 
@@ -70,19 +70,19 @@ fn host_is_reachable_from_the_context_and_not_from_tls() {
 **Interfaces:** consumes Task 1's `host_cell`; produces no new API.
 **Scope:** ~60 `with_host` call sites in functions that do **not** call JS/providers.
 
-- [ ] **Step 1: Add a regression test in `tools/test_check_arch.py` named `test_leaf_bindings_no_longer_use_tls_bridge` that reads `crates/js/src/runtime.rs` and asserts `text.count("with_host(") <= 150` (baseline 216). Run `python3 -m unittest tools.test_check_arch -v` → FAIL with the current count.
+- [ ] **Step 1: Add a regression test in `tools/test_check_arch.py` named `test_leaf_bindings_no_longer_use_tls_bridge` that reads `crates/js/src/runtime.rs` and asserts `text.count("with_host(") <= 156` (baseline 216; Task 2 migrates at least 66). Run `python3 -m unittest tools.test_check_arch -v` → FAIL with the current count.
 - [ ] **Step 2: Replace `with_host(|h| …)` with `host_cell(context).map(|mut h| …)` in the named sections only.** Keep imports of `with_host` for the remaining sections.
 - [ ] **Step 3: Run `cargo test -p megi-js` → PASS; `cargo clippy -p megi-js --all-targets -- -D warnings` → PASS.**
 - [ ] **Step 4: Commit** `refactor(js): migrate console/storage/timer bindings to context host cell`.
 
 ### Task 3: Split `EventState` and migrate dispatch
 
-**Files:** `crates/js/src/host.rs` (new `EventState`), `crates/js/src/events.rs` (all 55 `with_host` sites), `crates/js/src/runtime.rs` (dispatch entry points)
+**Files:** `crates/js/src/host.rs` (new `EventState`), `crates/js/src/events.rs` (all 53 `with_host` sites), `crates/js/src/runtime.rs` (dispatch entry points)
 **Interfaces:**
 - Produces: `with_events<R>(context, f) -> JsResult<R>`; `EventState { listeners, free_listener_slots, inline_handlers, dispatch, last_event_error, self_messages, scroll_x, scroll_y }`.
 - `DomState` keeps `document`, `nodes`, `node_index` and all other fields.
 
-- [ ] **Step 1: Add a regression test** in `crates/js/tests/reentrancy.rs`: a listener that dispatches another event and appends a child in the inner listener, then asserts both handlers ran and the DOM has 2 children. Run → PASS today (guard).
+- [ ] **Step 1: Add a compile-time RED assertion** in `tools/test_check_arch.py` requiring `crates/js/src/events.rs` to contain `with_events(` and no `host_cell(context)?.borrow().listeners`; run → FAIL today. The ignored behaviour tests in `crates/js/tests/host_reentrancy_new.rs` are enabled here and must pass.
 - [ ] **Step 2: Move the 7 event fields into `EventState` and add `with_events`.** Migrate `events.rs` dispatch loops: snapshot `Vec<NodeId>` and listener indices, **drop the borrow**, then call JS. Never hold an `EventState` borrow across `callback.call` or `array_*`.
 - [ ] **Step 3: Run `cargo test -p megi-js --test wp_a_events_timers --test event_advanced_tests` → PASS; full JS suite PASS.**
 - [ ] **Step 4: Commit** `refactor(js): split EventState and migrate event dispatch`.
@@ -96,21 +96,20 @@ fn host_is_reachable_from_the_context_and_not_from_tls() {
 
 - [ ] **Step 1: Write two failing tests** in `crates/js/tests/reentrancy.rs`:
   - `provider_can_call_back_into_javascript`: install a computed-style provider that calls `runtime.eval("window.__called = 1")`, trigger `getComputedStyle`, assert `__called == 1`.
-  - `nested_callback_sees_nodes_created_by_outer`: outer listener appends a `<span>`, then dispatches an inner event; inner listener reads `document.body.lastChild.tagName`, expect `SPAN`.
-  Run → FAIL (first with `already borrowed`, second with stale node table if a copy is used).
+  - Enable the already-written ignored test `nested_callback_sees_nodes_created_by_outer` for the same-realm path (the provider probe tests use a short-lived runtime because providers are `'static + Send + Sync`; add a real re-entry handle when the provider API allows it).
 - [ ] **Step 2: Implement `ObserverState`, `HostProviders` and migrate the provider call sites** so providers are cloned from `Arc` and invoked with **no active borrow**.
 - [ ] **Step 3: Run both tests → PASS; full JS suite → PASS.**
 - [ ] **Step 4: Commit** `refactor(js): split ObserverState and move providers out of the borrow`.
 
 ### Task 5: Workers, iframes and the final TLS deletion
 
-**Files:** `crates/js/src/runtime.rs` (~218 remaining `with_host` sites, workers/frames sections, module loader), `crates/js/src/host.rs`, `crates/js/src/events.rs`, `crates/js/src/websocket.rs`, `crates/js/src/xhr.rs`, `crates/js/src/canvas.rs`
+**Files:** `crates/js/src/runtime.rs` (~156 remaining `with_host` sites, workers/frames sections, module loader), `crates/js/src/host.rs`, `crates/js/src/events.rs`, `crates/js/src/websocket.rs`, `crates/js/src/xhr.rs`, `crates/js/src/canvas.rs`
 **Interfaces:** consumes all previous; produces `JsRuntime { context: Context }` with no `host` field.
 
 - [ ] **Step 1: Replace every remaining `with_host(|h| …)` with `host_cell(context).map(...)`.** For helpers without `context`, thread `&mut Context` through; do not add a new TLS.
-- [ ] **Step 2: Convert cross-realm links** (`worker_parent`, `parent_outbox`, `worker_outbox`, `frames`) from `Rc<RefCell<…>>` to owned `VecDeque` outboxes drained by the existing `run_worker_tasks`/pump. Keep nested `JsRuntime`s owning their own `Context`.
+- [ ] **Step 2: Remove `MegiModuleLoader.host_slot` (`runtime.rs:203-219,9890`) by resolving the host from the `&mut Context` passed to `ModuleLoader::load_imported_module`. Then convert cross-realm links** (`worker_parent`, `parent_outbox`, `worker_outbox`, `frames`) from `Rc<RefCell<…>>` to owned `VecDeque` outboxes drained by the existing `run_worker_tasks`/pump. Keep nested `JsRuntime`s owning their own `Context`.
 - [ ] **Step 3: Delete `CURRENT_HOST`, `HostScope`, `current_host`, `with_host`, the `host` field and all `Rc` imports from `crates/js/src`.** Replace residual `borrow_mut()` with `try_borrow_mut()` mapped to a typed `JsError`.
-- [ ] **Step 4: Verify:** `grep -Rn 'CURRENT_HOST\|with_host\|Rc<RefCell<Host>>' crates/js/src` → 0 lines; `grep -Rn 'Rc<' crates/js/src` → 0 lines; `cargo test -p megi-js` → PASS.
+- [ ] **Step 4: Verify:** `grep -Rn 'CURRENT_HOST\|with_host\|Rc<RefCell<Host>>' crates/js/src` → 0 lines. Do NOT require zero `Rc<`: Boa's module loader requires `Rc<Self>` and `Rc<M>`/`Rc<H>` context data. `cargo test -p megi-js` → PASS.
 - [ ] **Step 5: Update `docs/architecture-baseline.json`** to drop the `megi-js` legacy `Rc`/`RefCell` entries; `tools/check_arch.py` → OK with fewer legacy items.
 - [ ] **Step 6: Commit** `refactor(js): delete TLS host bridge and shared Rc state`.
 

@@ -36,7 +36,7 @@ Tres subagentes analizaron el código en paralelo con enfoques distintos:
 
 ```rust
 // crates/js/src/host.rs
-pub(crate) fn install_host(context: &mut Context, host: Host);
+pub(crate) fn install_host(context: &mut Context, host: Rc<RefCell<Host>>); // interim: the SAME Rc owned by JsRuntime
 pub(crate) fn host_cell(context: &mut Context) -> JsResult<RefMut<'_, Host>>;
 pub(crate) fn host_ref(context: &Context) -> JsResult<Ref<'_, Host>>;
 
@@ -49,7 +49,7 @@ pub(crate) fn with_events<R>(context: &mut Context, f: impl FnOnce(&mut EventSta
 pub(crate) fn with_observers<R>(context: &mut Context, f: impl FnOnce(&mut ObserverState) -> R) -> JsResult<R>;
 ```
 
-`JsRuntime` **ya no tiene campo `host`**. El único dueño del estado es su `Context`. Se eliminan `CURRENT_HOST`, `HostScope`, `current_host()` y `with_host()`.
+Durante la migración `JsRuntime` conserva el mismo `Rc<RefCell<Host>>` y el `Context` guarda **ese mismo Rc**; no se crea un segundo `Host`. Al final se elimina el campo `host` y el `Rc` restante. Se eliminan `CURRENT_HOST`, `HostScope`, `current_host()` y `with_host()`.
 
 **Reglas de oro para los bindings:**
 1. Tomar el préstamo al entrar; **soltarlo antes** de `callback.call`, `obj.get/set`, `array_*`, providers o cualquier función que reciba `&mut Context`.
