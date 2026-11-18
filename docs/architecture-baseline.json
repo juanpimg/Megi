@@ -80,7 +80,7 @@
     "crates/raster/src/png.rs": 710,
     "crates/raster/src/deflate.rs": 558,
     "crates/core/src/query.rs": 857,
-    "crates/core/src/tests.rs": 1331
+    "crates/core/src/unit_tests.rs": 1331
   },
   "forbidden_patterns": {
     "crates/js/src/host.rs:490": "pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;",

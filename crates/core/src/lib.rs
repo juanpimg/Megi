@@ -47,7 +47,7 @@
 pub mod iter;
 mod query;
 #[cfg(test)]
-mod tests;
+mod unit_tests;
 
 pub mod geometry;
 
