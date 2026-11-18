@@ -548,9 +548,11 @@ fn protocol(reason: &str) -> FetchError {
     FetchError::InvalidResponse(format!("websocket: {reason}"))
 }
 
-/// Parses a WebSocket URL, rewriting `ws://` to `http://` so the existing URL parser can handle
-/// it. `wss://` is rejected explicitly (this client has no TLS transport yet — it must never
-/// silently downgrade to plaintext). Any other scheme is a typed error.
+/// Parses a WebSocket URL, normalizing it to the HTTP(S) URL the handshake is performed against.
+/// `ws://host/path` becomes `http://host/path` and `wss://host/path` becomes `https://host/path`
+/// (same default port handling), which the handshake uses to resolve the endpoint and `Host`
+/// header while still identifying the scheme as WebSocket at the API boundary. `wss://`
+/// handshakes are performed over TLS and are never downgraded to plaintext.
 pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
     let input = input.trim();
     if let Some(rest) = input.strip_prefix("wss://") {
