@@ -1127,6 +1127,7 @@ fn chrome_geometry_scales_with_the_device_scale() {
         history_menu: None,
         download_status: None,
         history_button: false,
+        ime_preedit: "",
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = shell::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);

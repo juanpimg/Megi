@@ -1559,14 +1559,22 @@ impl WindowApp {
     /// future preedit overlay can render it; the composing bytes never reach the DOM until commit.
     fn handle_ime(&mut self, event: Ime) {
         match event {
-            Ime::Enabled => self.ime.enable(),
+            Ime::Enabled => {
+                self.ime.enable();
+                self.request_repaint();
+            }
             Ime::Disabled => {
                 let _ = self.ime.disable();
+                self.request_repaint();
             }
-            Ime::Preedit(text, _cursor) => self.ime.set_preedit(text),
+            Ime::Preedit(text, _cursor) => {
+                self.ime.set_preedit(text);
+                self.request_repaint();
+            }
             Ime::Commit(text) => {
                 let committed = self.ime.commit(text);
                 if committed.is_empty() {
+                    self.request_repaint();
                     return;
                 }
                 if self.address.is_editing() {
@@ -2479,6 +2487,11 @@ impl WindowApp {
             .iter()
             .map(|title| Some(crate::favicon::Favicon::fallback(title)))
             .collect();
+        let ime_preedit = if chrome_address.is_editing() {
+            self.ime.preedit()
+        } else {
+            ""
+        };
         let view = ChromeView {
             favicons: &favicons,
             tabs: &chrome_titles,
@@ -2499,6 +2512,7 @@ impl WindowApp {
             history_menu: self.history_menu.as_ref(),
             download_status: None,
             history_button: true,
+            ime_preedit,
         };
         let download_status = self.download.status_text();
         let view = ChromeView {
