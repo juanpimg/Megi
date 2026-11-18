@@ -1,5 +1,5 @@
 #![no_main]
-//! Fuzz target: CSS **container queries** (size + style) and cascade layers.
+//! Fuzz target: CSS **container size queries** and cascade layers.
 //!
 //! Drives the CSS parser with `@container`/`@layer` rules and the parsed query evaluator:
 //!
@@ -8,15 +8,13 @@
 //! - `css::container::evaluate` against **input-derived** container sizes, including the
 //!   degenerate values a real page can produce: `0`, negative, `NaN`, `+∞` and values far
 //!   above any viewport. Earlier revisions used five fixed pairs (#710), so the
-//!   comparison/threshold arithmetic never saw those;
-//! - style queries with a `ComputedStyle` carrying input-derived custom properties
-//!   (`--name: value`), because `@container style(--x)` resolves against them.
+//!   comparison/threshold arithmetic never saw those.
+//!
+//! Style/container scroll-state queries are not implemented in `css::container`, so this
+//! target exercises the size-query surface only.
 //!
 //! Everything is bounded by the CSS parser's own depth/count caps; no network, filesystem or
 //! DOM is required. Panics, aborts, ASan/UBSan findings and timeouts are the signals.
-
-use std::collections::HashMap;
-use std::sync::Arc;
 
 use libfuzzer_sys::fuzz_target;
 
@@ -61,26 +59,6 @@ fn candidate_sizes(data: &[u8]) -> Vec<css::container::ContainerSize> {
     sizes
 }
 
-/// A style with two input-derived custom properties, so `@container style(--x: …)` and
-/// `style(--x)` have something to resolve against.
-fn container_style(data: &[u8]) -> css::ComputedStyle {
-    let mut style = css::ComputedStyle::default();
-    let at = |index: usize| -> u8 { data.get(index).copied().unwrap_or(0) };
-    let mut properties = HashMap::new();
-    properties.insert("--fuzz-a".to_string(), at(4).to_string());
-    properties.insert(
-        "--fuzz-b".to_string(),
-        match at(5) % 4 {
-            0 => "0".to_string(),
-            1 => "1px".to_string(),
-            2 => "auto".to_string(),
-            _ => String::new(),
-        },
-    );
-    style.custom_properties = Some(Arc::new(properties));
-    style
-}
-
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
@@ -92,7 +70,7 @@ fuzz_target!(|data: &[u8]| {
     let _ = tokens.len();
 
     let sizes = candidate_sizes(data);
-    let style = container_style(data);
+    let style = css::ComputedStyle::default();
 
     let mut queries = Vec::new();
     if let Some(query) = css::container::parse_query(&text) {
