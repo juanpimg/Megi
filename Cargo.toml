@@ -12,6 +12,7 @@ members = [
     "crates/paint",
     "crates/net",
     "crates/render",
+    "crates/webview",
     "crates/browser",
     "crates/js",
     "crates/svg",
@@ -39,6 +40,7 @@ megi-raster = { path = "crates/raster", version = "0.1.0" }
 megi-paint = { path = "crates/paint", version = "0.1.0" }
 megi-net = { path = "crates/net", version = "0.1.0" }
 megi-render = { path = "crates/render", version = "0.1.0" }
+megi-webview = { path = "crates/webview", version = "0.1.0" }
 megi-browser = { path = "crates/browser", version = "0.1.0" }
 megi-js = { path = "crates/js", version = "0.1.0" }
 megi-svg = { path = "crates/svg", version = "0.1.0" }

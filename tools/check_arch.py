@@ -46,7 +46,8 @@ def allowed_edges() -> dict[str, set[str]]:
             "core", "html", "css", "layout", "fonts", "image",
             "display", "paint", "raster", "net", "js", "svg",
         },
-        "webview": {"core", "display", "net", "render"},
+        # `raster` supplies the owned frame type exposed by the embedding API.
+        "webview": {"core", "display", "net", "render", "raster"},
         "browser": {"webview"},
         "shell": {"webview"},  # pre-rename alias of `browser`
         "test_harness": {"core", "html", "css", "js"},
