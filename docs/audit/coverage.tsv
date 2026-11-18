@@ -28,7 +28,7 @@ LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
 PROGRESS.md	208	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-README.md	170	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+README.md	182	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	231	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/bench/Cargo.toml	26	tool	F4	lead	2026-11-17	covered	bench harness manifest, read in the F4 pass	read in the F3/F4 pass
@@ -115,7 +115,7 @@ crates/html/src/input_stream.rs	225	src	F2	wave1	2026-11-16	covered	#1120-#1125
 crates/html/src/lib.rs	97	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/src/scripting.rs	246	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/src/serializer.rs	688	src	F2	wave1	2026-11-16	covered	#1120-#1125	
-crates/html/src/tokenizer.rs	3576	src	F2	wave1	2026-11-16	covered	#1120-#1125	
+crates/html/src/tokenizer.rs	3602	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/src/tree_builder.rs	5036	src	F2	wave1	2026-11-16	covered	#1120-#1125	
 crates/html/tests/browser_api.rs	312	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
 crates/html/tests/perf.rs	146	test	F1	waveF1	2026-11-17	covered	#1353-#1355,#1361-#1362	
@@ -485,7 +485,7 @@ crates/render/tests/worker_tests.rs	50	test	F1	waveF1	2026-11-17	covered	#1386,#
 crates/shell/Cargo.toml	26	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/shell/src/a11y.rs	527	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/chrome.rs	3187	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/cli.rs	771	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/cli.rs	808	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/convert.rs	92	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/download.rs	735	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/error.rs	42	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -498,11 +498,11 @@ crates/shell/src/i18n.rs	214	src	F2	wave2	2026-11-18	covered	#1618-#1691	Wave 2 
 crates/shell/src/images.rs	119	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/lib.rs	274	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/links.rs	491	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/main.rs	203	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/main.rs	210	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/navigation.rs	391	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/pages.rs	625	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/present.rs	255	src	F2	wave1	2026-11-16	covered	#1163-#1178	
-crates/shell/src/reader.rs	233	src	F2	wave1	2026-11-16	covered	#1163-#1178	
+crates/shell/src/reader.rs	316	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/refresh.rs	206	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/scale.rs	173	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/scroll.rs	249	src	F2	wave1	2026-11-16	covered	#1163-#1178	
@@ -513,7 +513,7 @@ crates/shell/src/window.rs	3200	src	F2	wave1	2026-11-16	covered	#1163-#1178
 crates/shell/src/worker.rs	1121	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/src/zoom.rs	268	src	F2	wave1	2026-11-16	covered	#1163-#1178	
 crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#1379	
-crates/shell/tests/shell_tests.rs	1694	test	F1	waveF1	2026-11-17	covered	#1379	
+crates/shell/tests/shell_tests.rs	1752	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
 crates/svg/src/color.rs	392	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
