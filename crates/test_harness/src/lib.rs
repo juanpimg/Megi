@@ -38,11 +38,49 @@ pub const TOKENIZER_FIXTURE_ERROR_ANNOTATIONS: usize = 2769;
 /// Expected annotation count expanded per `initialStates` run (the same case annotations are
 /// checked once per initial state), i.e. what the error gate compares.
 pub const TOKENIZER_ERROR_ANNOTATIONS: usize = 2779;
-/// Suites where html5lib-tests emits otherwise-identical parse errors in a different order than
-/// Megi (input-stream errors interleaved with tokenizer errors). The annotation multisets and the
-/// `(code, line, col)` values still match exactly; only the sequence order differs.
-pub const KNOWN_TOKENIZER_ERROR_ORDER_GAPS: &[(&str, usize)] =
-    &[("test3.test", 34), ("test4.test", 3)];
+/// `(suite, case index, initial state)` runs where html5lib-tests emits otherwise-identical parse
+/// errors in a different order than Megi (input-stream errors interleaved with tokenizer errors).
+/// The annotation multisets and the `(code, line, col)` values still match exactly; only the
+/// sequence order differs.
+pub const KNOWN_TOKENIZER_ERROR_ORDER_GAPS: &[(&str, usize, &str)] = &[
+    ("test3.test", 369, "Data state"),
+    ("test3.test", 406, "Data state"),
+    ("test3.test", 414, "Data state"),
+    ("test3.test", 417, "Data state"),
+    ("test3.test", 420, "Data state"),
+    ("test3.test", 514, "Data state"),
+    ("test3.test", 549, "Data state"),
+    ("test3.test", 557, "Data state"),
+    ("test3.test", 560, "Data state"),
+    ("test3.test", 563, "Data state"),
+    ("test3.test", 643, "Data state"),
+    ("test3.test", 728, "Data state"),
+    ("test3.test", 731, "Data state"),
+    ("test3.test", 734, "Data state"),
+    ("test3.test", 737, "Data state"),
+    ("test3.test", 740, "Data state"),
+    ("test3.test", 743, "Data state"),
+    ("test3.test", 763, "Data state"),
+    ("test3.test", 766, "Data state"),
+    ("test3.test", 769, "Data state"),
+    ("test3.test", 776, "Data state"),
+    ("test3.test", 811, "Data state"),
+    ("test3.test", 819, "Data state"),
+    ("test3.test", 822, "Data state"),
+    ("test3.test", 825, "Data state"),
+    ("test3.test", 900, "Data state"),
+    ("test3.test", 903, "Data state"),
+    ("test3.test", 906, "Data state"),
+    ("test3.test", 913, "Data state"),
+    ("test3.test", 948, "Data state"),
+    ("test3.test", 956, "Data state"),
+    ("test3.test", 959, "Data state"),
+    ("test3.test", 962, "Data state"),
+    ("test3.test", 1040, "Data state"),
+    ("test4.test", 59, "Data state"),
+    ("test4.test", 60, "Data state"),
+    ("test4.test", 61, "Data state"),
+];
 /// `xmlViolation.test` declares no parse-error annotations (it only asserts coerced tokens).
 /// Megi still legitimately reports one input-stream error while tokenizing its U+FFFF input
 /// (`noncharacter-in-input-stream`); it is documented and asserted instead of silently ignored.

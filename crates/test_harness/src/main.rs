@@ -7,7 +7,8 @@
 //!
 //! Tokenizer runs also gate the 2,769 parse-error annotations declared by the fixtures (expanded to
 //! 2,779 `(case, initial state)` checks): every `(code, line, col)` must match, modulo 37 documented
-//! order-only differences and the one documented unannotated `xmlViolation.test` input-stream error.
+//! order-only differences pinned by `(suite, index, initial state)` and the one documented
+//! unannotated `xmlViolation.test` input-stream error.
 //!
 //! `--strict` treats even the documented known failures (the tokenizer error-order differences
 //! and the `xmlViolation.test` unannotated error) as gate failures. The tree-construction gate
@@ -112,12 +113,24 @@ fn main() {
         let mut suite_actual_errors = 0usize;
         let mut suite_multiset_mismatches = 0usize;
         let mut suite_order_gaps = 0usize;
+        let mut unexpected_order_gaps = Vec::new();
         for run in &runs {
             suite_expected_errors += run.expected_errors.len();
             suite_actual_errors += run.actual_errors.len();
             if run.errors_passed {
                 if !run.errors_in_order {
                     suite_order_gaps += 1;
+                    let is_documented =
+                        KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+                            .iter()
+                            .any(|(suite, index, state)| {
+                                *suite == fname
+                                    && *index == run.index
+                                    && *state == run.initial_state.as_str()
+                            });
+                    if !is_documented {
+                        unexpected_order_gaps.push((run.index, run.initial_state.clone()));
+                    }
                 }
             } else {
                 suite_multiset_mismatches += 1;
@@ -139,12 +152,28 @@ fn main() {
                      that differ (code/line/col multiset)"
                 ));
             }
-            let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, fname);
-            if suite_order_gaps != allowed_order_gaps {
+            let documented_order_gaps = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+                .iter()
+                .filter(|(suite, _, _)| *suite == fname)
+                .count();
+            if suite_order_gaps != documented_order_gaps || !unexpected_order_gaps.is_empty() {
                 gate_failed = true;
                 unknown_failures.push(format!(
                     "tokenizer {fname}: {suite_order_gaps} parse-error order-only difference(s) \
-                     (documented allowlist: {allowed_order_gaps})"
+                     (documented allowlist: {documented_order_gaps}){}",
+                    if unexpected_order_gaps.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "; unexpected (up to 10): {}",
+                            unexpected_order_gaps
+                                .iter()
+                                .take(10)
+                                .map(|(idx, state)| format!("#{idx} [{state}]"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
                 ));
             }
         }
@@ -461,8 +490,8 @@ fn main() {
         }
     );
     println!(
-        "  tokenizer errors: order-only {:?}, xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
-        KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+        "  tokenizer errors: order-only {} documented run(s), xmlViolation unannotated: {XML_VIOLATION_UNANNOTATED_ERRORS}",
+        KNOWN_TOKENIZER_ERROR_ORDER_GAPS.len()
     );
     println!(
         "  tree:      {}",

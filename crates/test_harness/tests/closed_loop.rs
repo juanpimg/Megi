@@ -11,7 +11,7 @@
 //! 3. All 14 tokenizer suites run: 7,050/7,050 state-runs, including `xmlViolation.test` 4/4 with
 //!    the WHATWG HTML §13.2.9 XML-infoset coercion enabled.
 //! 4. All 2,769 fixture parse-error annotations (2,779 run-level checks) match `(code, line, col)`;
-//!    only 37 documented order-only differences remain.
+//!    only 37 documented order-only differences remain, pinned by `(suite, index, initial state)`.
 //! 5. All 62 tree-construction suites run: **3,904/3,904** mode-runs. The four `#script-on`
 //!    `scripted_*` suites execute parser-inserted scripts (WP-6.4) through the JS executor
 //!    installed by `test_harness::tree_harness`; there are no known tree failures.
@@ -223,8 +223,9 @@ fn test_closed_loop_tokenizer_all_14_files_exact_gate() {
 /// Every fixture case declares `errors: [{code, line, col}]` (2,769 annotations, checked once per
 /// initial state => 2,779 run-level expectations). The comparison is:
 /// - exact `(code, line, col)` multisets for every run (position encoding included);
-/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` suites,
-///   where html5lib-tests interleaves input-stream and tokenizer errors differently;
+/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` runs
+///   `(suite, index, initial state)`, where html5lib-tests interleaves input-stream and tokenizer
+///   errors differently;
 /// - `xmlViolation.test` asserts tokens only, but its U+FFFF input still legitimately raises one
 ///   `noncharacter-in-input-stream` error: counted and asserted, never silently dropped.
 #[test]
@@ -257,6 +258,7 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
             .unwrap_or_else(|e| panic!("tokenizer suite {suite_name} failed to run: {e}"));
         let is_xml_violation = suite_name == "xmlViolation.test";
         let mut suite_order_gaps = 0usize;
+        let mut unexpected_order_gaps = Vec::new();
         for run in &results {
             expected_total += run.expected_errors.len();
             actual_total += run.actual_errors.len();
@@ -271,6 +273,17 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
                 }
             } else if !run.errors_in_order {
                 suite_order_gaps += 1;
+                let is_documented =
+                    KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+                        .iter()
+                        .any(|(suite, index, state)| {
+                            *suite == suite_name
+                                && *index == run.index
+                                && *state == run.initial_state.as_str()
+                        });
+                if !is_documented {
+                    unexpected_order_gaps.push((run.index, run.initial_state.clone()));
+                }
             }
         }
 
@@ -281,12 +294,27 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
                 .sum::<usize>();
             continue;
         }
-        let allowed_order_gaps = allowed_failures(KNOWN_TOKENIZER_ERROR_ORDER_GAPS, suite_name);
-        assert_eq!(
-            suite_order_gaps, allowed_order_gaps,
-            "Parse-error ORDER differs in {suite_name}: {suite_order_gaps} run(s) emit the same \
-             annotations in a different order, but the documented allowlist for this suite is \
-             {allowed_order_gaps}"
+        let documented_order_gaps = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
+            .iter()
+            .filter(|(suite, _, _)| *suite == suite_name)
+            .count();
+        assert!(
+            unexpected_order_gaps.is_empty() && suite_order_gaps == documented_order_gaps,
+            "Parse-error ORDER differs in {suite_name}: {suite_order_gaps} run(s) differ, \
+             documented allowlist has {documented_order_gaps} run(s){}",
+            if unexpected_order_gaps.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "; unexpected (up to 10): {}",
+                    unexpected_order_gaps
+                        .iter()
+                        .take(10)
+                        .map(|(idx, state)| format!("#{idx} [{state}]"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
         );
         order_gaps_total += suite_order_gaps;
     }
@@ -318,10 +346,7 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes \
          {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s))"
     );
-    let documented_order_gaps: usize = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
-        .iter()
-        .map(|(_, count)| *count)
-        .sum();
+    let documented_order_gaps = KNOWN_TOKENIZER_ERROR_ORDER_GAPS.len();
     assert_eq!(
         order_gaps_total, documented_order_gaps,
         "Total documented parse-error order-only differences changed"
