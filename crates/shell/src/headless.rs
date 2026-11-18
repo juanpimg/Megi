@@ -320,19 +320,23 @@ pub fn save_screenshot(
     path: impl AsRef<Path>,
 ) -> Result<ScreenshotInfo, ShellError> {
     let path = path.as_ref().to_path_buf();
-    let temporary = path.with_file_name(format!(
-        ".{}.tmp",
-        path.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "screenshot".to_string())
-    ));
-    if let Err(error) = std::fs::write(&temporary, &output.png) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(ShellError::Io {
+    let (temporary, mut file) =
+        crate::download::create_new_temp_file(&path).map_err(|error| ShellError::Io {
             path: path.display().to_string(),
             reason: error.to_string(),
-        });
+        })?;
+    {
+        use std::io::Write as _;
+        if let Err(error) = file.write_all(&output.png) {
+            drop(file);
+            let _ = std::fs::remove_file(&temporary);
+            return Err(ShellError::Io {
+                path: path.display().to_string(),
+                reason: error.to_string(),
+            });
+        }
     }
+    drop(file);
     std::fs::rename(&temporary, &path).map_err(|error| {
         let _ = std::fs::remove_file(&temporary);
         ShellError::Io {
@@ -386,19 +390,23 @@ pub fn error_frame(width: u32, height: u32) -> Vec<u32> {
 
 /// Writes raw bytes to a path, mapping I/O errors to [`ShellError::Io`].
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ShellError> {
-    let temporary = path.with_file_name(format!(
-        ".{}.tmp",
-        path.file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "download".to_string())
-    ));
-    if let Err(error) = std::fs::write(&temporary, bytes) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(ShellError::Io {
+    let (temporary, mut file) =
+        crate::download::create_new_temp_file(path).map_err(|error| ShellError::Io {
             path: path.display().to_string(),
             reason: error.to_string(),
-        });
+        })?;
+    {
+        use std::io::Write as _;
+        if let Err(error) = file.write_all(bytes) {
+            drop(file);
+            let _ = std::fs::remove_file(&temporary);
+            return Err(ShellError::Io {
+                path: path.display().to_string(),
+                reason: error.to_string(),
+            });
+        }
     }
+    drop(file);
     std::fs::rename(&temporary, path).map_err(|error| {
         let _ = std::fs::remove_file(&temporary);
         ShellError::Io {
@@ -406,4 +414,41 @@ pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), ShellError> {
             reason: error.to_string(),
         }
     })
+}
+
+#[cfg(test)]
+mod headless_tmp_tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "megi-headless-tmp-{}-{name}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn write_bytes_does_not_follow_symlink_at_predictable_tmp() {
+        // w2-st-1176 RED: symlink at `.<name>.tmp` must not redirect bytes.
+        let dir = temp_dir("symlink");
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let legacy = target.with_file_name(".out.bin.tmp");
+        let outside = dir.join("outside.bin");
+        std::fs::write(&outside, b"secret").expect("write outside");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &legacy).expect("plant symlink");
+        #[cfg(not(unix))]
+        std::fs::write(&legacy, b"attacker-sentinel").expect("plant");
+        let _ = write_bytes(&target, b"new-bytes");
+        let outside_bytes = std::fs::read(&outside).expect("read outside");
+        assert_eq!(
+            outside_bytes, b"secret",
+            "symlink at predictable tmp must not be followed"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
