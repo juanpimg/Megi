@@ -497,3 +497,42 @@ fn worker_deliveries_do_not_consume_the_timer_task_budget() {
     );
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn worker_error_does_not_disclose_local_directory_layout() {
+    // #1646: a failed `new Worker` must not echo the resolved absolute file:// path into the
+    // error delivered to the page (local directory fingerprinting).
+    use std::fs;
+    let dir = std::env::temp_dir().join(format!("megi-worker-leak-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("mkdir");
+    let secret = "directorio_secreto";
+    let page_html = format!(
+        "<!DOCTYPE html><body><script>\
+           var msg = ''; try {{ new Worker('file://{}/{secret}/missing.js'); }} \
+           catch (e) {{ msg = e.message; }} \
+           var p = document.createElement('p'); p.id = 'err'; p.textContent = msg; \
+           document.body.appendChild(p);\
+         </script></body>",
+        dir.display()
+    );
+    let page = dir.join("index.html");
+    fs::write(&page, &page_html).expect("page");
+
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 240).expect("viewport"),
+        scripting: ScriptingMode::Enabled,
+        ..base_options()
+    };
+    let output = render_url(&format!("file://{}", page.display()), &options).expect("render");
+    let err = output
+        .document
+        .get_element_by_id("err")
+        .map(|node| output.document.text_content(node))
+        .unwrap_or_default();
+    assert!(
+        !err.contains(secret) && !err.contains(&dir.display().to_string()),
+        "worker error leaked a local path: {err}"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}

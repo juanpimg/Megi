@@ -298,6 +298,10 @@ impl WebSocketClient {
 
     /// Sends a Close frame with the given status code.
     pub fn close(&mut self, code: u16) -> Result<(), FetchError> {
+        // #1627: reserved close codes (1005/1006/1015, ...) must never reach the wire.
+        if !close_code::is_valid_outgoing(code) {
+            return Err(protocol("reserved WebSocket close code"));
+        }
         let payload = code.to_be_bytes().to_vec();
         self.send(Opcode::Close, &payload)
     }
@@ -410,20 +414,26 @@ pub fn encode_frame(frame: &Frame, key: [u8; 4]) -> Vec<u8> {
     let first = (if frame.fin { 0x80 } else { 0x00 }) | frame.opcode.nibble();
     bytes.push(first);
     let len = frame.payload.len();
-    // MASK bit (0x80) is always set for client frames.
+    // #1637: honor the frame's MASK flag instead of always masking. Server-side frames
+    // (and tests) use masked=false and must carry the raw payload with no masking key.
+    let mask_bit = if frame.masked { 0x80 } else { 0x00 };
     if len < 126 {
-        bytes.push(0x80 | len as u8);
+        bytes.push(mask_bit | len as u8);
     } else if len <= u16::MAX as usize {
-        bytes.push(0x80 | 126);
+        bytes.push(mask_bit | 126);
         bytes.extend_from_slice(&(len as u16).to_be_bytes());
     } else {
-        bytes.push(0x80 | 127);
+        bytes.push(mask_bit | 127);
         bytes.extend_from_slice(&(len as u64).to_be_bytes());
     }
-    bytes.extend_from_slice(&key);
-    let mut masked = frame.payload.clone();
-    mask(&mut masked, key);
-    bytes.extend_from_slice(&masked);
+    if frame.masked {
+        bytes.extend_from_slice(&key);
+        let mut masked = frame.payload.clone();
+        mask(&mut masked, key);
+        bytes.extend_from_slice(&masked);
+    } else {
+        bytes.extend_from_slice(&frame.payload);
+    }
     bytes
 }
 
@@ -441,6 +451,12 @@ pub struct DecodedFrame {
 pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, FetchError> {
     if bytes.len() < 2 {
         return Err(protocol("truncated frame header"));
+    }
+    // #1625: RSV1/2/3 must be zero unless an extension negotiated them (none here).
+    if bytes[0] & 0x70 != 0 {
+        return Err(protocol(
+            "reserved RSV bits set without a negotiated extension",
+        ));
     }
     let fin = bytes[0] & 0x80 != 0;
     let opcode = Opcode::from_nibble(bytes[0] & 0x0F).ok_or_else(|| protocol("reserved opcode"))?;
@@ -478,6 +494,10 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
     }
     if !fin && !opcode.is_data() {
         return Err(protocol("fragmented control frame"));
+    }
+    // #1630: a Close frame carries either no payload or a 2-byte status code.
+    if opcode == Opcode::Close && length != 0 && length != 2 {
+        return Err(protocol("Close frame payload must be 0 or 2 bytes"));
     }
     if opcode.is_data() && length > max_payload as u64 {
         return Err(protocol("frame payload exceeds cap"));
@@ -788,6 +808,56 @@ mod tests {
             decode_frame(&minimal, 1024).expect("valid").frame.payload,
             b"hello"
         );
+    }
+
+    #[test]
+    fn reserved_bits_are_rejected() {
+        // #1625: RSV1/2/3 must be zero when no extension negotiated them.
+        assert!(decode_frame(&[0xC1, 0x00], 1024).is_err(), "RSV1 set");
+        assert!(decode_frame(&[0xA1, 0x00], 1024).is_err(), "RSV2 set");
+        assert!(decode_frame(&[0x91, 0x00], 1024).is_err(), "RSV3 set");
+        assert!(decode_frame(&[0x81, 0x00], 1024).is_ok(), "clean frame");
+    }
+
+    #[test]
+    fn close_payload_must_be_zero_or_at_least_two_bytes() {
+        // #1630: RFC 6455 requires Close to carry either no payload or a 2-byte status code.
+        assert!(
+            decode_frame(&[0x88, 0x01, 0x03], 1024).is_err(),
+            "1-byte close payload"
+        );
+        assert!(
+            decode_frame(&[0x88, 0x00], 1024).is_ok(),
+            "empty close payload"
+        );
+        let valid = [0x88u8, 0x02, 0x03, 0xE8];
+        assert!(decode_frame(&valid, 1024).is_ok(), "2-byte close payload");
+    }
+
+    #[test]
+    fn encode_frame_respects_masked_flag() {
+        // #1637: an unmasked frame must not carry a masking key or XORed payload.
+        let frame = Frame {
+            fin: true,
+            opcode: Opcode::Text,
+            masked: false,
+            payload: b"hi".to_vec(),
+        };
+        let encoded = encode_frame(&frame, [1, 2, 3, 4]);
+        assert_eq!(
+            encoded,
+            vec![0x81, 0x02, b'h', b'i'],
+            "unmasked encoding: {encoded:?}"
+        );
+    }
+
+    #[test]
+    fn close_code_validation_is_exposed() {
+        // #1627: reserved close codes must never be sent on the wire.
+        assert!(close_code::is_valid_outgoing(close_code::NORMAL));
+        assert!(!close_code::is_valid_outgoing(1005));
+        assert!(!close_code::is_valid_outgoing(1006));
+        assert!(!close_code::is_valid_outgoing(1015));
     }
 
     #[test]

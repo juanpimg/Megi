@@ -1348,7 +1348,7 @@ fn build_document_object(context: &mut Context) -> JsObject {
             1usize,
             document_write as fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
         ),
-        ("writeln", 1, document_write),
+        ("writeln", 1, document_writeln),
         ("getElementById", 1, document_get_element_by_id),
         ("getElementsByTagName", 1, document_get_elements_by_tag_name),
         (
@@ -3475,6 +3475,18 @@ fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -> bool {
     true
 }
 
+/// `document.writeln` is `write` plus a trailing newline (#1620).
+fn document_writeln(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let text = arg_string(args, 0, context)?;
+    let with_newline = format!("{text}\n");
+    let mut new_args = args.to_vec();
+    if new_args.is_empty() {
+        new_args.push(JsValue::undefined());
+    }
+    new_args[0] = JsValue::from(js_string!(with_newline));
+    document_write(this, &new_args, context)
+}
+
 fn document_write(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     const MAX_DOCUMENT_WRITE_INPUT: usize = 16 * 1024 * 1024;
     let text = arg_string(args, 0, context)?;
@@ -3819,7 +3831,32 @@ fn document_title_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let title = arg_string(args, 0, context)?;
-    with_host(|host| host.title = title);
+    with_host(|host| {
+        host.title = title.clone();
+        // #1645: the window/tab title is composed from the DOM <title> element. Update (or
+        // create) it so the assignment has an observable effect beyond the internal field.
+        let existing = host
+            .document
+            .get_elements_by_tag_name("title")
+            .into_iter()
+            .next();
+        if let Some(node) = existing {
+            let _ = host.document.set_text_content(node, &title);
+        } else {
+            let title_node = host
+                .document
+                .create_element(Namespace::Html, "title", Vec::new());
+            let text_node = host.document.create_text_node(&title);
+            host.document.append_child(title_node, text_node);
+            let parent = host
+                .document
+                .head()
+                .or_else(|| host.document.document_element());
+            if let Some(parent) = parent {
+                host.document.append_child(parent, title_node);
+            }
+        }
+    });
     Ok(JsValue::undefined())
 }
 
@@ -7599,119 +7636,6 @@ fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     });
   });
 
-  // XMLHttpRequest subset (#1532) implemented over fetch()/the host fetch provider.
-  // Async only (`async === false` is rejected by open()); events use a small per-instance
-  // listener table plus the on* handler properties, and are dispatched by name.
-  function XMLHttpRequest() {
-    this.readyState = 0; // UNSENT
-    this.status = 0;
-    this.statusText = "";
-    this.responseText = "";
-    this.response = null;
-    this.responseType = "";
-    this.responseURL = "";
-    this.timeout = 0;
-    this.withCredentials = false;
-    this.onreadystatechange = null;
-    this.onload = null;
-    this.onerror = null;
-    this.onabort = null;
-    this._listeners = {};
-    this._method = "GET";
-    this._url = "";
-    this._headers = [];
-    this._aborted = false;
-    var self = this;
-    this.addEventListener = function (type, fn) {
-      if (typeof fn !== "function") { return; }
-      if (!self._listeners[type]) { self._listeners[type] = []; }
-      if (self._listeners[type].length < 64) { self._listeners[type].push(fn); }
-    };
-    this.removeEventListener = function (type, fn) {
-      var list = self._listeners[type] || [];
-      self._listeners[type] = list.filter(function (f) { return f !== fn; });
-    };
-    this._fire = function (type) {
-      var event = { type: type, target: self };
-      var handler = self["on" + type];
-      if (typeof handler === "function") { try { handler(event); } catch (e) {} }
-      var list = (self._listeners[type] || []).slice();
-      for (var i = 0; i < list.length; i++) { try { list[i](event); } catch (e) {} }
-    };
-    this._changeState = function (state) {
-      self.readyState = state;
-      self._fire("readystatechange");
-    };
-    this.open = function (method, url, async) {
-      if (async === false) { throw new TypeError("synchronous XMLHttpRequest is not supported"); }
-      var m = String(method).toUpperCase();
-      if (["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"].indexOf(m) < 0) {
-        throw new TypeError("unsupported XMLHttpRequest method: " + String(method));
-      }
-      self._aborted = false;
-      self._method = m;
-      self._url = String(url);
-      self._headers = [];
-      self.status = 0;
-      self.statusText = "";
-      self.responseText = "";
-      self.response = null;
-      self._changeState(1); // OPENED
-    };
-    this.setRequestHeader = function (name, value) {
-      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
-      self._headers.push([headerName(name), headerValue(value)]);
-    };
-    this.overrideMimeType = function () {};
-    this.abort = function () {
-      if (self.readyState === 0 || self.readyState === 4) { return; }
-      self._aborted = true;
-      self.status = 0;
-      self.readyState = 0;
-      self._fire("abort");
-    };
-    this.send = function (body) {
-      if (self.readyState !== 1) { throw new Error("InvalidStateError"); }
-      var init = { method: self._method, headers: self._headers };
-      if (body !== undefined && body !== null && self._method !== "GET" && self._method !== "HEAD") {
-        init.body = body;
-      }
-      fetch(self._url, init).then(function (response) {
-        if (self._aborted) { return; }
-        self.status = response.status;
-        self.statusText = response.statusText || "";
-        self.responseURL = response.url || self._url;
-        return response.arrayBuffer().then(function (buffer) {
-          if (self._aborted) { return; }
-          if (self.responseType === "arraybuffer") { self.response = buffer; }
-          else {
-            var bytes = new Uint8Array(buffer);
-            var text = "";
-            for (var i = 0; i < bytes.length; i++) { text += String.fromCharCode(bytes[i]); }
-            self.responseText = text;
-            if (self.responseType === "json") {
-              try { self.response = JSON.parse(text); } catch (e) { self.response = null; }
-            } else if (self.responseType === "text" || self.responseType === "") {
-              self.response = text;
-            } else { self.response = text; }
-          }
-          self._changeState(4); // DONE
-          self._fire("load");
-        });
-      }).catch(function () {
-        if (self._aborted) { return; }
-        self.status = 0;
-        self._changeState(4);
-        self._fire("error");
-      });
-    };
-  }
-  XMLHttpRequest.UNSENT = 0;
-  XMLHttpRequest.OPENED = 1;
-  XMLHttpRequest.HEADERS_RECEIVED = 2;
-  XMLHttpRequest.LOADING = 3;
-  XMLHttpRequest.DONE = 4;
-  define("XMLHttpRequest", XMLHttpRequest);
 
   // Intl.NumberFormat subset (#1523): locale-aware decimal formatting with grouping and
   // configurable fraction digits. Uses small per-locale separator tables (no ICU dependency);

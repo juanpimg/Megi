@@ -459,6 +459,13 @@ fn event_constructor(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    // #1621: the type argument is required; `undefined` must not be coerced to "undefined".
+    if args
+        .first()
+        .is_none_or(|value| value.is_undefined() || value.is_null())
+    {
+        return Err(js_error("1 argument required, but only 0 present"));
+    }
     let event_type = arg_string(args, 0, context)?;
     let options = args.get(1).and_then(|value| value.as_object());
     let bubbles = options
@@ -505,7 +512,22 @@ fn custom_event_constructor(
                 .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
-    Ok(build_event(context, &event_type, bubbles, true, detail))
+    // #1619: CustomEventInit.cancelable defaults to false (DOM spec).
+    let cancelable = options
+        .as_ref()
+        .and_then(|options| {
+            prop(options, "cancelable", context)
+                .ok()
+                .map(|v| v.to_boolean())
+        })
+        .unwrap_or(false);
+    Ok(build_event(
+        context,
+        &event_type,
+        bubbles,
+        cancelable,
+        detail,
+    ))
 }
 
 fn build_message_event(
@@ -1667,10 +1689,13 @@ fn schedule_timer(
         // frame budget so render's deterministic event loop can pump it.
         16
     } else {
-        args.get(1)
-            .and_then(JsValue::as_number)
-            .unwrap_or(0.0)
-            .max(0.0) as u64
+        // #1622: apply the ECMAScript ToNumber coercion (setTimeout's delay is `long`, so a
+        // numeric string like "100" must schedule 100ms, not fall back to an immediate 0ms).
+        let raw = args
+            .get(1)
+            .map(|value| value.to_number(context).unwrap_or(f64::NAN))
+            .unwrap_or(0.0);
+        (if raw.is_finite() { raw.max(0.0) } else { 0.0 }) as u64
     };
     let id = with_host(|host| {
         if host.timers.len() >= MAX_PENDING_TIMERS {

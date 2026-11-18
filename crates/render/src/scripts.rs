@@ -776,22 +776,24 @@ fn load_worker_source(
     allow_file: bool,
     max_bytes: usize,
 ) -> Result<String, js::JsError> {
+    // #1646: never echo the resolved absolute file:// URL into an error delivered to page
+    // scripts — it discloses the local directory layout. Report only a coarse category.
     let parsed = Url::parse(url)
-        .map_err(|error| js::JsError::Runtime(format!("worker script URL {url}: {error}")))?;
+        .map_err(|_| js::JsError::Runtime("worker script URL is invalid".to_owned()))?;
     if parsed.scheme() != Scheme::File {
-        return Err(js::JsError::Runtime(format!(
-            "worker scripts only support file:// in render: {url}"
-        )));
+        return Err(js::JsError::Runtime(
+            "worker scripts only support file:// in render".to_owned(),
+        ));
     }
     if !allow_file {
-        return Err(js::JsError::Runtime(format!(
-            "worker script {url}: local file access is blocked for this document"
-        )));
+        return Err(js::JsError::Runtime(
+            "worker script: local file access is blocked for this document".to_owned(),
+        ));
     }
     let bytes = net::load_file_url_with_limit(&parsed, max_bytes)
-        .map_err(|error| js::JsError::Runtime(format!("worker script {url}: {error}")))?;
+        .map_err(|_| js::JsError::Runtime("worker script: cannot load".to_owned()))?;
     String::from_utf8(bytes)
-        .map_err(|error| js::JsError::Runtime(format!("worker script {url} is not UTF-8: {error}")))
+        .map_err(|_| js::JsError::Runtime("worker script is not UTF-8".to_owned()))
 }
 
 #[cfg(feature = "js")]

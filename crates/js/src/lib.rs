@@ -185,11 +185,11 @@
 //! `MouseEvent`/`PointerEvent` with `relatedTarget`/`pointerId`, `atob`/`btoa`,
 //! `structuredClone` subset (plain objects/arrays/Date/Map/Set; no cycles/transferables).
 //!
-//! Remaining gaps (documented): `getBoundingClientRect`/`offsetWidth`/`offsetHeight`
-//! (need a layout provider; not implemented to avoid fake values), `fetch`/XHR,
-//! `crypto.getRandomValues` (deliberately no real randomness), dataset writes,
-//! `innerText` block layout, `Range`, `URLSearchParams` relative-state sync and
-//! live `NodeList`.
+//! Remaining gaps (documented): `crypto.getRandomValues` (deliberately no real randomness),
+//! `innerText` block layout, `Range`, `URLSearchParams` relative-state sync and live `NodeList`.
+//! `fetch`, `XMLHttpRequest` (with `upload`, `getAllResponseHeaders`, sync-mode rejection),
+//! `WebSocket`, and `getBoundingClientRect`/`offsetWidth`/`offsetHeight` (via the injected
+//! layout provider) are implemented; their limitations are documented in their modules.
 //!
 #[cfg(feature = "js")]
 pub mod canvas;
