@@ -1,0 +1,213 @@
+use super::*;
+
+fn url(raw: &str) -> megi_webview::net::Url {
+    megi_webview::net::Url::parse(raw).expect("test URL parses")
+}
+
+fn region(x: f32, y: f32, width: f32, height: f32, href: &str) -> LinkRegion {
+    LinkRegion {
+        rect: CssRect::new(x, y, width, height),
+        href: href.to_owned(),
+        node: None,
+    }
+}
+
+#[test]
+fn rect_contains_uses_half_open_bounds() {
+    let rect = CssRect::new(10.0, 20.0, 100.0, 30.0);
+    assert!(rect.contains(10.0, 20.0));
+    assert!(rect.contains(109.9, 49.9));
+    assert!(
+        !rect.contains(110.0, 30.0),
+        "right/bottom edges are exclusive"
+    );
+    assert!(!rect.contains(9.9, 20.0));
+    assert_eq!((rect.right(), rect.bottom()), (110.0, 50.0));
+}
+
+#[test]
+fn find_link_at_returns_topmost_region() {
+    let regions = vec![
+        region(0.0, 0.0, 100.0, 100.0, "https://example.com/background"),
+        region(10.0, 10.0, 20.0, 20.0, "https://example.com/foreground"),
+    ];
+    assert_eq!(
+        find_link_at(&regions, 20.0, 20.0).map(|link| link.href.as_str()),
+        Some("https://example.com/foreground")
+    );
+    assert_eq!(
+        find_link_at(&regions, 80.0, 80.0).map(|link| link.href.as_str()),
+        Some("https://example.com/background")
+    );
+    assert!(find_link_at(&regions, 500.0, 500.0).is_none());
+}
+
+#[test]
+fn resolve_relative_absolute_and_fragment_hrefs() {
+    let base = url("https://example.com/docs/page.html");
+    assert_eq!(
+        resolve_href(&base, "other.html").unwrap().as_str(),
+        "https://example.com/docs/other.html"
+    );
+    assert_eq!(
+        resolve_href(&base, "/root.html").unwrap().as_str(),
+        "https://example.com/root.html"
+    );
+    assert_eq!(
+        resolve_href(&base, "  https://other.example/x  ")
+            .unwrap()
+            .as_str(),
+        "https://other.example/x"
+    );
+    assert_eq!(
+        resolve_href(&base, "#section").unwrap().as_str(),
+        "https://example.com/docs/page.html#section"
+    );
+    assert_eq!(
+        resolve_href(&base, "../up.html").unwrap().as_str(),
+        "https://example.com/up.html"
+    );
+}
+
+#[test]
+fn resolve_href_rejects_empty_and_oversized_values() {
+    let base = url("https://example.com/");
+    assert_eq!(resolve_href(&base, ""), Err(LinkError::Empty));
+    assert_eq!(resolve_href(&base, "   "), Err(LinkError::Empty));
+    assert_eq!(
+        resolve_href(&base, &"a".repeat(MAX_HREF_LEN + 1)),
+        Err(LinkError::TooLong)
+    );
+}
+
+#[test]
+fn resolve_href_supports_file_and_data_urls() {
+    let base = url("file:///tmp/page.html");
+    assert_eq!(
+        resolve_href(&base, "other.html").unwrap().as_str(),
+        "file:///tmp/other.html"
+    );
+    let data = resolve_href(&url("https://example.com/"), "data:text/html,x").unwrap();
+    assert!(matches!(data.scheme(), megi_webview::net::Scheme::Data));
+}
+
+#[test]
+fn navigable_schemes_are_limited_to_network_file_and_data() {
+    assert!(is_navigable(&url("http://example.com/")));
+    assert!(is_navigable(&url("https://example.com/")));
+    assert!(is_navigable(&url("file:///tmp/x.html")));
+    assert!(is_navigable(&url("data:text/html,x")));
+    // Non-special schemes are rejected by the URL resolver (`UnsupportedScheme`), so
+    // they can never reach `is_navigable`; the resolver error is documented.
+    let base = url("https://example.com/");
+    assert!(matches!(
+        resolve_href(&base, "mailto:a@example.com"),
+        Err(LinkError::Invalid(
+            megi_webview::net::UrlError::UnsupportedScheme(_)
+        ))
+    ));
+    assert!(matches!(
+        resolve_href(&base, "javascript:alert(1)"),
+        Err(LinkError::Invalid(
+            megi_webview::net::UrlError::UnsupportedScheme(_)
+        ))
+    ));
+}
+
+#[test]
+fn link_url_at_combines_hit_test_and_resolution() {
+    let page = url("https://example.com/docs/page.html");
+    let regions = vec![
+        region(0.0, 0.0, 50.0, 20.0, "next.html"),
+        region(0.0, 40.0, 50.0, 20.0, "mailto:a@example.com"),
+    ];
+    assert_eq!(
+        link_url_at(Some(&page), &regions, 10.0, 10.0)
+            .unwrap()
+            .map(|url| url.as_str()),
+        Some("https://example.com/docs/next.html".to_owned())
+    );
+    assert_eq!(
+        link_url_at(Some(&page), &regions, 10.0, 50.0).unwrap(),
+        None,
+        "non-navigable schemes are a no-op"
+    );
+    assert_eq!(
+        link_url_at(Some(&page), &regions, 500.0, 500.0).unwrap(),
+        None
+    );
+    assert_eq!(
+        link_url_at(None, &regions, 10.0, 10.0).unwrap(),
+        None,
+        "clicking before the first page URL is a no-op"
+    );
+}
+
+#[test]
+fn link_url_at_ignores_unparsable_hrefs() {
+    let page = url("https://example.com/");
+    let regions = vec![region(0.0, 0.0, 10.0, 10.0, "http://[bad")];
+    assert_eq!(
+        link_url_at(Some(&page), &regions, 5.0, 5.0).unwrap(),
+        None,
+        "browser-style no-op for unparsable hrefs"
+    );
+}
+
+#[test]
+fn zoomed_metrics_drive_page_coordinates() {
+    // Exercises the pure mapping with the effective scale (device scale × page zoom).
+    // The window call sites are covered by CI build/tests only; this pins the unit
+    // contract the fix relies on.
+    let metrics = crate::scale::window_metrics_zoomed(800, 600, 1.0, 2.0);
+    assert_eq!((metrics.css_width, metrics.css_height), (400, 300));
+    assert_eq!(
+        physical_to_page(100.0, 100.0, metrics.scale, 0),
+        (50.0, 50.0)
+    );
+}
+
+#[test]
+fn physical_to_page_applies_scale_and_scroll() {
+    assert_eq!(physical_to_page(100.0, 200.0, 2.0, 50), (50.0, 150.0));
+    assert_eq!(physical_to_page(10.0, 10.0, 1.0, 0), (10.0, 10.0));
+    // Degenerate scale factors fall back to 1.0 instead of dividing by zero.
+    assert_eq!(physical_to_page(10.0, 10.0, 0.0, 5), (10.0, 15.0));
+    assert_eq!(physical_to_page(10.0, 10.0, f64::NAN, 0), (10.0, 10.0));
+}
+
+#[test]
+fn collect_link_regions_finds_anchors_in_a_rendered_page() {
+    let output = crate::headless::render_target(
+        "data:text/html,<body><a href=\"next.html\">next page</a><p>text</p></body>",
+        320,
+        120,
+    )
+    .expect("data URL renders");
+    let regions = collect_link_regions(&output);
+    assert_eq!(regions.len(), 1, "regions: {regions:?}");
+    assert_eq!(regions[0].href, "next.html");
+    assert!(regions[0].rect.width > 0.0);
+    assert!(regions[0].rect.height > 0.0);
+    let center_x = regions[0].rect.x + regions[0].rect.width / 2.0;
+    let center_y = regions[0].rect.y + regions[0].rect.height / 2.0;
+    let page =
+        megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+    let resolved = link_url_at(Some(&page), &regions, center_x, center_y)
+        .expect("resolution")
+        .expect("navigable");
+    assert_eq!(resolved.as_str(), "https://example.com/docs/next.html");
+}
+
+#[test]
+fn collect_link_regions_skips_anchors_without_href() {
+    let output = crate::headless::render_target(
+        "data:text/html,<body><a name=\"x\">no href</a><a href=\"%23frag\">frag</a></body>",
+        320,
+        120,
+    )
+    .expect("data URL renders");
+    let regions = collect_link_regions(&output);
+    assert_eq!(regions.len(), 1);
+    assert_eq!(regions[0].href, "#frag");
+}
