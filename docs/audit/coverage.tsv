@@ -316,7 +316,7 @@ crates/net/src/cookies.rs	1174	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284
 crates/net/src/cors.rs	661	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/csp.rs	498	src	F2			pending		
 crates/net/src/data.rs	249	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
-crates/net/src/error.rs	278	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
+crates/net/src/error.rs	281	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/file.rs	161	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/h2/client.rs	1865	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
 crates/net/src/h2/frame.rs	842	src	F2	wave1	2026-11-16	covered	#1252-#1265,#1284-#1298	
