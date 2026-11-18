@@ -637,6 +637,7 @@ fn install_globals(context: &mut Context, host: &Rc<RefCell<Host>>) -> Result<()
     crate::events::install(context)?;
     install_browser_features(context)?;
     install_gap_apis(context)?;
+    crate::xhr::install_xhr(context)?;
     Ok(())
 }
 

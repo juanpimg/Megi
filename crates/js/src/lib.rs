@@ -195,6 +195,8 @@ pub mod host;
 pub mod import_map;
 #[cfg(feature = "js")]
 pub mod runtime;
+#[cfg(feature = "js")]
+pub mod xhr;
 
 pub use error::JsError;
 
