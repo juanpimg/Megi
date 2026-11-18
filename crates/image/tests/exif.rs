@@ -18,22 +18,31 @@ macro_rules! fixture {
     };
 }
 
+fn exif_fixture_bytes(orientation: u8) -> &'static [u8] {
+    match orientation {
+        1 => fixture!("exif_o1.jpg"),
+        2 => fixture!("exif_o2.jpg"),
+        3 => fixture!("exif_o3.jpg"),
+        4 => fixture!("exif_o4.jpg"),
+        5 => fixture!("exif_o5.jpg"),
+        6 => fixture!("exif_o6.jpg"),
+        7 => fixture!("exif_o7.jpg"),
+        8 => fixture!("exif_o8.jpg"),
+        _ => unreachable!(),
+    }
+}
+
+fn corner(image: &image::RgbaImage, x: u32, y: u32) -> [u8; 4] {
+    image
+        .pixel(x, y)
+        .expect("corner must be within decoded image")
+}
+
 #[test]
 fn parses_orientation_tags_from_pil_fixtures() {
     for orientation in 1..=8u8 {
-        let bytes: &[u8] = match orientation {
-            1 => fixture!("exif_o1.jpg"),
-            2 => fixture!("exif_o2.jpg"),
-            3 => fixture!("exif_o3.jpg"),
-            4 => fixture!("exif_o4.jpg"),
-            5 => fixture!("exif_o5.jpg"),
-            6 => fixture!("exif_o6.jpg"),
-            7 => fixture!("exif_o7.jpg"),
-            8 => fixture!("exif_o8.jpg"),
-            _ => unreachable!(),
-        };
         assert_eq!(
-            exif_orientation(bytes),
+            exif_orientation(exif_fixture_bytes(orientation)),
             Some(orientation),
             "tag {orientation}"
         );
@@ -44,6 +53,11 @@ fn parses_orientation_tags_from_pil_fixtures() {
 #[test]
 fn decodes_all_orientations_to_the_same_upright_pixels() {
     let reference = decode(fixture!("exif_o1.jpg")).expect("reference decodes");
+    assert_eq!(
+        (reference.width, reference.height),
+        (12, 8),
+        "reference must be upright 12x8"
+    );
     for orientation in 1..=8u8 {
         let bytes: &[u8] = match orientation {
             1 => fixture!("exif_o1.jpg"),
@@ -73,10 +87,19 @@ fn decodes_all_orientations_to_the_same_upright_pixels() {
             .map(|(a, b)| a.abs_diff(*b))
             .max()
             .unwrap_or(0);
-        assert!(
-            max_delta <= 8,
-            "orientation {orientation}: max delta {max_delta}"
-        );
+        if max_delta > 8 {
+            let tl = corner(&decoded, 0, 0);
+            let tr = corner(&decoded, decoded.width - 1, 0);
+            let bl = corner(&decoded, 0, decoded.height - 1);
+            let br = corner(&decoded, decoded.width - 1, decoded.height - 1);
+            let rtl = corner(&reference, 0, 0);
+            let rtr = corner(&reference, reference.width - 1, 0);
+            let rbl = corner(&reference, 0, reference.height - 1);
+            let rbr = corner(&reference, reference.width - 1, reference.height - 1);
+            panic!(
+                "orientation {orientation}: max delta {max_delta} corners got TL={tl:?} TR={tr:?} BL={bl:?} BR={br:?} ref TL={rtl:?} TR={rtr:?} BL={rbl:?} BR={rbr:?}"
+            );
+        }
     }
 }
 
@@ -114,36 +137,33 @@ fn orientation_corners_match_literal_pixels() {
         let img = decode(bytes).expect("EXIF fixture decodes");
         assert_eq!(
             (img.width, img.height),
-            (want_w, want_h),
+            (reference.width, reference.height),
             "orientation {orientation}: dimensions"
         );
-        let px = |x: u32, y: u32| -> [u8; 4] {
-            let o = ((y as usize) * (img.width as usize) + (x as usize)) * 4;
-            [
-                img.data[o],
-                img.data[o + 1],
-                img.data[o + 2],
-                img.data[o + 3],
-            ]
-        };
-        // JPEG is lossy (quality 95), so allow a small per-channel tolerance.
         let close = |got: [u8; 4], want: [u8; 4]| {
             got.iter()
                 .zip(want.iter())
                 .all(|(a, b)| a.abs_diff(*b) <= 8)
         };
-        assert!(close(px(0, 0), want_tl), "orientation {orientation}: TL");
         assert!(
-            close(px(img.width - 1, 0), want_tr),
-            "orientation {orientation}: TR"
+            close(corner(&img, 0, 0), tl),
+            "orientation {orientation}: TL got={:?} want={tl:?}",
+            corner(&img, 0, 0)
         );
         assert!(
-            close(px(0, img.height - 1), want_bl),
-            "orientation {orientation}: BL"
+            close(corner(&img, img.width - 1, 0), tr),
+            "orientation {orientation}: TR got={:?} want={tr:?}",
+            corner(&img, img.width - 1, 0)
         );
         assert!(
-            close(px(img.width - 1, img.height - 1), want_br),
-            "orientation {orientation}: BR"
+            close(corner(&img, 0, img.height - 1), bl),
+            "orientation {orientation}: BL got={:?} want={bl:?}",
+            corner(&img, 0, img.height - 1)
+        );
+        assert!(
+            close(corner(&img, img.width - 1, img.height - 1), br),
+            "orientation {orientation}: BR got={:?} want={br:?}",
+            corner(&img, img.width - 1, img.height - 1)
         );
     }
 }
@@ -169,10 +189,6 @@ fn single_component_progressive_jpeg_matches_baseline() {
 
 #[test]
 fn multi_component_progressive_refinement_matches_baseline() {
-    // Full colour progressive: DC/AC first scans plus successive-approximation refinement
-    // scans over the three components. JPEG quantizes once, so a correct decoder
-    // reconstructs the same coefficients as the sequential baseline; the documented
-    // tolerance covers the IDCT rounding/subsampling order between the two encodings.
     let progressive =
         decode(include_bytes!("fixtures/jpeg/color_progressive.jpg")).expect("colour progressive");
     let baseline =
