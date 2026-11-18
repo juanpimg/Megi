@@ -286,6 +286,8 @@ pub struct ScriptingHostContext {
     pub host_events: Vec<String>,
     /// Optional Content Security Policy enforced across `fetch`/`XHR`, modules, and `eval` (#1526).
     pub csp: Option<net::csp::ContentSecurityPolicy>,
+    /// Structured DOM/UI events forwarded from the host UI into the live JS realm (#1504).
+    pub host_dom_events: Vec<crate::HostDomEvent>,
     /// Pre-script layout geometry (`NodeId → viewport rects`) installed into the JS
     /// runtime so scripts can measure the initial layout (viewport coords, scroll = 0).
     #[cfg(feature = "js")]
@@ -314,6 +316,7 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             enable_workers: true,
             csp: None,
             #[cfg(feature = "js")]
@@ -335,6 +338,7 @@ impl ScriptingHostContext {
             fetch_options: net::FetchOptions::default(),
             no_network: false,
             host_events: Vec::new(),
+            host_dom_events: Vec::new(),
             enable_workers: true,
             csp: None,
             #[cfg(feature = "js")]
@@ -1415,6 +1419,59 @@ pub fn execute_scripts(
         drain_microtasks(&mut runtime, warnings);
         run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
     }
+    for dom_event in host.host_dom_events.iter().take(MAX_HOST_EVENTS) {
+        let resolved_target = {
+            let doc = runtime.document();
+            resolve_host_dom_target(&doc, &dom_event.target)
+        };
+        if dom_event.event_type == "focus" {
+            if let js::JsEventTarget::Node(node_id) = resolved_target {
+                runtime.set_active_element(Some(node_id));
+            }
+        } else if dom_event.event_type == "blur" {
+            runtime.set_active_element(None);
+        }
+        let kind = match &dom_event.kind {
+            crate::HostUiEventKind::Simple => js::JsUiEventKind::Simple,
+            crate::HostUiEventKind::Focus => js::JsUiEventKind::Focus,
+            crate::HostUiEventKind::Input { data, input_type } => js::JsUiEventKind::Input {
+                data: data.clone(),
+                input_type: input_type.clone(),
+            },
+            crate::HostUiEventKind::Keyboard {
+                key,
+                code,
+                ctrl_key,
+                shift_key,
+                alt_key,
+                meta_key,
+                repeat,
+            } => js::JsUiEventKind::Keyboard {
+                key: key.clone(),
+                code: code.clone(),
+                ctrl_key: *ctrl_key,
+                shift_key: *shift_key,
+                alt_key: *alt_key,
+                meta_key: *meta_key,
+                repeat: *repeat,
+            },
+        };
+        let event_name = truncate_utf8(&dom_event.event_type, MAX_HOST_EVENT_NAME);
+        match runtime.dispatch_ui_event(
+            resolved_target,
+            event_name,
+            dom_event.bubbles,
+            dom_event.cancelable,
+            &kind,
+        ) {
+            Ok(_) => execution.events_dispatched += 1,
+            Err(error) => warnings.push(format!(
+                "dispatching host UI event {event_name} failed: {error}"
+            )),
+        }
+        drain_microtasks(&mut runtime, warnings);
+        run_event_loop(&mut runtime, &limits, &mut loop_state, warnings);
+    }
     // 5. Deterministic cooperative workers: drain main→worker and worker→main queues,
     // then pump timers/microtasks scheduled by worker callbacks before the re-render.
     if host.enable_workers {
@@ -1483,6 +1540,97 @@ struct EventLoopState {
 fn drain_microtasks(runtime: &mut js::JsRuntime, warnings: &mut Vec<String>) {
     if let Err(error) = runtime.run_microtasks() {
         warnings.push(format!("microtasks failed: {error}"));
+    }
+}
+
+#[cfg(feature = "js")]
+fn truncate_utf8(value: &str, max_bytes: usize) -> &str {
+    if value.len() <= max_bytes {
+        return value;
+    }
+    let end = value
+        .char_indices()
+        .take_while(|(index, _)| *index < max_bytes)
+        .map(|(index, ch)| index + ch.len_utf8())
+        .last()
+        .unwrap_or(0);
+    &value[..end]
+}
+
+#[cfg(feature = "js")]
+fn find_element_with_attr(
+    document: &Document,
+    attr: &str,
+    expected: Option<&str>,
+) -> Option<NodeId> {
+    let mut stack = vec![document.root()];
+    while let Some(id) = stack.pop() {
+        if let Some(node) = document.try_node(id) {
+            if let Some(element) = node.as_element() {
+                match expected {
+                    Some(target_val) => {
+                        if element.get_attribute(attr) == Some(target_val) {
+                            return Some(id);
+                        }
+                    }
+                    None => {
+                        if element.has_attribute(attr) {
+                            return Some(id);
+                        }
+                    }
+                }
+            }
+            let mut children = Vec::new();
+            let mut child = node.first_child;
+            while let Some(child_id) = child {
+                children.push(child_id);
+                child = document.try_node(child_id).and_then(|n| n.next_sibling);
+            }
+            for child_id in children.into_iter().rev() {
+                stack.push(child_id);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(feature = "js")]
+fn resolve_host_dom_target(
+    document: &Document,
+    target: &crate::HostEventTarget,
+) -> js::JsEventTarget {
+    match target {
+        crate::HostEventTarget::Window => js::JsEventTarget::Window,
+        crate::HostEventTarget::Document => js::JsEventTarget::Document,
+        crate::HostEventTarget::FormControl(form_id) => {
+            let needle = form_id.to_string();
+            find_element_with_attr(document, "data-megi-form-id", Some(&needle))
+                .map_or(js::JsEventTarget::Document, js::JsEventTarget::Node)
+        }
+        crate::HostEventTarget::OwningForm(form_id) => {
+            let needle = form_id.to_string();
+            let Some(control_node) =
+                find_element_with_attr(document, "data-megi-form-id", Some(&needle))
+            else {
+                return js::JsEventTarget::Document;
+            };
+            std::iter::once(control_node)
+                .chain(document.ancestors(control_node))
+                .find(|&id| {
+                    document
+                        .try_node(id)
+                        .and_then(|node| node.as_element())
+                        .is_some_and(|el| el.local_name.eq_ignore_ascii_case("form"))
+                })
+                .map_or(
+                    js::JsEventTarget::Node(control_node),
+                    js::JsEventTarget::Node,
+                )
+        }
+        crate::HostEventTarget::Focused => {
+            find_element_with_attr(document, "data-megi-focused", None)
+                .map_or(js::JsEventTarget::Document, js::JsEventTarget::Node)
+        }
     }
 }
 

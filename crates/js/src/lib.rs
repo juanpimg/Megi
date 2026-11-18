@@ -211,7 +211,7 @@ pub struct ModuleOutcome {
     pub exports: Vec<(String, String)>,
 }
 #[cfg(feature = "js")]
-pub use events::JsEventTarget;
+pub use events::{JsEventTarget, JsUiEventKind};
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]

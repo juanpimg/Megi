@@ -54,6 +54,39 @@ pub enum JsEventTarget {
     Node(dom::NodeId),
 }
 
+/// Kind and initialization data for a structured UI event dispatched from Rust (#1504).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum JsUiEventKind {
+    /// Plain DOM `Event` (`change`, `submit`, etc.).
+    Simple,
+    /// `KeyboardEvent` (`keydown`, `keyup`).
+    Keyboard {
+        /// Key string (`KeyboardEvent.key`, e.g. `"a"`, `"Enter"`, `"Backspace"`).
+        key: String,
+        /// Physical/logical key code (`KeyboardEvent.code`, e.g. `"KeyA"`, `"Enter"`).
+        code: String,
+        /// Control modifier state.
+        ctrl_key: bool,
+        /// Shift modifier state.
+        shift_key: bool,
+        /// Alt modifier state.
+        alt_key: bool,
+        /// Meta/Super modifier state.
+        meta_key: bool,
+        /// Key auto-repeat flag.
+        repeat: bool,
+    },
+    /// `InputEvent` (`input`).
+    Input {
+        /// Inserted text data (`None` for deletions such as Backspace).
+        data: Option<String>,
+        /// Input operation type (`"insertText"`, `"deleteContentBackward"`, etc.).
+        input_type: String,
+    },
+    /// `FocusEvent` (`focus`, `blur`).
+    Focus,
+}
+
 pub(crate) fn js_error(message: impl Into<String>) -> boa_engine::JsError {
     JsNativeError::typ().with_message(message.into()).into()
 }
@@ -1030,15 +1063,80 @@ fn deliver(
     Ok(())
 }
 
-/// Dispatches a synthetic event from Rust to the current realm's listeners.
-///
-/// `target` selects `window`, the `document` object or a DOM node (bubbling through its
-/// ancestors). Returns `Ok(false)` when a listener called `preventDefault()`.
-pub(crate) fn dispatch_rust_event(
+fn set_event_prototype(context: &mut Context, object: &JsObject, ctor_name: &str) {
+    if let Ok(ctor) = context.global_object().get(js_string!(ctor_name), context)
+        && let Some(ctor_obj) = ctor.as_object()
+        && let Ok(proto) = ctor_obj.get(js_string!("prototype"), context)
+        && let Some(proto_obj) = proto.as_object()
+    {
+        let _ = object.set_prototype(Some(proto_obj));
+    }
+}
+
+fn build_ui_event(
+    context: &mut Context,
+    event_type: &str,
+    bubbles: bool,
+    cancelable: bool,
+    kind: &JsUiEventKind,
+) -> JsValue {
+    let event = build_event(
+        context,
+        event_type,
+        bubbles,
+        cancelable,
+        JsValue::undefined(),
+    );
+    if let Some(object) = event.as_object() {
+        match kind {
+            JsUiEventKind::Simple => {}
+            JsUiEventKind::Keyboard {
+                key,
+                code,
+                ctrl_key,
+                shift_key,
+                alt_key,
+                meta_key,
+                repeat,
+            } => {
+                set_event_prototype(context, &object, "KeyboardEvent");
+                let _ = object.set(js_string!("key"), js_string!(key.clone()), false, context);
+                let _ = object.set(js_string!("code"), js_string!(code.clone()), false, context);
+                let _ = object.set(js_string!("ctrlKey"), *ctrl_key, false, context);
+                let _ = object.set(js_string!("shiftKey"), *shift_key, false, context);
+                let _ = object.set(js_string!("altKey"), *alt_key, false, context);
+                let _ = object.set(js_string!("metaKey"), *meta_key, false, context);
+                let _ = object.set(js_string!("repeat"), *repeat, false, context);
+            }
+            JsUiEventKind::Input { data, input_type } => {
+                set_event_prototype(context, &object, "InputEvent");
+                let data_value = match data {
+                    Some(text) => JsValue::from(js_string!(text.clone())),
+                    None => JsValue::null(),
+                };
+                let _ = object.set(js_string!("data"), data_value, false, context);
+                let _ = object.set(
+                    js_string!("inputType"),
+                    js_string!(input_type.clone()),
+                    false,
+                    context,
+                );
+            }
+            JsUiEventKind::Focus => {
+                set_event_prototype(context, &object, "FocusEvent");
+                let _ = object.set(js_string!("relatedTarget"), JsValue::null(), false, context);
+            }
+        }
+    }
+    event
+}
+
+fn dispatch_built_event(
     context: &mut Context,
     target: JsEventTarget,
     event_type: &str,
     bubbles: bool,
+    event: JsValue,
 ) -> Result<bool, CrateJsError> {
     let target = match target {
         JsEventTarget::Window => TargetKey::Window,
@@ -1050,7 +1148,6 @@ pub(crate) fn dispatch_rust_event(
             TargetKey::Node(handle)
         }
     };
-    let event = build_event(context, event_type, bubbles, true, JsValue::undefined());
     let target_js = match target {
         TargetKey::Window => JsValue::from(context.global_object()),
         TargetKey::Document => global_get(context, "document")
@@ -1085,10 +1182,46 @@ pub(crate) fn dispatch_rust_event(
             break;
         }
     }
+    let _ = event_object.set(js_string!("currentTarget"), JsValue::null(), false, context);
+    let _ = event_object.set(js_string!("eventPhase"), JsValue::from(0.0), false, context);
     let prevented = with_host(|host| host.dispatch.map(|dispatch| dispatch.prevent_default))
         .flatten()
         .unwrap_or(false);
+    let _ = event_object.set(
+        js_string!("defaultPrevented"),
+        JsValue::from(prevented),
+        false,
+        context,
+    );
     Ok(!prevented)
+}
+
+/// Dispatches a synthetic event from Rust to the current realm's listeners.
+///
+/// `target` selects `window`, the `document` object or a DOM node (bubbling through its
+/// ancestors). Returns `Ok(false)` when a listener called `preventDefault()`.
+pub(crate) fn dispatch_rust_event(
+    context: &mut Context,
+    target: JsEventTarget,
+    event_type: &str,
+    bubbles: bool,
+) -> Result<bool, CrateJsError> {
+    let event = build_event(context, event_type, bubbles, true, JsValue::undefined());
+    dispatch_built_event(context, target, event_type, bubbles, event)
+}
+
+/// Dispatches a structured UI event (`KeyboardEvent`, `InputEvent`, `FocusEvent`, or
+/// `Event`) from Rust into the realm's capture/target/bubble flow (#1504).
+pub(crate) fn dispatch_rust_ui_event(
+    context: &mut Context,
+    target: JsEventTarget,
+    event_type: &str,
+    bubbles: bool,
+    cancelable: bool,
+    kind: &JsUiEventKind,
+) -> Result<bool, CrateJsError> {
+    let event = build_ui_event(context, event_type, bubbles, cancelable, kind);
+    dispatch_built_event(context, target, event_type, bubbles, event)
 }
 
 // ---------------------------------------------------------------------------
