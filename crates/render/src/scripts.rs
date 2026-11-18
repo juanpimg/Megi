@@ -857,6 +857,9 @@ pub fn execute_scripts(
                 };
                 options.origin = Some(origin);
             }
+            if options.mixed_content.is_none() {
+                options.mixed_content = Some(net::MixedContentPolicy::new(base.scheme(), true));
+            }
             let no_network = host.no_network;
             // `fetch` volume is budgeted per page: the per-call loader caps bound one response,
             // but a script could still issue thousands of calls (#660).

@@ -173,15 +173,15 @@ pub fn load_images(
         resolved.push((node_id, url, use_cors));
     }
 
-    let requests: Vec<(&Url, bool)> = resolved
+    let requests: Vec<(&Url, bool, bool)> = resolved
         .iter()
-        .map(|(_, url, use_cors)| (url, *use_cors))
+        .map(|(_, url, use_cors)| (url, *use_cors, false))
         .collect();
     // Enforce the image byte cap while fetching, not after every response has been
     // buffered (#1213). Restore the caller's cap afterwards so unrelated later fetches
     // keep their original limit.
     let previous_cap = loader.set_max_response_bytes(limits.max_image_bytes);
-    let loaded_resources = loader.load_many(&requests);
+    let loaded_resources = loader.load_many_checked(&requests);
     loader.set_max_response_bytes(previous_cap);
 
     for ((node_id, url, _use_cors), loaded_res) in resolved.into_iter().zip(loaded_resources) {
