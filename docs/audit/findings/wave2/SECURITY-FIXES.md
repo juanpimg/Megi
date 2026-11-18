@@ -14,7 +14,7 @@ Los 7 hallazgos tratados como aviso privado han sido arreglados con TDD (test RE
 
 ## Verificación
 
-En `HEAD` `3a9218f` (worktree limpio): `cargo fmt --all -- --check` → 0, `cargo clippy --workspace --all-targets -- -D warnings` → 0, `cargo check --workspace --no-default-features` → 0, `cargo test --workspace` → 0, `cargo run --release -p test_harness -- --summary` → 0, `python3 tools/audit_coverage.py --check --strict` → 0. Evidencia en `/tmp/megi-pushverify.log`.
+En `HEAD` `3a9218f` (worktree limpio): `cargo fmt --all -- --check` → 0, `cargo clippy --workspace --all-targets -- -D warnings` → 0, `cargo check --workspace --no-default-features` → 0, `cargo test --workspace` → 0, `cargo run --release -p megi-test-harness -- --summary` → 0, `python3 tools/audit_coverage.py --check --strict` → 0. Evidencia en `/tmp/megi-pushverify.log`.
 
 `git rev-list --left-right --count origin/main...HEAD` → `0 0` tras `git push origin main`.
 

@@ -164,7 +164,7 @@ Worktree limpio `/tmp/opencode/megi-verify` @ `3c06db8` (`git status` limpio):
 | `python3 tools/update_coverage.py --check` | exit 0: `coverage status is up to date` |
 | `python3 tools/check_docs_links.py` | exit 0: `docs links: OK (39 files checked)` |
 | `cargo deny check` | NO EJECUTABLE EN LOCAL: `error: no such command: 'deny'` (cargo-deny no instalado; CI lo instala vía taiki-e/install-action). Concern, no hallazgo. |
-| `cargo package --allow-dirty -p dom` (con `--verify`, sin `--no-verify`) | exit 0 (verify compila `dom-0.1.0` OK, 4m15s) |
+| `cargo package --allow-dirty -p megi-core` (con `--verify`, sin `--no-verify`) | exit 0 (verify compila `dom-0.1.0` OK, 4m15s) |
 | `python3 -m unittest tools.test_audit_coverage tools.test_update_coverage tools.test_png_check tools.test_real_site_check` | 52 tests OK |
 | Demos #1308/#1311 | arriba en w2-ci-02 |
 
@@ -184,7 +184,7 @@ Worktree limpio `/tmp/opencode/megi-verify` @ `3c06db8` (`git status` limpio):
 
 1. `cargo deny`/`cargo audit` no son ejecutables en local (herramientas no instaladas) y
    `cargo package --workspace --locked` de CI usa `--no-verify` (no compila el paquete);
-   el único `package` con verify ejecutado aquí es `-p dom`. La superficie
+   el único `package` con verify ejecutado aquí es `-p megi-core`. La superficie
    empaquetado/SBOM depende entera de CI.
 2. `/tmp` (tmpfs 7,7 GB) se llenó durante la auditoría (`target/` del worktree + salidas de
    varios agentes); los builds del worktree limpio se redirigieron a

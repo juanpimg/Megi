@@ -27,15 +27,15 @@
 //!   definite sizes keep their declared values. Replaced boxes prefer their
 //!   intrinsic ratio with `auto` (or the declared ratio when it is explicit).
 
-use css::calc::CalcValue;
-use css::{
+use megi_css::calc::CalcValue;
+use megi_css::{
     BoxSizing, Clear, ComputedStyle, Display, FlexDirection, FlexWrap, Float, Length, Overflow,
     Position, WhiteSpace,
 };
 
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::{Dimensions, EdgeSizes, Rect};
 use crate::inline::{DefaultTextMeasurer, TextMeasurer};
+use megi_core::geometry::{Dimensions, EdgeSizes, Rect};
 
 /// Positioning context inherited down the box tree (CSS 2.2 §9.6, §10.1).
 #[derive(Clone, Copy, Debug)]

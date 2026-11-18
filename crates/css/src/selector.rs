@@ -1,7 +1,7 @@
 //! # W3C Selectors Level 4 AST & DOM Matching Engine
 //!
 //! Provides compound and complex selector representation, token stream parsing,
-//! and high-performance matching over [`dom::Document`] and [`dom::NodeId`].
+//! and high-performance matching over [`megi_core::Document`] and [`megi_core::NodeId`].
 //!
 //! Supported: type/universal selectors (case-insensitive for HTML elements, case-sensitive
 //! for foreign SVG/MathML elements), `#id`, `.class`, attribute selectors (`=`, `~=`, `|=`,
@@ -21,7 +21,7 @@
 //! unknown/unsupported pseudo-classes invalidate the whole selector list instead of silently
 //! over-matching (audit findings F13/F14/F15/F16).
 
-use dom::{Document, Namespace, NodeId, NodeKind};
+use megi_core::{Document, Namespace, NodeId, NodeKind};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
@@ -1987,7 +1987,7 @@ fn strip_attribute_value_quotes(value: &str) -> Option<String> {
 #[cfg(test)]
 mod id_list_tests {
     use super::*;
-    use dom::Attribute;
+    use megi_core::Attribute;
 
     fn doc_with_id(id: &str) -> (Document, NodeId) {
         let mut doc = Document::new();

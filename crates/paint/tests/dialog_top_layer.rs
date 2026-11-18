@@ -1,14 +1,14 @@
 //! Paint and hit-test ordering tests for top-layer `<dialog>` and `::backdrop`.
 
-use css::{Color, ComputedStyle, Display, Position};
-use dom::{Document, Namespace};
-use layout::{BoxType, Dimensions, LayoutBox, Rect};
-use paint::{
+use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, Position};
+use megi_layout::{BoxType, Dimensions, LayoutBox, Rect};
+use megi_paint::{
     DisplayItem, HitKind, RenderConfig, build_display_list_and_hit_regions, hit_test,
     rasterize_display_list_with_font_database,
 };
 
-fn elem(doc: &mut Document, parent: dom::NodeId, tag: &str) -> dom::NodeId {
+fn elem(doc: &mut Document, parent: megi_core::NodeId, tag: &str) -> megi_core::NodeId {
     let id = doc.create_element(Namespace::Html, tag, vec![]);
     doc.append_child(parent, id);
     id
@@ -23,7 +23,7 @@ fn solid_style(color: Color, pos: Position, z: Option<i32>) -> ComputedStyle {
     style
 }
 
-fn make_box(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
+fn make_box(id: megi_core::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
     let mut b = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     b.dimensions = Dimensions::default();
     b.dimensions.content = rect;
@@ -92,7 +92,7 @@ fn top_layer_dialog_and_backdrop_paint_above_high_z_index_and_block_hits() {
         100,
         100,
         RenderConfig::OPAQUE_WHITE,
-        paint::bundled_font_database(),
+        megi_paint::bundled_font_database(),
     );
 
     // Center pixel inside dialog is red (dialog paints over the z-index: 99999 green overlay).

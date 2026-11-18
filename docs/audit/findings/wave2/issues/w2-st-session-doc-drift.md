@@ -1,7 +1,7 @@
 [shell] fallback ~/.megi/session.json documentado es inalcanzable
 
 ## Resumen
-El doc de `crates/shell/src/session.rs:3-5` promete fallback `~/.local/share/… and then ~/.megi/…`, pero `default_session_path` (`session.rs:522-553`) con `HOME` definido (caso normal) retorna siempre `~/.local/share/…`; `None` solo sin `XDG` ni `HOME`. Ninguna rama `~/.megi` existe en el código.
+El doc de `crates/browser/src/session.rs:3-5` promete fallback `~/.local/share/… and then ~/.megi/…`, pero `default_session_path` (`session.rs:522-553`) con `HOME` definido (caso normal) retorna siempre `~/.local/share/…`; `None` solo sin `XDG` ni `HOME`. Ninguna rama `~/.megi` existe en el código.
 
 ## Impacto
 P3 — docs/contrato falso menor. Fix: implementar fallback o corregir docs (una de las dos).

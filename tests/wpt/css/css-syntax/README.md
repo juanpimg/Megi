@@ -2,7 +2,7 @@
 
 These three files are unmodified copies of the upstream [web-platform-tests](https://github.com/web-platform-tests/wpt)
 CSS Syntax tests. They are **vendored as conformance fixtures** so that a clean clone of Megi can run
-the CSS Syntax closed-loop gate offline (`cargo test -p test_harness`) with no network access.
+the CSS Syntax closed-loop gate offline (`cargo test -p megi-test-harness`) with no network access.
 
 - Upstream URL base: <https://raw.githubusercontent.com/web-platform-tests/wpt/master/css/css-syntax/>
 - Upstream branch: `master`
@@ -26,8 +26,8 @@ The fixture files are read from disk at test time; if any of them is missing the
 
 | Fixture | Results | How it is exercised |
 |---|---|---|
-| `declarations-trim-whitespace.html` | 9 | The `<style id="style-el">` block is parsed with `html::parse_document`, the stylesheet is parsed with the `css` crate, and `--foo-1`..`--foo-9` must trim to `bar`. |
-| `input-preprocessing.html` | 13 | The 10 upstream `testParsing(...)` cases are extracted from the file's script and replayed through `css::preprocess_css_codepoints` (5 NULL and 5 lone-surrogate cases), plus 3 newline-normalization cases (CRLF/CR/FF) that upstream cannot express in JS. |
+| `declarations-trim-whitespace.html` | 9 | The `<style id="style-el">` block is parsed with `megi_html::parse_document`, the stylesheet is parsed with the `css` crate, and `--foo-1`..`--foo-9` must trim to `bar`. |
+| `input-preprocessing.html` | 13 | The 10 upstream `testParsing(...)` cases are extracted from the file's script and replayed through `megi_css::preprocess_css_codepoints` (5 NULL and 5 lone-surrogate cases), plus 3 newline-normalization cases (CRLF/CR/FF) that upstream cannot express in JS. |
 | `anb-parsing.html` | 8 | 8 curated `testANB(...)` inputs are located in the file, their upstream expected `selectorText` strings are parsed, and the engine's `AnPlusB { a, b }` is canonicalized to `n`/`2n+1`-style text and compared against the upstream expectation. |
 | **Total** | **30** | |
 
@@ -39,9 +39,9 @@ follow-up work, as is comparing full `:nth-child()` serialization.
 Commands (from the repository root):
 
 ```bash
-cargo test -p test_harness                 # closed-loop tests, including the CSS gate
-cargo run -p test_harness -- --summary     # CLI report; exit 0 only if failures are allowlisted
-cargo run -p test_harness -- --summary --strict   # any failure (even allowlisted) => exit 1
+cargo test -p megi-test-harness                 # closed-loop tests, including the CSS gate
+cargo run -p megi-test-harness -- --summary     # CLI report; exit 0 only if failures are allowlisted
+cargo run -p megi-test-harness -- --summary --strict   # any failure (even allowlisted) => exit 1
 ```
 
 ## Refreshing the fixtures
@@ -54,6 +54,6 @@ done
 sha256sum tests/wpt/css/css-syntax/*.html
 ```
 
-After refreshing, update the date/hashes above and re-run `cargo test -p test_harness`; the
+After refreshing, update the date/hashes above and re-run `cargo test -p megi-test-harness`; the
 extractors in `crates/test_harness/src/css_harness.rs` fail loudly if the expected number of
 upstream cases changes (10 `testParsing` cases, 67 `testANB` cases, the 8 curated An+B inputs).

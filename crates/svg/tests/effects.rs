@@ -1,12 +1,12 @@
 //! `<clipPath>`, `<mask>` and basic filter coverage.
 
-use svg::{SvgOptions, render_svg};
+use megi_svg::{SvgOptions, render_svg};
 
-fn render(source: &str) -> svg::SvgImage {
+fn render(source: &str) -> megi_svg::SvgImage {
     render_svg(source.as_bytes(), &SvgOptions::default()).expect("render")
 }
 
-fn px(image: &svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
+fn px(image: &megi_svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
     image.pixel(x, y).expect("pixel")
 }
 

@@ -1,6 +1,6 @@
 //! Offline tests for `data:` URL parsing/decoding and the built-in Base64 codec.
 
-use net::{
+use megi_net::{
     FetchError, LoadError, ResourceLoader, Scheme, Url, base64_decode, base64_encode,
     decode_data_url,
 };

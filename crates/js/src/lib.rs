@@ -1,7 +1,7 @@
 //! # Megi JavaScript (`js`) — embedded runtime with minimal DOM bindings
 //!
 //! Phase 6 (WP-6.1 + base of WP-6.2): an embedded **Boa 0.21** ECMAScript runtime bound to
-//! one [`dom::Document`], with a small, auditable DOM bridge and anti-DoS budgets.
+//! one [`megi_core::Document`], with a small, auditable DOM bridge and anti-DoS budgets.
 //!
 //! ## What works today
 //!
@@ -34,7 +34,7 @@
 //! ## Rust-facing APIs (block 0, used by the HTML harness)
 //!
 //! - [`JsRuntime::eval_on_document`] evaluates a script against a **borrowed**
-//!   `&mut dom::Document` (temporary realm, applies [`Budget`], writes the document back
+//!   `&mut megi_core::Document` (temporary realm, applies [`Budget`], writes the document back
 //!   even when the script fails).
 //! - [`JsRuntime::dispatch_simple_event`] dispatches a synthetic DOM event from Rust
 //!   (`Some(NodeId)` targets a node and bubbles; `None` targets `window`, useful for
@@ -130,6 +130,14 @@
 //!   remaining listeners; budget errors (infinite loops) still abort the dispatch with
 //!   [`JsError::Budget`].
 //!
+//! ## Host bridge
+//!
+//! There is no thread-local "current host". Each [`JsRuntime`] installs its shared
+//! host cell in the Boa `Context`'s `HostDefined` data at construction; every native
+//! binding borrows it from the `Context` it receives. Nested iframe/worker realms
+//! therefore always resolve their own document/providers, even while a parent realm
+//! is suspended inside a bridged call. The host cell is the only owner of that state.
+//!
 //! ## Feature layout
 //!
 //! The `js` feature is **enabled by default** and pulls `boa_engine`. With
@@ -200,6 +208,8 @@ pub mod events;
 pub mod host;
 pub mod import_map;
 #[cfg(feature = "js")]
+pub mod providers;
+#[cfg(feature = "js")]
 pub mod runtime;
 #[cfg(feature = "js")]
 pub mod websocket;
@@ -221,8 +231,14 @@ pub use events::{JsEventTarget, JsUiEventKind};
 #[cfg(feature = "js")]
 pub use host::ConsoleEntry;
 #[cfg(feature = "js")]
-pub use host::{CookieProvider, MediaProvider, SandboxFlags, ViewportInfo, ViewportProvider};
+pub use host::{CookieProvider, SandboxFlags, ViewportInfo};
 pub use import_map::ImportMap;
+#[cfg(feature = "js")]
+pub use providers::{
+    ComputedStyleProvider, CookieGetFn, CookieSetFn, FetchProvider, FrameLoader, HistoryProvider,
+    LayoutProvider, LocationProvider, MediaProvider, ModuleLoader, ModuleResolver, StorageLoadFn,
+    StorageSaveFn, ViewportProvider, WebSocketProvider, WorkerLoader,
+};
 #[cfg(feature = "js")]
 pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome};
 

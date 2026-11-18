@@ -11,9 +11,9 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
-use net::h2::hpack::{Decoder, Encoder};
-use net::{FetchOptions, ResourceLoader, Url};
+use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
+use megi_net::h2::hpack::{Decoder, Encoder};
+use megi_net::{FetchOptions, ResourceLoader, Url};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};

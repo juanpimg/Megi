@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, ProxyConfig, ResourceLoader, Url, fetch};
+use megi_net::{FetchError, FetchOptions, ProxyConfig, ResourceLoader, Url, fetch};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};

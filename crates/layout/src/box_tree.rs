@@ -5,10 +5,10 @@
 
 use std::sync::Arc;
 
-use css::{ComputedStyle, Float, Position};
-use dom::NodeId;
+use megi_core::NodeId;
+use megi_css::{ComputedStyle, Float, Position};
 
-use crate::geometry::{Dimensions, Rect};
+use megi_core::geometry::{Dimensions, Rect};
 
 /// The nature of a box in the layout tree.
 #[derive(Clone, Debug, PartialEq)]
@@ -120,7 +120,7 @@ pub struct LayoutBox {
     /// stacked modal dialogs deterministically.
     pub top_layer_order: u32,
     /// Resolved `::backdrop` background color for top-layer modal dialogs.
-    pub backdrop_color: Option<css::Color>,
+    pub backdrop_color: Option<megi_css::Color>,
     /// `true` when this box was generated for a CSS pseudo-element (`::before`/`::after`).
     pub is_pseudo: bool,
     /// Child boxes in layout order.

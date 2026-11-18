@@ -1,0 +1,29 @@
+[package]
+name = "megi-webview"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — platform-agnostic embeddable WebView API (no windowing dependencies)"
+
+[features]
+default = []
+full = ["megi-render/js", "megi-render/pac"]
+
+[dependencies]
+megi-core = { workspace = true }
+megi-css = { workspace = true }
+megi-html = { workspace = true }
+megi-layout = { workspace = true }
+megi-fonts = { workspace = true }
+megi-image = { workspace = true }
+megi-paint = { workspace = true }
+megi-net = { workspace = true }
+megi-display = { workspace = true }
+megi-raster = { workspace = true }
+megi-render = { workspace = true, default-features = false }
+
+[lints]
+workspace = true

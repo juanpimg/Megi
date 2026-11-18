@@ -10,7 +10,7 @@
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use html::{
+use megi_html::{
     ParseErrorCode, ParseOptions, Token, Tokenizer, TokenizerConfig, parse_document,
     parse_document_with_options, parse_fragment_with_options,
 };
@@ -152,7 +152,7 @@ fn serializer_handles_deep_dom_iteratively() {
             let outcome = parse_document_with_options(&input, false, &options);
             // Lift the byte ceiling: this test is about stack safety on a 16 MB dump, not
             // about the truncation behaviour (covered by the budget tests below).
-            let dump = html::serializer::serialize_dom_for_test_with_limit(
+            let dump = megi_html::serializer::serialize_dom_for_test_with_limit(
                 &outcome.document,
                 64 * 1024 * 1024,
             );
@@ -344,7 +344,7 @@ fn fragment_parser_honours_parse_options() {
     };
     let input = "<div>".repeat(1_000);
     let outcome =
-        parse_fragment_with_options(&input, html::Namespace::Html, "div", false, &options);
+        parse_fragment_with_options(&input, megi_html::Namespace::Html, "div", false, &options);
     assert!(outcome.limit_violations.depth_exceeded > 0);
     assert!(outcome.document.len() < 32);
 }
@@ -401,18 +401,18 @@ fn selectedcontent_budget_is_counted_once_across_selects() {
 fn serialization_has_an_output_budget_and_reports_truncation() {
     // #647: `out: String` grew without bound, so a hostile DOM (one huge text node or a deep
     // chain) OOMed the caller with no error path.
-    let mut doc = dom::Document::new();
+    let mut doc = megi_core::Document::new();
     let root = doc.root();
-    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    let body = doc.create_element(megi_core::Namespace::Html, "body", Vec::new());
     doc.append_child(root, body);
-    let div = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+    let div = doc.create_element(megi_core::Namespace::Html, "div", Vec::new());
     doc.append_child(body, div);
     let text = doc.create_text_node(&"x".repeat(64 * 1024));
     doc.append_child(div, text);
 
-    let options = html::serializer::HtmlSerializeOptions::scripting_disabled()
+    let options = megi_html::serializer::HtmlSerializeOptions::scripting_disabled()
         .with_max_output_bytes(4 * 1024);
-    let out = html::serialize_html_with_options(&doc, options);
+    let out = megi_html::serialize_html_with_options(&doc, options);
     assert!(
         out.len() <= 4 * 1024 + 32,
         "the serializer must respect the ceiling (got {} bytes)",
@@ -425,7 +425,7 @@ fn serialization_has_an_output_budget_and_reports_truncation() {
     );
 
     // The default ceiling is high enough that ordinary documents are untouched.
-    let small = html::serialize_html(&doc);
+    let small = megi_html::serialize_html(&doc);
     assert!(small.contains("<div>"));
     assert!(!small.contains("truncated"));
 }
@@ -434,20 +434,20 @@ fn serialization_has_an_output_budget_and_reports_truncation() {
 fn deep_serialization_does_not_allocate_per_node_indent() {
     // The canonical tree dump used `"  ".repeat(depth)` per node (O(n·depth) bytes). A 4k-deep
     // chain must still serialize, quickly, and mark truncation at the byte cap.
-    let mut doc = dom::Document::new();
+    let mut doc = megi_core::Document::new();
     let root = doc.root();
-    let body = doc.create_element(dom::Namespace::Html, "body", Vec::new());
+    let body = doc.create_element(megi_core::Namespace::Html, "body", Vec::new());
     doc.append_child(root, body);
     let mut parent = body;
     for _ in 0..4_000 {
-        let child = doc.create_element(dom::Namespace::Html, "div", Vec::new());
+        let child = doc.create_element(megi_core::Namespace::Html, "div", Vec::new());
         doc.append_child(parent, child);
         parent = child;
     }
-    let out = html::serializer::serialize_dom_for_test(&doc);
+    let out = megi_html::serializer::serialize_dom_for_test(&doc);
     assert!(!out.is_empty());
     assert!(
-        out.len() <= html::serializer::MAX_SERIALIZED_BYTES + 64,
+        out.len() <= megi_html::serializer::MAX_SERIALIZED_BYTES + 64,
         "the tree dump must respect its byte ceiling"
     );
 }
@@ -490,11 +490,16 @@ fn table_text_buffer_is_bounded_by_the_text_budget() {
     );
 }
 
-fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize, depth: usize) {
+fn collect_text_bytes(
+    doc: &megi_core::Document,
+    node: megi_core::NodeId,
+    total: &mut usize,
+    depth: usize,
+) {
     if depth > 64 {
         return;
     }
-    if let dom::NodeKind::Text(text) = &doc.node(node).kind {
+    if let megi_core::NodeKind::Text(text) = &doc.node(node).kind {
         *total += text.len();
     }
     let mut child = doc.node(node).first_child;
@@ -505,7 +510,7 @@ fn collect_text_bytes(doc: &dom::Document, node: dom::NodeId, total: &mut usize,
 }
 
 /// Text of the first `<p>` in a parsed document (`text_content` on the root does not descend).
-fn paragraph_text(document: &dom::Document) -> String {
+fn paragraph_text(document: &megi_core::Document) -> String {
     document
         .get_elements_by_tag_name("p")
         .first()
@@ -519,7 +524,7 @@ fn huge_numeric_character_reference_runs_stay_linear_and_out_of_range() {
     // `&#` + millions of digits burned one arithmetic step per digit. The accumulator now stops
     // after eight significant digits (still consuming the run to find the terminator) and
     // reports the out-of-range error once.
-    use html::{ParseOptions, parse_document_with_options};
+    use megi_html::{ParseOptions, parse_document_with_options};
 
     let run = "9".repeat(200_000);
     let input = format!("<p>&#{run};</p>");
@@ -553,7 +558,7 @@ fn token_values_are_capped_to_the_per_token_budget() {
     // #636: `max_input_bytes` bounds the document, not a single value. One unterminated
     // comment, doctype id, quoted attribute value or script/RCDATA run used to grow a single
     // buffer to input size, which the tree builder/DOM/serializer then copied.
-    use html::tokenizer::{MAX_TOKEN_BYTES, Token, Tokenizer, TokenizerConfig};
+    use megi_html::tokenizer::{MAX_TOKEN_BYTES, Token, Tokenizer, TokenizerConfig};
 
     let big = "x".repeat(MAX_TOKEN_BYTES + 4096);
 
@@ -616,7 +621,7 @@ fn active_formatting_list_is_bounded() {
     // #643: the Noah's Ark clause only removes a fourth *identical* entry, so distinct
     // `(tag, attributes)` pairs grew the list without bound and every character run then
     // cloned the whole thing in `reconstruct_active_formatting_elements`.
-    use html::{ParseOptions, parse_document_with_options};
+    use megi_html::{ParseOptions, parse_document_with_options};
 
     let mut input = String::new();
     for index in 0..20_000 {
@@ -645,9 +650,9 @@ fn self_writing_script_loops_are_fuelled() {
     // #639: a parser-inserted script can `document.write` another `<script>`, which executes in
     // turn and may write again — without a fuel cap the parse never finishes. Each execution and
     // each written byte must be budgeted.
-    use dom::Document;
-    use html::scripting::{ScriptExecution, ScriptExecutor};
-    use html::{ParseOptions, parse_document_with_options_and_executor};
+    use megi_core::Document;
+    use megi_html::scripting::{ScriptExecution, ScriptExecutor};
+    use megi_html::{ParseOptions, parse_document_with_options_and_executor};
 
     struct LoopExecutor {
         runs: usize,
@@ -695,9 +700,9 @@ fn many_small_document_writes_stay_linear() {
     // #639: every `document.write` re-inserted through `Tokenizer::insert_input`, which shifted
     // every line start and rebuilt the UTF-16 prefix table from scratch — quadratic in the
     // number of writes, which is exactly the normal `document.write` pattern.
-    use dom::Document;
-    use html::scripting::{ScriptExecution, ScriptExecutor};
-    use html::{ParseOptions, parse_document_with_options_and_executor};
+    use megi_core::Document;
+    use megi_html::scripting::{ScriptExecution, ScriptExecutor};
+    use megi_html::{ParseOptions, parse_document_with_options_and_executor};
 
     struct SmallWrites {
         remaining: usize,

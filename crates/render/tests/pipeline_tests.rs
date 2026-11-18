@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use render::{RenderError, RenderOptions, RenderOutput, Viewport, render_url};
+use megi_render::{RenderError, RenderOptions, RenderOutput, Viewport, render_url};
 
 // ---------------------------------------------------------------------------
 // Local HTTP test server
@@ -192,16 +192,16 @@ fn closed_port() -> u16 {
 fn options(width: u32, height: u32) -> RenderOptions {
     RenderOptions {
         viewport: Viewport::new(width, height).expect("valid viewport"),
-        fetch_options: net::FetchOptions {
+        fetch_options: megi_net::FetchOptions {
             connect_timeout: Duration::from_secs(2),
             read_timeout: Duration::from_secs(2),
-            ..net::FetchOptions::default()
+            ..megi_net::FetchOptions::default()
         },
         ..RenderOptions::default()
     }
 }
 
-fn pixel_is(pixmap: &paint::Pixmap, x: u32, y: u32, r: u8, g: u8, b: u8) -> bool {
+fn pixel_is(pixmap: &megi_paint::Pixmap, x: u32, y: u32, r: u8, g: u8, b: u8) -> bool {
     let pixel = pixmap.pixel(x, y);
     pixel.r == r && pixel.g == g && pixel.b == b
 }
@@ -299,7 +299,7 @@ fn file_url_fixture_uses_base_href_and_ignores_print_media() {
     let output = render_url(&url, &options(300, 200)).expect("file render");
     assert_eq!(output.stats.external_stylesheets, 1);
     assert_eq!(output.stats.inline_stylesheets, 1);
-    assert_eq!(output.document_url.scheme(), net::Scheme::File);
+    assert_eq!(output.document_url.scheme(), megi_net::Scheme::File);
     // theme.css (resolved through <base href="sub/">) paints green.
     assert!(
         pixel_is(&output.pixmap, 10, 10, 0, 128, 0),
@@ -575,10 +575,10 @@ fn non_stylesheet_media_attributes_are_ignored() {
 fn oversized_inline_style_in_render_pipeline_does_not_panic() {
     let prefix = "background-color: rgb(0, 180, 0); width: 80px; height: 80px; ";
     let mut style = String::from(prefix);
-    style.push_str(&" ".repeat(css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
+    style.push_str(&" ".repeat(megi_css::MAX_INLINE_STYLE_BYTES - prefix.len() - 1));
     style.push('🦀');
     style.push_str("; background-color: rgb(255, 0, 0);");
-    assert!(!style.is_char_boundary(css::MAX_INLINE_STYLE_BYTES));
+    assert!(!style.is_char_boundary(megi_css::MAX_INLINE_STYLE_BYTES));
 
     let html = format!(
         "<!doctype html><html><body style=\"margin:0\"><div style=\"{style}\"></div></body></html>"

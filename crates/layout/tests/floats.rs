@@ -6,9 +6,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Float, Length, Overflow};
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Float, Length, Overflow};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn make_block_style(width: Length, height: Length) -> ComputedStyle {
     let mut style = ComputedStyle::initial();
@@ -216,7 +216,7 @@ fn test_clear_both_moves_box_below_float() {
     let cleared = make_div(&mut doc, container);
     styles.insert(float_box, make_float_style(Float::Left, 50.0, 30.0));
     let mut cleared_style = make_block_style(Length::Auto, Length::Px(10.0));
-    cleared_style.clear = css::Clear::Both;
+    cleared_style.clear = megi_css::Clear::Both;
     styles.insert(cleared, cleared_style);
 
     let tree = layout_doc(&doc, &styles);
@@ -244,7 +244,7 @@ fn test_clear_left_ignores_right_float() {
     let cleared = make_div(&mut doc, container);
     styles.insert(right_float, make_float_style(Float::Right, 50.0, 30.0));
     let mut cleared_style = make_block_style(Length::Auto, Length::Px(10.0));
-    cleared_style.clear = css::Clear::Left;
+    cleared_style.clear = megi_css::Clear::Left;
     styles.insert(cleared, cleared_style);
 
     let tree = layout_doc(&doc, &styles);

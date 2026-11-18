@@ -10,7 +10,6 @@ pub mod block;
 pub mod box_tree;
 mod calc;
 mod flex;
-pub mod geometry;
 mod grid;
 pub mod inline;
 pub mod table;
@@ -19,17 +18,17 @@ pub mod tree_builder;
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Overflow, Position, PseudoStyles};
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
+use megi_css::{ComputedStyle, Overflow, Position, PseudoStyles};
 
 use block::layout_block_with_viewport;
 pub use block::{layout_block, layout_block_with_measurer};
 pub use box_tree::{BoxType, LayoutBox};
-pub use geometry::{Dimensions, EdgeSizes, Rect};
 pub use inline::{
     DefaultTextMeasurer, FontMetrics, TextMeasurer, layout_inline_formatting_context,
     layout_inline_formatting_context_with_measurer,
 };
+pub use megi_core::{Dimensions, EdgeSizes, Rect};
 pub use text::FontTextMeasurer;
 use tree_builder::build_layout_tree_internal;
 pub use tree_builder::{
@@ -230,8 +229,8 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use css::{Display, Length};
-    use dom::{Document, Namespace};
+    use megi_core::{Document, Namespace};
+    use megi_css::{Display, Length};
 
     fn make_style(display: Display, width: Length, height: Length) -> ComputedStyle {
         let mut s = ComputedStyle::initial();

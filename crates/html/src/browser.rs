@@ -31,7 +31,7 @@
 //! CSSOM, `querySelector`/`matches` (needs the `css` crate), `Range`, mutation observers,
 //! sanitizer integration and the JS bindings themselves.
 
-use dom::{Document, DomError, NodeId};
+use megi_core::{Document, DomError, NodeId};
 
 use crate::tree_builder::{LimitViolations, ParseOptions, parse_fragment_into};
 
@@ -193,7 +193,7 @@ pub fn document_write_with_options(
     let violations = parse_fragment_into(
         doc,
         html,
-        dom::Namespace::Html,
+        megi_core::Namespace::Html,
         "body",
         scripting_enabled,
         options,
@@ -210,7 +210,10 @@ pub fn document_write_with_options(
 }
 
 /// Returns the namespace/local-name fragment-parsing context for `element`.
-fn fragment_context(doc: &Document, element: NodeId) -> Result<(dom::Namespace, String), DomError> {
+fn fragment_context(
+    doc: &Document,
+    element: NodeId,
+) -> Result<(megi_core::Namespace, String), DomError> {
     let element_data = doc
         .try_node(element)
         .ok_or(DomError::UnknownNode(element))?
@@ -225,7 +228,7 @@ fn content_target(doc: &Document, element: NodeId) -> NodeId {
     doc.try_node(element)
         .and_then(|node| node.as_element())
         .and_then(|element_data| {
-            (element_data.namespace == dom::Namespace::Html
+            (element_data.namespace == megi_core::Namespace::Html
                 && element_data.local_name == "template")
                 .then_some(element_data.template_contents)
                 .flatten()
@@ -350,7 +353,7 @@ mod unit_tests {
     #[test]
     fn detached_element_outer_html_is_rejected() {
         let mut doc = Document::new();
-        let detached = doc.create_element(dom::Namespace::Html, "div", vec![]);
+        let detached = doc.create_element(megi_core::Namespace::Html, "div", vec![]);
         assert!(matches!(
             set_outer_html(&mut doc, detached, "<p>x</p>"),
             Err(DomError::DetachedNode(_))

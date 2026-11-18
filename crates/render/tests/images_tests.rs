@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -32,7 +32,7 @@ fn options() -> RenderOptions {
     }
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -164,10 +164,10 @@ fn test_fixture_image_is_loaded_layouted_and_painted() {
 
     // The 4x4 PNG has red/green/blue/magenta quadrants; bilinear scaling to
     // 40x40 keeps solid interiors of each quadrant.
-    let red = count_color(&output.pixmap, css::Color::new(255, 0, 0, 255));
-    let green = count_color(&output.pixmap, css::Color::new(0, 255, 0, 255));
-    let blue = count_color(&output.pixmap, css::Color::new(0, 0, 255, 255));
-    let magenta = count_color(&output.pixmap, css::Color::new(255, 0, 255, 255));
+    let red = count_color(&output.pixmap, megi_css::Color::new(255, 0, 0, 255));
+    let green = count_color(&output.pixmap, megi_css::Color::new(0, 255, 0, 255));
+    let blue = count_color(&output.pixmap, megi_css::Color::new(0, 0, 255, 255));
+    let magenta = count_color(&output.pixmap, megi_css::Color::new(255, 0, 255, 255));
     for (name, count) in [
         ("red", red),
         ("green", green),
@@ -177,7 +177,7 @@ fn test_fixture_image_is_loaded_layouted_and_painted() {
         assert!(count > 100, "{name} quadrant must paint, got {count} px");
     }
     // The missing image leaves a documented gray placeholder.
-    let placeholder = count_color(&output.pixmap, paint::IMAGE_PLACEHOLDER);
+    let placeholder = count_color(&output.pixmap, megi_paint::IMAGE_PLACEHOLDER);
     assert!(
         placeholder > 100,
         "missing image placeholder, got {placeholder} px"
@@ -208,7 +208,7 @@ fn test_http_image_is_fetched_and_painted() {
         "{:?}",
         output.stats.warnings
     );
-    assert!(count_color(&output.pixmap, css::Color::RED) > 100);
+    assert!(count_color(&output.pixmap, megi_css::Color::RED) > 100);
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn test_missing_http_image_warns_and_uses_placeholder() {
         "{:?}",
         output.stats.warnings
     );
-    assert!(count_color(&output.pixmap, paint::IMAGE_PLACEHOLDER) > 100);
+    assert!(count_color(&output.pixmap, megi_paint::IMAGE_PLACEHOLDER) > 100);
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn test_unsupported_webp_image_is_a_warning_not_an_error() {
         "{:?}",
         output.stats.warnings
     );
-    assert!(count_color(&output.pixmap, paint::IMAGE_PLACEHOLDER) > 100);
+    assert!(count_color(&output.pixmap, megi_paint::IMAGE_PLACEHOLDER) > 100);
 }
 
 #[test]
@@ -278,7 +278,7 @@ fn test_no_network_skips_http_images_with_a_warning() {
                 </body></html>";
     let data_url = format!(
         "data:text/html;base64,{}",
-        net::base64_encode(page.as_bytes())
+        megi_net::base64_encode(page.as_bytes())
     );
     let mut render_options = options();
     render_options.no_network = true;
@@ -295,7 +295,7 @@ fn test_no_network_skips_http_images_with_a_warning() {
         "{:?}",
         output.stats.warnings
     );
-    assert!(count_color(&output.pixmap, paint::IMAGE_PLACEHOLDER) > 100);
+    assert!(count_color(&output.pixmap, megi_paint::IMAGE_PLACEHOLDER) > 100);
 }
 
 #[test]

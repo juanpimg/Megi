@@ -9,8 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
-use dom::Document;
-use render::{RenderOptions, Viewport, render_url};
+use megi_core::Document;
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -27,16 +27,16 @@ fn options() -> RenderOptions {
     }
 }
 
-fn render_fixture_with(name: &str, options: &RenderOptions) -> render::RenderOutput {
+fn render_fixture_with(name: &str, options: &RenderOptions) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), options)
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_fixture_with(name, &options())
 }
 
-fn element_with_id(document: &Document, id: &str) -> dom::NodeId {
+fn element_with_id(document: &Document, id: &str) -> megi_core::NodeId {
     document
         .descendants(document.root())
         .find(|node_id| {
@@ -49,7 +49,7 @@ fn element_with_id(document: &Document, id: &str) -> dom::NodeId {
         .unwrap_or_else(|| panic!("fixture element #{id} missing"))
 }
 
-fn attribute(output: &render::RenderOutput, id: &str, name: &str) -> Option<String> {
+fn attribute(output: &megi_render::RenderOutput, id: &str, name: &str) -> Option<String> {
     let node_id = element_with_id(&output.document, id);
     output
         .document
@@ -59,7 +59,7 @@ fn attribute(output: &render::RenderOutput, id: &str, name: &str) -> Option<Stri
         .map(str::to_owned)
 }
 
-fn count_where(pixmap: &paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
+fn count_where(pixmap: &megi_paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool) -> usize {
     pixmap
         .pixels
         .iter()

@@ -4,7 +4,7 @@
 //! a one-shot `TcpListener` on `127.0.0.1:0`. No external network, no long sleeps.
 //!
 //! These tests exercise the host side: `<script>` discovery, external script loading,
-//! `js::JsRuntime` execution with budgets, microtask/timer draining, console capture and
+//! `megi_js::JsRuntime` execution with budgets, microtask/timer draining, console capture and
 //! the re-render of the mutated DOM (styles → layout → paint).
 
 #![cfg(feature = "js")]
@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use render::{
+use megi_render::{
     ConsoleMessage, RenderOptions, ScriptBudget, ScriptingLimits, ScriptingMode, Viewport,
     render_url,
 };
@@ -36,7 +36,7 @@ fn options() -> RenderOptions {
     }
 }
 
-fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
+fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
         .iter()
@@ -44,12 +44,12 @@ fn count_color(pixmap: &paint::Pixmap, color: css::Color) -> usize {
         .count()
 }
 
-const RED: css::Color = css::Color::new(0xFF, 0x00, 0x00, 0xFF);
-const GREEN: css::Color = css::Color::new(0x00, 0xFF, 0x00, 0xFF);
-const BLUE: css::Color = css::Color::new(0x00, 0x00, 0xFF, 0xFF);
-const MAGENTA: css::Color = css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
+const RED: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0x00, 0xFF);
+const GREEN: megi_css::Color = megi_css::Color::new(0x00, 0xFF, 0x00, 0xFF);
+const BLUE: megi_css::Color = megi_css::Color::new(0x00, 0x00, 0xFF, 0xFF);
+const MAGENTA: megi_css::Color = megi_css::Color::new(0xFF, 0x00, 0xFF, 0xFF);
 
-fn render_fixture(name: &str, options: &RenderOptions) -> render::RenderOutput {
+fn render_fixture(name: &str, options: &RenderOptions) -> megi_render::RenderOutput {
     let url = file_url(&fixture_dir().join(name));
     render_url(&url, options).unwrap_or_else(|error| panic!("render {name}: {error}"))
 }

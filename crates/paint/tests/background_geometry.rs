@@ -4,13 +4,13 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_core::{Document, Namespace};
+use megi_css::{
     BackgroundPosition, BackgroundRepeat, BackgroundSize, Color, ComputedStyle, Display, Length,
 };
-use dom::{Document, Namespace};
-use image::RgbaImage;
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_image::RgbaImage;
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, ImageStore, MAX_BACKGROUND_TILES, Pixmap, background_tiles,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -22,7 +22,7 @@ const VIEWPORT: Rect = Rect {
     height: 120.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -56,7 +56,7 @@ fn background_style(
 }
 
 fn box_with_style(
-    id: dom::NodeId,
+    id: megi_core::NodeId,
     style: ComputedStyle,
     rect: Rect,
     padding: EdgeSizes,
@@ -72,7 +72,10 @@ fn box_with_style(
 }
 
 /// Builds `html > div` with a patterned background and paints it.
-fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (paint::DisplayList, Pixmap) {
+fn render_background(
+    style: ComputedStyle,
+    image: Arc<RgbaImage>,
+) -> (megi_paint::DisplayList, Pixmap) {
     let (_document, ids) = node_ids(2);
     let mut root_style = block_style();
     root_style.background_color = Color::WHITE; // keep canvas propagation on root
@@ -95,7 +98,7 @@ fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (paint::Dis
     (display_list, pixmap)
 }
 
-fn images(display_list: &paint::DisplayList) -> Vec<Rect> {
+fn images(display_list: &megi_paint::DisplayList) -> Vec<Rect> {
     display_list
         .iter()
         .filter_map(|item| match item {
@@ -296,7 +299,7 @@ fn test_background_tiles_matches_painter_geometry() {
 
 // --- R94: origin/clip/attachment, multiple layers and space/round -------------
 
-use css::{BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin};
+use megi_css::{BackgroundAttachment, BackgroundClip, BackgroundLayer, BackgroundOrigin};
 
 fn layer(
     image: &str,

@@ -1,13 +1,13 @@
 //! # Canonical `#document` Tree Serializer (`html5lib-tests` & WPT `serializeTree`)
 //!
-//! Serializes a [`dom::Document`] into the exact line-oriented format expected by
+//! Serializes a [`megi_core::Document`] into the exact line-oriented format expected by
 //! `html5lib-tests/tree-construction/*.dat` and WPT `html/syntax/parsing/resources/test.js`.
 //!
 //! The traversal is iterative (explicit heap work stack) so that deeply nested DOM trees
 //! cannot overflow the call stack (`F6` in the core audit: a 50k-level DOM used to abort
 //! the process here).
 
-use dom::{Attribute, Document, Namespace, NodeId, NodeKind};
+use megi_core::{Attribute, Document, Namespace, NodeId, NodeKind};
 
 /// Hard ceiling for one serialization pass (#647).
 ///
@@ -290,7 +290,7 @@ fn escape_attribute(value: &str, out: &mut String) {
 
 /// Returns the tag name to serialize for an element: local name for HTML/MathML/SVG elements,
 /// qualified name otherwise (WHATWG HTML §13.3, "serializing HTML fragments", element step).
-fn element_tag_name(el: &dom::ElementData) -> String {
+fn element_tag_name(el: &megi_core::ElementData) -> String {
     match el.namespace {
         Namespace::Html | Namespace::Svg | Namespace::MathMl => el.local_name.clone(),
         _ => match &el.prefix {
@@ -320,11 +320,11 @@ fn attribute_qualified_name(attr: &Attribute) -> String {
     }
 }
 
-fn is_void_html_element(el: &dom::ElementData) -> bool {
+fn is_void_html_element(el: &megi_core::ElementData) -> bool {
     el.namespace == Namespace::Html && HTML_VOID_ELEMENTS.contains(&el.local_name.as_str())
 }
 
-fn is_rawtext_element(el: &dom::ElementData, options: HtmlSerializeOptions) -> bool {
+fn is_rawtext_element(el: &megi_core::ElementData, options: HtmlSerializeOptions) -> bool {
     if el.namespace != Namespace::Html {
         return false;
     }

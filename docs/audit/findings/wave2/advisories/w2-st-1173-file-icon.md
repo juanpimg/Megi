@@ -2,8 +2,8 @@
 
 - Nombre propuesto: `favicon fetch lee ficheros locales indicados por páginas http(s) sin chequeo de esquema`.
 - Severidad propuesta: P2 (confidencialidad). Sin RCE; oráculo de existencia/validez + exfiltración de píxeles 16×16 vía icono.
-- Commit afectado: `3c06db8` (`crates/shell/src/favicon.rs:50-129`).
-- Alcance: `crates/shell` — `icon_url` / `fetch` rama `File` / `for_page`.
+- Commit afectado: `3c06db8` (`crates/browser/src/favicon.rs:50-129`).
+- Alcance: `crates/browser` — `icon_url` / `fetch` rama `File` / `for_page`.
 
 ## Impacto (resumen, sin PoC público)
 `for_page` no filtra por esquema de la página: una página remota puede referenciar un icono `file:` y el shell lee el fichero local para pintarlo en la banda chrome (tab + address). Efecto observado: el render difiere según el fichero exista/sea imagen válida (oráculo), y los píxeles del icono se exfiltran al screenshot. Dedup #1173 (evidencia nueva en HEAD).

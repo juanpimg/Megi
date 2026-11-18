@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
 #[cfg(feature = "js")]
-use render::ScriptingMode;
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::ScriptingMode;
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn spawn_echo() -> (String, Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback listener");

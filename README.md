@@ -15,7 +15,7 @@
 ## Megi Browser Shell
 
 ![Megi Desktop Browser Showcase](docs/images/showcase.png)
-*Navegador interactivo Megi (`crates/shell`): chrome nativo con barra de navegación, pestañas, motor tipográfico y renderizado determinista de HTML/CSS de extremo a extremo. Para más ejemplos y capturas de renderizado, consulta la [Galería de Renders](docs/SHOWCASE.md).*
+*Navegador interactivo Megi (`crates/browser`): chrome nativo con barra de navegación, pestañas, motor tipográfico y renderizado determinista de HTML/CSS de extremo a extremo. Para más ejemplos y capturas de renderizado, consulta la [Galería de Renders](docs/SHOWCASE.md).*
 
 ---
 
@@ -61,7 +61,7 @@ Si vas a trabajar en una issue, comenta en ella primero para evitar duplicados. 
 -  **Ejecución de JavaScript (`crates/js`)**:
   - Integración nativa con el motor ECMAScript **Boa 0.22**.
   - Bindings completos para manipulación del DOM, eventos, temporizadores y Web Workers cooperativos.
--  **Shell de Escritorio Usable (`crates/shell`)**:
+-  **Shell de Escritorio Usable (`crates/browser`)**:
   - Ventana interactiva nativa (X11/Wayland vía `winit`), soporte para múltiples pestañas, zoom dinámico, historial navegable y modo screenshot *headless* para CI. Chrome oscuro con acento, pestañas redondeadas y barra tipo pill; el mismo binario sirve para X11 y Wayland.
 
 ---
@@ -79,10 +79,10 @@ Si vas a trabajar en una issue, comenta en ella primero para evitar duplicados. 
 
 ```bash
 # Abrir una URL o archivo HTML en el navegador gráfico
-cargo run --release -p shell -- https://example.com
+cargo run --release -p megi-browser -- https://example.com
 
 # Modo headless: generar captura PNG de una página sin levantar servidor gráfico
-cargo run --release -p shell -- https://example.com --screenshot output.png --width 1024 --height 768
+cargo run --release -p megi-browser -- https://example.com --screenshot output.png --width 1024 --height 768
 ```
 
 ### 2. Ejecutar la Suite de Conformidad y Tests
@@ -92,17 +92,17 @@ cargo run --release -p shell -- https://example.com --screenshot output.png --wi
 cargo test --workspace
 
 # Ejecutar el gate oficial de conformidad (HTML5 + CSS)
-cargo run --release -p test_harness -- --summary
+cargo run --release -p megi-test-harness -- --summary
 
 # Modo estricto de conformidad
-cargo run --release -p test_harness -- --summary --strict
+cargo run --release -p megi-test-harness -- --summary --strict
 ```
 
 ### 3. Pipeline de Render a Imagen
 
 ```bash
 # Renderizar un documento HTML local a PNG mediante el pipeline de Fase 5
-cargo run --release -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 800 --height 600
+cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --width 800 --height 600
 ```
 
 ---
@@ -113,7 +113,7 @@ El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado e
 
 ```mermaid
 graph TD
-    shell["crates/shell (UI & Ventana)"] --> render["crates/render (Pipeline Orquestador)"]
+    shell["crates/browser (UI & Ventana)"] --> render["crates/render (Pipeline Orquestador)"]
     render --> html["crates/html (Parser WHATWG)"]
     render --> css["crates/css (Syntax, Cascade & Layers)"]
     render --> layout["crates/layout (BFC, IFC, Grid & Tables)"]
@@ -124,14 +124,14 @@ graph TD
     render --> image["crates/image (PNG, JPEG, GIF, WebP)"]
     render --> svg["crates/svg (Parser & Rasterizer)"]
     
-    html --> dom["crates/dom (Arena de Nodos)"]
+    html --> dom["crates/core (Arena de Nodos)"]
     layout --> dom
     paint --> image
 ```
 
 | Crate | Responsabilidad | Concurrencia / Seguridad |
 |---|---|:---:|
-| [`crates/dom`](crates/dom) | Arena de nodos DOM contigua con `NodeId` generacional libre de ciclos. | `#![forbid(unsafe_code)]` |
+| [`crates/core`](crates/core) | Arena de nodos DOM contigua con `NodeId` generacional libre de ciclos. | `#![forbid(unsafe_code)]` |
 | [`crates/html`](crates/html) | Tokenizador y árbol WHATWG HTML5 con conformidad 100%. | `#![forbid(unsafe_code)]` |
 | [`crates/css`](crates/css) | Parser CSS Syntax L3, Cascade Layers, Selectors L4 y Bloom pruning. | `#![forbid(unsafe_code)]` |
 | [`crates/layout`](crates/layout) | Árbol de cajas, BFC, IFC, CSS Grid, Flexbox y Container Queries. | `#![forbid(unsafe_code)]` |
@@ -142,7 +142,7 @@ graph TD
 | [`crates/net`](crates/net) | Stack de red: URL WHATWG, HTTP/1.1, HTTP/2 multiplexado y TLS puro. | `#![forbid(unsafe_code)]` |
 | [`crates/js`](crates/js) | Motor JS ECMAScript basado en Boa, bindings DOM y Web Workers. | `#![forbid(unsafe_code)]` |
 | [`crates/render`](crates/render) | Orquestador del pipeline completo de renderizado web de extremo a extremo. | `#![forbid(unsafe_code)]` |
-| [`crates/shell`](crates/shell) | Aplicación de escritorio nativa con pestañas, address bar y hotkeys. | `#![forbid(unsafe_code)]` |
+| [`crates/browser`](crates/browser) | Aplicación de escritorio nativa con pestañas, address bar y hotkeys. | `#![forbid(unsafe_code)]` |
 | [`crates/bench`](crates/bench) | Arnés de benchmarks reproducibles para medir latencias del pipeline. | `#![forbid(unsafe_code)]` |
 | [`crates/test_harness`](crates/test_harness) | Runner de verificación oficial frente a suites de conformidad WPT. | `#![forbid(unsafe_code)]` |
 

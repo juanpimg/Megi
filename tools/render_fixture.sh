@@ -32,22 +32,22 @@ check_json() {
 }
 
 echo "==> basic fixture (640x400)"
-cargo run -q -p render -- tests/fixtures/render/basic.html "$outdir/megi-basic.png" \
+cargo run -q -p megi-render -- tests/fixtures/render/basic.html "$outdir/megi-basic.png" \
     --width 640 --height 400 --json | check_json
 python3 tools/png_check.py "$outdir/megi-basic.png"
 digest_file "$outdir/megi-basic.png"
 
 echo "==> backgrounds fixture (800x600, background-image + list-style-image)"
-cargo run -q -p render -- tests/fixtures/render/backgrounds.html "$outdir/megi-backgrounds.png" \
+cargo run -q -p megi-render -- tests/fixtures/render/backgrounds.html "$outdir/megi-backgrounds.png" \
     --json | check_json
 python3 tools/png_check.py "$outdir/megi-backgrounds.png"
 digest_file "$outdir/megi-backgrounds.png"
 
 echo "==> scripting fixture (800x600, inline JS mutates text/colour)"
-cargo run -q -p render -- tests/fixtures/render/js_text.html "$outdir/megi-js-text.png" --json | check_json
+cargo run -q -p megi-render -- tests/fixtures/render/js_text.html "$outdir/megi-js-text.png" --json | check_json
 python3 tools/png_check.py "$outdir/megi-js-text.png"
 digest_file "$outdir/megi-js-text.png"
-cargo run -q -p render -- tests/fixtures/render/js_text.html \
+cargo run -q -p megi-render -- tests/fixtures/render/js_text.html \
     "$outdir/megi-js-text-disabled.png" --no-scripting --json | check_json
 digest_file "$outdir/megi-js-text-disabled.png"
 if cmp -s "$outdir/megi-js-text.png" "$outdir/megi-js-text-disabled.png"; then
@@ -58,17 +58,17 @@ else
 fi
 
 echo "==> SVG image fixture (800x600, rasterized SVG <img>)"
-cargo run -q -p render -- tests/fixtures/render/svg_img.html "$outdir/megi-svg-img.png" --json | check_json
+cargo run -q -p megi-render -- tests/fixtures/render/svg_img.html "$outdir/megi-svg-img.png" --json | check_json
 python3 tools/png_check.py "$outdir/megi-svg-img.png"
 digest_file "$outdir/megi-svg-img.png"
 
 echo "==> Inline SVG fixture (800x600, <svg> replaced by synthetic <img> data URL)"
-cargo run -q -p render -- tests/fixtures/render/svg_inline_simple.html "$outdir/megi-svg-inline.png" --json | check_json
+cargo run -q -p megi-render -- tests/fixtures/render/svg_inline_simple.html "$outdir/megi-svg-inline.png" --json | check_json
 python3 tools/png_check.py "$outdir/megi-svg-inline.png"
 digest_file "$outdir/megi-svg-inline.png"
 
 echo "==> showcase fixture (1024x768, @import + media + images + backgrounds + table)"
-cargo run -q -p render -- tests/fixtures/render/showcase/index.html \
+cargo run -q -p megi-render -- tests/fixtures/render/showcase/index.html \
     "$outdir/megi-showcase.png" --width 1024 --height 768 --json | check_json
 python3 tools/png_check.py "$outdir/megi-showcase.png"
 digest_file "$outdir/megi-showcase.png"

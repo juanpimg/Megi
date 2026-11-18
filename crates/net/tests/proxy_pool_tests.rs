@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::FetchOptions;
-use net::Url;
-use net::http::{H1Pool, fetch_pooled};
-use net::proxy::ProxyConfig;
+use megi_net::FetchOptions;
+use megi_net::Url;
+use megi_net::http::{H1Pool, fetch_pooled};
+use megi_net::proxy::ProxyConfig;
 
 fn spawn(handler: impl FnOnce(TcpListener) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -41,7 +41,7 @@ fn options(proxy: Url) -> FetchOptions {
     FetchOptions {
         connect_timeout: Duration::from_secs(2),
         read_timeout: Duration::from_secs(2),
-        accept_encoding: net::compression::AcceptEncoding::Identity,
+        accept_encoding: megi_net::compression::AcceptEncoding::Identity,
         proxy: Some(Arc::new(ProxyConfig {
             http: Some(proxy.clone()),
             https: Some(proxy),
@@ -155,9 +155,9 @@ fn socks5_proxy_connection_is_reused_across_fetch_pooled_calls() {
     let opts = FetchOptions {
         connect_timeout: Duration::from_secs(2),
         read_timeout: Duration::from_secs(2),
-        accept_encoding: net::compression::AcceptEncoding::Identity,
+        accept_encoding: megi_net::compression::AcceptEncoding::Identity,
         proxy: Some(Arc::new(ProxyConfig {
-            socks: Some(net::socks::SocksProxy {
+            socks: Some(megi_net::socks::SocksProxy {
                 host: "127.0.0.1".to_owned(),
                 port: socks_port,
                 username: None,

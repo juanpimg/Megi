@@ -8,8 +8,8 @@
 //! milliseconds (debug) or a few milliseconds (release). Budgets are deliberately loose so
 //! that scheduler noise cannot cause flaky failures.
 //!
-//! Measured with `cargo test -p html --test perf -- --nocapture` (debug) and
-//! `cargo test --release -p html --test perf -- --nocapture`.
+//! Measured with `cargo test -p megi-html --test perf -- --nocapture` (debug) and
+//! `cargo test --release -p megi-html --test perf -- --nocapture`.
 //!
 //! Before/after the F2 fix (this machine, warm build; budgets are 2 s per case so CI noise
 //! cannot make them flaky):
@@ -30,7 +30,7 @@
 
 use std::time::{Duration, Instant};
 
-use html::parse_document;
+use megi_html::parse_document;
 
 /// Budget multiplier from `MEGI_PERF_BUDGET_SCALE` (default `1.0`).
 fn budget_scale() -> f64 {

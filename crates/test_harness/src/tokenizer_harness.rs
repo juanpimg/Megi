@@ -2,7 +2,7 @@
 //!
 //! Parses `tests/html5lib-tests/tokenizer/*.test` JSON files, handles `doubleEscaped`
 //! `\uHHHH` hex unescaping (preserving lone UTF-16 surrogates via `Vec<u32>` code-point
-//! buffers), runs [`html::tokenizer::Tokenizer`] across every state in `initialStates`,
+//! buffers), runs [`megi_html::tokenizer::Tokenizer`] across every state in `initialStates`,
 //! coalesces adjacent `Character` tokens, compares actual vs expected output, and (for the 13
 //! standard suites) compares the 1-based `(code, line, col)` parse-error annotations. The
 //! `xmlViolationTests` fixture additionally runs with the §13.2.9 XML-infoset coercion enabled.
@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use html::tokenizer::{ParseError, Token, Tokenizer, TokenizerConfig, TokenizerState};
+use megi_html::tokenizer::{ParseError, Token, Tokenizer, TokenizerConfig, TokenizerState};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -55,7 +55,7 @@ pub type NormalizedParseError = (String, usize, usize);
 
 /// Converts Megi's [`ParseError`]s into html5lib-tests annotation form.
 ///
-/// The html5lib code name is exactly [`html::tokenizer::ParseErrorCode::as_str`]: Megi implements
+/// The html5lib code name is exactly [`megi_html::tokenizer::ParseErrorCode::as_str`]: Megi implements
 /// the 52 WHATWG HTML §13.2.2 codes, and every code used by the fixtures matches that table.
 pub fn normalize_parse_errors(errors: &[ParseError]) -> Vec<NormalizedParseError> {
     errors
@@ -311,7 +311,7 @@ pub fn coalesce_normalized_tokens(tokens: Vec<NormalizedToken>) -> Vec<Normalize
     out
 }
 
-/// Converts raw [`html::tokenizer::Token`] stream emitted by the engine into
+/// Converts raw [`megi_html::tokenizer::Token`] stream emitted by the engine into
 /// coalesced [`NormalizedToken`]s matching `html5lib-tests` format.
 pub fn normalize_engine_tokens(tokens: &[Token]) -> Vec<NormalizedToken> {
     let mut raw = Vec::new();

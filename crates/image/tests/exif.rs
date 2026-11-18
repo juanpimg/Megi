@@ -2,7 +2,7 @@
 //! of its tag, so `decode` (which applies the tag) must land on the same upright image
 //! (#1365). This exercises the real-world case, not just tag parsing.
 
-use image::{decode, exif_orientation};
+use megi_image::{decode, exif_orientation};
 
 /// Corner colours of the orientation-1 fixture, read literally from its decoded pixels.
 /// These are independent of `apply_orientation`: a no-op or transposed regression in that
@@ -32,7 +32,7 @@ fn exif_fixture_bytes(orientation: u8) -> &'static [u8] {
     }
 }
 
-fn corner(image: &image::RgbaImage, x: u32, y: u32) -> [u8; 4] {
+fn corner(image: &megi_image::RgbaImage, x: u32, y: u32) -> [u8; 4] {
     image
         .pixel(x, y)
         .expect("corner must be within decoded image")

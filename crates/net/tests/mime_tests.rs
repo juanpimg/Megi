@@ -1,6 +1,6 @@
 //! MIME sniffing tests (WHATWG MIME Sniffing §5 subset) and content-type resolution.
 
-use net::mime::{self, MimeHint};
+use megi_net::mime::{self, MimeHint};
 
 #[test]
 fn sniffs_html_documents() {
@@ -71,7 +71,10 @@ fn mime_types_are_canonical() {
     assert_eq!(MimeHint::Svg.mime_type(), "image/svg+xml");
     assert_eq!(MimeHint::Png.mime_type(), "image/png");
     assert_eq!(MimeHint::Binary.mime_type(), "application/octet-stream");
-    assert_eq!(net::mime::mime_type(MimeHint::Json), "application/json");
+    assert_eq!(
+        megi_net::mime::mime_type(MimeHint::Json),
+        "application/json"
+    );
 }
 
 #[test]
@@ -81,7 +84,7 @@ fn content_type_header_wins_over_sniffing() {
         "text/html; charset=utf-8".to_owned(),
     )];
     assert_eq!(
-        net::resolve_content_type(&headers, b"\x89PNG\r\n\x1a\n"),
+        megi_net::resolve_content_type(&headers, b"\x89PNG\r\n\x1a\n"),
         "text/html; charset=utf-8"
     );
 }
@@ -90,9 +93,9 @@ fn content_type_header_wins_over_sniffing() {
 fn empty_or_missing_content_type_falls_back_to_sniffing() {
     let empty = vec![("content-type".to_owned(), "  ".to_owned())];
     assert_eq!(
-        net::resolve_content_type(&empty, b"\x89PNG\r\n\x1a\n"),
+        megi_net::resolve_content_type(&empty, b"\x89PNG\r\n\x1a\n"),
         "image/png"
     );
-    assert_eq!(net::resolve_content_type(&[], b"<html>"), "text/html");
-    assert_eq!(net::resolve_content_type(&[], b"plain"), "text/plain");
+    assert_eq!(megi_net::resolve_content_type(&[], b"<html>"), "text/html");
+    assert_eq!(megi_net::resolve_content_type(&[], b"plain"), "text/plain");
 }

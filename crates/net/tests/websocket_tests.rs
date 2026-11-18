@@ -4,8 +4,8 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
-use net::websocket::accept_value;
-use net::{WebSocket, WebSocketError};
+use megi_net::websocket::accept_value;
+use megi_net::{WebSocket, WebSocketError};
 
 fn read_head(stream: &mut std::net::TcpStream) -> String {
     let mut bytes = Vec::new();
@@ -90,22 +90,22 @@ fn ws_handshake_and_text_roundtrip() {
 #[test]
 fn ws_scheme_is_case_insensitive() {
     // #1644: the gate lowercases but parse_ws_url must also handle uppercase prefixes.
-    let upper = net::websocket::parse_ws_url("WS://example.test/chat").expect("uppercase ws");
-    let lower = net::websocket::parse_ws_url("ws://example.test/chat").expect("lowercase ws");
+    let upper = megi_net::websocket::parse_ws_url("WS://example.test/chat").expect("uppercase ws");
+    let lower = megi_net::websocket::parse_ws_url("ws://example.test/chat").expect("lowercase ws");
     assert_eq!(upper.as_str(), lower.as_str());
     let upper_secure =
-        net::websocket::parse_ws_url("WSS://example.test/chat").expect("uppercase wss");
+        megi_net::websocket::parse_ws_url("WSS://example.test/chat").expect("uppercase wss");
     let lower_secure =
-        net::websocket::parse_ws_url("wss://example.test/chat").expect("lowercase wss");
+        megi_net::websocket::parse_ws_url("wss://example.test/chat").expect("lowercase wss");
     assert_eq!(upper_secure.as_str(), lower_secure.as_str());
 }
 
 #[test]
 fn ws_url_with_surrounding_whitespace_is_rejected() {
     // #1641: silent trimming hides caller mistakes; reject instead.
-    assert!(net::websocket::parse_ws_url("  ws://example.test/x  ").is_err());
-    assert!(net::websocket::parse_ws_url("\tws://example.test/x").is_err());
-    assert!(net::websocket::parse_ws_url("ws://example.test/x\n").is_err());
+    assert!(megi_net::websocket::parse_ws_url("  ws://example.test/x  ").is_err());
+    assert!(megi_net::websocket::parse_ws_url("\tws://example.test/x").is_err());
+    assert!(megi_net::websocket::parse_ws_url("ws://example.test/x\n").is_err());
 }
 
 #[test]
@@ -123,8 +123,8 @@ mod secure {
     use std::sync::Arc;
     use std::thread::JoinHandle;
 
-    use net::FetchOptions;
-    use net::websocket::{self, WebSocketClient};
+    use megi_net::FetchOptions;
+    use megi_net::websocket::{self, WebSocketClient};
     use rcgen::generate_simple_self_signed;
     use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
     use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -299,7 +299,7 @@ fn fragmented_text_message_is_reassembled() {
                 .expect("key");
             let response = format!(
                 "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
-                net::websocket::accept_value(&key)
+                megi_net::websocket::accept_value(&key)
             );
             let _ = stream.write_all(response.as_bytes());
             // Fragmented message: "a" (FIN=0), "b" (FIN=1).
@@ -310,11 +310,12 @@ fn fragmented_text_message_is_reassembled() {
     }
 
     let (port, server) = spawn();
-    let url = net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
-    let mut client = net::websocket::WebSocketClient::connect(&url, &net::FetchOptions::default())
-        .expect("connect");
+    let url = megi_net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let mut client =
+        megi_net::websocket::WebSocketClient::connect(&url, &megi_net::FetchOptions::default())
+            .expect("connect");
     let frame = client.recv().expect("reassembled frame");
-    assert_eq!(frame.opcode, net::websocket::Opcode::Text);
+    assert_eq!(frame.opcode, megi_net::websocket::Opcode::Text);
     assert!(frame.fin);
     assert_eq!(
         frame.payload, b"ab",
@@ -359,7 +360,7 @@ fn raw_recv_replies_to_ping_and_recv_bytes_returns_binary() {
                 .expect("key");
             let response = format!(
                 "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
-                net::websocket::accept_value(&key)
+                megi_net::websocket::accept_value(&key)
             );
             let _ = stream.write_all(response.as_bytes());
             // Ping, then a binary message with bytes 0xFF 0x00.
@@ -378,16 +379,17 @@ fn raw_recv_replies_to_ping_and_recv_bytes_returns_binary() {
     }
 
     let (port, server) = spawn();
-    let url = net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
-    let options = net::FetchOptions {
+    let url = megi_net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let options = megi_net::FetchOptions {
         read_timeout: std::time::Duration::from_secs(2),
-        ..net::FetchOptions::default()
+        ..megi_net::FetchOptions::default()
     };
-    let mut client = net::websocket::WebSocketClient::connect(&url, &options).expect("connect");
+    let mut client =
+        megi_net::websocket::WebSocketClient::connect(&url, &options).expect("connect");
     let ping = client.recv().expect("ping");
-    assert_eq!(ping.opcode, net::websocket::Opcode::Ping);
+    assert_eq!(ping.opcode, megi_net::websocket::Opcode::Ping);
     let binary = client.recv().expect("binary");
-    assert_eq!(binary.opcode, net::websocket::Opcode::Binary);
+    assert_eq!(binary.opcode, megi_net::websocket::Opcode::Binary);
     assert_eq!(binary.payload, vec![0xFF, 0x00]);
     server.join().expect("server");
 }
@@ -426,14 +428,15 @@ fn websocket_wrapper_recv_bytes_returns_binary() {
             .expect("key");
         let response = format!(
             "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
-            net::websocket::accept_value(&key)
+            megi_net::websocket::accept_value(&key)
         );
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.write_all(&[0x82, 0x02, 0xAB, 0xCD]);
         let _ = stream.flush();
         std::thread::sleep(std::time::Duration::from_millis(30));
     });
-    let mut socket = net::WebSocket::connect(&format!("ws://127.0.0.1:{port}/")).expect("connect");
+    let mut socket =
+        megi_net::WebSocket::connect(&format!("ws://127.0.0.1:{port}/")).expect("connect");
     assert_eq!(socket.recv_bytes().expect("recv_bytes"), vec![0xAB, 0xCD]);
     server.join().expect("server");
 }

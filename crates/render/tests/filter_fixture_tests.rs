@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -16,7 +16,7 @@ fn near(a: u8, b: u8, tolerance: u8) -> bool {
     a.abs_diff(b) <= tolerance
 }
 
-fn pixel(output: &render::RenderOutput, x: u32, y: u32) -> css::Color {
+fn pixel(output: &megi_render::RenderOutput, x: u32, y: u32) -> megi_css::Color {
     let idx = (y as usize) * (output.pixmap.width as usize) + (x as usize);
     output.pixmap.pixels[idx]
 }

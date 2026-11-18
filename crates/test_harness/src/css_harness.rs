@@ -230,7 +230,7 @@ pub fn run_wpt_declarations_trim_whitespace(wpt_dir: &Path) -> Result<Vec<CssTes
     let content = read_wpt_fixture(wpt_dir, "declarations-trim-whitespace.html")?;
 
     // Parse the test HTML file with Megi's HTML engine (scripting disabled)
-    let doc = html::parse_document(&content, false);
+    let doc = megi_html::parse_document(&content, false);
 
     // Find the style element text
     let mut style_text = String::new();
@@ -261,10 +261,10 @@ pub fn run_wpt_declarations_trim_whitespace(wpt_dir: &Path) -> Result<Vec<CssTes
         ));
     }
 
-    let stylesheet = css::parse_stylesheet(&style_text);
+    let stylesheet = megi_css::parse_stylesheet(&style_text);
     let mut decl_map = std::collections::HashMap::new();
     for rule in &stylesheet.rules {
-        if let css::Rule::Style(style_rule) = rule {
+        if let megi_css::Rule::Style(style_rule) = rule {
             for decl in &style_rule.declarations {
                 decl_map.insert(decl.name.clone(), decl.raw_value.clone());
             }
@@ -291,7 +291,7 @@ pub fn run_wpt_declarations_trim_whitespace(wpt_dir: &Path) -> Result<Vec<CssTes
 /// Runs the WPT `input-preprocessing.html` test suite.
 ///
 /// The 10 upstream `testParsing(input, expected)` cases are extracted from the fixture and replayed
-/// through [`css::preprocess_css_codepoints`] (which supports lone surrogates, unlike `&str`). Three
+/// through [`megi_css::preprocess_css_codepoints`] (which supports lone surrogates, unlike `&str`). Three
 /// CR/LF/FF newline-normalization cases are appended because the upstream fixture cannot express
 /// them in JS (it says so in a comment); those come from CSS Syntax §3.3 directly.
 pub fn run_wpt_input_preprocessing(wpt_dir: &Path) -> Result<Vec<CssTestResult>, String> {
@@ -306,7 +306,7 @@ pub fn run_wpt_input_preprocessing(wpt_dir: &Path) -> Result<Vec<CssTestResult>,
 
     let mut results = Vec::new();
     for (input_cps, expected_cps) in &calls {
-        let actual_cps: Vec<u32> = css::preprocess_css_codepoints(input_cps)
+        let actual_cps: Vec<u32> = megi_css::preprocess_css_codepoints(input_cps)
             .into_iter()
             .map(|ch| ch as u32)
             .collect();
@@ -328,7 +328,7 @@ pub fn run_wpt_input_preprocessing(wpt_dir: &Path) -> Result<Vec<CssTestResult>,
         ("foo\rbar", "foo\nbar"),
         ("foo\x0Cbar", "foo\nbar"),
     ] {
-        let actual: String = css::preprocess_css_input(input).into_iter().collect();
+        let actual: String = megi_css::preprocess_css_input(input).into_iter().collect();
         let passed = actual == expected;
         results.push(CssTestResult {
             name: format!("input-preprocessing.html (newline normalization): {input:?}"),
@@ -342,7 +342,7 @@ pub fn run_wpt_input_preprocessing(wpt_dir: &Path) -> Result<Vec<CssTestResult>,
 }
 
 /// Canonicalizes an `An+B` struct into the selector text WPT uses for `:nth-child(<An+B>)`.
-fn format_an_plus_b(anb: css::AnPlusB) -> String {
+fn format_an_plus_b(anb: megi_css::AnPlusB) -> String {
     if anb.a == 0 {
         return anb.b.to_string();
     }
@@ -363,7 +363,7 @@ fn format_an_plus_b(anb: css::AnPlusB) -> String {
 /// Runs a curated subset of `anb-parsing.html` validated against the upstream expectations.
 ///
 /// Each curated input is located in the vendored fixture, its expected `selectorText` is decoded
-/// from upstream, and the engine's [`css::AnPlusB`] is canonicalized to the same textual form before
+/// from upstream, and the engine's [`megi_css::AnPlusB`] is canonicalized to the same textual form before
 /// comparison. Missing inputs are an error (fixture drift), never a silent skip.
 pub fn run_wpt_anb_parsing(wpt_dir: &Path) -> Result<Vec<CssTestResult>, String> {
     let content = read_wpt_fixture(wpt_dir, "anb-parsing.html")?;
@@ -408,13 +408,13 @@ pub fn run_wpt_anb_parsing(wpt_dir: &Path) -> Result<Vec<CssTestResult>, String>
 
         // Extract the engine's parsed An+B from a :nth-child() selector.
         let selector_str = format!(":nth-child({formula})");
-        let list = css::parse_selectors(&selector_str);
+        let list = megi_css::parse_selectors(&selector_str);
         let mut matched_anb = None;
         if let Some(first_sel) = list.selectors.first()
             && let Some((compound, _)) = first_sel.compounds.first()
         {
             for pseudo in &compound.pseudo_classes {
-                if let css::PseudoClass::NthChild(anb) = pseudo {
+                if let megi_css::PseudoClass::NthChild(anb) = pseudo {
                     matched_anb = Some(*anb);
                 }
             }
@@ -423,7 +423,7 @@ pub fn run_wpt_anb_parsing(wpt_dir: &Path) -> Result<Vec<CssTestResult>, String>
         let actual = matched_anb
             .map(format_an_plus_b)
             .unwrap_or_else(|| "parse error".to_string());
-        let expected_anb = css::AnPlusB {
+        let expected_anb = megi_css::AnPlusB {
             a: expected_a,
             b: expected_b,
         };

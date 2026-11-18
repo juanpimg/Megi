@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display};
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display};
+use megi_layout::{BoxType, Rect, layout_document};
 
 fn element(doc: &mut Document, parent: NodeId, name: &str) -> NodeId {
     let id = doc.create_element(Namespace::Html, name, vec![]);
@@ -88,7 +88,10 @@ fn test_sibling_text_boxes_share_the_parent_anonymous_style_arc() {
 }
 
 /// Collects every text box under `node` (tree order).
-fn collect_text_boxes<'a>(node: &'a layout::LayoutBox, out: &mut Vec<&'a layout::LayoutBox>) {
+fn collect_text_boxes<'a>(
+    node: &'a megi_layout::LayoutBox,
+    out: &mut Vec<&'a megi_layout::LayoutBox>,
+) {
     if matches!(node.box_type, BoxType::TextNode(_)) {
         out.push(node);
     }
@@ -153,7 +156,7 @@ fn test_equal_element_styles_share_the_interned_arc() {
 }
 
 /// Finds the layout box for a node id (tree order).
-fn find_box(root: &layout::LayoutBox, id: NodeId) -> Option<&layout::LayoutBox> {
+fn find_box(root: &megi_layout::LayoutBox, id: NodeId) -> Option<&megi_layout::LayoutBox> {
     if matches!(root.box_type, BoxType::BlockNode(node) | BoxType::InlineBlock(node) if node == id)
     {
         return Some(root);

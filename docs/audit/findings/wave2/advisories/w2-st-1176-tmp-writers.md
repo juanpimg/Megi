@@ -2,8 +2,8 @@
 
 - Nombre propuesto: `writers secundarios usan tmp predecible + truncate/symlink-follow (descargas, screenshots)`.
 - Severidad propuesta: P2 (integridad, atacante local). Sin RCE remota.
-- Commit afectado: `3c06db8` (`crates/shell/src/download.rs:138-161`, `crates/shell/src/headless.rs:318-348,388-409`; contraejemplo correcto `crates/shell/src/session.rs:477-504`).
-- Alcance: `crates/shell` — `download::write_atomic`, `headless::save_screenshot`/`write_bytes`.
+- Commit afectado: `3c06db8` (`crates/browser/src/download.rs:138-161`, `crates/browser/src/headless.rs:318-348,388-409`; contraejemplo correcto `crates/browser/src/session.rs:477-504`).
+- Alcance: `crates/browser` — `download::write_atomic`, `headless::save_screenshot`/`write_bytes`.
 
 ## Impacto (resumen, sin PoC público)
 Los writers secundarios usan nombre fijo `.<name>.tmp` + `fs::write` (trunca y sigue symlinks). Un atacante local que plante un symlink en el nombre predecible puede redirigir bytes controlados fuera del directorio esperado. Solo `session.rs` se migró al patrón correcto (tmp único + `create_new` + guard). Dedup #1176 (la corrección solo cubrió `session.rs`; 3 call sites siguen vulnerables).

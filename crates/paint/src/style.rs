@@ -1,7 +1,7 @@
 //! # `<style>` Extraction Helper
 //!
 //! CSS 2.2 §4.1 lets a document embed author style sheets in `<style>`
-//! elements. [`css::resolve_document_styles`] takes the concatenated author
+//! elements. [`megi_css::resolve_document_styles`] takes the concatenated author
 //! CSS as a string, but the DOM layer intentionally has no "collect stylesheet
 //! text" helper, so every driver would otherwise re-implement this traversal.
 //!
@@ -21,8 +21,8 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
 
 /// Resolves the computed styles of `doc`, applying the embedded `<style>`
 /// elements as author CSS on top of the default user-agent stylesheet.
@@ -31,7 +31,7 @@ use dom::{Document, NodeId};
 /// (`examples/html_to_png.rs`) and by the end-to-end tests:
 ///
 /// ```text
-/// collect_style_text(doc) -> Option<&str> -> css::resolve_document_styles
+/// collect_style_text(doc) -> Option<&str> -> megi_css::resolve_document_styles
 /// ```
 ///
 /// It is a distinct helper (instead of inlining it in each caller) so the
@@ -44,7 +44,7 @@ pub fn resolve_embedded_styles(doc: &Document) -> HashMap<NodeId, ComputedStyle>
     } else {
         Some(style_text.as_str())
     };
-    css::resolve_document_styles(doc, author_css)
+    megi_css::resolve_document_styles(doc, author_css)
 }
 
 /// Concatenates the text content of every `<style>` element, in document order.
@@ -139,19 +139,19 @@ fn collect_text_content(doc: &Document, node_id: NodeId, out: &mut String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dom::Document;
+    use megi_core::Document;
 
     /// Builds `<html><head><style>..</style><style>..</style></head><body/></html>`.
     fn document_with_styles(sheets: &[&str]) -> Document {
         let mut doc = Document::new();
-        let html = doc.create_element(dom::Namespace::Html, "html", vec![]);
-        let head = doc.create_element(dom::Namespace::Html, "head", vec![]);
-        let body = doc.create_element(dom::Namespace::Html, "body", vec![]);
+        let html = doc.create_element(megi_core::Namespace::Html, "html", vec![]);
+        let head = doc.create_element(megi_core::Namespace::Html, "head", vec![]);
+        let body = doc.create_element(megi_core::Namespace::Html, "body", vec![]);
         doc.append_child(doc.root(), html);
         doc.append_child(html, head);
         doc.append_child(html, body);
         for sheet in sheets {
-            let style = doc.create_element(dom::Namespace::Html, "style", vec![]);
+            let style = doc.create_element(megi_core::Namespace::Html, "style", vec![]);
             doc.append_child(head, style);
             doc.append_text(style, sheet);
         }
@@ -170,10 +170,10 @@ mod tests {
     #[test]
     fn test_resolve_embedded_styles_applies_author_css() {
         let mut doc = Document::new();
-        let html = doc.create_element(dom::Namespace::Html, "html", vec![]);
-        let head = doc.create_element(dom::Namespace::Html, "head", vec![]);
-        let body = doc.create_element(dom::Namespace::Html, "body", vec![]);
-        let style = doc.create_element(dom::Namespace::Html, "style", vec![]);
+        let html = doc.create_element(megi_core::Namespace::Html, "html", vec![]);
+        let head = doc.create_element(megi_core::Namespace::Html, "head", vec![]);
+        let body = doc.create_element(megi_core::Namespace::Html, "body", vec![]);
+        let style = doc.create_element(megi_core::Namespace::Html, "style", vec![]);
         doc.append_child(doc.root(), html);
         doc.append_child(html, head);
         doc.append_child(html, body);
@@ -182,15 +182,15 @@ mod tests {
 
         let styles = resolve_embedded_styles(&doc);
         let body_style = styles.get(&body).expect("body computed style");
-        assert_eq!(body_style.color, css::Color::new(1, 2, 3, 255));
+        assert_eq!(body_style.color, megi_css::Color::new(1, 2, 3, 255));
         // The user-agent stylesheet is still applied.
-        assert_eq!(body_style.display, css::Display::Block);
+        assert_eq!(body_style.display, megi_css::Display::Block);
     }
 
     #[test]
     fn test_returns_empty_string_without_style_elements() {
         let mut doc = Document::new();
-        let html = doc.create_element(dom::Namespace::Html, "html", vec![]);
+        let html = doc.create_element(megi_core::Namespace::Html, "html", vec![]);
         doc.append_child(doc.root(), html);
         assert_eq!(collect_style_text(&doc), "");
     }

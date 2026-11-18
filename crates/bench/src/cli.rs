@@ -16,8 +16,8 @@ usage: bench [options]
   -h, --help          show this help
 
 Examples:
-  cargo run --release -p bench
-  cargo run --release -p bench -- --json --scale 0.5
+  cargo run --release -p megi-bench
+  cargo run --release -p megi-bench -- --json --scale 0.5
   ./tools/bench.sh --filter html
 ";
 

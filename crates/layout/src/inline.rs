@@ -7,11 +7,11 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
-use dom::NodeId;
+use megi_core::NodeId;
+use megi_css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
 
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::Rect;
+use megi_core::geometry::Rect;
 
 /// Typographic font metrics for text measurement and baseline alignment.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -332,7 +332,7 @@ fn push_style(styles: &mut Vec<Arc<ComputedStyle>>, style: Arc<ComputedStyle>) -
 }
 
 /// Resolves a CSS [`Length`] (and optional `calc()` value) into pixels relative to containing block width.
-fn resolve_length(len: Length, calc: Option<css::calc::CalcValue>, cb_width: f32) -> f32 {
+fn resolve_length(len: Length, calc: Option<megi_css::calc::CalcValue>, cb_width: f32) -> f32 {
     crate::calc::length(len, calc, cb_width)
 }
 
@@ -355,7 +355,7 @@ pub fn layout_inline_formatting_context_with_measurer(
 /// IFC layout with the inherited positioning context (needed to lay out atomic
 /// inline-level boxes and their absolutely positioned descendants).
 /// Finds an LRO/RLO control anywhere in this formatting context's text (#1448).
-fn bidi_control_direction(box_node: &LayoutBox) -> Option<css::Direction> {
+fn bidi_control_direction(box_node: &LayoutBox) -> Option<megi_css::Direction> {
     match &box_node.box_type {
         BoxType::TextNode(text) => crate::bidi::forced_direction_from_controls(text),
         _ => box_node.children.iter().find_map(bidi_control_direction),
@@ -435,8 +435,8 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     let strut_descent = strut_metrics.descent + strut_leading / 2.0;
 
     // 4. Construct LineBox layout boxes and resolve baseline / vertical-align
-    let bidi_active = container_style.direction == css::Direction::Rtl
-        || container_style.unicode_bidi != css::UnicodeBidi::Normal
+    let bidi_active = container_style.direction == megi_css::Direction::Rtl
+        || container_style.unicode_bidi != megi_css::UnicodeBidi::Normal
         || crate::bidi::contains_rtl_or_bidi(&text_pool)
         || control_direction.is_some();
     let mut line_boxes = Vec::with_capacity(lines.len());
@@ -488,7 +488,7 @@ fn reorder_line_tokens_bidi(
     text_pool: &mut String,
     styles: &[Arc<ComputedStyle>],
     container_style: &ComputedStyle,
-    control_direction: Option<css::Direction>,
+    control_direction: Option<megi_css::Direction>,
 ) {
     use crate::bidi::{
         BidiClass, paragraph_base_level, reorder_visual_indices, resolve_levels, word_bidi_class,
@@ -501,16 +501,16 @@ fn reorder_line_tokens_bidi(
     // A paragraph-level bidi-override forces every character, including Latin text,
     // into the container direction; per-word style indices are not reliable here.
     let forced_all = match container_style.unicode_bidi {
-        css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride => {
+        megi_css::UnicodeBidi::BidiOverride | megi_css::UnicodeBidi::IsolateOverride => {
             Some(match container_style.direction {
-                css::Direction::Ltr => BidiClass::L,
-                css::Direction::Rtl => BidiClass::R,
+                megi_css::Direction::Ltr => BidiClass::L,
+                megi_css::Direction::Rtl => BidiClass::R,
             })
         }
         // LRO/RLO embedded in the text also force the run (#1448).
         _ => control_direction.map(|direction| match direction {
-            css::Direction::Ltr => BidiClass::L,
-            css::Direction::Rtl => BidiClass::R,
+            megi_css::Direction::Ltr => BidiClass::L,
+            megi_css::Direction::Rtl => BidiClass::R,
         }),
     };
 
@@ -553,10 +553,10 @@ fn reorder_line_tokens_bidi(
     let mut classes = Vec::with_capacity(groups.len());
     let mut first_strong = None;
     let override_dir = match container_style.unicode_bidi {
-        css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride => {
+        megi_css::UnicodeBidi::BidiOverride | megi_css::UnicodeBidi::IsolateOverride => {
             Some(match container_style.direction {
-                css::Direction::Ltr => BidiClass::L,
-                css::Direction::Rtl => BidiClass::R,
+                megi_css::Direction::Ltr => BidiClass::L,
+                megi_css::Direction::Rtl => BidiClass::R,
             })
         }
         _ => None,
@@ -575,11 +575,12 @@ fn reorder_line_tokens_bidi(
                         let st = &styles[*style as usize];
                         if matches!(
                             st.unicode_bidi,
-                            css::UnicodeBidi::BidiOverride | css::UnicodeBidi::IsolateOverride
+                            megi_css::UnicodeBidi::BidiOverride
+                                | megi_css::UnicodeBidi::IsolateOverride
                         ) {
                             found = Some(match st.direction {
-                                css::Direction::Ltr => BidiClass::L,
-                                css::Direction::Rtl => BidiClass::R,
+                                megi_css::Direction::Ltr => BidiClass::L,
+                                megi_css::Direction::Rtl => BidiClass::R,
                             });
                         } else {
                             found = Some(word_bidi_class(&text_pool[*start..*end]));

@@ -8,7 +8,7 @@ P2 — bug de corrección: SVGs válidos con colores comunes quedan invisibles e
 
 ## Pasos para reproducir
 1. `docs/audit/findings/wave2/repro-w2-assets/namedcolor.svg` (`fill="rebeccapurple"`).
-2. `cargo run -p svg --example svg_to_png -- namedcolor.svg out.png` + conteo de píxeles (o sonda Mesa A `render` vía `svg::render_svg`).
+2. `cargo run -p megi-svg --example svg_to_png -- namedcolor.svg out.png` + conteo de píxeles (o sonda Mesa A `render` vía `megi_svg::render_svg`).
 
 ## Esperado vs observado
 Esperado: rectángulo opaco `(102, 51, 153)` (CSS Color 3 / SVG 1.1 §4.2; `rebeccapurple` es CSS Color 4).

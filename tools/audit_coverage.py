@@ -13,7 +13,7 @@ category, so a new crate or tool cannot slip in unaudited.
 
 Usage:
     python3 tools/audit_coverage.py --generate          # add new files as pending
-    python3 tools/audit_coverage.py --mark covered --path crates/dom/src \
+    python3 tools/audit_coverage.py --mark covered --path crates/core/src \
         --auditor wave1 --date 2026-11-16 --findings '#1105-#1119'
     python3 tools/audit_coverage.py --report            # coverage summary
     python3 tools/audit_coverage.py --check             # CI gate

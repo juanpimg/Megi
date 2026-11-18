@@ -1,6 +1,6 @@
 # Auditoría ola 2 — F2 shell-tools (prefijo `w2-st`)
 
-- Scope: todos los `.rs` bajo `crates/shell/src/`, `crates/bench/src/`, `crates/test_harness/src/` (41 archivos, ~25k líneas), leídos línea por línea.
+- Scope: todos los `.rs` bajo `crates/browser/src/`, `crates/bench/src/`, `crates/test_harness/src/` (41 archivos, ~25k líneas), leídos línea por línea.
 - HEAD auditado: `3c06db8`. Árbol principal y worktree coinciden en el scope (`cmp` limpio archivo por archivo).
 - **Proveniencia de ejecución**: el árbol principal puede tener cambios WIP que afectan a la compilación; **todos** los comandos `cargo`/binario se ejecutaron desde el worktree limpio `/tmp/opencode/megi-verify` (HEAD `3c06db8`, `git status` limpio). Primeros sondeos en el árbol principal se descartaron por sospecha de binario stale (ver concerns). Ningún hallazgo depende de cambios sin commitear → **ninguno lleva `excluir: WIP del usuario`**.
 - Issues de referencia verificados en `gh` (todos CLOSED) y en `docs/audit/FINDINGS.md` (marcados Deferred): #1163 #1165 #1166 #1167 #1168 #1169 #1171 #1172 #1173 #1174 #1175 #1176 #1197 #1198 #1199 #1201, más #1177 #1178 y #1468.
@@ -9,7 +9,7 @@
 
 Leídos de arriba abajo (tests incluidos):
 
-- `crates/shell/src/`: `a11y.rs` (527), `chrome.rs` (3186), `cli.rs` (771), `convert.rs` (92), `download.rs` (606), `error.rs` (42), `favicon.rs` (347), `find.rs` (692), `forms.rs` (1579), `headless.rs` (409), `history.rs` (391), `i18n.rs` (179), `images.rs` (119), `lib.rs` (274), `links.rs` (491), `main.rs` (203), `navigation.rs` (391), `pages.rs` (625), `present.rs` (255), `reader.rs` (233), `refresh.rs` (206), `scale.rs` (173), `scroll.rs` (249), `session.rs` (1445), `tabs.rs` (473), `title.rs` (370), `window.rs` (3200), `worker.rs` (1121), `zoom.rs` (268).
+- `crates/browser/src/`: `a11y.rs` (527), `chrome.rs` (3186), `cli.rs` (771), `convert.rs` (92), `download.rs` (606), `error.rs` (42), `favicon.rs` (347), `find.rs` (692), `forms.rs` (1579), `headless.rs` (409), `history.rs` (391), `i18n.rs` (179), `images.rs` (119), `lib.rs` (274), `links.rs` (491), `main.rs` (203), `navigation.rs` (391), `pages.rs` (625), `present.rs` (255), `reader.rs` (233), `refresh.rs` (206), `scale.rs` (173), `scroll.rs` (249), `session.rs` (1445), `tabs.rs` (473), `title.rs` (370), `window.rs` (3200), `worker.rs` (1121), `zoom.rs` (268).
 - `crates/bench/src/`: `benches.rs` (1720), `cli.rs` (183), `generators.rs` (584), `main.rs` (82), `report.rs` (243), `runner.rs` (337).
 - `crates/test_harness/src/`: `css_harness.rs` (447), `js_executor.rs` (189), `lib.rs` (181), `main.rs` (513), `serializer_harness.rs` (856), `tokenizer_harness.rs` (469), `tree_harness.rs` (267).
 
@@ -125,7 +125,7 @@ Leídos de arriba abajo (tests incluidos):
 ### F8 — w2-st-1171-no-fsync · `session.rs:422-446` · lente contrato · P2 · contract · `needs-repro` (solo para el evento de pérdida) · dedup #1171
 
 - title: `save()` renombra sin `fsync` del fichero ni del directorio.
-- evidence: `write_temporary` + `fs::rename` sin `sync_all`; `grep -rn "sync_all|fsync|fdatasync" crates/shell/src/` → 0 resultados (comando ejecutado en worktree limpio).
+- evidence: `write_temporary` + `fs::rename` sin `sync_all`; `grep -rn "sync_all|fsync|fdatasync" crates/browser/src/` → 0 resultados (comando ejecutado en worktree limpio).
 - impact: caída de energía/crash tras rename → `session.json` truncado o vacío pese a tmp+rename.
 - expected: `sync_all` del tmp + `sync_all` del dir antes de `rename` (best-effort, como hacen otros navegadores).
 - fix: idem; test con `LD_PRELOAD`/crash-injection o inspección de trazas.
@@ -265,8 +265,8 @@ Leídos de arriba abajo (tests incluidos):
 
 Todos desde `/tmp/opencode/megi-verify` (HEAD 3c06db8 limpio), salvo `gh` (solo lectura).
 
-1. `cargo test -p shell -p bench -p test_harness` → shell lib 269 passed; shell bins 12+1; bench 58; harness lib 3; closed_loop 8 (100.6 s). Todo `ok`, 0 fallos.
-2. `grep -rn "sync_all|fsync|fdatasync" crates/shell/src/ | wc -l` → `0`.
+1. `cargo test -p megi-browser -p megi-bench -p megi-test-harness` → shell lib 269 passed; shell bins 12+1; bench 58; harness lib 3; closed_loop 8 (100.6 s). Todo `ok`, 0 fallos.
+2. `grep -rn "sync_all|fsync|fdatasync" crates/browser/src/ | wc -l` → `0`.
 3. `gh issue view` ×17 → los 17 issues CLOSED (lista en el encabezado).
 4. E-tabs (F16): `megi "data:text/html,<h1>AAA</h1>" --tabs B --screenshot t1.png` y con `--tabs CCC-different` → ambos `wrote … 14344 bytes`, md5 `29c7df93e9775d51d46db8c170d1ad32` idénticos.
 5. E-icon (F2): servidor `http.server 8932` + página con `<link rel=icon href="file:///tmp/opencode/v2/secret/marker.png">` (fixture `rgba8.png`); `--save-html` confirma carga (`hi-http`).
@@ -283,5 +283,5 @@ Todos desde `/tmp/opencode/megi-verify` (HEAD 3c06db8 limpio), salvo `gh` (solo 
 3. **Proveniencia**: sondeos iniciales en el árbol principal dieron resultados inconsistentes (posible binario stale); se descartaron y todo lo reportado se re-ejecutó en el worktree limpio con build fresco. Los servidores http de prueba (puertos 8931/8932) deben apagarse.
 4. **`window.rs` no es ejecutable en CI** (sin display): F1, F3–F6, F10, F18 quedan en `needs-repro` pese a evidencia de código concluyente; el cableado evento→acción solo se puede verificar con tests de integración con display o refactors de inyección.
 5. **#1201 fuera de scope** (medidor de `layout`, crate no asignada): no se verifica; si el runner usa el measurer de producción o el fallback determina si sigue vivo.
-6. **Posible falso positivo descartado**: `site_origin` vs `normalize_site_zooms` (mayúsculas) no se reporta porque `net::Url` probablemente normaliza el host y `net` está fuera del scope.
+6. **Posible falso positivo descartado**: `site_origin` vs `normalize_site_zooms` (mayúsculas) no se reporta porque `megi_net::Url` probablemente normaliza el host y `net` está fuera del scope.
 7. **Deuda de docs (F14)**: `lib.rs` acumula contradicciones por features aterrizadas (#1503/#1504/#1538, tabs, chrome); conviene reescribir la sección "What it does not do yet" de una vez en vez de parches.

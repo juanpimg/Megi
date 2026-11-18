@@ -3,10 +3,10 @@
 
 #![cfg(feature = "js")]
 
-use dom::{Document, Namespace};
-use js::{Budget, JsError, JsRuntime};
+use megi_core::{Document, Namespace};
+use megi_js::{Budget, JsError, JsRuntime};
 
-fn document_with_target() -> (Document, dom::NodeId) {
+fn document_with_target() -> (Document, megi_core::NodeId) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     let body = document.create_element(Namespace::Html, "body", vec![]);
@@ -208,7 +208,7 @@ fn document_event_target_remove_and_prevent_default() {
 
 #[test]
 fn rust_can_dispatch_directly_to_the_document() {
-    use js::JsEventTarget;
+    use megi_js::JsEventTarget;
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime
         .eval(

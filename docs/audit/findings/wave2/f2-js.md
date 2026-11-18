@@ -273,12 +273,12 @@ ver `## Comandos ejecutados (árbol limpio)`.
 
 ## Comandos ejecutados (árbol limpio `/tmp/opencode/megi-verify`, HEAD 3c06db8)
 
-- `cargo test -p js`: 32 suites, todas `ok`, 0 fallos (totales por suite: 27, 13, 19,
+- `cargo test -p megi-js`: 32 suites, todas `ok`, 0 fallos (totales por suite: 27, 13, 19,
   3, 2, 3, 3, 12, 1, 14, 1, 20, 11, 16, 5, 20, 9, 7, 12, 10, 3, 3, 10, 2, 12, 18,
   10, 23, 19, 15, 6, 0 doc-tests). `CARGO_TARGET_DIR=/home/jp/.cache/megi-verify-target`
   (el `/tmp` tmpfs de 7.7G se llenó con los target/ de los harness; se borraron y se
   redirigió el build a `/home`).
-- `cargo check -p js --no-default-features`: `Finished`, sin errores.
+- `cargo check -p megi-js --no-default-features`: `Finished`, sin errores.
 - Repros contra el árbol limpio (`/tmp/opencode/repro-f2-js-verify`, path-deps a
   `megi-verify`; salidas idénticas a las del árbol principal):
   `R1 Err(Syntax(...got 'now'...))`, `R2 Err(DynamicImport(...))`,

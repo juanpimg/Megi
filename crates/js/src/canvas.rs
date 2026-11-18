@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use dom::NodeId;
+use megi_core::NodeId;
 
 /// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
 pub const MAX_CANVAS_DIM: u32 = 4096;

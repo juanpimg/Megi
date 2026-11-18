@@ -7,7 +7,7 @@
   generados por las propias corridas).
 - Env: `TMPDIR=/home/jp/.cache/megi-tmp CARGO_TARGET_DIR=/home/jp/.cache/f2-target`,
   ejecución desde `/tmp/opencode/megi-verify`. Binario `render` construido por Mesa A
-  desde ese árbol (`cargo build -p render --bin render` → `Finished dev profile`,
+  desde ese árbol (`cargo build -p megi-render --bin render` → `Finished dev profile`,
   binario en `/home/jp/.cache/f2-target/debug/render`).
 - Repros: crate auxiliar del auditor en `/home/jp/.cache/f2-repro` reutilizado
   SIN modificar (sus path-deps apuntan a `/tmp/opencode/megi-verify`; el `.d`
@@ -25,7 +25,7 @@
 | id | veredicto | comando | salida literal (recortada) | nota |
 |---|---|---|---|---|
 | w2-render-01 | VERIFIED | `f2-repro exp01 2` + `exp01 3` + `exp01-flat 2` + lectura `frames.rs:32-48,113` | `EXP01 width=2 elapsed_ms=413 warnings=0` · `width=3 elapsed_ms=1473` · `EXP01-FLAT width=2 elapsed_ms=35` | Escalado lineal en nº de renders (31→121 renders ≈ 413→1473 ms, ×3.6) y exponencial en W; flat 35 ms (×12 / ×42). El cap `out.len() >= MAX_FRAMES_PER_PAGE` es local a cada llamada `collect_frames` (vector `out` por nivel) y la recursión vía `render_url_inner(..., depth+1)` sólo topa en `MAX_FRAME_DEPTH` (termina, pero amplifica). Proyección W=16 = 69905 renders: aritmética confirmada, sin re-ejecutar los 31.5 s. P1 proporcionado. |
-| w2-render-02 | VERIFIED | `cargo check -p render --no-default-features` (mismo env) | `error[E0433]: cannot find module or crate 'js' in this scope --> crates/render/src/ws_bridge.rs:8:5` (ídem `:9:5`) · `error: could not compile 'render' (lib) due to 2 previous errors` | `pub mod ws_bridge` incondicional (`lib.rs:215`) frente a `#[cfg(feature = "js")] mod browser_host`. Literal idéntica al informe. |
+| w2-render-02 | VERIFIED | `cargo check -p megi-render --no-default-features` (mismo env) | `error[E0433]: cannot find module or crate 'js' in this scope --> crates/render/src/ws_bridge.rs:8:5` (ídem `:9:5`) · `error: could not compile 'render' (lib) due to 2 previous errors` | `pub mod ws_bridge` incondicional (`lib.rs:215`) frente a `#[cfg(feature = "js")] mod browser_host`. Literal idéntica al informe. |
 | w2-render-03 | VERIFIED | `f2-repro exp03` + lectura `scripts.rs:1284-1300`, `:100`, `:132` | `EXP03 executed=10 failed=0 limited=true` · `EXP03 warn: total JavaScript loop-iteration budget exhausted; skipping remaining scripts` | Matemática del informe confirmada en código: total `1_000_000` / grant `100_000` = 10 scripts; el 11º recibe `grant == 0` → `break`. `max_scripts` (64) inalcanzable por defecto. |
 | w2-render-04 | VERIFIED | `f2-repro exp04` + lectura `lib.rs:1488` vs `webfonts.rs:143` | `EXP04 bundled_faces=2 with_system_faces=1106 bundled_digest=14069339365844523798 with_system_digest=8606334732936271880 equal=false` | Byte-idéntica al informe (incluidos ambos digests). Ruta SVG directa usa `new_with_bundled_and_system_fonts()`. |
 | w2-render-05 | CONVERGENTE | `f2-repro exp05` / `exp05 await` + CLI `--json` (módulo con error sintáctico plain vs `//await`) + lectura `scripts.rs:1310` | `EXP05 await_comment=false executed=1 tasks=1 virt_ms=50 limited=false r="done"` · idéntica con `await_comment=true` · `PLAIN … failed: SyntaxError: unexpected token ';' … at line 4` vs `AWAIT … at line 2` (mismo mensaje, solo nº de línea desplazado) | La rama `if script.text.contains("await")` existe y se toma, pero converge en comportamiento en las 3 sondas (timer 50 ms + sintaxis). Riesgo latente + maquinaria async innecesaria: el diagnóstico a nivel de código sigue válido. Sin cambio de severidad propuesto (P2). |
@@ -40,7 +40,7 @@
 
 ## Controles adicionales
 
-- `cargo build -p render --bin render` (mismo env): `Finished dev profile … in 26.19s`.
+- `cargo build -p megi-render --bin render` (mismo env): `Finished dev profile … in 26.19s`.
 - `grep -rn "contentDocument\|frame_documents" crates/` en `3c06db8`: vacío
   (la feature `set_frame_document`/`AccessorKind::ContentDocument` solo existe en
   el árbol principal, `runtime.rs:1497,6506+,7946` + `scripts.rs:288,836-837`).

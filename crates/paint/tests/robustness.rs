@@ -6,10 +6,10 @@
 //! for all unbounded traversals, with documented caps for stacking-context and
 //! float nesting and a hard display-list item limit.
 
-use css::{Color, ComputedStyle, Display, Position};
-use dom::{Document, Namespace};
-use layout::{BoxType, LayoutBox, Rect};
-use paint::{
+use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, Position};
+use megi_layout::{BoxType, LayoutBox, Rect};
+use megi_paint::{
     DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_STACKING_CONTEXT_DEPTH, Pixmap, build_display_list,
     png::PngRegionEncoder,
 };
@@ -22,7 +22,7 @@ const VIEWPORT: Rect = Rect {
     height: 600.0,
 };
 
-fn node_ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn node_ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -43,7 +43,7 @@ fn block_style() -> ComputedStyle {
 }
 
 /// Builds a `depth`-level chain of nested block boxes.
-fn deep_chain(ids: &[dom::NodeId], depth: usize) -> LayoutBox {
+fn deep_chain(ids: &[megi_core::NodeId], depth: usize) -> LayoutBox {
     let mut current = LayoutBox::new(BoxType::BlockNode(ids[depth - 1]), Some(block_style()));
     for index in (0..depth - 1).rev() {
         let mut parent = LayoutBox::new(BoxType::BlockNode(ids[index]), Some(block_style()));
@@ -54,7 +54,7 @@ fn deep_chain(ids: &[dom::NodeId], depth: usize) -> LayoutBox {
 }
 
 /// Builds a `depth`-level chain of nested inline boxes around one text node.
-fn deep_inline_chain(ids: &[dom::NodeId], depth: usize) -> LayoutBox {
+fn deep_inline_chain(ids: &[megi_core::NodeId], depth: usize) -> LayoutBox {
     let text = LayoutBox::new(BoxType::TextNode("deep".to_string()), Some(block_style()));
     let mut current = text;
     for index in (0..depth).rev() {
@@ -71,7 +71,7 @@ fn deep_inline_chain(ids: &[dom::NodeId], depth: usize) -> LayoutBox {
 #[test]
 fn test_display_list_truncates_at_the_documented_cap() {
     let mut list = DisplayList::new();
-    let item = paint::DisplayItem::SolidColor {
+    let item = megi_paint::DisplayItem::SolidColor {
         rect: Rect::new(0.0, 0.0, 1.0, 1.0),
         color: Color::WHITE,
     };
@@ -171,7 +171,7 @@ fn hostile_text_size_is_clamped_before_shaping() {
         let text_items: Vec<f32> = display_list
             .iter()
             .filter_map(|item| match item {
-                paint::DisplayItem::Text { font_size, .. } => Some(*font_size),
+                megi_paint::DisplayItem::Text { font_size, .. } => Some(*font_size),
                 _ => None,
             })
             .collect();
@@ -221,8 +221,8 @@ fn region_encoder_tolerates_rects_outside_the_pixmap() {
 fn hostile_style_text_is_capped_before_the_css_parser() {
     // #662: `<style>` text descendants were concatenated with no byte cap, so one inline sheet
     // dictated peak memory before the CSS parser ever saw it.
-    use dom::{Document, Namespace};
-    use paint::style::{MAX_STYLE_TEXT_BYTES, collect_style_text};
+    use megi_core::{Document, Namespace};
+    use megi_paint::style::{MAX_STYLE_TEXT_BYTES, collect_style_text};
 
     let mut document = Document::new();
     let root = document.root();

@@ -1,19 +1,19 @@
 //! Integration tests for real typography in layout (WP-4.4 phase 2).
 //!
 //! These tests use the deterministic bundled fonts from `crates/fonts/assets/`
-//! through [`layout::FontTextMeasurer`], so they do not depend on the fonts
+//! through [`megi_layout::FontTextMeasurer`], so they do not depend on the fonts
 //! installed on the host.
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display};
-use dom::{Document, Namespace};
-use layout::{
+use megi_core::{Document, Namespace};
+use megi_css::{ComputedStyle, Display};
+use megi_layout::{
     BoxType, FontTextMeasurer, LayoutBox, Rect, TextMeasurer, layout_document,
     layout_document_with_measurer,
 };
 
-fn text_doc(text: &str, font_size: f32) -> (Document, HashMap<dom::NodeId, ComputedStyle>) {
+fn text_doc(text: &str, font_size: f32) -> (Document, HashMap<megi_core::NodeId, ComputedStyle>) {
     let mut doc = Document::new();
     let html = doc.create_element(Namespace::Html, "html", vec![]);
     let body = doc.create_element(Namespace::Html, "body", vec![]);

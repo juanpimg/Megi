@@ -4,7 +4,7 @@
 //! Drives Document mutators with attacker-influenced op streams over a bounded
 //! arena of nodes to surface stale-NodeId, half-mutation and order bugs.
 
-use dom::{Document, Namespace, NodeId};
+use megi_core::{Document, Namespace, NodeId};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

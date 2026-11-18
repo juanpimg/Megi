@@ -38,14 +38,14 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_css::{
     AlignItems, AlignSelf, ComputedStyle, FlexDirection, FlexWrap, JustifyContent, Length, Position,
 };
 
 use crate::block::{calculate_block_height, layout_box_contents, translate_box};
 use crate::box_tree::{BoxType, LayoutBox};
-use crate::geometry::{EdgeSizes, Rect};
 use crate::inline::TextMeasurer;
+use megi_core::geometry::{EdgeSizes, Rect};
 
 /// Resolved box-model edges of one flex item.
 #[derive(Clone, Copy, Debug, Default)]
@@ -125,7 +125,7 @@ impl Item<'_> {
     }
 }
 
-fn resolve(value: Length, calc: Option<css::calc::CalcValue>, reference: f32) -> f32 {
+fn resolve(value: Length, calc: Option<megi_css::calc::CalcValue>, reference: f32) -> f32 {
     crate::calc::length(value, calc, reference)
 }
 
@@ -174,7 +174,7 @@ fn resolve_edges(style: &ComputedStyle, cb_width: f32) -> Edges {
 
 fn definite_length(
     value: Length,
-    calc: Option<css::calc::CalcValue>,
+    calc: Option<megi_css::calc::CalcValue>,
     reference: Option<f32>,
 ) -> Option<f32> {
     crate::calc::length_optional(value, calc, reference)

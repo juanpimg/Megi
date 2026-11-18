@@ -8,9 +8,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
-use dom::{Document, Namespace};
-use layout::{BoxType, Rect, layout_document};
+use megi_core::{Document, Namespace};
+use megi_css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
+use megi_layout::{BoxType, Rect, layout_document};
 
 fn make_block_style(width: Length, height: Length) -> ComputedStyle {
     let mut s = ComputedStyle::initial();

@@ -6,8 +6,8 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
-use net::websocket;
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use megi_net::websocket;
+use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 fn spawn_echo_server() -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");

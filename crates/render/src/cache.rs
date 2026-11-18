@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, PseudoElement, PseudoStyles};
-use dom::{Document, NodeId, NodeKind};
-use layout::{LayoutBox, Rect, TextMeasurer};
+use megi_core::{Document, NodeId, NodeKind};
+use megi_css::{ComputedStyle, PseudoElement, PseudoStyles};
+use megi_layout::{LayoutBox, Rect, TextMeasurer};
 
 const MAX_LAYOUT_CACHE_ENTRIES: usize = 16;
 const MAX_CSS_CACHE_ENTRIES: usize = 64;
@@ -24,7 +24,7 @@ pub struct RenderCache {
     layout_entries: Vec<(u64, LayoutBox)>,
     /// `(FNV prefilter, exact source text, parsed sheet)`. The source text is kept so a
     /// hash collision cannot return a different stylesheet (#1223).
-    css_entries: Vec<(u64, String, css::Stylesheet)>,
+    css_entries: Vec<(u64, String, megi_css::Stylesheet)>,
     stats: RenderCacheStats,
 }
 
@@ -47,7 +47,7 @@ impl RenderCache {
     }
 
     /// Parses a stylesheet or returns a cached clone when the exact source text matches.
-    pub fn parse_stylesheet(&mut self, css_text: &str) -> css::Stylesheet {
+    pub fn parse_stylesheet(&mut self, css_text: &str) -> megi_css::Stylesheet {
         let key_hash = fnv1a_bytes(css_text.as_bytes());
         if let Some(pos) = self.css_entries.iter().position(|(h, source, _)| {
             *h == key_hash && source.len() == css_text.len() && source == css_text
@@ -59,7 +59,7 @@ impl RenderCache {
             return sheet;
         }
         self.stats.css_misses += 1;
-        let sheet = css::parse_stylesheet(css_text);
+        let sheet = megi_css::parse_stylesheet(css_text);
         if self.css_entries.len() >= MAX_CSS_CACHE_ENTRIES {
             self.css_entries.remove(0);
         }
@@ -119,7 +119,7 @@ impl RenderCache {
             return Some((cloned, true));
         }
         self.stats.layout_misses += 1;
-        let layout_root = layout::layout_document_with_measurer_and_pseudos(
+        let layout_root = megi_layout::layout_document_with_measurer_and_pseudos(
             document,
             styles,
             pseudo_styles,
@@ -273,7 +273,7 @@ mod cache_tests {
 
     #[test]
     fn layout_fingerprint_includes_font_identity() {
-        let document = dom::Document::new();
+        let document = megi_core::Document::new();
         let styles = HashMap::new();
         let viewport = Rect::new(0.0, 0.0, 100.0, 100.0);
         let sizes = HashMap::new();
@@ -290,7 +290,7 @@ mod cache_tests {
         let a = "a{color:red}";
         let b = "a{color:tan}";
         assert_eq!(a.len(), b.len());
-        let sheet_a = css::parse_stylesheet(a);
+        let sheet_a = megi_css::parse_stylesheet(a);
 
         let mut cache = RenderCache::new();
         // Inject an entry whose FNV key matches `b` but whose exact source is `a`:

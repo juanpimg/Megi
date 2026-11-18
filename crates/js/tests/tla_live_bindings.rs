@@ -3,9 +3,10 @@
 #![cfg(feature = "js")]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use js::host::FetchResult;
-use js::runtime::{Budget, JsRuntime};
+use megi_js::host::FetchResult;
+use megi_js::runtime::{Budget, JsRuntime};
 
 fn runtime_with(modules: &[(&str, &str)]) -> JsRuntime {
     let resolver: HashMap<String, String> = modules
@@ -33,19 +34,19 @@ fn runtime_with(modules: &[(&str, &str)]) -> JsRuntime {
         })
         .collect();
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_module_resolver(Box::new(move |specifier, _base| {
+    runtime.set_module_resolver(Arc::new(move |specifier, _base| {
         Ok(resolver.get(specifier).cloned())
     }));
-    runtime.set_module_loader(Box::new(move |url| {
+    runtime.set_module_loader(Arc::new(move |url| {
         sources
             .get(url)
             .cloned()
-            .ok_or_else(|| js::JsError::ModuleNotFound(url.to_string()))
+            .ok_or_else(|| megi_js::JsError::ModuleNotFound(url.to_string()))
     }));
     runtime
 }
 
-fn eval(runtime: &mut JsRuntime, source: &str) -> Result<js::ModuleOutcome, js::JsError> {
+fn eval(runtime: &mut JsRuntime, source: &str) -> Result<megi_js::ModuleOutcome, megi_js::JsError> {
     runtime.eval_module_async(source, "main", "mem://main", &Budget::default())
 }
 
@@ -117,7 +118,7 @@ fn top_level_await_with_timer() {
 #[test]
 fn top_level_await_with_fetch_provider() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_fetch_provider(Box::new(|_request| {
+    runtime.set_fetch_provider(Arc::new(|_request| {
         Ok(FetchResult {
             status: 200,
             status_text: "OK".into(),

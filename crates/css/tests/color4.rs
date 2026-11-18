@@ -1,6 +1,6 @@
 //! CSS Color 4/5 parsing and sRGB conversion (R159).
 
-use css::Color;
+use megi_css::Color;
 
 fn assert_color(actual: Option<Color>, expected: (u8, u8, u8), tolerance: u8, context: &str) {
     let color = actual.unwrap_or_else(|| panic!("{context}: expected a color"));
@@ -237,7 +237,7 @@ fn test_legacy_colors_still_work() {
 
 #[test]
 fn test_modern_colors_in_properties() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -253,7 +253,7 @@ fn test_modern_colors_in_properties() {
     );
     document.append_child(document.root(), body);
     document.append_child(body, element);
-    let styles = css::resolve_document_styles(&document, None);
+    let styles = megi_css::resolve_document_styles(&document, None);
     let style = styles.get(&element).cloned().expect("style");
     assert_color(
         Some(style.background_color),
@@ -357,7 +357,7 @@ fn test_color_mix_alpha_weights() {
 
 #[test]
 fn test_modern_colors_in_filter_and_drop_shadow() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -370,10 +370,10 @@ fn test_modern_colors_in_filter_and_drop_shadow() {
     );
     document.append_child(document.root(), body);
     document.append_child(body, element);
-    let styles = css::resolve_document_styles(&document, None);
+    let styles = megi_css::resolve_document_styles(&document, None);
     let style = styles.get(&element).cloned().expect("style");
     match style.filter.first().expect("filter function") {
-        css::FilterFunction::DropShadow { color, .. } => {
+        megi_css::FilterFunction::DropShadow { color, .. } => {
             assert_color(Some(*color), (0, 255, 0), 1, "drop shadow color");
         }
         other => panic!("expected drop-shadow, got {other:?}"),
@@ -382,7 +382,7 @@ fn test_modern_colors_in_filter_and_drop_shadow() {
 
 #[test]
 fn test_modern_colors_in_conic_gradient_stops() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -396,7 +396,7 @@ fn test_modern_colors_in_conic_gradient_stops() {
     );
     document.append_child(document.root(), body);
     document.append_child(body, element);
-    let styles = css::resolve_document_styles(&document, None);
+    let styles = megi_css::resolve_document_styles(&document, None);
     let style = styles.get(&element).cloned().expect("style");
     let gradient = style.background_layers[0]
         .gradient
@@ -499,9 +499,9 @@ fn modern_rgb_and_hsl_space_slash_and_case_insensitive() {
 
 #[test]
 fn shadow_list_rejects_entire_declaration_when_any_layer_is_invalid() {
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
-    let check = |style_attr: &str| -> css::ComputedStyle {
+    let check = |style_attr: &str| -> megi_css::ComputedStyle {
         let mut document = Document::new();
         let body = document.create_element(Namespace::Html, "body", vec![]);
         let element = document.create_element(
@@ -511,7 +511,7 @@ fn shadow_list_rejects_entire_declaration_when_any_layer_is_invalid() {
         );
         document.append_child(document.root(), body);
         document.append_child(body, element);
-        let styles = css::resolve_document_styles(&document, None);
+        let styles = megi_css::resolve_document_styles(&document, None);
         styles.get(&element).cloned().expect("style")
     };
 

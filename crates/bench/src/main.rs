@@ -1,7 +1,7 @@
 //! Megi benchmark runner.
 //!
 //! ```text
-//! cargo run --release -p bench -- [--json] [--scale F] [--iterations N] ...
+//! cargo run --release -p megi-bench -- [--json] [--scale F] [--iterations N] ...
 //! ```
 //!
 //! The binary has no external dependencies (beyond the engine's own workspace

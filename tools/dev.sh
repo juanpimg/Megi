@@ -22,6 +22,9 @@ case "$cmd" in
         cargo fmt --all -- --check
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
+        python3 tools/check_arch.py
+        cargo check -p megi-webview --no-default-features
+        cargo test -p megi-webview --no-default-features
         python3 tools/update_progress.py --check --no-gate --no-count
         python3 tools/update_coverage.py --check
         python3 tools/audit_coverage.py --check
@@ -30,7 +33,7 @@ case "$cmd" in
         cargo doc --workspace --no-deps
         ;;
     report)
-        cargo run -p test_harness -- --summary
+        cargo run -p megi-test-harness -- --summary
         ;;
     all)
         echo "==> [1/5] Checking formatting..."
@@ -38,13 +41,16 @@ case "$cmd" in
         echo "==> [2/5] Running clippy across workspace..."
         cargo clippy --workspace --all-targets -- -D warnings
         python3 tools/check_docs_links.py
+        python3 tools/check_arch.py
+        cargo check -p megi-webview --no-default-features
+        cargo test -p megi-webview --no-default-features
         python3 tools/update_progress.py --check --no-gate --no-count
         echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace
         echo "==> [4/5] Building workspace documentation..."
         cargo doc --workspace --no-deps
         echo "==> [5/5] Running conformance gate (test_harness --summary)..."
-        cargo run -p test_harness -- --summary
+        cargo run -p megi-test-harness -- --summary
         echo "==> All checks passed!"
         ;;
     -h|--help)

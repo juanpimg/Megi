@@ -4,13 +4,13 @@
 //! Rendering path under test (same one as `examples/html_to_png.rs`):
 //!
 //! ```text
-//! html::parse_document
-//!   ├─ paint::collect_style_text
-//!   ├─ css::resolve_document_styles
-//!   ├─ layout::layout_document
-//!   ├─ paint::build_display_list
-//!   ├─ paint::rasterize_display_list
-//!   └─ paint::Pixmap::to_png
+//! megi_html::parse_document
+//!   ├─ megi_paint::collect_style_text
+//!   ├─ megi_css::resolve_document_styles
+//!   ├─ megi_layout::layout_document
+//!   ├─ megi_paint::build_display_list
+//!   ├─ megi_paint::rasterize_display_list
+//!   └─ megi_paint::Pixmap::to_png
 //! ```
 
 mod common;
@@ -19,9 +19,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::{ihdr_fields, parse_png};
-use css::Color;
-use layout::{Rect, TextMeasurer};
-use paint::{
+use megi_css::Color;
+use megi_layout::{Rect, TextMeasurer};
+use megi_paint::{
     DisplayItem, DisplayList, Pixmap, RenderConfig, build_display_list, rasterize_display_list,
     rasterize_display_list_with_config, resolve_embedded_styles,
 };
@@ -44,13 +44,14 @@ fn fixture(name: &str) -> String {
 
 /// Runs the full pipeline for an in-memory HTML document.
 fn render(source: &str, width: u32, height: u32) -> (Pixmap, DisplayList) {
-    let doc = html::parse_document(source, false);
+    let doc = megi_html::parse_document(source, false);
     let styles = resolve_embedded_styles(&doc);
     let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
     // Real typography with the deterministic bundled font (WP-4.4 phase 2).
-    let measurer = layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
-    let layout_root = layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-        .expect("layout must produce a root box");
+    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
+    let layout_root =
+        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
+            .expect("layout must produce a root box");
     let display_list = build_display_list(&layout_root, viewport);
     let pixmap = rasterize_display_list(&display_list, width, height);
     (pixmap, display_list)
@@ -401,7 +402,7 @@ fn test_render_basic_html_png_matches_golden() {
         panic!(
             "cannot read golden {}: {error}\n\
              Regenerate it with:\n\
-             cargo run -p paint --example html_to_png -- \
+             cargo run -p megi-paint --example html_to_png -- \
              tests/fixtures/phase4/basic.html /tmp/basic.png \
              --rgba tests/fixtures/phase4/basic.rgba",
             golden_path.display()
@@ -417,7 +418,7 @@ fn test_render_basic_html_png_matches_golden() {
             "rendered RGBA does not match golden {} \
              (lengths {} vs {}, first difference at byte {:?})\n\
              If the rendering change is intentional, regenerate with:\n\
-             cargo run -p paint --example html_to_png -- \
+             cargo run -p megi-paint --example html_to_png -- \
              tests/fixtures/phase4/basic.html /tmp/basic.png \
              --rgba tests/fixtures/phase4/basic.rgba",
             golden_path.display(),
@@ -429,8 +430,8 @@ fn test_render_basic_html_png_matches_golden() {
 }
 
 /// Recursively collects text fragments of a laid-out tree: `(text, baseline)`.
-fn collect_text_baselines(layout_box: &layout::LayoutBox, out: &mut Vec<(String, f32, f32)>) {
-    if let layout::BoxType::TextNode(text) = &layout_box.box_type {
+fn collect_text_baselines(layout_box: &megi_layout::LayoutBox, out: &mut Vec<(String, f32, f32)>) {
+    if let megi_layout::BoxType::TextNode(text) = &layout_box.box_type {
         out.push((
             text.clone(),
             layout_box.baseline,
@@ -499,12 +500,13 @@ fn test_real_font_glyphs_are_antialiased_and_baseline_aware() {
 #[test]
 fn test_text_baseline_is_propagated_per_line() {
     let source = "<!doctype html><html><body style=\"margin:0;color:#000;font-family:sans-serif;font-size:16px\"><p style=\"margin:0\">one<br>two</p></body></html>";
-    let doc = html::parse_document(source, false);
+    let doc = megi_html::parse_document(source, false);
     let styles = resolve_embedded_styles(&doc);
     let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
-    let measurer = layout::FontTextMeasurer::bundled().expect("bundled fonts");
-    let layout_root = layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-        .expect("layout root");
+    let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts");
+    let layout_root =
+        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
+            .expect("layout root");
     let mut fragments = Vec::new();
     collect_text_baselines(&layout_root, &mut fragments);
     assert_eq!(fragments.len(), 2, "two lines => two text fragments");

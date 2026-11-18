@@ -7,7 +7,7 @@
 
 include!("data/zlib_vectors.rs");
 
-use image::{
+use megi_image::{
     ImageError, ImageFormat, InflateLimits, PngLimits, decode, decode_with_limits, detect_format,
     inflate_deflate, inflate_zlib,
 };
@@ -101,11 +101,11 @@ fn inflate_long_matches_and_maximum_distance() {
 fn inflate_rejects_bad_adler_and_truncation() {
     assert!(matches!(
         inflate_zlib(BAD_ADLER, InflateLimits::default()),
-        Err(image::InflateError::AdlerMismatch { .. })
+        Err(megi_image::InflateError::AdlerMismatch { .. })
     ));
     assert_eq!(
         inflate_zlib(TRUNCATED, InflateLimits::default()),
-        Err(image::InflateError::TruncatedInput)
+        Err(megi_image::InflateError::TruncatedInput)
     );
 }
 
@@ -113,7 +113,7 @@ fn inflate_rejects_bad_adler_and_truncation() {
 fn inflate_output_limit_is_enforced() {
     assert!(matches!(
         inflate_zlib(DYNAMIC, InflateLimits::new(8)),
-        Err(image::InflateError::OutputLimitExceeded { limit: 8 })
+        Err(megi_image::InflateError::OutputLimitExceeded { limit: 8 })
     ));
     assert!(inflate_zlib(DYNAMIC, InflateLimits::new(1 << 20)).is_ok());
 }

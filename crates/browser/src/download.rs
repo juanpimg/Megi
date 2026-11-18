@@ -1,0 +1,747 @@
+//! Downloads/exports from the shell: the rendered page as PNG and the rendered DOM as HTML.
+//!
+//! `Ctrl+S` saves the current frame as `megi-<host>-<n>.png`; `Ctrl+Shift+S` saves the DOM
+//! snapshot (including the doctype) as `megi-<host>-<n>.html`. Files go to `--download-dir`,
+//! else `$HOME/Downloads` (falling back to the system temp directory). Names are sanitized
+//! (`[a-z0-9-]`, capped) and never overwrite an existing download: `<n>` is the first free
+//! integer starting at 1. Everything returns typed errors / `Result` instead of panicking;
+//! the window reports the result in its title and stdout (no visual prompt).
+//!
+//! Limits: no resource downloads (only the page itself), no "Save as" dialog, no MIME
+//! negotiation beyond the two exporters, and the HTML snapshot contains the post-script DOM
+//! (scripts are not re-run when reopening it).
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::links::CssRect;
+
+/// Largest accepted host label in a download name.
+pub const MAX_HOST_CHARS: usize = 40;
+/// Prefix of every generated download.
+pub const DOWNLOAD_PREFIX: &str = "megi";
+
+/// Kind of exported file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownloadKind {
+    /// Rendered page as PNG.
+    Png,
+    /// Rendered DOM serialized as HTML.
+    Html,
+    /// A rendered page image resource (`<img>` bytes fetched on demand).
+    Image,
+}
+
+impl DownloadKind {
+    /// File extension (`png`/`html`).
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Html => "html",
+            Self::Image => "image",
+        }
+    }
+}
+
+/// Metadata of a successful save.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SavedDownload {
+    /// Written path.
+    pub path: PathBuf,
+    /// File size in bytes.
+    pub bytes: usize,
+    /// Exported kind.
+    pub kind: DownloadKind,
+}
+
+impl SavedDownload {
+    /// User-facing one-line notice.
+    pub fn notice(&self) -> String {
+        format!(
+            "saved {} ({} bytes) to {}",
+            self.kind.extension(),
+            self.bytes,
+            self.path.display()
+        )
+    }
+}
+
+/// Sanitizes a URL into the host component used in download names.
+///
+/// `https://example.com/x` → `example.com`; `file:` URLs → `local`; `data:` URLs → `page`;
+/// everything else is lowercased and reduced to `[a-z0-9-]`, capped at [`MAX_HOST_CHARS`].
+pub fn sanitize_host(url: &megi_webview::net::Url) -> String {
+    let raw = match url.scheme().as_str() {
+        "file" => "local".to_string(),
+        "data" => "page".to_string(),
+        _ => url.host().to_lowercase(),
+    };
+    let sanitized: String = raw
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '.' || character == '-' {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    // Truncate before collapsing runs: `replace("--", "-")` in a loop is quadratic on a
+    // long hostile host, so bound the input first (#426).
+    let mut sanitized: String = sanitized.chars().take(MAX_HOST_CHARS).collect();
+    while sanitized.contains("--") {
+        sanitized = sanitized.replace("--", "-");
+    }
+    let sanitized = sanitized.trim_matches('-').to_string();
+    if sanitized.is_empty() {
+        "page".to_string()
+    } else {
+        sanitized
+    }
+}
+
+/// Finds the first free `megi-<host>-<n>.<extension>` path in `dir`.
+///
+/// Naming is deterministic: it starts at 1 and increments while the candidate exists.
+pub fn next_download_path(dir: &Path, url: &megi_webview::net::Url, extension: &str) -> PathBuf {
+    let host = sanitize_host(url);
+    // Reject extensions that could escape the download directory.
+    if extension.contains('/') || extension.contains('\\') || extension.contains("..") {
+        return dir.join(format!("{DOWNLOAD_PREFIX}-{host}-1.png"));
+    }
+    for number in 1..=1024u32 {
+        let candidate = dir.join(format!("{DOWNLOAD_PREFIX}-{host}-{number}.{extension}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(format!("{DOWNLOAD_PREFIX}-{host}-overflow.{extension}"))
+}
+
+/// Returns `--download-dir` when provided, else `$HOME/Downloads`, else the temp directory.
+pub fn default_download_dir(explicit: Option<&Path>, home: Option<&Path>) -> PathBuf {
+    if let Some(dir) = explicit {
+        return dir.to_path_buf();
+    }
+    match home {
+        Some(home) if !home.as_os_str().is_empty() => home.join("Downloads"),
+        _ => std::env::temp_dir(),
+    }
+}
+
+/// Runtime download directory (`--download-dir`, `$HOME/Downloads`, temp).
+pub fn resolve_download_dir(explicit: Option<&Path>) -> PathBuf {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    default_download_dir(explicit, home.as_deref())
+}
+
+/// Writes `bytes` atomically via a unique sibling temporary (`create_new`, same
+/// filesystem), so a crash/interruption never leaves a half-written download and a
+/// pre-planted `.<name>.tmp` symlink/file is never followed or truncated.
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<usize, String> {
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("cannot create {}: {error}", parent.display()))?;
+    }
+    let (temporary, mut file) = create_new_temp_file(path)
+        .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    {
+        use std::io::Write as _;
+        if let Err(error) = file.write_all(bytes) {
+            drop(file);
+            let _ = fs::remove_file(&temporary);
+            return Err(format!("cannot write {}: {error}", path.display()));
+        }
+    }
+    drop(file);
+    fs::rename(&temporary, path).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        format!("cannot write {}: {error}", path.display())
+    })?;
+    Ok(bytes.len())
+}
+
+/// Returns a unique, unpredictable sibling temporary path for `path` (same
+/// filesystem, so the final rename stays atomic).
+///
+/// `.‍<name>.<pid>.<nanos>.<counter>.tmp` can neither be guessed by a local
+/// attacker nor collide between two concurrent/sequential writers.
+pub(crate) fn unique_temporary_path(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "download".to_string());
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(
+        ".{name}.{}.{nanos}.{count}.tmp",
+        std::process::id()
+    ))
+}
+
+/// Creates a fresh temporary file next to `path` with `create_new` (fails when
+/// the candidate already exists, so a planted symlink/file is never followed).
+/// Retries on `AlreadyExists` collisions.
+pub(crate) fn create_new_temp_file(path: &Path) -> std::io::Result<(PathBuf, fs::File)> {
+    for _ in 0..16 {
+        let candidate = unique_temporary_path(path);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => return Ok((candidate, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "cannot create a unique download temporary",
+    ))
+}
+
+/// Saves PNG bytes produced by the render pipeline as a download, **without re-encoding**.
+///
+/// `png` must be a complete PNG file (validated by [`is_png`]); the render's `RenderOutput.png`
+/// is passed through byte for byte, so `Ctrl+S`/`--save-png` are identical to `--screenshot`.
+pub fn save_png(
+    dir: &Path,
+    url: &megi_webview::net::Url,
+    png: &[u8],
+) -> Result<SavedDownload, String> {
+    if !is_png(png) {
+        return Err("not a PNG image (missing signature)".to_string());
+    }
+    fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    let path = next_download_path(dir, url, DownloadKind::Png.extension());
+    let bytes = write_atomic(&path, png)?;
+    Ok(SavedDownload {
+        path,
+        bytes,
+        kind: DownloadKind::Png,
+    })
+}
+
+/// Infers a download extension from image bytes (magic) or the URL path.
+pub fn image_extension(bytes: &[u8], url: &megi_webview::net::Url) -> &'static str {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        return "png";
+    }
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return "jpg";
+    }
+    if bytes.starts_with(b"GIF8") {
+        return "gif";
+    }
+    if bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        return "webp";
+    }
+    if bytes.starts_with(b"<svg") || bytes.starts_with(b"<?xml") {
+        return "svg";
+    }
+    let path = url.as_str().to_ascii_lowercase();
+    for extension in ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"] {
+        if path.ends_with(&format!(".{extension}")) {
+            return if extension == "jpeg" {
+                "jpg"
+            } else {
+                extension
+            };
+        }
+    }
+    "img"
+}
+
+/// Saves fetched image bytes as a download `megi-<host>-<n>.<ext>` (atomic, no re-encode).
+pub fn save_image(
+    dir: &Path,
+    url: &megi_webview::net::Url,
+    bytes: &[u8],
+) -> Result<SavedDownload, String> {
+    if bytes.is_empty() {
+        return Err("the image resource is empty".to_string());
+    }
+    fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    let extension = image_extension(bytes, url);
+    let path = next_download_path(dir, url, extension);
+    let written = write_atomic(&path, bytes)?;
+    Ok(SavedDownload {
+        path,
+        bytes: written,
+        kind: DownloadKind::Image,
+    })
+}
+
+/// Serializes a DOM as a complete HTML document (doctype prepended when missing).
+pub fn serialize_document(document: &megi_webview::core::Document) -> String {
+    let mut html = megi_webview::html::serialize_html(document);
+    if !html
+        .trim_start()
+        .to_ascii_lowercase()
+        .starts_with("<!doctype")
+    {
+        html.insert_str(0, "<!DOCTYPE html>\n");
+    }
+    html
+}
+
+/// Writes rendered PNG bytes to an explicit path (`--save-png`), atomically and without
+/// re-encoding.
+pub fn write_png_bytes_to(path: &Path, png: &[u8]) -> Result<usize, String> {
+    if !is_png(png) {
+        return Err("not a PNG image (missing signature)".to_string());
+    }
+    write_atomic(path, png)
+}
+
+/// Writes the serialized DOM (doctype included) to an explicit path (`--save-html`).
+pub fn write_html_to(
+    path: &Path,
+    document: &megi_webview::core::Document,
+) -> Result<usize, String> {
+    let html = serialize_document(document);
+    write_atomic(path, html.as_bytes())
+}
+
+/// Saves the rendered DOM as an HTML download (the serializer includes the doctype).
+pub fn save_html(
+    dir: &Path,
+    url: &megi_webview::net::Url,
+    document: &megi_webview::core::Document,
+) -> Result<SavedDownload, String> {
+    fs::create_dir_all(dir).map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
+    let path = next_download_path(dir, url, DownloadKind::Html.extension());
+    let html = serialize_document(document);
+    if html.is_empty() {
+        return Err("HTML serializer returned an empty document".to_string());
+    }
+    let bytes = write_atomic(&path, html.as_bytes())?;
+    Ok(SavedDownload {
+        path,
+        bytes,
+        kind: DownloadKind::Html,
+    })
+}
+
+/// Convenience path helpers used by tests/docs.
+pub fn download_file_name(host: &str, number: u32, extension: &str) -> String {
+    format!("{DOWNLOAD_PREFIX}-{host}-{number}.{extension}")
+}
+
+/// Unused guard used by docs to describe page rectangles; keeps the module's exported
+/// geometry type visible for callers building download overlays in the future.
+pub type PageRect = CssRect;
+
+/// Returns the PNG signature check used by tests/docs.
+pub fn is_png(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
+}
+
+/// Deterministic download progress text shown in the status bar.
+///
+/// Downloads are synchronous in this shell, so the UI cannot animate; the state machine
+/// still exposes the transient `guardando… <name>` phase for tests and paints the last
+/// completed download afterwards. No wall-clock component: the same operations always
+/// produce the same strings.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DownloadProgress {
+    /// Name of the download currently being written, if any.
+    saving: Option<String>,
+    /// Name of the last completed download.
+    last: Option<String>,
+}
+
+impl DownloadProgress {
+    /// Creates the empty state.
+    pub const fn new() -> Self {
+        Self {
+            saving: None,
+            last: None,
+        }
+    }
+
+    /// Marks a download as started (deterministic `guardando…` indicator).
+    pub fn begin(&mut self, name: impl Into<String>) {
+        self.saving = Some(name.into());
+    }
+
+    /// Finishes the current download with its actual saved file name.
+    pub fn complete(&mut self, name: impl Into<String>) {
+        self.saving = None;
+        self.last = Some(name.into());
+    }
+
+    /// Marks the current download as finished and remembers it as the last one.
+    pub fn finish(&mut self) {
+        if let Some(name) = self.saving.take() {
+            self.last = Some(name);
+        }
+    }
+
+    /// Status-bar text: the in-flight download wins over the last completed one.
+    pub fn status_text(&self) -> Option<String> {
+        if let Some(name) = &self.saving {
+            Some(format!("guardando… {name}"))
+        } else {
+            self.last
+                .as_ref()
+                .map(|name| format!("última descarga: {name}"))
+        }
+    }
+
+    /// Last completed download name, if any.
+    pub fn last(&self) -> Option<&str> {
+        self.last.as_deref()
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+
+    #[test]
+    fn download_progress_complete_uses_the_actual_name() {
+        let mut progress = DownloadProgress::new();
+        progress.begin("hint");
+        progress.complete("megi-example-com-1.png");
+        assert_eq!(progress.last(), Some("megi-example-com-1.png"));
+        assert_eq!(
+            progress.status_text().as_deref(),
+            Some("última descarga: megi-example-com-1.png")
+        );
+    }
+
+    #[test]
+    fn download_progress_state_is_deterministic() {
+        let mut progress = DownloadProgress::new();
+        assert_eq!(progress.status_text(), None);
+        progress.begin("megi-example-1.png");
+        assert_eq!(
+            progress.status_text().as_deref(),
+            Some("guardando… megi-example-1.png")
+        );
+        progress.finish();
+        assert_eq!(
+            progress.status_text().as_deref(),
+            Some("última descarga: megi-example-1.png")
+        );
+        assert_eq!(progress.last(), Some("megi-example-1.png"));
+        progress.begin("file.bin");
+        progress.finish();
+        assert_eq!(progress.last(), Some("file.bin"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn url(raw: &str) -> megi_webview::net::Url {
+        megi_webview::net::Url::parse(raw).expect("test URL")
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "megi-download-test-{}-{name}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn rendered() -> megi_webview::render::RenderOutput {
+        crate::headless::render_target(
+            "data:text/html,<title>Download Page</title><h1>hello</h1>",
+            64,
+            48,
+        )
+        .expect("render")
+    }
+
+    #[test]
+    fn host_sanitization_covers_http_file_and_data() {
+        assert_eq!(
+            sanitize_host(&url("https://Example.COM/path")),
+            "example.com"
+        );
+        assert_eq!(sanitize_host(&url("file:///tmp/page.html")), "local");
+        assert_eq!(sanitize_host(&url("data:text/html,x")), "page");
+        assert_eq!(sanitize_host(&url("https://a__b__c/")), "a-b-c");
+    }
+
+    #[test]
+    fn long_host_is_truncated_before_collapsing_dashes() {
+        // A hostile host must be bounded before the quadratic `replace("--", "-")` loop
+        // (#426); the result never exceeds the cap.
+        let url = url(&format!("https://{}/", "a-".repeat(100)));
+        let host = sanitize_host(&url);
+        assert!(host.chars().count() <= MAX_HOST_CHARS);
+        assert!(!host.contains("--"));
+    }
+
+    #[test]
+    fn download_names_start_at_one_and_avoid_collisions() {
+        let dir = temp_dir("names");
+        let page = url("https://example.com/page");
+        assert_eq!(
+            next_download_path(&dir, &page, "png"),
+            dir.join("megi-example.com-1.png")
+        );
+        fs::create_dir_all(&dir).expect("mkdir");
+        fs::write(dir.join("megi-example.com-1.png"), b"x").expect("write");
+        assert_eq!(
+            next_download_path(&dir, &page, "png"),
+            dir.join("megi-example.com-2.png")
+        );
+        assert_eq!(download_file_name("h", 3, "html"), "megi-h-3.html");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn png_download_is_valid_and_deterministic() {
+        let dir = temp_dir("png");
+        let output = rendered();
+        let url = url("https://example.com/");
+        let first = save_png(&dir, &url, &output.png).expect("save");
+        assert!(first.path.is_file());
+        assert_eq!(first.kind, DownloadKind::Png);
+        let bytes = fs::read(&first.path).expect("read");
+        assert!(is_png(&bytes));
+        assert_eq!(bytes.len(), first.bytes);
+        // Deterministic output: same frame → identical file (different name is fine).
+        let second = save_png(&dir, &url, &output.png).expect("second save");
+        assert_ne!(second.path, first.path);
+        assert_eq!(fs::read(&second.path).expect("read"), bytes);
+        assert!(first.notice().contains("saved png"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn html_download_contains_doctype_and_title() {
+        let dir = temp_dir("html");
+        let output = rendered();
+        let saved =
+            save_html(&dir, &url("file:///tmp/page.html"), &output.document).expect("save html");
+        let html = fs::read_to_string(&saved.path).expect("read");
+        assert!(
+            html.trim_start()
+                .to_ascii_lowercase()
+                .starts_with("<!doctype"),
+            "doctype: {html}"
+        );
+        assert!(
+            html.contains("<title>Download Page</title>"),
+            "title: {html}"
+        );
+        assert!(html.contains("<h1>hello</h1>"));
+        assert_eq!(saved.bytes, html.len());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn invalid_frames_and_hostile_paths_return_errors() {
+        let dir = temp_dir("errors");
+        let url = url("https://example.com/");
+        assert!(save_png(&dir, &url, b"").is_err());
+        assert!(save_png(&dir, &url, b"not a png").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn explicit_path_writers_include_doctype_and_png_signature() {
+        let dir = temp_dir("writers");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let output = rendered();
+        let png_path = dir.join("explicit.png");
+        let bytes = write_png_bytes_to(&png_path, &output.png).expect("png");
+        let png = fs::read(&png_path).expect("read png");
+        assert_eq!(bytes, png.len());
+        assert!(is_png(&png));
+        let html_path = dir.join("explicit.html");
+        let html_bytes = write_html_to(&html_path, &output.document).expect("html");
+        let html = fs::read_to_string(&html_path).expect("read html");
+        assert_eq!(html_bytes, html.len());
+        assert!(html.to_ascii_lowercase().starts_with("<!doctype"));
+        assert!(html.contains("Download Page"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saved_png_is_byte_identical_and_leaves_no_temp_files() {
+        let dir = temp_dir("passthrough");
+        let output = rendered();
+        let saved = save_png(&dir, &url("https://example.com/"), &output.png).expect("save");
+        assert_eq!(
+            fs::read(&saved.path).expect("read"),
+            output.png,
+            "no re-encode"
+        );
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "atomic write must not leave tmp files"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unwritable_download_directory_returns_an_error() {
+        let dir = temp_dir("readonly");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let output = rendered();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&dir).expect("metadata").permissions();
+            permissions.set_mode(0o500);
+            fs::set_permissions(&dir, permissions).expect("chmod");
+        }
+        let result = save_png(&dir, &url("https://example.com/"), &output.png);
+        #[cfg(unix)]
+        {
+            assert!(result.is_err(), "read-only directory must fail cleanly");
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&dir).expect("metadata").permissions();
+            permissions.set_mode(0o700);
+            fs::set_permissions(&dir, permissions).expect("chmod back");
+        }
+        let _ = result;
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_download_directory_uses_explicit_home_or_temp() {
+        let home = Path::new("/home/user");
+        assert_eq!(
+            default_download_dir(Some(Path::new("/tmp/dl")), Some(home)),
+            PathBuf::from("/tmp/dl")
+        );
+        assert_eq!(
+            default_download_dir(None, Some(home)),
+            PathBuf::from("/home/user/Downloads")
+        );
+        assert_eq!(default_download_dir(None, None), std::env::temp_dir());
+    }
+
+    #[test]
+    fn image_downloads_infer_extension_and_keep_bytes() {
+        let dir = temp_dir("save-image");
+        let png_bytes = [0x89u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 1];
+        let saved = save_image(&dir, &url("https://example.com/pic"), &png_bytes).expect("save");
+        assert_eq!(saved.kind, DownloadKind::Image);
+        assert!(saved.path.to_string_lossy().ends_with(".png"));
+        assert_eq!(fs::read(&saved.path).expect("read"), png_bytes);
+        let jpeg = [0xFFu8, 0xD8, 0xFF, 0x00];
+        let saved_jpeg = save_image(&dir, &url("https://example.com/photo"), &jpeg).expect("jpeg");
+        assert!(saved_jpeg.path.to_string_lossy().ends_with(".jpg"));
+        assert!(save_image(&dir, &url("https://example.com/x"), b"").is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn atomic_write_does_not_clobber_preplanted_predictable_tmp() {
+        // w2-st-1176 RED: legacy `.<name>.tmp` must not be truncated/followed.
+        let dir = temp_dir("tmp-race");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let legacy = target.with_file_name(".out.bin.tmp");
+        fs::write(&legacy, b"attacker-sentinel").expect("plant");
+        let written = write_atomic(&target, b"new-bytes");
+        // With the fix the predictable tmp is left alone (unique tmp is used).
+        let legacy_bytes = fs::read(&legacy).expect("read legacy tmp");
+        assert_eq!(
+            legacy_bytes, b"attacker-sentinel",
+            "predictable tmp must not be overwritten"
+        );
+        assert!(written.is_ok(), "write via unique tmp must succeed");
+        assert_eq!(
+            fs::read(&target).expect("read target"),
+            b"new-bytes",
+            "target must hold the new bytes"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn atomic_write_does_not_follow_symlink_at_predictable_tmp() {
+        // w2-st-1176 RED: a symlink planted at `.<name>.tmp` must not redirect bytes.
+        let dir = temp_dir("tmp-symlink");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let legacy = target.with_file_name(".out.bin.tmp");
+        let outside = dir.join("outside.bin");
+        fs::write(&outside, b"secret").expect("write outside");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &legacy).expect("plant symlink");
+        #[cfg(not(unix))]
+        fs::write(&legacy, b"attacker-sentinel").expect("plant");
+        let _ = write_atomic(&target, b"new-bytes");
+        let outside_bytes = fs::read(&outside).expect("read outside");
+        assert_eq!(
+            outside_bytes, b"secret",
+            "symlink at predictable tmp must not be followed"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unique_temporary_paths_are_distinct_and_unpredictable() {
+        let dir = temp_dir("tmp-unique");
+        let target = dir.join("out.bin");
+        let first = unique_temporary_path(&target);
+        let second = unique_temporary_path(&target);
+        assert_ne!(first, second, "sequential writers must differ");
+        assert_ne!(
+            first,
+            target.with_file_name(".out.bin.tmp"),
+            "must not reuse the legacy predictable name"
+        );
+        assert_ne!(first.parent(), None);
+        assert_eq!(first.parent(), target.parent());
+    }
+
+    #[test]
+    fn create_new_refuses_a_preexisting_temporary() {
+        // A planted file/symlink at the exact candidate must fail instead of
+        // being truncated or followed.
+        let dir = temp_dir("tmp-create-new");
+        fs::create_dir_all(&dir).expect("mkdir");
+        let target = dir.join("out.bin");
+        let candidate = unique_temporary_path(&target);
+        fs::write(&candidate, b"planted").expect("plant");
+        let refused = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists);
+        assert!(refused, "create_new must reject a pre-existing tmp");
+        assert_eq!(fs::read(&candidate).expect("read"), b"planted");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn download_names_are_unique_and_sanitized() {
+        let dir = temp_dir("progress-naming");
+        let url =
+            megi_webview::net::Url::parse("https://example.com/some image.PNG?x=1").expect("url");
+        let png = [0x89u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        let first = save_image(&dir, &url, &png).expect("first");
+        let second = save_image(&dir, &url, &png).expect("second");
+        assert_ne!(first.path, second.path);
+        assert!(first.path.to_string_lossy().contains("megi-example"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

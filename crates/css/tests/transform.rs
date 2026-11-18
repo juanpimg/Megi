@@ -1,17 +1,17 @@
 //! CSS `transform` parsing (#1539): translate/scale/rotate resolve into a 2D matrix
 //! on `ComputedStyle`; `none` and malformed values stay unset.
 
-use css::resolve_document_styles;
-use dom::{Document, Namespace};
+use megi_core::{Document, Namespace};
+use megi_css::resolve_document_styles;
 
-fn style_for(css_text: &str) -> css::ComputedStyle {
+fn style_for(css_text: &str) -> megi_css::ComputedStyle {
     let mut doc = Document::new();
     let html = doc.create_element(Namespace::Html, "html", vec![]);
     doc.append_child(doc.root(), html);
     let div = doc.create_element(
         Namespace::Html,
         "div",
-        vec![dom::Attribute::new("id", "target")],
+        vec![megi_core::Attribute::new("id", "target")],
     );
     doc.append_child(html, div);
     let styles = resolve_document_styles(&doc, Some(css_text));
@@ -68,15 +68,15 @@ fn transform_is_not_inherited() {
 #[test]
 fn transform_function_names_are_case_insensitive() {
     // #1668: CSS function names are ASCII case-insensitive.
-    let upper = css::transform::Transform::parse("TRANSLATE(10px) ROTATE(90deg)");
-    let lower = css::transform::Transform::parse("translate(10px) rotate(90deg)");
+    let upper = megi_css::transform::Transform::parse("TRANSLATE(10px) ROTATE(90deg)");
+    let lower = megi_css::transform::Transform::parse("translate(10px) rotate(90deg)");
     assert!(upper.is_some(), "uppercase function names must parse");
     assert_eq!(upper, lower);
 }
 
 #[test]
 fn transform_validates_units_and_arity() {
-    use css::transform::Transform;
+    use megi_css::transform::Transform;
     // #1667: typed units and strict arity; garbage suffixes and extra args are invalid.
     assert!(
         Transform::parse("translate(10%)").is_none(),

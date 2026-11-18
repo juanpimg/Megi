@@ -8,8 +8,24 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::proxy::ProxyConfig;
-use net::{FetchOptions, ResourceLoader, Url, fetch};
+use megi_net::proxy::ProxyConfig;
+use megi_net::{FetchOptions, ResourceLoader, Url, fetch};
+
+/// PAC tests supply the same JS-backed evaluator the browser installs in production.
+struct TestJsEvaluator;
+
+impl megi_net::PacEvaluator for TestJsEvaluator {
+    fn evaluate(&self, script: &str, _url: &str, _host: &str) -> Result<String, String> {
+        megi_js::JsRuntime::new()
+            .map_err(|e| e.to_string())?
+            .eval(script, "proxy.pac")
+            .map_err(|e| e.to_string())
+    }
+}
+
+fn install_evaluator() {
+    megi_net::set_pac_evaluator(TestJsEvaluator);
+}
 
 fn spawn(handler: impl FnOnce(TcpListener) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -80,6 +96,7 @@ fn options(pac_url: Url) -> FetchOptions {
 
 #[test]
 fn pac_find_proxy_for_url_selects_the_configured_proxy() {
+    install_evaluator();
     let pac_hits = Arc::new(AtomicUsize::new(0));
     let proxy_hits = Arc::new(AtomicUsize::new(0));
     let (proxy_port, proxy_server) = spawn_proxy(Arc::clone(&proxy_hits));
@@ -111,6 +128,7 @@ fn pac_find_proxy_for_url_selects_the_configured_proxy() {
 
 #[test]
 fn pac_result_is_cached_per_host() {
+    install_evaluator();
     let pac_hits = Arc::new(AtomicUsize::new(0));
     let proxy_hits = Arc::new(AtomicUsize::new(0));
     let (proxy_port, proxy_server) = spawn_proxy(Arc::clone(&proxy_hits));
@@ -140,6 +158,7 @@ fn pac_result_is_cached_per_host() {
 
 #[test]
 fn resource_loader_uses_the_pac_proxy() {
+    install_evaluator();
     let pac_hits = Arc::new(AtomicUsize::new(0));
     let proxy_hits = Arc::new(AtomicUsize::new(0));
     let (proxy_port, proxy_server) = spawn_proxy(Arc::clone(&proxy_hits));
@@ -161,6 +180,7 @@ fn resource_loader_uses_the_pac_proxy() {
 
 #[test]
 fn pac_failover_skips_unreachable_proxy_and_uses_live_secondary() {
+    install_evaluator();
     let dead = TcpListener::bind("127.0.0.1:0").expect("bind dead");
     let dead_port = dead.local_addr().expect("addr").port();
     drop(dead);
@@ -187,6 +207,7 @@ fn pac_failover_skips_unreachable_proxy_and_uses_live_secondary() {
 
 #[test]
 fn pac_supports_socks5_and_socks4a_directives_and_helpers() {
+    install_evaluator();
     // 1) SOCKS5 selected via shExpMatch & isInNet helpers.
     let (socks5_port, socks5_server) = spawn(|listener| {
         if let Ok((mut tcp, _)) = listener.accept() {

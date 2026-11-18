@@ -230,7 +230,7 @@ enum ErrorPositionMode {
 /// Position convention per parse error code, derived from the html5lib-tests fixtures.
 ///
 /// All codes not listed here use [`ErrorPositionMode::Current`]. The residue of codes that still
-/// differ after this split is tracked explicitly by `test_harness::KNOWN_POSITION_GAPS`.
+/// differ after this split is tracked explicitly by `megi_test_harness::KNOWN_POSITION_GAPS`.
 const fn error_position_mode(code: ParseErrorCode) -> ErrorPositionMode {
     use ParseErrorCode::*;
     match code {

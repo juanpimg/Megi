@@ -10,7 +10,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, Url, fetch, fetch_streaming};
+use megi_net::{FetchError, FetchOptions, Url, fetch, fetch_streaming};
 
 const GZIP_HEADER: [u8; 10] = [0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 255];
 
@@ -70,7 +70,7 @@ fn gzip_stored(parts: &[Vec<u8>]) -> Vec<u8> {
         out.extend_from_slice(part);
         all.extend_from_slice(part);
     }
-    out.extend_from_slice(&net::compression::crc32_ieee(&all).to_le_bytes());
+    out.extend_from_slice(&megi_net::compression::crc32_ieee(&all).to_le_bytes());
     out.extend_from_slice(&(all.len() as u32).to_le_bytes());
     out
 }
@@ -88,7 +88,7 @@ fn zlib_stored(parts: &[Vec<u8>]) -> Vec<u8> {
         out.extend_from_slice(part);
         all.extend_from_slice(part);
     }
-    out.extend_from_slice(&image::adler32(&all).to_be_bytes());
+    out.extend_from_slice(&megi_image::adler32(&all).to_be_bytes());
     out
 }
 

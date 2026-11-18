@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use css::ComputedStyle;
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::ComputedStyle;
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs
@@ -29,10 +29,10 @@ fn document() -> (Document, NodeId) {
 }
 
 fn computed(doc: &Document, css_text: &str) -> HashMap<NodeId, ComputedStyle> {
-    css::resolve_document_styles(doc, Some(css_text))
+    megi_css::resolve_document_styles(doc, Some(css_text))
 }
 
-const RED: css::Color = css::Color {
+const RED: megi_css::Color = megi_css::Color {
     r: 255,
     g: 0,
     b: 0,

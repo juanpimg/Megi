@@ -32,12 +32,12 @@ El árbol principal estaba bloqueado al inicio (rotura por WIP del usuario en
 llenó dos veces durante la sesión: `ld` murió con SIGBUS; reintentado con
 `CARGO_TARGET_DIR=/home/jp/.cache/verify-target`):
 
-- `cargo test -p render --lib` → **ok. 42 passed; 0 failed** (salida literal).
-- `cargo test -p render --test iframe_tests` (y resto de targets de
+- `cargo test -p megi-render --lib` → **ok. 42 passed; 0 failed** (salida literal).
+- `cargo test -p megi-render --test iframe_tests` (y resto de targets de
   integración): enlace imposible en esta máquina (`ld` SIGBUS por tmpfs lleno;
   reintentado en target de `/home`, ver Concern). No bloquea los hallazgos:
   cada uno tiene repro dedicado ejecutado abajo.
-- `cargo run --release -p test_harness -- --summary --strict` (árbol
+- `cargo run --release -p megi-test-harness -- --summary --strict` (árbol
   principal) → corre; `CSS Syntax Total: 30 / 30 tests passed`;
   **Conformance gate: FAIL** en estricto (38 diferencias documentadas de
   parse-error no toleradas; ámbito html/css, informativo).
@@ -92,8 +92,8 @@ llenó dos veces durante la sesión: `ld` murió con SIGBUS; reintentado con
 
 - `id`: w2-render-02 · `ws_bridge.rs:8-9`, `lib.rs:215`
 - `lente`: contrato · `severidad`: P2 · `categoría`: build
-- `title`: `use js::...` incondicional rompe la configuración documentada sin `js`
-- `evidence`: `cargo check -p render --no-default-features` →
+- `title`: `use megi_js::...` incondicional rompe la configuración documentada sin `js`
+- `evidence`: `cargo check -p megi-render --no-default-features` →
   `error[E0433]: cannot find module or crate 'js' in this scope -->
   crates/render/src/ws_bridge.rs:8:5` (ídem :9). `pub mod ws_bridge`
   incondicional frente a `#[cfg(feature = "js")] mod browser_host`.
@@ -254,16 +254,16 @@ llenó dos veces durante la sesión: `ld` murió con SIGBUS; reintentado con
 ## Comandos ejecutados (salidas literales)
 
 1. `wc`/`git log`/`git status`: alcance y WIP identificados.
-2. `cargo test -p render` (árbol principal, con WIP): `error[E0308] ...
+2. `cargo test -p megi-render` (árbol principal, con WIP): `error[E0308] ...
    runtime.rs:1454 ... expected 44, found 43` (bloqueo inicial, hoy resuelto
    en HEAD e87f206).
-3. `cargo check -p render --no-default-features`: `error[E0433] ...
+3. `cargo check -p megi-render --no-default-features`: `error[E0433] ...
    ws_bridge.rs:8:5` (w2-render-02).
-4. `cargo test -p render --lib` (worktree limpio): `ok. 42 passed; 0 failed`.
+4. `cargo test -p megi-render --lib` (worktree limpio): `ok. 42 passed; 0 failed`.
 5. Targets de integración: enlace imposible en tmpfs lleno (`ld` SIGBUS);
    reintentado con `CARGO_TARGET_DIR=/home/jp/.cache/verify-target`:
    `iframe_tests` → **ok. 5 passed; 0 failed** (worktree 3c06db8); mismo
-   resultado en el árbol principal HEAD (`cargo test -p render --test
+   resultado en el árbol principal HEAD (`cargo test -p megi-render --test
    iframe_tests` → 5 passed). Resto de targets pendientes de `/tmp` sano.
 6. `test_harness --summary --strict`: `CSS Syntax Total: 30 / 30`; gate FAIL
    (38 parse-error differences).

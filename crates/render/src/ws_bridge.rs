@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use js::error::JsError;
-use js::host::{WebSocketEvent, WebSocketTransport};
-use net::http::FetchOptions;
-use net::websocket::{self, Opcode, WebSocketClient};
+use megi_js::error::JsError;
+use megi_js::host::{WebSocketEvent, WebSocketTransport};
+use megi_net::http::FetchOptions;
+use megi_net::websocket::{self, Opcode, WebSocketClient};
 
 /// How long the pump thread blocks on each socket read before checking for stop/shutdown.
 const POLL_TIMEOUT: Duration = Duration::from_millis(20);
@@ -71,7 +71,7 @@ impl LiveWebSocketTransport {
                         }
                         Opcode::Continuation => {}
                     },
-                    Err(net::FetchError::Io(error))
+                    Err(megi_net::FetchError::Io(error))
                         if matches!(
                             error.kind(),
                             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut

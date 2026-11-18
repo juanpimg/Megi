@@ -73,7 +73,7 @@ try{location.hash='#h'}catch(e){}\n";
 /// returned values include the shapes that historically break hosts (NaN/±∞ geometry, a
 /// status of `0`, conflicting `content-length` headers, bodies that exceed the advertised
 /// length, storage keys with NULs).
-fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
+fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     let seed: Arc<Vec<u8>> = Arc::new(seed.iter().copied().take(64).collect());
 
     // fetch(): typed error, hostile headers/status, or a body larger than the caller expects.
@@ -82,7 +82,7 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     runtime.set_fetch_provider(Box::new(move |request| {
         let call = fetch_calls.fetch_add(1, Ordering::Relaxed);
         if call >= 4 {
-            return Err(js::JsError::Budget(
+            return Err(megi_js::JsError::Budget(
                 "fuzz fetch provider call cap".to_string(),
             ));
         }
@@ -91,17 +91,17 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
             .copied()
             .unwrap_or(0);
         match b % 4 {
-            0 => Err(js::JsError::Runtime(
+            0 => Err(megi_js::JsError::Runtime(
                 "hostile provider rejection".to_string(),
             )),
-            1 => Ok(js::host::FetchResult {
+            1 => Ok(megi_js::host::FetchResult {
                 status: 0,
                 status_text: String::new(),
                 url: request.url,
                 headers: vec![("X-Fuzz".to_string(), "\r\n\t\"".to_string())],
                 body: vec![0xFF; usize::from(b % 32)],
             }),
-            2 => Ok(js::host::FetchResult {
+            2 => Ok(megi_js::host::FetchResult {
                 status: 599,
                 status_text: "hostile".to_string(),
                 url: request.url,
@@ -112,7 +112,7 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
                 ],
                 body: vec![b; usize::from(b % 128)],
             }),
-            _ => Ok(js::host::FetchResult {
+            _ => Ok(megi_js::host::FetchResult {
                 status: 200,
                 status_text: "OK".to_string(),
                 url: request.url,
@@ -126,7 +126,7 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     let storage_seed = Arc::clone(&seed);
     let save_calls = Arc::new(AtomicUsize::new(0));
     let saves = Arc::clone(&save_calls);
-    runtime.set_storage_provider(js::host::StorageProvider {
+    runtime.set_storage_provider(megi_js::host::StorageProvider {
         load: Box::new(move |_kind| {
             vec![
                 (String::new(), "empty-key".to_string()),
@@ -154,11 +154,11 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     runtime.set_layout_provider(Box::new(move |_node| {
         match layout_seed.first().copied().unwrap_or(0) % 3 {
             0 => None,
-            1 => Some(js::host::LayoutRect {
+            1 => Some(megi_js::host::LayoutRect {
                 border_box: (f32::NAN, f32::NEG_INFINITY, 1.0e30, -1.0),
                 content_box: (0.0, 0.0, -0.0, f32::INFINITY),
             }),
-            _ => Some(js::host::LayoutRect {
+            _ => Some(megi_js::host::LayoutRect {
                 border_box: (1.0, 2.0, 3.0, 4.0),
                 content_box: (1.0, 2.0, 3.0, 4.0),
             }),
@@ -169,7 +169,7 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     let viewport_seed = Arc::clone(&seed);
     runtime.set_viewport_provider(Box::new(move || {
         let b = |i: usize| u32::from(viewport_seed.get(i).copied().unwrap_or(0));
-        js::ViewportInfo {
+        megi_js::ViewportInfo {
             width: b(0).wrapping_mul(97),
             height: b(1).wrapping_mul(89),
             device_pixel_ratio: if b(2) % 2 == 0 { f64::NAN } else { 1.0e30 },
@@ -219,7 +219,7 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     runtime.set_worker_loader(Box::new(move |_url| {
         let call = worker_calls.fetch_add(1, Ordering::Relaxed);
         if call >= 2 {
-            return Err(js::JsError::Budget(
+            return Err(megi_js::JsError::Budget(
                 "fuzz worker loader call cap".to_string(),
             ));
         }
@@ -230,15 +230,15 @@ fn install_hostile_providers(runtime: &mut js::JsRuntime, seed: &[u8]) {
     }));
 }
 
-fn pick_target(runtime: &js::JsRuntime, selector: u8) -> js::JsEventTarget {
+fn pick_target(runtime: &megi_js::JsRuntime, selector: u8) -> megi_js::JsEventTarget {
     match selector % 4 {
-        0 => js::JsEventTarget::Window,
-        1 => js::JsEventTarget::Document,
-        2 => js::JsEventTarget::Node(runtime.document().root()),
+        0 => megi_js::JsEventTarget::Window,
+        1 => megi_js::JsEventTarget::Document,
+        2 => megi_js::JsEventTarget::Node(runtime.document().root()),
         _ => {
             // Prefer a stable element when available; fall back to document root.
             let root = runtime.document().root();
-            js::JsEventTarget::Node(root)
+            megi_js::JsEventTarget::Node(root)
         }
     }
 }
@@ -249,8 +249,8 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let fixture = FIXTURES[data[0] as usize % FIXTURES.len()];
-    let document = html::parse_document(fixture, false);
-    let Ok(mut runtime) = js::JsRuntime::with_document(document, "about:blank".to_string()) else {
+    let document = megi_html::parse_document(fixture, false);
+    let Ok(mut runtime) = megi_js::JsRuntime::with_document(document, "about:blank".to_string()) else {
         return;
     };
 
@@ -259,7 +259,7 @@ fuzz_target!(|data: &[u8]| {
     let recursion_limit = bounded_usize(data.get(2).copied().unwrap_or(0), 16, 128);
     let stack_size_limit = bounded_usize(data.get(3).copied().unwrap_or(0), 512, 4_096);
     let time_budget_ms = bounded_usize(data.get(4).copied().unwrap_or(0), 5, 120) as u64;
-    runtime.set_budget(js::Budget {
+    runtime.set_budget(megi_js::Budget {
         loop_iterations,
         recursion_limit,
         stack_size_limit,

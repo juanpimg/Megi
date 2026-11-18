@@ -1,5 +1,5 @@
 [package]
-name = "css"
+name = "megi-css"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,10 @@ repository.workspace = true
 description = "Megi Engine — W3C CSS Syntax Module Level 3 & Selectors Level 4 Foundation"
 
 [dependencies]
-dom.workspace = true
+megi-core.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+
+[lints]
+workspace = true

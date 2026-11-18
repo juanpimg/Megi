@@ -2,11 +2,13 @@
 
 use std::sync::Arc;
 
-use css::{BackgroundPosition, Color, ComputedStyle, Display, FilterFunction, Length, ObjectFit};
-use dom::{Document, Namespace};
-use image::RgbaImage;
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_core::{Document, Namespace};
+use megi_css::{
+    BackgroundPosition, Color, ComputedStyle, Display, FilterFunction, Length, ObjectFit,
+};
+use megi_image::RgbaImage;
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, ImageStore, Pixmap,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -369,7 +371,7 @@ fn test_no_backdrop_filter_keeps_legacy_display_list() {
 
 #[test]
 fn test_object_fit_from_css_resolution() {
-    use dom::Attribute;
+    use megi_core::Attribute;
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     let body = document.create_element(Namespace::Html, "body", vec![]);
@@ -385,7 +387,7 @@ fn test_object_fit_from_css_resolution() {
     document.append_child(document.root(), html);
     document.append_child(html, body);
     document.append_child(body, node);
-    let styles = css::resolve_document_styles(&document, None);
+    let styles = megi_css::resolve_document_styles(&document, None);
     let style = styles.get(&node).cloned().expect("style");
     assert_eq!(style.object_fit, ObjectFit::Contain);
     assert_eq!(style.object_position.x, Length::Percent(0.0));

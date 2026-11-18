@@ -1,0 +1,277 @@
+//! Worker coordination: render requests, generation-based message draining,
+//! navigation-triggered renders and debounced resize scheduling.
+
+use super::*;
+
+impl WindowApp {
+    /// Enqueues a full-page render for the current viewport.
+    pub(super) fn request_render(&mut self) {
+        let Some(sender) = &self.request_sender else {
+            self.error = Some("render worker is not running".to_string());
+            self.update_title();
+            return;
+        };
+        let render_input = if crate::reader::is_reader_url(&self.input) {
+            self.reader_html.clone().unwrap_or_else(|| {
+                crate::pages::data_url(&crate::pages::reader_page("Reader", &[], "about:reader"))
+            })
+        } else if is_history_url(&self.input) {
+            let html = crate::history::history_page_html(&self.tabs.active().history_log.recent());
+            format!(
+                "data:text/html;base64,{}",
+                megi_webview::net::base64_encode(html.as_bytes())
+            )
+        } else {
+            self.input.clone()
+        };
+        let page_height = self.page_viewport_height();
+        let request = if self.find.query().is_empty() {
+            self.store
+                .begin_request(&render_input, self.metrics.css_width, page_height)
+        } else {
+            self.store.begin_find_request(
+                &render_input,
+                self.metrics.css_width,
+                page_height,
+                self.find.query(),
+            )
+        };
+        self.render_pending = true;
+        if sender.send(request).is_err() {
+            self.error = Some("render worker stopped unexpectedly".to_string());
+            self.update_title();
+        }
+    }
+
+    /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
+    pub(super) fn start_navigation(&mut self, url: &megi_webview::net::Url) {
+        self.session_autosave.mark_dirty(Instant::now());
+        self.input = url.as_str();
+        if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
+            self.zoom = stored;
+            self.tabs.active_mut().zoom = stored;
+        }
+        self.reader_html = None;
+        self.error = None;
+        self.content_capped = false;
+        self.links.clear();
+        self.refresh.clear();
+        self.frame_scripts_executed = 0;
+        self.frame_timers_pending = 0;
+        self.frame_warnings = 0;
+        self.frame_script_errors = 0;
+        self.forms.clear();
+        self.focus.blur();
+        self.editor = None;
+        self.document = None;
+        self.doc_title = None;
+        self.close_find();
+        self.dropdown = None;
+        self.overflow_menu = None;
+        self.context_menu = None;
+        self.history_menu = None;
+        self.hover_url = None;
+        self.address.cancel();
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+        self.request_render();
+    }
+
+    /// Commits a navigation (link click): pushes a history entry unless it is the same URL.
+    pub(super) fn navigate_to(&mut self, url: megi_webview::net::Url) {
+        if self.nav.navigate_to(url) == NavigationOutcome::Pushed
+            && let Some(current) = self.nav.current().cloned()
+        {
+            self.start_navigation(&current);
+        }
+    }
+
+    /// Goes back one history entry (no-op at the beginning of the history).
+    pub(super) fn go_back(&mut self) {
+        let previous = self.nav.current().cloned();
+        if let Some(url) = self.nav.back().cloned() {
+            self.apply_history_navigation(&url, previous.as_ref());
+        }
+    }
+
+    /// Goes forward one history entry (no-op at the end of the history).
+    pub(super) fn go_forward(&mut self) {
+        let previous = self.nav.current().cloned();
+        if let Some(url) = self.nav.forward().cloned() {
+            self.apply_history_navigation(&url, previous.as_ref());
+        }
+    }
+
+    /// Applies a back/forward navigation.
+    ///
+    /// When the target differs from the current document only by its fragment, the page is not
+    /// reloaded: the current DOM snapshot is re-rendered with `hashchange` and `popstate`
+    /// dispatched on `window` so SPA routers can react (#1503). Any other navigation falls back
+    /// to a full render.
+    pub(super) fn apply_history_navigation(
+        &mut self,
+        url: &megi_webview::net::Url,
+        previous: Option<&megi_webview::net::Url>,
+    ) {
+        let same_document = previous.is_some_and(|current| current.cache_key() == url.cache_key());
+        let fragment_changed = previous.and_then(|current| current.fragment()) != url.fragment();
+        if same_document
+            && fragment_changed
+            && self.document.is_some()
+            && self.request_sender.is_some()
+        {
+            let snapshot =
+                crate::forms::snapshot_data_url(self.document.as_ref().expect("document present"));
+            // Resolve relative resources against the target URL (same document as `previous`).
+            let base = Some(url.as_str());
+            let events: Vec<&str> = if url.fragment().is_some() {
+                vec!["hashchange", "popstate"]
+            } else {
+                vec!["popstate"]
+            };
+            let request = self.store.begin_history_event_request(
+                &snapshot,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                base.as_deref(),
+                &events,
+            );
+            if let Some(sender) = &self.request_sender
+                && sender.send(request).is_err()
+            {
+                self.error = Some("render worker stopped unexpectedly".to_string());
+            }
+            self.input = url.as_str();
+            self.update_title();
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            return;
+        }
+        self.start_navigation(url);
+    }
+
+    /// Reloads the current page (keeps scroll position and history).
+    pub(super) fn reload(&mut self) {
+        if self.nav.reload_target().is_some() {
+            self.request_render();
+        }
+    }
+
+    /// Debounced resize/scale change: schedule a render after the quiet period.
+    pub(super) fn schedule_resize(&mut self, event_loop: &ActiveEventLoop, metrics: WindowMetrics) {
+        self.pending_metrics = Some(metrics);
+        let deadline = self.debounce.schedule(Instant::now());
+        event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+    }
+
+    /// Applies all pending worker messages; returns whether the view changed.
+    pub(super) fn drain_worker_messages(&mut self) -> bool {
+        let mut applied = false;
+        let mut messages = Vec::new();
+        if let Some(receiver) = &self.message_receiver {
+            while let Ok(message) = receiver.try_recv() {
+                messages.push(message);
+            }
+        }
+        let mut sync_find = false;
+        let mut rebuild_focus = false;
+        for message in messages {
+            if !self.store.accept(message) {
+                continue; // stale generation
+            }
+            applied = true;
+            match self.store.frame() {
+                Some(frame) => {
+                    rebuild_focus = true;
+                    self.error = None;
+                    self.render_pending = false;
+                    self.content_capped = frame.capped;
+                    self.links = frame.links.clone();
+                    self.doc_title = frame.title.clone();
+                    if !frame.document_url.starts_with("data:") {
+                        let title = frame
+                            .title
+                            .clone()
+                            .unwrap_or_else(|| frame.document_url.clone());
+                        let logical = self.recent_history.record(&title, &frame.document_url);
+                        self.tabs.active_mut().history_log.record(
+                            &title,
+                            &frame.document_url,
+                            logical,
+                        );
+                    }
+                    self.frame_scripts_executed = frame.scripts_executed;
+                    self.frame_timers_pending = frame.script_timers_pending;
+                    self.frame_warnings = frame.warnings;
+                    self.frame_script_errors = frame.script_errors;
+                    self.forms = frame.forms.clone();
+                    self.document = Some(Arc::clone(&frame.document));
+                    self.find_rects = frame.find_rects.clone();
+                    if self.find_editing && !self.find.query().is_empty() {
+                        self.find.set_matches(frame.find_matches.clone());
+                        sync_find = true;
+                    }
+                    // A patched-DOM render has a data: document URL: keep the real page URL
+                    // in history/`input` (only store redirects for normal renders).
+                    let patched_render = frame.document_url.starts_with("data:");
+                    if !patched_render {
+                        self.editor = None;
+                        self.release_button = None;
+                    }
+                    self.scroll.set_content_height(frame.content_height);
+                    // Auto-refresh only when the page ran scripts and left timers pending;
+                    // one-shot: the next frame re-arms it or clears it (no loops otherwise).
+                    if self
+                        .refresh
+                        .should_refresh(frame.scripts_executed, frame.script_timers_pending)
+                    {
+                        self.refresh.schedule(Instant::now());
+                    } else {
+                        self.refresh.clear();
+                    }
+                    // Server redirects: the final URL replaces the requested history entry.
+                    if !patched_render
+                        && let Ok(final_url) = megi_webview::net::Url::parse(&frame.document_url)
+                        && self.nav.current() != Some(&final_url)
+                        && self.nav.replace_current(final_url.clone())
+                    {
+                        self.input = final_url.as_str();
+                    }
+                }
+                None => {
+                    self.render_pending = false;
+                    self.error = self.store.take_error();
+                    // A failed render must not keep auto-refreshing (error loop).
+                    self.refresh.clear();
+                    if let Some(error) = &self.error {
+                        eprintln!("megi: {error}");
+                    }
+                }
+            }
+            if sync_find {
+                sync_find = false;
+                self.scroll_to_current_find();
+            }
+        }
+        if applied {
+            // Rebuild the keyboard focus list for the new DOM, keeping focus when the same
+            // target survived the render. Done here, after the `frame` borrow ended (#1517).
+            if rebuild_focus {
+                self.rebuild_focus_targets();
+            }
+            self.update_title();
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            // Release a pressed button visual state once its frame is on screen.
+            if let Some(form_id) = self.release_button.take() {
+                self.apply_form_patch(Some(form_id), None, None, false);
+            }
+        }
+        applied
+    }
+}

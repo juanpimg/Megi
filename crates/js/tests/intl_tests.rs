@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use megi_js::runtime::JsRuntime;
 
 fn eval(script: &str) -> String {
     let mut runtime = JsRuntime::new().expect("runtime");

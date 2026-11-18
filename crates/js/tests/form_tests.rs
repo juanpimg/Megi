@@ -4,14 +4,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 
 fn runtime_with_fetch() -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&calls);
     let mut runtime = JsRuntime::new().expect("runtime");
-    let provider: FetchProvider = Box::new(move |request| {
+    let provider: FetchProvider = Arc::new(move |request| {
         seen.lock().expect("lock").push(request);
         Ok(FetchResult {
             status: 200,

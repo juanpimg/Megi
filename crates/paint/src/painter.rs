@@ -80,19 +80,19 @@
 //! `body` child. The propagated color is emitted as the first display item over
 //! the whole viewport and the originating element does not paint it again.
 
-use css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, Visibility};
-use dom::NodeId;
-use layout::{BoxType, LayoutBox, Rect};
+use megi_core::NodeId;
+use megi_css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, Visibility};
+use megi_layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::display_list::{
+use megi_display::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_SHADOWS,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
-use crate::hit_test::{HitKind, HitRegion, RegionCollector};
+use megi_display::{HitKind, HitRegion, RegionCollector};
 
 /// Background color propagated from the root element or `body` to the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -117,7 +117,7 @@ struct PaintSkip {
 /// Decoded image resources available to one paint pass.
 ///
 /// Bundled so the internal painting helpers thread a single reference: replaced
-/// elements are keyed by [`dom::NodeId`] ([`ImageStore`]) while CSS background
+/// elements are keyed by [`megi_core::NodeId`] ([`ImageStore`]) while CSS background
 /// and list-marker images are keyed by their raw CSS URL string
 /// ([`BackgroundImages`]).
 struct PaintResources<'a> {
@@ -138,7 +138,7 @@ struct PaintResources<'a> {
 impl PaintResources<'_> {
     /// Records a painted primitive for hit-testing (no-op when regions are off).
     #[inline]
-    fn record(&self, rect: Rect, node_id: Option<dom::NodeId>, kind: HitKind) {
+    fn record(&self, rect: Rect, node_id: Option<megi_core::NodeId>, kind: HitKind) {
         if let Some(collector) = self.regions {
             collector.borrow_mut().record(rect, node_id, kind);
         }
@@ -175,7 +175,7 @@ fn push_rounded_group(
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
     rect: Rect,
-    radii: css::BorderRadii,
+    radii: megi_css::BorderRadii,
 ) {
     list.push(DisplayItem::PushRoundedGroup { rect, radii });
     resources.push_clip(rect);
@@ -444,7 +444,10 @@ fn canvas_background(root: &LayoutBox, effects_present: bool) -> CanvasBackgroun
 
 /// Builds the four computed border sides of a box (CSS order: top, right,
 /// bottom, left), zeroing the width of `none`/`hidden` sides (CSS 2.2 §8.5.3).
-fn border_sides(style: &css::ComputedStyle, border: layout::EdgeSizes) -> [BorderSide; 4] {
+fn border_sides(
+    style: &megi_css::ComputedStyle,
+    border: megi_layout::EdgeSizes,
+) -> [BorderSide; 4] {
     let widths = [border.top, border.right, border.bottom, border.left];
     let styles = [
         style.border_style.top,
@@ -537,7 +540,7 @@ fn tree_has_effects(root: &LayoutBox) -> bool {
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
         if node.style.as_ref().is_some_and(|style| {
-            !style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal
+            !style.filter.is_empty() || style.mix_blend_mode != megi_css::MixBlendMode::Normal
         }) {
             return true;
         }
@@ -552,10 +555,12 @@ fn tree_has_effects(root: &LayoutBox) -> bool {
 /// The clipping edge is the padding box and the corner radii are shrunk by the
 /// border widths (CSS Overflow 3 §3 / CSS Backgrounds 3 §5.5), so content is
 /// clipped by the inner curve, not by the outer border box.
-fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRadii)> {
+fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, megi_css::BorderRadii)> {
     let style = layout_box.style.as_ref()?;
-    if !matches!(style.overflow, css::Overflow::Hidden | css::Overflow::Clip)
-        || style.border_radius.is_zero()
+    if !matches!(
+        style.overflow,
+        megi_css::Overflow::Hidden | megi_css::Overflow::Clip
+    ) || style.border_radius.is_zero()
     {
         return None;
     }
@@ -567,24 +572,24 @@ fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRad
     let outer = layout_box.dimensions.border_box();
     // Resolve percent radii against the border box before subtracting the border;
     // keeping them percent and re-resolving against the padding box is wrong (#audit).
-    let shrink = |length: css::Length, width: f32, area: f32| -> css::Length {
+    let shrink = |length: megi_css::Length, width: f32, area: f32| -> megi_css::Length {
         let px = match length {
-            css::Length::Px(px) => px,
-            css::Length::Percent(pct) => area * pct / 100.0,
-            css::Length::Auto => 0.0,
+            megi_css::Length::Px(px) => px,
+            megi_css::Length::Percent(pct) => area * pct / 100.0,
+            megi_css::Length::Auto => 0.0,
         };
-        css::Length::Px((px - width).max(0.0))
+        megi_css::Length::Px((px - width).max(0.0))
     };
-    let radii = css::BorderRadii {
-        top_left: css::Radius {
+    let radii = megi_css::BorderRadii {
+        top_left: megi_css::Radius {
             x: shrink(style.border_radius.top_left.x, border.left, outer.width),
             y: shrink(style.border_radius.top_left.y, border.top, outer.height),
         },
-        top_right: css::Radius {
+        top_right: megi_css::Radius {
             x: shrink(style.border_radius.top_right.x, border.right, outer.width),
             y: shrink(style.border_radius.top_right.y, border.top, outer.height),
         },
-        bottom_right: css::Radius {
+        bottom_right: megi_css::Radius {
             x: shrink(
                 style.border_radius.bottom_right.x,
                 border.right,
@@ -596,7 +601,7 @@ fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRad
                 outer.height,
             ),
         },
-        bottom_left: css::Radius {
+        bottom_left: megi_css::Radius {
             x: shrink(style.border_radius.bottom_left.x, border.left, outer.width),
             y: shrink(
                 style.border_radius.bottom_left.y,
@@ -609,11 +614,11 @@ fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, css::BorderRad
 }
 
 /// True when a background layer asks to be clipped to the element's glyphs.
-fn background_clips_to_text(style: &css::ComputedStyle) -> bool {
+fn background_clips_to_text(style: &megi_css::ComputedStyle) -> bool {
     style
         .background_layers
         .iter()
-        .any(|layer| layer.clip == css::BackgroundClip::Text)
+        .any(|layer| layer.clip == megi_css::BackgroundClip::Text)
 }
 
 /// Per-pass cap on how many boxes may collect a `background-clip: text` mask.
@@ -660,7 +665,7 @@ fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun> {
                 font_italic: child.style.as_ref().is_some_and(|style| {
                     matches!(
                         style.font_style,
-                        css::FontStyle::Italic | css::FontStyle::Oblique
+                        megi_css::FontStyle::Italic | megi_css::FontStyle::Oblique
                     )
                 }),
                 advance,
@@ -684,20 +689,20 @@ fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun> {
 #[inline]
 fn has_effects(layout_box: &LayoutBox) -> bool {
     layout_box.style.as_ref().is_some_and(|style| {
-        !style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal
+        !style.filter.is_empty() || style.mix_blend_mode != megi_css::MixBlendMode::Normal
     })
 }
 
 /// Extra pixel margin needed around an effect group so blur/drop-shadow can
 /// paint outside the source bounds (deterministic box-blur spread).
-fn effect_padding(filters: &[css::FilterFunction]) -> f32 {
+fn effect_padding(filters: &[megi_css::FilterFunction]) -> f32 {
     let mut padding = 0.0f32;
-    for filter in filters.iter().take(css::MAX_FILTER_FUNCTIONS) {
+    for filter in filters.iter().take(megi_css::MAX_FILTER_FUNCTIONS) {
         match *filter {
-            css::FilterFunction::Blur(blur) => {
+            megi_css::FilterFunction::Blur(blur) => {
                 padding = padding.max(blur.clamp(0.0, 64.0) * 2.0 + 2.0);
             }
-            css::FilterFunction::DropShadow {
+            megi_css::FilterFunction::DropShadow {
                 offset_x,
                 offset_y,
                 blur,
@@ -721,7 +726,7 @@ fn effect_padding(filters: &[css::FilterFunction]) -> f32 {
 fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
     let style = layout_box.style.as_ref()?;
     if style.filter.is_empty()
-        || style.mix_blend_mode != css::MixBlendMode::Normal
+        || style.mix_blend_mode != megi_css::MixBlendMode::Normal
         || !layout_box.children.is_empty()
         || style.background_image.is_some()
         || style.background_geometry_explicit
@@ -738,12 +743,12 @@ fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
     if style.filter.iter().any(|filter| {
         matches!(
             filter,
-            css::FilterFunction::Blur(_) | css::FilterFunction::DropShadow { .. }
+            megi_css::FilterFunction::Blur(_) | megi_css::FilterFunction::DropShadow { .. }
         )
     }) {
         return None;
     }
-    Some(crate::rasterizer::filter_solid_color(
+    Some(megi_raster::rasterizer::filter_solid_color(
         style.background_color,
         &style.filter,
     ))
@@ -889,7 +894,7 @@ fn paint_stacking_context(
     if resources.effects_present
         && inline_filtered_solid(layout_box).is_none()
         && let Some(style) = layout_box.style.as_ref()
-        && (!style.filter.is_empty() || style.mix_blend_mode != css::MixBlendMode::Normal)
+        && (!style.filter.is_empty() || style.mix_blend_mode != megi_css::MixBlendMode::Normal)
         && list.len() > start
     {
         let filters = style.filter.clone();
@@ -1175,7 +1180,7 @@ enum InlineTask<'a> {
         alpha: f32,
         ordinal: u32,
         /// Nearest element `NodeId` (for text/decoration hit regions).
-        owner: Option<dom::NodeId>,
+        owner: Option<megi_core::NodeId>,
     },
     PopClip,
     PopRoundedGroup,
@@ -1357,7 +1362,7 @@ fn push_inline_children<'a>(
     inherited_hidden: bool,
     inherited_decoration: TextDecoration,
     alpha_scale: f32,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     stack: &mut Vec<InlineTask<'a>>,
     effects_present: bool,
 ) {
@@ -1410,31 +1415,35 @@ fn object_fit_rect(
     content: Rect,
     image_width: f32,
     image_height: f32,
-    fit: css::ObjectFit,
-    position: css::BackgroundPosition,
+    fit: megi_css::ObjectFit,
+    position: megi_css::BackgroundPosition,
 ) -> Rect {
     if image_width <= 0.0 || image_height <= 0.0 {
         return content;
     }
     let scale = match fit {
-        css::ObjectFit::Fill => {
+        megi_css::ObjectFit::Fill => {
             return content;
         }
-        css::ObjectFit::None => 1.0,
-        css::ObjectFit::Contain => (content.width / image_width).min(content.height / image_height),
-        css::ObjectFit::Cover => (content.width / image_width).max(content.height / image_height),
-        css::ObjectFit::ScaleDown => {
+        megi_css::ObjectFit::None => 1.0,
+        megi_css::ObjectFit::Contain => {
+            (content.width / image_width).min(content.height / image_height)
+        }
+        megi_css::ObjectFit::Cover => {
+            (content.width / image_width).max(content.height / image_height)
+        }
+        megi_css::ObjectFit::ScaleDown => {
             let contain = (content.width / image_width).min(content.height / image_height);
             contain.min(1.0)
         }
     };
     let drawn_width = image_width * scale;
     let drawn_height = image_height * scale;
-    let resolve = |value: css::Length, area: f32, drawn: f32| -> f32 {
+    let resolve = |value: megi_css::Length, area: f32, drawn: f32| -> f32 {
         match value {
-            css::Length::Px(px) => px,
-            css::Length::Percent(pct) => (area - drawn) * (pct / 100.0),
-            css::Length::Auto => 0.0,
+            megi_css::Length::Px(px) => px,
+            megi_css::Length::Percent(pct) => (area - drawn) * (pct / 100.0),
+            megi_css::Length::Auto => 0.0,
         }
     };
     Rect::new(
@@ -1450,7 +1459,7 @@ fn object_fit_rect(
 /// is handled by layout; paint only stretches the bitmap to `content`).
 fn paint_replaced_element(
     layout_box: &LayoutBox,
-    node_id: dom::NodeId,
+    node_id: megi_core::NodeId,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
     alpha_scale: f32,
@@ -1463,11 +1472,11 @@ fn paint_replaced_element(
     let fit = layout_box
         .style
         .as_ref()
-        .map_or(css::ObjectFit::Fill, |style| style.object_fit);
+        .map_or(megi_css::ObjectFit::Fill, |style| style.object_fit);
     let position = layout_box.style.as_ref().map_or(
-        css::BackgroundPosition {
-            x: css::Length::Percent(50.0),
-            y: css::Length::Percent(50.0),
+        megi_css::BackgroundPosition {
+            x: megi_css::Length::Percent(50.0),
+            y: megi_css::Length::Percent(50.0),
         },
         |style| style.object_position,
     );
@@ -1489,12 +1498,12 @@ fn paint_replaced_element(
             // without a clip so existing goldens stay byte-identical. Contain,
             // none and scale-down draw inside the content box, so only `cover`
             // needs the clip item (R166).
-            if fit == css::ObjectFit::Fill {
+            if fit == megi_css::ObjectFit::Fill {
                 list.push(DisplayItem::Image {
                     rect,
                     image: std::sync::Arc::clone(image),
                 });
-            } else if fit == css::ObjectFit::Cover {
+            } else if fit == megi_css::ObjectFit::Cover {
                 push_clip_item(list, resources, rect);
                 list.push(DisplayItem::Image {
                     rect: drawn,
@@ -1627,7 +1636,7 @@ fn paint_background_border(
             list.push(DisplayItem::BoxShadow {
                 rect: border_box,
                 radii,
-                shadow: css::BoxShadow {
+                shadow: megi_css::BoxShadow {
                     color: scaled(shadow.color, alpha_scale),
                     ..*shadow
                 },
@@ -1641,7 +1650,7 @@ fn paint_background_border(
     let color_clips_to_text = style
         .background_layers
         .last()
-        .is_some_and(|layer| layer.clip == css::BackgroundClip::Text);
+        .is_some_and(|layer| layer.clip == megi_css::BackgroundClip::Text);
     if !background_is_propagated && style.background_color.a > 0 {
         if color_clips_to_text
             && let Some(runs) = text_mask_runs.as_ref()
@@ -1673,15 +1682,15 @@ fn paint_background_border(
             // Full CSS Backgrounds 3 geometry for every layer, painted
             // bottom-to-top (CSS lists the top layer first).
             let fallback_layer;
-            let layers: &[css::BackgroundLayer] = if style.background_layers.is_empty() {
+            let layers: &[megi_css::BackgroundLayer] = if style.background_layers.is_empty() {
                 // Synthetic styles/tests may only populate the legacy scalar
                 // fields; treat them as a single layer with CSS initial geometry.
-                fallback_layer = vec![css::BackgroundLayer {
+                fallback_layer = vec![megi_css::BackgroundLayer {
                     image: style.background_image.clone(),
                     repeat: style.background_repeat,
                     size: style.background_size,
                     position: style.background_position,
-                    ..css::BackgroundLayer::default()
+                    ..megi_css::BackgroundLayer::default()
                 }];
                 &fallback_layer
             } else {
@@ -1691,7 +1700,7 @@ fn paint_background_border(
                 if layer.image.is_none() && layer.gradient.is_none() {
                     continue;
                 }
-                let layer_clips_to_text = layer.clip == css::BackgroundClip::Text;
+                let layer_clips_to_text = layer.clip == megi_css::BackgroundClip::Text;
                 if layer_clips_to_text && !text_mask_active {
                     if let Some(runs) = text_mask_runs.as_ref() {
                         push_text_mask_group(
@@ -1808,7 +1817,7 @@ fn paint_background_border(
             list.push(DisplayItem::BoxShadow {
                 rect: border_box,
                 radii,
-                shadow: css::BoxShadow {
+                shadow: megi_css::BoxShadow {
                     color: scaled(shadow.color, alpha_scale),
                     ..*shadow
                 },
@@ -1848,7 +1857,7 @@ fn paint_background_border(
 /// is capped at [`MAX_SHADOWS`].
 #[allow(clippy::too_many_arguments)]
 fn push_text_shadows(
-    style: Option<&css::ComputedStyle>,
+    style: Option<&megi_css::ComputedStyle>,
     list: &mut DisplayList,
     text: &str,
     rect: Rect,
@@ -1887,7 +1896,7 @@ fn paint_text_run(
     text: &str,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     alpha_scale: f32,
 ) {
     let style = layout_box.style.as_ref();
@@ -1915,7 +1924,7 @@ fn paint_text_run(
     let font_italic = style.is_some_and(|style| {
         matches!(
             style.font_style,
-            css::FontStyle::Italic | css::FontStyle::Oblique
+            megi_css::FontStyle::Italic | megi_css::FontStyle::Oblique
         )
     });
 
@@ -1939,7 +1948,7 @@ fn paint_text_run(
     list.push(DisplayItem::Text {
         text: text
             .chars()
-            .take(crate::display_list::MAX_TEXT_RUN_CHARS)
+            .take(megi_display::MAX_TEXT_RUN_CHARS)
             .collect(),
         rect: layout_box.dimensions.content,
         color: scaled(color, alpha_scale),
@@ -1976,7 +1985,7 @@ fn paint_text_decorations(
     decoration: TextDecoration,
     list: &mut DisplayList,
     resources: &PaintResources<'_>,
-    owner: Option<dom::NodeId>,
+    owner: Option<megi_core::NodeId>,
     alpha_scale: f32,
 ) {
     if decoration.is_empty() {
@@ -2111,7 +2120,7 @@ fn paint_marker(
                 font_weight: style.font_weight,
                 font_italic: matches!(
                     style.font_style,
-                    css::FontStyle::Italic | css::FontStyle::Oblique
+                    megi_css::FontStyle::Italic | megi_css::FontStyle::Oblique
                 ),
                 advance: width / 2.0,
                 baseline: font_size * 0.8,

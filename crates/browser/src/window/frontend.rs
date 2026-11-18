@@ -1,0 +1,162 @@
+//! Frontend setup: construction of [`WindowApp`] and winit/softbuffer/window wiring.
+
+use super::*;
+
+impl WindowApp {
+    pub(super) fn new(
+        input: String,
+        title: String,
+        width: u32,
+        height: u32,
+        proxy: EventLoopProxy<UserEvent>,
+        render_options: megi_webview::render::RenderOptions,
+        view: WindowViewOptions,
+    ) -> Self {
+        let mut startup_notice = None;
+        let mut recent = RecentHistory::new();
+        let mut site_zooms: Vec<(String, f64)> = Vec::new();
+        let tabs = if let Some(path) = &view.session_path {
+            let loaded = crate::session::load(path);
+            if let Some(warning) = &loaded.warning {
+                eprintln!("megi: {warning}");
+                startup_notice = Some(warning.clone());
+            }
+            match loaded.session {
+                Some(session) => {
+                    startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
+                    recent = crate::history::RecentHistory::from_entries(session.recent.clone());
+                    site_zooms = session.site_zooms.clone();
+                    let mut restored = session.restore();
+                    if !input.is_empty() && input != crate::tabs::BLANK_TAB_URL {
+                        if let Some(pos) = restored.tabs().iter().position(|tab| tab.url == input) {
+                            restored.activate(pos);
+                        } else if restored.active().url == crate::tabs::BLANK_TAB_URL {
+                            if let Some(replacement) = crate::tabs::Tab::new(input.clone()) {
+                                *restored.active_mut() = replacement;
+                            }
+                        } else {
+                            restored.open_tab(input.clone());
+                        }
+                    }
+                    restored
+                }
+                None => TabsState::from_urls(view.tabs.clone()),
+            }
+        } else if view.tabs.is_empty() {
+            TabsState::new(input.clone())
+        } else {
+            TabsState::from_urls(view.tabs.clone())
+        };
+        let input = tabs.active().url.clone();
+        let nav = tabs.active().navigation.clone();
+        let zoom = zoom::sanitize_zoom(tabs.active().zoom);
+        let restored_scroll = tabs.active().scroll;
+        Self {
+            input,
+            title,
+            requested_width: width,
+            requested_height: height,
+            window: None,
+            context: None,
+            surface: None,
+            proxy,
+            render_options,
+            metrics: window_metrics_zoomed(width, height, 1.0, zoom),
+            scale_factor: 1.0,
+            scroll: restored_scroll,
+            store: FrameStore::new(),
+            request_sender: None,
+            message_receiver: None,
+            worker: None,
+            debounce: Debounce::new(RENDER_DEBOUNCE),
+            pending_metrics: None,
+            error: None,
+            content_capped: false,
+            nav,
+            links: Vec::new(),
+            doc_title: None,
+            cursor: None,
+            modifiers: ModifiersState::default(),
+            zoom,
+            refresh: RefreshTimer::new(view.refresh),
+            frame_scripts_executed: 0,
+            frame_timers_pending: 0,
+            frame_warnings: 0,
+            frame_script_errors: 0,
+            forms: Vec::new(),
+            focus: FocusState::new(),
+            focus_targets: Vec::new(),
+            editor: None,
+            ime: crate::forms::ImeState::new(),
+            document: None,
+            release_button: None,
+            find: FindState::new(),
+            find_editing: false,
+            find_rects: Vec::new(),
+            address: AddressBar::new(),
+            dropdown: None,
+            session_path: view.session_path.clone(),
+            download_dir: view.download_dir.clone(),
+            session_autosave: SessionAutosave::new(std::time::Duration::from_millis(600)),
+            status: startup_notice,
+            render_pending: false,
+            overflow_menu: None,
+            hover_url: None,
+            context_menu: None,
+            clipboard: String::new(),
+            recent_history: recent,
+            history_menu: None,
+            download: crate::download::DownloadProgress::new(),
+            multi_anchor: None,
+            hover_form: None,
+            site_zooms,
+            reader_html: None,
+            tabs,
+        }
+    }
+
+    /// Creates the window, surface and worker thread on first resume.
+    pub(super) fn ensure_window(&mut self, event_loop: &ActiveEventLoop) -> Result<(), ShellError> {
+        if self.window.is_some() {
+            return Ok(());
+        }
+        let attributes = Window::default_attributes()
+            .with_title(self.title.clone())
+            .with_inner_size(LogicalSize::new(
+                f64::from(self.requested_width),
+                f64::from(self.requested_height),
+            ));
+        let window =
+            Arc::new(event_loop.create_window(attributes).map_err(|error| {
+                ShellError::Window(format!("cannot create the window: {error}"))
+            })?);
+        let context = softbuffer::Context::new(Arc::clone(&window))
+            .map_err(|error| ShellError::Window(format!("softbuffer context: {error}")))?;
+        let surface = softbuffer::Surface::new(&context, Arc::clone(&window))
+            .map_err(|error| ShellError::Window(format!("softbuffer surface: {error}")))?;
+
+        self.scale_factor = window.scale_factor();
+        let size = window.inner_size();
+        self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
+        self.scroll = ScrollState::new(1, self.page_viewport_height());
+        self.window = Some(window);
+        self.context = Some(context);
+        self.surface = Some(surface);
+
+        let proxy = self.proxy.clone();
+        let render_options = self.render_options.clone();
+        let (sender, receiver, handle) = spawn_worker(
+            move |request: &RenderRequest| {
+                crate::worker::render_document_with_options(request, &render_options)
+            },
+            move || {
+                // Wake the event loop; ignore a closed loop (window closing).
+                let _ = proxy.send_event(UserEvent::WorkerReady);
+            },
+        );
+        self.request_sender = Some(sender);
+        self.message_receiver = Some(receiver);
+        self.worker = Some(handle);
+        Ok(())
+    }
+}

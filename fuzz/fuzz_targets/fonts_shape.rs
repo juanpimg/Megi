@@ -1,9 +1,9 @@
 #![no_main]
-//! Direct fuzz target for `fonts::FontDatabase` family queries, measurement and
+//! Direct fuzz target for `megi_fonts::FontDatabase` family queries, measurement and
 //! shaping (#834, #1423). The old target only resolved a family, leaving glyph
 //! selection/shaping/measurement uncovered despite the advertised surface.
 
-use fonts::{FontDatabase, FontStyle};
+use megi_fonts::{FontDatabase, FontStyle};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

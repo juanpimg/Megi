@@ -8,11 +8,11 @@
 
 use std::collections::HashMap;
 
-use css::{
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{
     AlignItems, AlignSelf, ComputedStyle, Display, FlexDirection, FlexWrap, JustifyContent, Length,
 };
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style() -> ComputedStyle {
     let mut style = ComputedStyle::initial();

@@ -2,16 +2,16 @@
 //!
 //! Placing a float scans every float already placed in the formatting context to find the
 //! lowest position where it fits (CSS 2.2 §9.5.1), so a formatting context with F floats
-//! costs O(F²) comparisons. `layout::block::MAX_FLOATS_PER_CONTEXT` bounds that: past the
+//! costs O(F²) comparisons. `megi_layout::block::MAX_FLOATS_PER_CONTEXT` bounds that: past the
 //! cap, new floats are laid out in flow instead of out of flow, which is observable
 //! geometry (they advance the block flow) and documented on the constant itself.
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Float, Length};
-use dom::{Document, Namespace, NodeId};
-use layout::block::MAX_FLOATS_PER_CONTEXT;
-use layout::{LayoutBox, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Float, Length};
+use megi_layout::block::MAX_FLOATS_PER_CONTEXT;
+use megi_layout::{LayoutBox, Rect, layout_document};
 
 fn make_block_style(width: Length, height: Length) -> ComputedStyle {
     let mut style = ComputedStyle::initial();

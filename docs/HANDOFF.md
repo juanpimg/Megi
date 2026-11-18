@@ -2,7 +2,7 @@
 
 **Fecha**: 2026-11-17 (Europe/Madrid)  
 **Rama**: `main` (último commit de código: `9f44916`, estado/badges: `7ab03bc`)  
-**Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p shell -p render -p test_harness -p bench`)
+**Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p megi-browser -p megi-render -p megi-test-harness -p megi-bench`)
 
 ## Qué se completó y cerró en la sesión actual
 
@@ -15,7 +15,7 @@
 | `352dfd1`, `9f44916` | Fallback de fuentes del sistema bajo demanda (`SYSTEM_FALLBACK_DB` con `OnceLock`) preservando determinismo golden en fuentes empaquetadas. | `#1015` |
 | `d1da78f` | Runtime de transiciones CSS (`ANIMATABLE_PROPERTIES`, `transition_progress`, `apply_transitions`). | `#941`, `#942` |
 | `7ab03bc` | Actualización de `PROGRESS.md` y badges en `docs/status/`. | — |
-| `905d869`, `4663ca2`, `62c41e9`, `8eef306` | Pixmap vacío en dimensiones desbordadas, clip stack O(1) acotado, `scrollable_overflow_height` en `shell::worker` y límites en `TextCache` (`crates/paint`). | `#667`, `#651`, `#1021`, `#656` |
+| `905d869`, `4663ca2`, `62c41e9`, `8eef306` | Pixmap vacío en dimensiones desbordadas, clip stack O(1) acotado, `scrollable_overflow_height` en `megi_browser::worker` y límites en `TextCache` (`crates/paint`). | `#667`, `#651`, `#1021`, `#656` |
 | *(actual)* | Actualización de `ARCHITECTURE.md`, `TOOLING.md`, `PHASE4-SUPPORT.md`, `JAVASCRIPT-STRATEGY.md`, `SECURITY.md` y `PROGRESS.md`/badges. | `#718`, `#721`, `#731`, `#825`, `#829`, `#830` |
 
 ## Verificación del estado actual en `main`
@@ -23,7 +23,7 @@
 - `cargo fmt --all -- --check`: **PASS**
 - `cargo clippy --workspace --all-targets -- -D warnings`: **PASS**
 - `cargo test --workspace --locked`: **PASS** (incluyendo los 13 tests de `import_media_tests` y 15+10 de `fonts`)
-- `cargo run --release --locked -p test_harness -- --summary`: **PASS** (tokenizer `7050/7050`, árbol `3904/3904`, serializer `230/230`, CSS syntax `30/30`)
+- `cargo run --release --locked -p megi-test-harness -- --summary`: **PASS** (tokenizer `7050/7050`, árbol `3904/3904`, serializer `230/230`, CSS syntax `30/30`)
 
 ## Pendiente prioritario para la próxima sesión de coding
 
@@ -57,7 +57,7 @@
 ## Evidencia verificada
 
 - `cargo test --workspace` → **0 fallos** (cifra exacta en el badge de `PROGRESS.md`/`docs/status/`); conteos orientativos por crate: bench **12**, image **120**, shell **305**, js **280**, paint **251**.
-- Gate (`cargo run -p test_harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
+- Gate (`cargo run -p megi-test-harness -- --summary`, exit 0): tokenizer **7.050/7.050**, árbol **3.904/3.904**, serializer **230/230**, CSS **30/30**; allowlists tokenizer/tree **(none)**.
 - **Perf**: css resolve −50,5 %, layout −7,0 %, PNG decode −62,4 %, encode −18/−22 %, render-to-png −27,7 %, CLI render −6,5 % con PNG byte-idéntico.
 - **Goldens**: básicos/showcase/phase4 intactos; PNG raw md5 idéntico a PIL; TLA E2E 2/2.
 - **Status**: `docs/status/progress.toml` es la fuente editable; `python3 tools/update_progress.py --write` regenera `PROGRESS.md` + `docs/status/*`; CI ejecuta `--check --no-gate --no-count`.
@@ -68,16 +68,16 @@
 ```bash
 ./tools/dev.sh all                                  # fmt, clippy, tests, doc y gate
 cargo test --workspace                              # suite completa (JS por defecto)
-cargo run -p test_harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
+cargo run -p megi-test-harness -- --summary              # gate: 3904/3904 árbol, PASS, exit 0
 cargo fmt --check && cargo clippy --workspace --all-targets -- -D warnings && cargo doc --workspace --no-deps
 cargo +1.91 check --workspace --all-targets         # MSRV
 
 # Ronda 32
-cargo run --release -p bench -- --filter css/resolve-styles
-cargo run --release -p bench -- --filter image/decode-png
-cargo run --release -p bench -- --filter paint/encode-png-1024
-cargo test -p js --test tla_live_bindings && cargo test -p render --test tla_tests
-cargo test -p net --test h1_streaming && cargo test -p net --test push_priority
+cargo run --release -p megi-bench -- --filter css/resolve-styles
+cargo run --release -p megi-bench -- --filter image/decode-png
+cargo run --release -p megi-bench -- --filter paint/encode-png-1024
+cargo test -p megi-js --test tla_live_bindings && cargo test -p megi-render --test tla_tests
+cargo test -p megi-net --test h1_streaming && cargo test -p megi-net --test push_priority
 
 # Progress status
 python3 tools/update_progress.py --write

@@ -1,7 +1,7 @@
 #![no_main]
 //! Fuzz target: EXIF `APP1` orientation parser on arbitrary JPEG-ish bytes.
 //!
-//! [`image::exif::orientation`] walks JPEG marker segments up to `SOS`/`EOI`
+//! [`megi_image::exif::orientation`] walks JPEG marker segments up to `SOS`/`EOI`
 //! looking for an `Exif\0\0` APP1 payload and then parses the TIFF header/IFD0
 //! orientation tag (little/big endian). Malformed structures must return `None`
 //! (metadata never makes a valid image fail), so the target looks for panics,
@@ -21,7 +21,7 @@ fuzz_target!(|data: &[u8]| {
     // The parser must yield a valid EXIF orientation tag or `None`; any other value means
     // the TIFF/IFD0 walk accepted a corrupt tag (#1428). This invariant gives the dedicated
     // APP1/TIFF campaign teeth beyond "does not panic".
-    if let Some(orientation) = image::exif::orientation(data) {
+    if let Some(orientation) = megi_image::exif::orientation(data) {
         assert!(
             (1..=8).contains(&orientation),
             "orientation tag out of range: {orientation}"

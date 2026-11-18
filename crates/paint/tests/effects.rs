@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use css::{BorderRadii, BoxShadow, Color, ComputedStyle, Display, Length, Radius};
-use dom::{Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_core::{Document, Namespace};
+use megi_css::{BorderRadii, BoxShadow, Color, ComputedStyle, Display, Length, Radius};
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -17,7 +17,7 @@ const VIEWPORT: Rect = Rect {
     height: 60.0,
 };
 
-fn ids(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn ids(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -36,7 +36,7 @@ fn block_style() -> ComputedStyle {
     style
 }
 
-fn box_at(id: dom::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
+fn box_at(id: megi_core::NodeId, style: ComputedStyle, rect: Rect) -> LayoutBox {
     let mut layout_box = LayoutBox::new(BoxType::BlockNode(id), Some(style));
     layout_box.dimensions = Dimensions {
         content: rect,
@@ -143,7 +143,8 @@ fn test_rounded_background_image_is_clipped() {
     root.dimensions.content = VIEWPORT;
     root.children
         .push(box_at(nodes[1], style, Rect::new(10.0, 10.0, 20.0, 20.0)));
-    let image = Arc::new(image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
+    let image =
+        Arc::new(megi_image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
     let backgrounds: BackgroundImages = [("bg.png".to_string(), image)].into_iter().collect();
     let list = build_display_list_with_images_and_backgrounds(
         &root,
@@ -164,9 +165,9 @@ fn test_rounded_background_image_is_clipped() {
 fn test_rounded_border_ring() {
     let mut style = block_style();
     style.background_color = Color::WHITE;
-    style.border_width = css::RectEdges::all(4.0);
-    style.border_style = css::RectEdges::all(css::BorderStyle::Solid);
-    style.border_color = css::RectEdges::all(Color::BLUE);
+    style.border_width = megi_css::RectEdges::all(4.0);
+    style.border_style = megi_css::RectEdges::all(megi_css::BorderStyle::Solid);
+    style.border_color = megi_css::RectEdges::all(Color::BLUE);
     style.border_radius = uniform_radius(8.0);
     let (document, nodes) = ids(2);
     let mut root_style = block_style();
@@ -176,7 +177,7 @@ fn test_rounded_border_ring() {
     let mut child = box_at(nodes[1], style, Rect::new(10.0, 10.0, 30.0, 30.0));
     child.dimensions.border = EdgeSizes::all(4.0);
     root.children.push(child);
-    let list = paint::build_display_list_with_images(&root, VIEWPORT, &ImageStore::new());
+    let list = megi_paint::build_display_list_with_images(&root, VIEWPORT, &ImageStore::new());
     let _ = document;
     assert!(
         list.items

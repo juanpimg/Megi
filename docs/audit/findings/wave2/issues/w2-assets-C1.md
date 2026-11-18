@@ -7,7 +7,7 @@
 P3 — bug: contenido válido desaparece sin diagnóstico; el llamante no puede distinguir "texto vacío" de "límite excedido". Considerar `SvgError::Limit` o documentar el tope.
 
 ## Pasos para reproducir
-1. Sonda Mesa A `concerns` (in-process `svg::render_svg` sobre `<text font-size="5000">`).
+1. Sonda Mesa A `concerns` (in-process `megi_svg::render_svg` sobre `<text font-size="5000">`).
 2. Contar píxeles pintados.
 
 ## Esperado vs observado

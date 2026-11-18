@@ -3,7 +3,7 @@
 //! Each test names the bug it pins down (WPT-inspired, offline, one realm per test).
 #![cfg(feature = "js")]
 
-use js::{Budget, JsRuntime};
+use megi_js::{Budget, JsRuntime};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");

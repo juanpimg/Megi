@@ -52,21 +52,21 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 **Ronda 22**: **JPEG y GIF desde cero** (JPEG baseline con IDCT separable, 4:4:4/4:2:2/4:2:0 nearest, grayscale/YCbCr/Adobe RGB y errores tipados; GIF87a/89a con LZW 12-bit, paletas, transparencia e interlace; `render` decodifica PNG|JPEG|GIF por sniffing; decode PNG 800×600 **6,65 ms p50 ~290 MB/s**; image **54**/render **137**); **efectos SVG** (`clipPath` shapes/paths/use con units/anidados/ciclos sin panic, `mask` por luminancia con región/units y gradientes, filtros `feGaussianBlur`/`feOffset`/subset `feFlood`+`feComposite`; caps 4096 shapes/16 primitivas/blur 64/64M muestras; svg **85**); **HTTP/2 MVP** (HPACK completo con static 61/dynamic eviction/literals/Huffman, framing HEADERS/CONTINUATION/DATA/SETTINGS/WINDOW_UPDATE/PING/RST/GOAWAY con caps 16 KiB frame/64 KiB headers/2 streams, ALPN h2 sobre rustls con fallback h1, `FetchError::Http2`; net **225**); **chrome del shell** (`chrome.rs`: address bar Ctrl+L/caret/Enter/Esc, tab strip con títulos/activa/cerrar/+/overflow y hit-testing, dropdown `<select>` cap 8, overlay 58 px y `--screenshot --chrome`; shell **160**); **grid completo** (grid-auto-flow row/column+dense, `grid-template-areas`/`grid-area`, líneas nombradas y placement por nombre, justify/align-content con stretch, `repeat(auto-fit)`; layout **206**/css **195**; fixtures grid_areas `8f9a9eba…`/grid_dense `1789daf8…`/grid_content `123d1a2b…`); **filtros CSS/mix-blend/image-set** (filter blur/brightness/contrast/grayscale/invert/opacity/sepia/saturate/hue-rotate/drop-shadow + alias `-webkit`, mix-blend-mode normal/multiply/screen/overlay/darken/lighten, image-set() 1x; paint `DisplayItem::EffectGroup` contra backdrop, caps 16,7 Mpx/blur 64/funciones 16; css **195**/paint **190**; fixtures filter_effects `ffe06406…`, blend_modes `32788e6d…`, image_set `dc638211…`). Total **1449 tests**; **F5 ≈99 %**, **F7 ≈90 %**; manifiesto `docs/status/progress.toml` actualizado (F4/F5/F7 y next_up) para regenerar `PROGRESS.md`; CI verde y repo sincronizado en `00d8388`.
 **Ronda 21**: **recuperación de presupuestos sin subirlos** (los presupuestos son gates: pipeline ≤140 ms, layout ≤43 ms). **HTML** (26560cc): fast paths bulk del tokenizer, runs de texto UTF-8 byte a byte, preprocesado byte-oriented (`has_wide`) y dedupe híbrido de atributos ⇒ `html/realistic-1mb` 20,0→16,4 ms (−18/−20 %). **CSS** (0ea54b5): hasher FNV + claves `&str` prestadas + caché de `ComputedStyle` 128-bit (umbral 2, sin inline, cap 1024) ⇒ css resolve 38,84→33,91 ms (−12,7 %; ≤35 ✅). **Layout** (d0249ce): interning de `ComputedStyle` (fingerprint + `eq` exacta antes de compartir `Arc`), estilos anónimos perezosos, spacing cero en IFC y grid por índice ⇒ layout 46,6→36,4 ms (−21,8 %; ≤43 ✅), sticky 42,8→32,3. **Paint** (fd2c471): fast path por caja en `paint_background_border`, `DisplayList::with_capacity(16384)`, baseline sin `Vec` ⇒ build-display 8,62→7,84 ms (−9,1 %). **Pipeline 160,1→~130-133 ms** (A/B 154,13→132,39, −14,1 %; ≤140 ✅). Estado de fases generado en [`PROGRESS.md`](../PROGRESS.md) (`tools/update_progress.py --write`, check de frescura en CI): overall 95 %, 1.345 tests, gate PASS. Total **1345 tests**; CI verde y repo sincronizado en `a8ce8ba`.
 **Ronda 20**: **fix bloqueante de custom properties** (`Option<Arc<HashMap>>` lazy/COW + `needs_resolution` fast path; A/B css resolve 46,8→39,8 ms = −14,9 % quiet/−9,4 % carga, pipeline −3,4 %/−6,1 %, UA-cache revertida, presupuestos intactos); **conic-gradient**/`repeating-conic` (`from`/`at`, stops angulares, hard stops, alpha, wrap) + **color hints** + **espacios `in srgb|srgb-linear|oklab`** (default sRGB byte-idéntico); **calc() mixto %+px** (`CalcLengths` en CSS + resolución en layout, base indefinida ⇒ %=0); **tipografía** (`text-transform` en shaping, `word-spacing`/`letter-spacing`, `white-space: pre-wrap/pre-line`) y **`position: sticky`** (modelo headless); **pestañas en shell** (`tabs.rs`, Ctrl+T/W/Tab/Shift+Tab, Alt+1..9, `--tabs` repetible, MAX 32; shell **140**); **filas E2E del bench** (`pipeline/gradients`, `pipeline/grid`, `css/vars-calc`, `paint/clipping`, `layout/sticky-text` SKIP). css **175**/layout **196**/paint **175**/render **136**/shell **140**; total **1344 tests**; **F7 ≈80 %**; CI verde y repo sincronizado en `c6b66b1`.
-**Ronda 19**: **gradientes CSS E2E** (`linear-gradient` con ángulos deg/grad/rad/turn y `to side/corner`, `radial-gradient` circle/ellipse con radios y posición, `repeating-*` en capas de `background-image` mezclables con `url()`; stops alpha/currentColor/hard stops, caps 64 stops/256 gradientes; paint `DisplayItem::Gradient` por tile respetando size/position/repeat(space/round)/origin/clip/radius/clip:text/opacidad; css **142**/paint **162**; fixture `gradient_linear` 240×220 md5 `6a04fdc6…`, goldens intactos); **grid avanzado** (placement explícito con líneas 1-based/negativas y `span N`, auto-placer que salta ocupadas y crece tracks implícitos, `minmax()` px/%/fr/auto y `repeat(auto-fill|auto-fit)` con cap 1024, `order` estable en grid/flex; layout **173**; fixtures `grid_span` md5 `0c376406…` y `grid_autofill` `d2255ca3…`); **render** instala `ReferrerConfig` (header>meta>default) en el loader ⇒ `Referer` y SameSite reales, `RenderStats.referrer_policy` en `--json`, y resuelve **estado CSS real** con `css::state::with_state` pre/post-script (`:checked/:disabled/:enabled/:read-only/:required/:placeholder-shown`, `data-megi-*`, fixture `css_state.html`; **136** tests, +2 de gradientes); **shell find-in-page** (`Ctrl+F` case-insensitive sobre nodos Text, Enter/Shift+Enter con wrap, Esc, scroll al hit, highlight amarillo en framebuffer y `--find QUERY --screenshot`, `find.rs` puro, navegación F5/g/Alt+Home/Ctrl+D; shell **125** tests, +17). Total **1260 tests**; **F7 ≈78 %**; CI verde y repo sincronizado en `d9e07e0`.
+**Ronda 19**: **gradientes CSS E2E** (`linear-gradient` con ángulos deg/grad/rad/turn y `to side/corner`, `radial-gradient` circle/ellipse con radios y posición, `repeating-*` en capas de `background-image` mezclables con `url()`; stops alpha/currentColor/hard stops, caps 64 stops/256 gradientes; paint `DisplayItem::Gradient` por tile respetando size/position/repeat(space/round)/origin/clip/radius/clip:text/opacidad; css **142**/paint **162**; fixture `gradient_linear` 240×220 md5 `6a04fdc6…`, goldens intactos); **grid avanzado** (placement explícito con líneas 1-based/negativas y `span N`, auto-placer que salta ocupadas y crece tracks implícitos, `minmax()` px/%/fr/auto y `repeat(auto-fill|auto-fit)` con cap 1024, `order` estable en grid/flex; layout **173**; fixtures `grid_span` md5 `0c376406…` y `grid_autofill` `d2255ca3…`); **render** instala `ReferrerConfig` (header>meta>default) en el loader ⇒ `Referer` y SameSite reales, `RenderStats.referrer_policy` en `--json`, y resuelve **estado CSS real** con `megi_css::state::with_state` pre/post-script (`:checked/:disabled/:enabled/:read-only/:required/:placeholder-shown`, `data-megi-*`, fixture `css_state.html`; **136** tests, +2 de gradientes); **shell find-in-page** (`Ctrl+F` case-insensitive sobre nodos Text, Enter/Shift+Enter con wrap, Esc, scroll al hit, highlight amarillo en framebuffer y `--find QUERY --screenshot`, `find.rs` puro, navegación F5/g/Alt+Home/Ctrl+D; shell **125** tests, +17). Total **1260 tests**; **F7 ≈78 %**; CI verde y repo sincronizado en `d9e07e0`.
 **Ronda 18**: **fuzz 7 targets** (+`render_pipeline`/`js_eval`/`svg_parse`, seeds 4/6/5 y job PR build-only; allocation one-time de Boa documentada); **CSS moderno**: custom properties/`var()` (herencia/fallback/ciclos, 32 niveles), `calc()` (px/em/rem/%/vh/vw; mezcla %+px invalid), pseudo-clases de estado (`:focus`, `:focus-visible`, `:hover`, `:active`, `:checked`, `:disabled`, `:enabled`, `:read-only`, `:read-write`, `:required`, `:placeholder-shown`) con `StateContext`/`data-megi-*` y `resolve_document_styles_with_media_and_state`, parseo de grid y alias `-webkit-background-clip` (css **128**); **paint**: `overflow:hidden`+radius recorta el subárbol (padding box, radios internos, AA 4×4, cap 16,7 Mpx) y `background-clip:text` (máscara de glifos, multlínea, cap 4096 runs; display list byte-idéntica sin clipping; paint **150**); **layout**: **Grid MVP** (tracks fixed/%/fr/auto/repeat, gaps, auto-placement row-major, justify/align items/self, auto-rows; sin spans/minmax/auto-fill/subgrid/colocación explícita; layout **158**, 3 fixtures E2E md5 `2d6714bc…`/`c411ff6d…`/`93d1126d…`); **net**: SameSite+PSL reducida (~150 sufijos), Referrer-Policy (8), Range/206 (`ByteRange`/`ContentRange`, sin multi-range/If-Range) y cache (`no-cache`/`must-revalidate`/`s-maxage`/`Age`/`requires_revalidation`), net **207**; integración del referrer en render HECHA en la ronda 19. Total **1189 tests**; F5 ≈97 %, F6 ≈90 %, F7 ≈75 %; goldens intactos.
 **Ronda 17**: **Flexbox MVP** (`display:flex/inline-flex` con flag, direction 4, justify 5 incl. space-evenly, align stretch/flex-*/center/baseline, wrap, gap, grow/shrink/basis + shorthand; layout **146**/css **94** tests, fixtures E2E md5 `c28ce538…`/`8d06d66c…`/`7fbf998e…`); **`border-radius`/`box-shadow`/`text-shadow`** con DisplayItems redondeados, blur determinista de 3 pasadas, caps 64 px/32 sombras y goldens intactos (css 94/paint **141**); **formularios** UA styles + shell editable (FocusState/TextEdit UTF-8/snapshot re-render/Tab/checkbox; `forms.html` 640×480 md5 `b8b9a20…`; shell **108**); **SVG `<pattern>` y `<text>` básico** (dep interna `svg→fonts`, caps 10k tiles/1.000 texts; svg **73**). Total **1107 tests**; **F7 ≈75 %**. CI verde y repo sincronizado.
 **Ronda 16**: **SVG real** (CSS interno `<style>`/class/id/descendientes + gradientes lineales/radiales completos con stops/units/spread/gradientTransform/href; `pattern` pendiente; svg **60 tests**), **backgrounds multicapa** con `background-origin`/`clip`/`attachment` y `background_layers` top-first (`space`/`round` reales, legacy flag; css **76**/paint **130**), **APIs de navegador en js** (`matchMedia`, viewport/DPR/scroll, `requestAnimationFrame` 16 ms, `onerror`, `readyState`, consola; **71 tests**) y **cableado real en render** (`getComputedStyle` pre-script con `styles_pre_script`, matchMedia/viewport, rAF con **epoch virtual fijo 48 ms** sin flake, errores/console ⇒ warnings no fatales `console_errors`, multi-capa E2E `background_layers.html` md5 `c357cc2c…`; **123 tests**). Total **1046 tests**; **F6 ≈90 %**. CI verde con deps de sistema y suite determinista. Estados: F4 prácticamente completa, F5 ≈95 %, **F6 ≈90 %**, **F7 ≈70 %**.
 **Ronda 15**: **background-* geometry** (`repeat/size/position` + shorthand, tiling con clip y cap 4096, legacy `background_geometry_explicit` para goldens; css 69/paint 122); **SVG inline** en `render` (pre-proceso a `<img>` sintético con base64, límites 256/1 MiB/8 MiB/depth 256, stat `inline_svgs`, 7 fixtures y 10 tests ⇒ render 114); **IFC −28 %** (layout/realistic-1mb **50,5 → 36,3 ms**, pipeline **132,9 → 120,5 ms**, geometría byte-idéntica gracias a pool de texto, ids de estilo, breaking incremental y fast path de `format_line`); y **fix de determinismo** del event loop (`b808d7b`: sólo reloj virtual, fixture `js_event_timeout` md5 `07682088…`, CI verde). Estados: F5 ≈95 %, **F6 ≈80-85 %**, **F7 ≈70 %**.
 **Ronda 13**: **fuentes web @font-face + WOFF2 E2E** (`css` parsea `@font-face`, `fonts` decodifica WOFF2→sfnt con `woff2-patched 0.4` Apache-2.0 pure Rust — única dep externa de `fonts` — y `render` construye una DB por render para layout+paint con fetch/dedupe/caps 8/8 MiB/32 MiB, stats y warnings no fatales; evidencia md5 webfont `f38aed03…` vs fallback `e2d76dee…`); nuevo **crate `svg`** (parser XML+modelo SVG+rasterizador AA desde cero, 41 tests, límites anti-DoS) ya **cableado E2E en `render`** para `<img src=*.svg>` y `background-image` (detección Content-Type/sniffing, intrínseco width/height/viewBox con 300×150 por defecto, cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, navegación directa en página sintética, stat `svgs_rendered`; 11 tests ⇒ render 104); **cierre de ronda**: fix `html/fast_hash` recupera `html/massive-end-p` (~19 ms; antes 21,4) y deja el **pipeline ~127-134 ms** con el gate intacto; **shell** con **zoom** (`--zoom` 0.5–3.0), **auto-refresh opt-in** (`--refresh-ms`) y título enriquecido (100 tests; `--zoom 2` md5 `c11903cf…`). CI verde con deps de sistema. Estados: F5 ≈95 %, **F6 ≈80-85 %**, **F7 ≈70 %**.
 **🎉 HITO Ronda 11**: **árbol HTML5 3.904/3.904 (100 %)** — las 4 suites `scripted_*` pasan y el gate queda **sin allowlist de tree** (`scripted_*` 6/6 mode-runs). **WP-6.4 HECHO**: hook `ScriptExecutor` en el parser, scripts parser-inserted al `</script>`/EOF y `document.write` re-tokenizado en la posición actual (`Tokenizer::insert_input`, anidados incluidos), harness `JsScriptExecutor` sobre `eval_on_document`. **WP-B HECHO**: `CSSStyleDeclaration` completa, `getComputedStyle` con provider, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`, identidad de wrappers y `document` como `EventTarget`. **Event loop presupuestado en `render`**: reloj virtual, `DOMContentLoaded`/`load`, timers con delay (`max_tasks` 10k, `max_virtual_time` 1000), un solo re-render y stats (`script_*`, `timings.event_loop`); 6 fixtures `js_event_*`. **Parser**: regresión `tag-40k-attrs` corregida (~12,4 ms, A/B por debajo del baseline pre-r10) manteniendo las ganancias de r10. Estados: F5 ≈95 %, **F6 ≈75-80 %**, **F7 ≈65-70 %**. **Ronda 12**: **rendimiento** — `LayoutBox.style` → `Option<Arc<ComputedStyle>>` (+ `style()`/`with_shared_style`), estilo anónimo compartido por padre y tokens `Space` con `char` ⇒ **LayoutBox 496→176 B**, `layout/realistic-1mb` **−14,6 %** (51-53 ms) y pipeline **134-137 ms**; **encoder PNG −30,5 %** (render-to-PNG 13,30→9,24 ms) con **bitstream byte a byte idéntico** (goldens sin regenerar). **JS eventos avanzados HECHO** (`currentTarget`/`eventPhase`, `once`/`passive`, `onclick`/`onload`/`onerror`, `document.close()`, `estimated_heap_bytes()`, excepciones capturadas; 58 tests). **CI GitHub en verde** (3 jobs) con paquetes de sistema Wayland/X11/xcb añadidos al workflow; `main` y la rama sincronizadas. Estados: F5 ≈95 %, **F6 ≈80 %**, **F7 ≈65-70 %**.
-**Ronda 10**: JS **WP-A HECHO** (`EventTarget` con captura+burbuja, `Event`/`CustomEvent` y timers con reloj inyectable `advance`/`run_until`/`now_ms`/`pending_timers`; 26 tests js); **rendimiento** pipeline 800×600 **167,6 → 131,2 ms (−21,7 %)** y `html/realistic-1mb` **55,0 → 19,2 ms (−65 %)** (gate y golden intactos); **`RenderOutput.hit_regions` cableado** en el pipeline (píxeles sin cambios, +0,6 µs) y el shell usa `paint::find_link_at`; **red avanzada E2E** en `render`/`shell` (jar de cookies por render o sesión, `--cookies`, `--origin` con CORS/credentials y denegación no fatal, gzip/deflate en HTML/CSS). Estados: F5 ≈95 %, F6 ≈40 %, F7 ≈65 %. **Ronda 9 (cierre)**: el pipeline `render` **ejecuta JavaScript** (`ScriptingMode`, WP-6.2 host: scripts inline/externos post-parseo con budgets, microtasks/timers, console y **re-render del DOM mutado** visible en el PNG; `--no-scripting`), `paint` gana **hit-testing** aditivo (`HitRegion`/`hit_test`/`find_link_at`; PNG/golden byte-idénticos) y el `shell` es **navegable**: clic en enlaces con `Url::join`, historial (`NavigationState`), Alt+←/→, `r` y título dinámico. La Fase 4 sigue funcionalmente cerrada (pendientes menores: `background-repeat/size/position`, colores de `border-collapse`, block-in-inline). Fase 5 ≈95 % (HTTP2/streaming/SameSite pendientes). Fase 6 ≈40 % (WP-B, WP-6.4 `scripted_*` e integración de eventos/timers en el host pendientes). Fase 7 ≈65 % (formularios, pestañas, zoom, JS en el host y eventos del DOM pendientes).
+**Ronda 10**: JS **WP-A HECHO** (`EventTarget` con captura+burbuja, `Event`/`CustomEvent` y timers con reloj inyectable `advance`/`run_until`/`now_ms`/`pending_timers`; 26 tests js); **rendimiento** pipeline 800×600 **167,6 → 131,2 ms (−21,7 %)** y `html/realistic-1mb` **55,0 → 19,2 ms (−65 %)** (gate y golden intactos); **`RenderOutput.hit_regions` cableado** en el pipeline (píxeles sin cambios, +0,6 µs) y el shell usa `megi_paint::find_link_at`; **red avanzada E2E** en `render`/`shell` (jar de cookies por render o sesión, `--cookies`, `--origin` con CORS/credentials y denegación no fatal, gzip/deflate en HTML/CSS). Estados: F5 ≈95 %, F6 ≈40 %, F7 ≈65 %. **Ronda 9 (cierre)**: el pipeline `render` **ejecuta JavaScript** (`ScriptingMode`, WP-6.2 host: scripts inline/externos post-parseo con budgets, microtasks/timers, console y **re-render del DOM mutado** visible en el PNG; `--no-scripting`), `paint` gana **hit-testing** aditivo (`HitRegion`/`hit_test`/`find_link_at`; PNG/golden byte-idénticos) y el `shell` es **navegable**: clic en enlaces con `Url::join`, historial (`NavigationState`), Alt+←/→, `r` y título dinámico. La Fase 4 sigue funcionalmente cerrada (pendientes menores: `background-repeat/size/position`, colores de `border-collapse`, block-in-inline). Fase 5 ≈95 % (HTTP2/streaming/SameSite pendientes). Fase 6 ≈40 % (WP-B, WP-6.4 `scripted_*` e integración de eventos/timers en el host pendientes). Fase 7 ≈65 % (formularios, pestañas, zoom, JS en el host y eventos del DOM pendientes).
 > **2.383 tests** y gate de 4 suites PASS (**tokenizer 7.050/7.050, árbol 3.904/3.904, serializador 230/230, CSS 30/30**); estado de fases y badges generados en [`PROGRESS.md`](../PROGRESS.md) (`python3 tools/update_progress.py --write`, check de frescura en CI); rendimiento r23: css resolve **26,54 ms**, pipeline **~105,5 ms** en A/B (presupuestos ≤140/≤43 sin subirlos), build-display **7,34–7,72 ms ≤8**; suite determinista (reloj virtual, epoch fijo de rAF).
 ```
 
 
 | Fase / Bloque | Barra | Estado | Cobertura Verificada | Hito Clave Alcanzado |
 |---|:---:|:---:|---|---|
-| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 28 tests en `crates/dom` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
+| **Fase 0: Tooling, Arena DOM & Closed-Loop Harness** | `[██████████] 100%` | **COMPLETO** | 28 tests en `crates/core` | Arena contigua indexada (`NodeId(NonZeroU32)` de 4 bytes) sin `Rc<RefCell<Node>>`, scripts CLI de inspección WHATWG en vivo. |
 | **Fase 1A: Tokenizador HTML5 (84 Estados & 2.231 Entidades)** | `[██████████] 100%` | **COMPLETO** | 7.050 / 7.050 estados en el gate (allowlist vacía) | 13 suites estándar de `html5lib-tests/tokenizer` al 100%; `ParseOptions` anti-DoS y deduplicación de atributos en tiempo lineal. |
 | **Fase 1B: Árbol DOM, Serializador §13.3 & DOM de navegador** | `[██████████] 100%` | **COMPLETO** | **3.904/3.904 árbol (100 %)** + 230/230 serializer + **60 tests html** | 21 modos de inserción, AAA, *foster parenting*, `innerHTML`; **serializador público WHATWG HTML §13.3** (`serialize_html`/`serialize_fragment`/`serialize_outer_html` + opciones) con las 5 suites `html5lib-tests/serializer` en el gate. **WP-6.4 (ronda 11)**: hook `ScriptExecutor` + scripts parser-inserted + `document.write` re-tokenizado ⇒ las 4 suites `scripted_*` pasan y la allowlist de tree queda vacía; fix de la regresión `tag-40k-attrs` (~12,4 ms). |
 | **Fase 2: Motor CSS (Sintaxis L3, Selectores L4, Cascada L4, Hoja UA §15)** | `[██████████] 100%` | **COMPLETO** | 230/230 unit + 30/30 WPT | Selectores L4 funcionales (`:is/:where/:not/:has`) y estructurales, especificidad, expansión de shorthands antes de la cascada, `font` shorthand, `@media` básico y índice de reglas (2,1× en resolve-styles 10k nodos); bases de Fase 4 (bordes por lado, `border-style: none`, `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`, `line_height_factor`). |
@@ -75,7 +75,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 | **Fase 4: Motor tipográfico (`crates/fonts`)** | `[██████████] 100%` | **COMPLETO (integrado + fuentes web)** | 17 + 1 doctest | `FontDatabase` (fontdb), métricas OpenType (ttf-parser), shaping LTR con `rustybuzz` (kern/ligaduras), rasterización de glifos (`ab_glyph`) y fallback; **integrado en layout y paint** (texto real en el pipeline). **Ronda 13**: **fuentes web `@font-face`+WOFF2 E2E** (dep `woff2-patched 0.4`, alias CSS, DB por render en layout/paint, caps y stats). Bidi/scripts complejos/fuentes variables quedan fuera de Fase 4. |
 | **Fase 5: Red, Render Pipeline & Imágenes** | `[██████████] 100%` | *COMPLETA* | 325+ (net) + 172+ (render) + 90+ (image) | URL WHATWG (subset http/https/file + join), HTTP/1.1 `GET`, **TLS 1.2/1.3 con `rustls` 0.23 (ring) + `webpki-roots`** (SNI/validación, feature `tls` por defecto), **caché HTTP RFC 9111 subset** (max-age/Expires/ETag/Last-Modified/304/no-store/Vary), **`data:` URLs** con Base64 propio, `file://`, MIME sniffing y `ResourceLoader` con caché; `#![forbid(unsafe_code)]`. **`crates/render`**: pipeline URL→PNG con CSS externo, CLI y **`<img>` E2E**; **`crates/image`**: decoder PNG/JPEG/GIF/WebP propio; CSS con `@import`/media queries. **`@import` recursivo + media real** en `render`, **showcase 1024×768** (80.220 B, `md5 c95c7eff…`), **backgrounds E2E**, **cookies RFC 6265/CORS/gzip** y **ejecución JS en render** (`ScriptingMode`), **red avanzada E2E** (cookies/CORS/gzip con `--cookies`/`--origin`) **hit_regions** en `RenderOutput` y **event loop presupuestado** (reloj virtual, lifecycle, timers, re-render único) y **fuentes web E2E** (`@font-face`/WOFF2, DB por render, stats/timing) y **SVG E2E** en `render` (`<img>`/background-image, cap 16 Mpx/64 MiB RGBA, `svgs_rendered`; 5 fixtures `svg_*`), **SVG inline** (pre-proceso a `<img>` sintético, caps 256/1 MiB/8 MiB, `inline_svgs`; 7 fixtures y 10 tests) y **event loop determinista** (sólo reloj virtual; fixture `js_event_timeout` md5 `07682088…`), **APIs de navegador** (`getComputedStyle` pre-script, matchMedia/viewport, rAF epoch fijo 48 ms, onerror/consola ⇒ warnings) y multi-capa backgrounds E2E (`c357cc2c…`). **Ronda 18**: SameSite+PSL reducida, Referrer-Policy (8), Range/206 y cache refinada. **Ronda 19**: `ReferrerConfig` instalado en el loader de `render` (header>meta>default) ⇒ `Referer`/SameSite reales en subrecursos + `RenderStats.referrer_policy`, estado CSS real con `with_state` en render. **Ronda 23–32**: HTTP/2 completo (flow control, multiplexado, SETTINGS, PUSH_PROMISE/prioridades, trailers, streaming, keep-alive, proxies); EXIF/JPEG progresivo/WebP VP8 & VP8L; `RenderCache`. |
 | **Fase 6: Integración JS & DOM Bindings** | `[██████████] 100%` | **COMPLETO** | 175+ tests `crates/js` + scripting E2E en `render` y en el parser | **Boa 0.22** embebido (feature `js` ON por defecto, stub `--no-default-features`) con `Budget`/`RuntimeLimits`, bindings DOM, `EventTarget` (captura+burbuja, `once`/`passive`, reutilización de slots), timers con reloj inyectable, **WP-B** (`CSSStyleDeclaration`, `getComputedStyle`, `NodeList`, `matches`/`closest`, `insertAdjacentHTML/Text`), **WP-6.4** (parser-inserted + `document.write` ⇒ árbol 3.904/3.904), **ES modules + TLA + live bindings**, **`fetch()` subset + `AbortController`**, **Web Workers cooperativos** (realm aislado sin DOM), `localStorage`/`sessionStorage` (orden de inserción + WebIDL index/boolean conformance) y `MutationObserver`. [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md). |
-| **Fase 7: Ventana OS & Shell** | `[█████████░] 98%` | *EN CURSO* | 238+ tests en `crates/shell` | Ventana usable (`winit`+`softbuffer`, sin GPU) con scroll (cap 8192 CSS px), entrada, HiDPI, render en worker y `--screenshot` headless. **Navegación real (WP-7.5)**: clic en enlaces (`Url::join`), historial (`NavigationState` + `HistoryLog`, `about:history`, Ctrl+H), title dinámico, zoom (`Ctrl+=/-/0`), **formularios editables**, **find-in-page** (`Ctrl+F`), **pestañas** (`tabs.rs` MAX 32), **chrome con fuente bundled** (address bar, tab strip, menú contextual, dropdown `<select>`), **reader mode**, **sesión persistente JSON v1** y descargas (`Ctrl+S`/`Ctrl+Shift+S`). Pendientes: widgets nativos, accesibilidad y aislamiento por pestaña (`#989`/`#946`). |
+| **Fase 7: Ventana OS & Shell** | `[█████████░] 98%` | *EN CURSO* | 238+ tests en `crates/browser` | Ventana usable (`winit`+`softbuffer`, sin GPU) con scroll (cap 8192 CSS px), entrada, HiDPI, render en worker y `--screenshot` headless. **Navegación real (WP-7.5)**: clic en enlaces (`Url::join`), historial (`NavigationState` + `HistoryLog`, `about:history`, Ctrl+H), title dinámico, zoom (`Ctrl+=/-/0`), **formularios editables**, **find-in-page** (`Ctrl+F`), **pestañas** (`tabs.rs` MAX 32), **chrome con fuente bundled** (address bar, tab strip, menú contextual, dropdown `<select>`), **reader mode**, **sesión persistente JSON v1** y descargas (`Ctrl+S`/`Ctrl+Shift+S`). Pendientes: widgets nativos, accesibilidad y aislamiento por pestaña (`#989`/`#946`). |
 
 ---
 
@@ -88,12 +88,12 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - WHATWG DOM §4.4 *Interface Node* (`#interface-node`) y §4.5 *Interface Document* (`#interface-document`, `#concept-document-quirks`)
   - WHATWG HTML §4.12.3 *The `template` element* (`https://html.spec.whatwg.org/multipage/scripting.html#the-template-element`)
 - **Archivo(s) de test que lo validan**:
-  - Tests unitarios de invariantes de arena y mutaciones `O(1)` en `crates/dom/src/lib.rs`.
+  - Tests unitarios de invariantes de arena y mutaciones `O(1)` en `crates/core/src/lib.rs`.
 - **Crate y módulo responsable**:
   - `Cargo.toml`, `.cargo/config.toml`, `tools/whatwg_spec.py`, `tools/test_inspector.py`, `tools/dev.sh`
-  - `crates/dom/src/lib.rs` (`NodeId(NonZeroU32)`, `Document`, `Node`, `NodeKind`, `ElementData`, `Attribute`, `Namespace`, `QuirksMode`)
+  - `crates/core/src/lib.rs` (`NodeId(NonZeroU32)`, `Document`, `Node`, `NodeKind`, `ElementData`, `Attribute`, `Namespace`, `QuirksMode`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p dom` pasa al 100% verificando `size_of::<Option<NodeId>>() == 4`, `append_child`, `insert_before`, `detach`, `reparent_children`, coalescencia de nodos de texto (`append_text` / `insert_text_before`) y creación del `DocumentFragment` inerte para `<template>`.
+  - `cargo test -p megi-core` pasa al 100% verificando `size_of::<Option<NodeId>>() == 4`, `append_child`, `insert_before`, `detach`, `reparent_children`, coalescencia de nodos de texto (`append_text` / `insert_text_before`) y creación del `DocumentFragment` inerte para `<template>`.
 
 ---
 
@@ -108,7 +108,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/input_stream.rs` (`preprocess_code_points`, `preprocess_str`, `is_noncharacter`, `is_surrogate`, `is_control_character_in_stream`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p html input_stream` pasa al 100%, normalizando secuencias `\r\n` y `\r` aislados a `\n` (`U+000A`) y registrando los errores de flujo de entrada sin descartar códigos de punto ni provocar pánicos ante sustitutos UTF-16 (`0xD800..=0xDFFF`).
+  - `cargo test -p megi-html input_stream` pasa al 100%, normalizando secuencias `\r\n` y `\r` aislados a `\n` (`U+000A`) y registrando los errores de flujo de entrada sin descartar códigos de punto ni provocar pánicos ante sustitutos UTF-16 (`0xD800..=0xDFFF`).
 
 ---
 
@@ -122,7 +122,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/test_harness/src/tokenizer_harness.rs` (`load_tokenizer_test_file`, `decode_test_string`, `coalesce_normalized_tokens`, `run_tokenizer_suite_file`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p test_harness test_all_14_tokenizer_json_files_parse_cleanly_with_6824_cases` pasa al 100%, soportando las claves raíz `"tests"` y `"xmlViolationTests"`, desescapado hexadecimal `\uHHHH` cuando `"doubleEscaped": true`, ejecución multi-estado según `"initialStates"`, configuración de `"lastStartTag"`, coalescencia de tokens `Character` adyacentes y tuplas de 3 elementos `["ProcessingInstruction", target, data]`.
+  - `cargo test -p megi-test-harness test_all_14_tokenizer_json_files_parse_cleanly_with_6824_cases` pasa al 100%, soportando las claves raíz `"tests"` y `"xmlViolationTests"`, desescapado hexadecimal `\uHHHH` cuando `"doubleEscaped": true`, ejecución multi-estado según `"initialStates"`, configuración de `"lastStartTag"`, coalescencia de tokens `Character` adyacentes y tuplas de 3 elementos `["ProcessingInstruction", target, data]`.
 
 ---
 
@@ -137,7 +137,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - `crates/html/src/serializer.rs` (`serialize_dom_for_test`)
   - `crates/test_harness/src/tree_harness.rs` (`parse_dat_str`, `load_tree_dat_file`, `load_tree_json_file`, `execute_tree_case`, `run_tree_suite_file`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p test_harness test_all_62_tree_construction_dat_and_json_files_parse_with_1973_cases` pasa al 100%, garantizando paridad exacta entre el parser `.dat` (que respeta nodos de texto multilínea con líneas en blanco `\n\n`) y los archivos `.json` exportados.
+  - `cargo test -p megi-test-harness test_all_62_tree_construction_dat_and_json_files_parse_with_1973_cases` pasa al 100%, garantizando paridad exacta entre el parser `.dat` (que respeta nodos de texto multilínea con líneas en blanco `\n\n`) y los archivos `.json` exportados.
 
 ---
 
@@ -157,7 +157,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`TokenizerState::{Data, TagOpen, EndTagOpen, TagName, SelfClosingStartTag}`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p html test_tokenize_basic_tags_and_attributes` y `cargo test -p test_harness test_closed_loop_tokenizer_all_13_standard_suites_100_percent_green` pasan al 100%.
+  - `cargo test -p megi-html test_tokenize_basic_tags_and_attributes` y `cargo test -p megi-test-harness test_closed_loop_tokenizer_all_13_standard_suites_100_percent_green` pasan al 100%.
 
 ---
 
@@ -180,7 +180,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`PendingTag`, `TokenizerState::BeforeAttributeName`..`AfterAttributeValueQuoted`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- test3.test` reporta `1802 / 1802 state-runs passed`.
+  - `cargo run -p megi-test-harness -- test3.test` reporta `1802 / 1802 state-runs passed`.
 
 ---
 
@@ -213,7 +213,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`TokenizerState::BogusComment`..`CommentEndBang` y `ProcessingInstructionOpen`..`ProcessingInstructionQuestionable`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p html test_processing_instruction_states` y `cargo run -p test_harness -- test2.test` (`46 / 46 state-runs passed`).
+  - `cargo test -p megi-html test_processing_instruction_states` y `cargo run -p megi-test-harness -- test2.test` (`46 / 46 state-runs passed`).
 
 ---
 
@@ -242,7 +242,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`PendingDoctype`, `TokenizerState::Doctype`..`BogusDoctype`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- doctype01.dat` reporta `74 / 74 mode-runs passed`.
+  - `cargo run -p megi-test-harness -- doctype01.dat` reporta `74 / 74 mode-runs passed`.
 
 ---
 
@@ -267,7 +267,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`is_appropriate_end_tag`, `flush_temp_buffer_as_end_tag_fallback`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- contentModelFlags.test` reporta `24 / 24 state-runs passed`.
+  - `cargo run -p megi-test-harness -- contentModelFlags.test` reporta `24 / 24 state-runs passed`.
 
 ---
 
@@ -299,7 +299,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tokenizer.rs` (`TokenizerState::ScriptData`..`ScriptDataDoubleEscapeEnd`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- escapeFlag.test` (`9 / 9`) y `cargo run -p test_harness -- scriptdata01.dat` (`52 / 52`).
+  - `cargo run -p megi-test-harness -- escapeFlag.test` (`9 / 9`) y `cargo run -p megi-test-harness -- scriptdata01.dat` (`52 / 52`).
 
 ---
 
@@ -325,7 +325,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - `crates/html/src/entities.rs` (`NAMED_ENTITIES`)
   - `crates/html/src/tokenizer.rs` (`NUMERIC_REPLACEMENT_TABLE`, `TokenizerState::CharacterReference`..`NumericCharacterReferenceEnd`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- namedEntities.test` (`4210 / 4210`), `numericEntities.test` (`336 / 336`), `entities.test` (`80 / 80`), `entities01.dat` (`150 / 150`) y `entities02.dat` (`52 / 52`).
+  - `cargo run -p megi-test-harness -- namedEntities.test` (`4210 / 4210`), `numericEntities.test` (`336 / 336`), `entities.test` (`80 / 80`), `entities01.dat` (`150 / 150`) y `entities02.dat` (`52 / 52`).
 
 ---
 
@@ -352,7 +352,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`TreeBuilder`, `InsertionMode::{Initial, BeforeHtml, BeforeHead, InHead, InHeadNoscript, AfterHead}`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- doctype01.dat` (`74/74`), `noscript01.dat` (`18/18`), `comments01.dat` (`32/32`) y `quirks01.dat` (`8/8`).
+  - `cargo run -p megi-test-harness -- doctype01.dat` (`74/74`), `noscript01.dat` (`18/18`), `comments01.dat` (`32/32`) y `quirks01.dat` (`8/8`).
 
 ---
 
@@ -370,7 +370,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`process_in_body`, `close_p_element`, `generate_implied_end_tags`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- inbody01.dat` (`8/8`), `void-in-phrasing.dat` (`26/26`), `blocks.dat` (`96/96`), `main-element.dat` (`6/6`) y `search-element.dat` (`16/16`).
+  - `cargo run -p megi-test-harness -- inbody01.dat` (`8/8`), `void-in-phrasing.dat` (`26/26`), `blocks.dat` (`96/96`), `main-element.dat` (`6/6`) y `search-element.dat` (`16/16`).
 
 ---
 
@@ -386,7 +386,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`FormattingEntry`, `push_active_formatting`, `reconstruct_active_formatting_elements`, `run_adoption_agency_algorithm`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- adoption01.dat` (`36/36`), `adoption02.dat` (`8/8`) y `tricky01.dat` (`18/18`).
+  - `cargo run -p megi-test-harness -- adoption01.dat` (`36/36`), `adoption02.dat` (`8/8`) y `tricky01.dat` (`18/18`).
 
 ---
 
@@ -408,7 +408,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`appropriate_place_for_inserting_node`, `process_in_table`, `process_in_caption`, `process_in_column_group`, `process_in_table_body`, `process_in_row`, `process_in_cell`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p html test_foster_parenting_places_misnested_element_before_table` y `cargo run -p test_harness -- tables01.dat` (`38/38`).
+  - `cargo test -p megi-html test_foster_parenting_places_misnested_element_before_table` y `cargo run -p megi-test-harness -- tables01.dat` (`38/38`).
 
 ---
 
@@ -425,7 +425,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`form_element`, manejo de `<ruby>` y `<select>` en `process_in_body`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- isindex.dat` (`8/8`), `menuitem-element.dat` (`40/40`) y `ruby.dat` (`42/42`).
+  - `cargo run -p megi-test-harness -- isindex.dat` (`8/8`), `menuitem-element.dat` (`40/40`) y `ruby.dat` (`42/42`).
 
 ---
 
@@ -440,7 +440,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - `crates/html/src/tree_builder.rs` (`template_modes`, `InsertionMode::InTemplate`)
   - `crates/html/src/serializer.rs` (serialización de `|   content`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo test -p html test_template_contents_serialization` y `cargo run -p test_harness -- template.dat` (`254/254`).
+  - `cargo test -p megi-html test_template_contents_serialization` y `cargo run -p megi-test-harness -- template.dat` (`254/254`).
 
 ---
 
@@ -460,7 +460,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (despachador de contenido foráneo, tablas de ajuste de 37 etiquetas SVG y 60 atributos SVG + 11 atributos `xlink`/`xml`/`xmlns`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- svg.dat` (`16/16`), `math.dat` (`16/16`), `namespace-sensitivity.dat` (`2/2`) y `foreign-fragment.dat` (`132/132`).
+  - `cargo run -p megi-test-harness -- svg.dat` (`16/16`), `math.dat` (`16/16`), `namespace-sensitivity.dat` (`2/2`) y `foreign-fragment.dat` (`132/132`).
 
 ---
 
@@ -481,7 +481,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
 - **Crate y módulo responsable**:
   - `crates/html/src/tree_builder.rs` (`InsertionMode::{Text, AfterBody, InFrameset, AfterFrameset, AfterAfterBody, AfterAfterFrameset}`)
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- scriptdata01.dat` (`52/52`), `tests14.dat` (`14/14`) y `tests24.dat` (`16/16`).
+  - `cargo run -p megi-test-harness -- scriptdata01.dat` (`52/52`), `tests14.dat` (`14/14`) y `tests24.dat` (`16/16`).
 
 ---
 
@@ -498,7 +498,7 @@ Tras publicar la Pre-Alpha `v0.1.0` (recuento actual en [`PROGRESS.md`](../PROGR
   - `crates/html/src/tree_builder.rs` (`parse_fragment`)
   - `crates/html/src/serializer.rs`
 - **Criterio de aceptación verificable por test**:
-  - `cargo run -p test_harness -- tests_innerHTML_1.dat` (`162/162`) y `tests4.dat` (`18/18`).
+  - `cargo run -p megi-test-harness -- tests_innerHTML_1.dat` (`162/162`) y `tests4.dat` (`18/18`).
 
 ---
 
@@ -533,13 +533,13 @@ Resultados visuales: [`images/phase4-basic.png`](images/phase4-basic.png), [`ima
 | `WP-5.10` | Backgrounds E2E (`background-image`/`list-style-image`) en `render` | **HECHO** (ronda 8; caps 32/8 MiB/16 MiB) |
 | `WP-5.11` | Red avanzada E2E en el pipeline: cookies (jar por render o sesión), CORS/credentials con denegación no fatal, gzip/deflate en HTML/CSS; `--cookies`/`--origin` y stats (`cookies_stored`/`content_encoding`) | **HECHO** (ronda 10; render 114 tests tras ronda 15) |
 
-Criterio global: `cargo test -p net -p image -p render` + `cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png` + `bash tools/render_fixture.sh`.
+Criterio global: `cargo test -p megi-net -p megi-image -p megi-render` + `cargo run -p megi-render -- tests/fixtures/render/images.html /tmp/images.png` + `bash tools/render_fixture.sh`.
 
 ---
 
 ## FASE 6: Integración JS & DOM Bindings (COMPLETA, 100 % — WP-A/B/6.4 + eventos + APIs navegador HECHOS)
 
-**Estado**: **WP-6.1 HECHO** (`crates/js` con **Boa 0.22**, feature `js` ON por defecto), **WP-6.2 lado host HECHO** (`render` ejecuta `<script>` inline/`src` con `ScriptingMode`/`ScriptingLimits`, caps y re-render del DOM mutado; 7 fixtures `js_*`), **WP-A HECHO** (ronda 10: `EventTarget` captura+burbuja, `Event`/`CustomEvent`, timers con reloj inyectable y `document` como target), **WP-B HECHO** (ronda 11: `CSSStyleDeclaration` completa —`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`—, `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML/Text` e **identidad de wrappers**) y **WP-6.4 HECHO** (ronda 11: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF; `document.write` re-tokenizado con `Tokenizer::insert_input` en la posición actual, anidados incluidos; externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost ⇒ **árbol 3.904/3.904 y allowlist de tree vacía**). **APIs de navegador y cableado real (ronda 16)**: `matchMedia`, viewport/DPR/scroll, `requestAnimationFrame` (16 ms virtuales), `onerror`, `readyState`, consola ampliada, `getComputedStyle` real pre-script; en `render`: `RenderTimings::styles_pre_script`, MediaContext/viewport reales, rAF con epoch fijo 48 ms y warnings `console_errors`. **Event loop presupuestado y determinista en `render`** (ronda 15, `b808d7b`): sólo reloj virtual (`run_until` en pasos de 1 ms, sin reloj de pared), `DOMContentLoaded`/`load`, timers con delay (`max_tasks` 10.000, `max_virtual_time` 1000), un solo re-render, stats `script_*`/`timings.event_loop`; 6 fixtures `js_event_*` y 11 tests (fixture `js_event_timeout` md5 `07682088…`). **Eventos avanzados (ronda 12) HECHO**: `currentTarget` real + `eventPhase` 1/2/3 (capture en el target), `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror` (elemento/document/window), `document.close()` no-op, `estimated_heap_bytes()` aproximado, dispatch no-`Event` ⇒ `TypeError` y excepciones de listeners capturadas (`last_event_error()`) sin abortar el resto. **168 tests js** y recuento de workspace en [`PROGRESS.md`](../PROGRESS.md); **Fase 6 = 100 %**; **fuzz `js_eval`** añadido en la ronda 18 y el estado CSS real (`with_state`) integrado en render en la ronda 19.
+**Estado**: **WP-6.1 HECHO** (`crates/js` con **Boa 0.22**, feature `js` ON por defecto), **WP-6.2 lado host HECHO** (`render` ejecuta `<script>` inline/`src` con `ScriptingMode`/`ScriptingLimits`, caps y re-render del DOM mutado; 7 fixtures `js_*`), **WP-A HECHO** (ronda 10: `EventTarget` captura+burbuja, `Event`/`CustomEvent`, timers con reloj inyectable y `document` como target), **WP-B HECHO** (ronda 11: `CSSStyleDeclaration` completa —`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`—, `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML/Text` e **identidad de wrappers**) y **WP-6.4 HECHO** (ronda 11: hook `megi_html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF; `document.write` re-tokenizado con `Tokenizer::insert_input` en la posición actual, anidados incluidos; externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost ⇒ **árbol 3.904/3.904 y allowlist de tree vacía**). **APIs de navegador y cableado real (ronda 16)**: `matchMedia`, viewport/DPR/scroll, `requestAnimationFrame` (16 ms virtuales), `onerror`, `readyState`, consola ampliada, `getComputedStyle` real pre-script; en `render`: `RenderTimings::styles_pre_script`, MediaContext/viewport reales, rAF con epoch fijo 48 ms y warnings `console_errors`. **Event loop presupuestado y determinista en `render`** (ronda 15, `b808d7b`): sólo reloj virtual (`run_until` en pasos de 1 ms, sin reloj de pared), `DOMContentLoaded`/`load`, timers con delay (`max_tasks` 10.000, `max_virtual_time` 1000), un solo re-render, stats `script_*`/`timings.event_loop`; 6 fixtures `js_event_*` y 11 tests (fixture `js_event_timeout` md5 `07682088…`). **Eventos avanzados (ronda 12) HECHO**: `currentTarget` real + `eventPhase` 1/2/3 (capture en el target), `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror` (elemento/document/window), `document.close()` no-op, `estimated_heap_bytes()` aproximado, dispatch no-`Event` ⇒ `TypeError` y excepciones de listeners capturadas (`last_event_error()`) sin abortar el resto. **168 tests js** y recuento de workspace en [`PROGRESS.md`](../PROGRESS.md); **Fase 6 = 100 %**; **fuzz `js_eval`** añadido en la ronda 18 y el estado CSS real (`with_state`) integrado en render en la ronda 19.
 
 **Decisiones registradas** (detalle y racional en [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md)):
 1. **Motor = Boa `boa_engine` 0.22.x** (pure Rust, MSRV Rust 1.91, licencia Unlicense OR MIT; se elige MIT). La decisión original (ronda 7) fue 0.21.x / MSRV 1.88, actualizada al subir Boa a 0.22 (ronda 25). Se descartan motor propio, QuickJS/rquickjs (queda como plan de migración), V8/SpiderMonkey y el stub.

@@ -11,7 +11,7 @@
 //! ## Codec
 //!
 //! The inflater is the `image` crate's dependency-free, `std`-only zlib/raw-DEFLATE
-//! implementation ([`image::inflate_zlib`] / [`image::inflate_deflate`]), already used by
+//! implementation ([`megi_image::inflate_zlib`] / [`megi_image::inflate_deflate`]), already used by
 //! the PNG decoder. Sharing it avoids a second DEFLATE implementation in the workspace.
 //! The gzip wrapper (header flags, optional fields, trailer) and the CRC-32/ISIZE checks
 //! live here. Follow-up: extract the codec into its own crate (`crates/compress`) if a
@@ -28,12 +28,12 @@
 //!
 //! Deliberate limits: only single `gzip`/`deflate` codings (no `br`/`zstd`, no stacked
 //! encodings), `fetch` decodes complete bodies; [`crate::http::fetch_streaming`] decodes gzip/
-//! deflate incrementally with [`image::StreamingInflater`], delivering decompressed
+//! deflate incrementally with [`megi_image::StreamingInflater`], delivering decompressed
 //! chunks as they arrive (CRC/ISIZE/Adler verified at the trailer).
 
 use std::fmt;
 
-use image::{InflateError, InflateLimits, inflate_deflate, inflate_zlib};
+use megi_image::{InflateError, InflateLimits, inflate_deflate, inflate_zlib};
 
 use crate::error::FetchError;
 
@@ -336,7 +336,7 @@ pub(crate) mod testing {
     //! generated with an external zlib and embedded as bytes.
 
     use super::crc32_ieee;
-    use image::adler32;
+    use megi_image::adler32;
 
     /// Encodes `data` as raw DEFLATE stored blocks (RFC 1951 §3.2.4).
     pub fn deflate_stored(data: &[u8]) -> Vec<u8> {

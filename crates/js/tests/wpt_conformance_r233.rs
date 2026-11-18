@@ -2,7 +2,9 @@
 
 #![cfg(feature = "js")]
 
-use js::runtime::JsRuntime;
+use std::sync::Arc;
+
+use megi_js::runtime::JsRuntime;
 
 fn runtime() -> JsRuntime {
     JsRuntime::new().expect("runtime")
@@ -230,9 +232,9 @@ fn select_selected_index_supported() {
 
 #[test]
 fn computed_style_and_bounding_rect_provider() {
-    use js::host::LayoutRect;
+    use megi_js::host::LayoutRect;
     let mut rt = runtime();
-    rt.set_layout_provider(Box::new(|_node| {
+    rt.set_layout_provider(Arc::new(|_node| {
         Some(LayoutRect {
             border_box: (1.0, 2.0, 10.0, 20.0),
             content_box: (1.0, 2.0, 8.0, 18.0),

@@ -2,12 +2,12 @@
 
 use std::collections::HashMap;
 
-use css::{
+use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{
     BorderCollapse, BorderStyle, ComputedStyle, Display, Length, Position, TableLayout,
     VerticalAlign,
 };
-use dom::{Attribute, Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style(width: Length) -> ComputedStyle {
     let mut style = ComputedStyle::initial();
@@ -483,8 +483,8 @@ fn test_inline_table_is_atomic_with_first_row_baseline() {
 
 fn collapse_cell_style() -> ComputedStyle {
     let mut style = cell_style();
-    style.border_width = css::RectEdges::all(0.0);
-    style.border_style = css::RectEdges::all(BorderStyle::Solid);
+    style.border_width = megi_css::RectEdges::all(0.0);
+    style.border_style = megi_css::RectEdges::all(BorderStyle::Solid);
     style
 }
 
@@ -597,7 +597,7 @@ fn test_border_collapse_ignores_spacing_vs_separate() {
 // Cell content exposure (paint walks LayoutBox.children and must find the text)
 // ---------------------------------------------------------------------------
 
-use layout::Rect as LayoutRect;
+use megi_layout::Rect as LayoutRect;
 
 /// Recursively collects `(text, content rect)` of every TextNode under `node`.
 fn collect_text_boxes(node: &LayoutBox, out: &mut Vec<(String, LayoutRect)>) {

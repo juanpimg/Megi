@@ -6,20 +6,21 @@
 //!    state machine from WPT `test.js` (`parseDat()`).
 //! 2. Exported `.json` fixtures (`tests/html5lib-tests/tree-construction-json/*.json`).
 //!
-//! Feeds each test case into [`html::parse_document`] or [`html::parse_fragment`],
-//! serializes the resulting [`dom::Document`] via [`html::serialize_dom_for_test`],
+//! Feeds each test case into [`megi_html::parse_document`] or [`megi_html::parse_fragment`],
+//! serializes the resulting [`megi_core::Document`] via [`megi_html::serialize_dom_for_test`],
 //! and compares actual vs expected `#document` tree output.
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use dom::Namespace;
-use html::{
+use megi_core::Namespace;
+use megi_html::{
     parse_document, parse_document_with_options_and_executor, parse_fragment,
     serialize_dom_for_test,
 };
 use serde::Deserialize;
 
+#[cfg(feature = "js")]
 use crate::js_executor::JsScriptExecutor;
 
 /// Script execution mode directive for a tree-construction test case.
@@ -219,8 +220,11 @@ pub fn execute_tree_case(
         parse_document_with_options_and_executor(
             &case.data,
             true,
-            &html::ParseOptions::default(),
+            &megi_html::ParseOptions::default(),
+            #[cfg(feature = "js")]
             Some(Box::new(JsScriptExecutor::new())),
+            #[cfg(not(feature = "js"))]
+            None,
         )
         .document
     } else {

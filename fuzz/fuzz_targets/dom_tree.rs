@@ -1,7 +1,7 @@
 #![no_main]
-//! Direct fuzz target for `dom::Document` tree mutations (#834).
+//! Direct fuzz target for `megi_core::Document` tree mutations (#834).
 
-use dom::{Attribute, Document, Namespace};
+use megi_core::{Attribute, Document, Namespace};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

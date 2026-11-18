@@ -2,7 +2,7 @@
 //! Fuzz target: layout resolution (block/inline/table/flex/grid) on untrusted DOM + CSS.
 
 use libfuzzer_sys::fuzz_target;
-use render::{RenderOptions, render_url};
+use megi_render::{RenderOptions, render_url};
 
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);

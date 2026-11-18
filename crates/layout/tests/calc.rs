@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Length, Position};
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Length, Position};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style() -> ComputedStyle {
     let mut style = ComputedStyle::initial();
@@ -86,7 +86,7 @@ fn simple(style: ComputedStyle, viewport_width: f32) -> BoxDimensions {
 #[test]
 fn width_calc_percent_minus_px() {
     let mut style = block(Length::Auto, Length::Px(20.0));
-    style.calc_lengths.width = Some(css::calc::CalcValue {
+    style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 100.0,
         px: -40.0,
     });
@@ -104,7 +104,7 @@ fn width_calc_half_plus_px_inside_parent() {
         block(Length::Px(400.0), Length::Auto),
     );
     let mut child_style = block(Length::Auto, Length::Px(10.0));
-    child_style.calc_lengths.width = Some(css::calc::CalcValue {
+    child_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 10.0,
     });
@@ -124,7 +124,7 @@ fn height_calc_percent_minus_px() {
         block(Length::Px(200.0), Length::Px(200.0)),
     );
     let mut child_style = block(Length::Px(50.0), Length::Auto);
-    child_style.calc_lengths.height = Some(css::calc::CalcValue {
+    child_style.calc_lengths.height = Some(megi_css::calc::CalcValue {
         percent: 100.0,
         px: -20.0,
     });
@@ -144,7 +144,7 @@ fn margin_left_calc_percent_minus_px() {
         block(Length::Px(400.0), Length::Auto),
     );
     let mut child_style = block(Length::Px(100.0), Length::Px(10.0));
-    child_style.calc_lengths.margin_left = Some(css::calc::CalcValue {
+    child_style.calc_lengths.margin_left = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: -20.0,
     });
@@ -164,7 +164,7 @@ fn padding_top_calc_percent_plus_px() {
         block(Length::Px(200.0), Length::Auto),
     );
     let mut child_style = block(Length::Px(50.0), Length::Px(10.0));
-    child_style.calc_lengths.padding_top = Some(css::calc::CalcValue {
+    child_style.calc_lengths.padding_top = Some(megi_css::calc::CalcValue {
         percent: 10.0,
         px: 5.0,
     });
@@ -182,7 +182,7 @@ fn absolute_top_calc_percent_minus_px() {
     let parent = add(&mut doc, html, &mut styles, parent_style);
     let mut child_style = block(Length::Px(50.0), Length::Px(50.0));
     child_style.position = Position::Absolute;
-    child_style.calc_lengths.top = Some(css::calc::CalcValue {
+    child_style.calc_lengths.top = Some(megi_css::calc::CalcValue {
         percent: 100.0,
         px: -30.0,
     });
@@ -195,7 +195,7 @@ fn absolute_top_calc_percent_minus_px() {
 #[test]
 fn nested_calc_em_and_multiplication() {
     let mut style = block(Length::Auto, Length::Px(10.0));
-    style.calc_lengths.width = Some(css::calc::CalcValue {
+    style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 20.0,
     });
@@ -213,7 +213,7 @@ fn max_width_calc_clamps_stretch_width() {
         block(Length::Px(400.0), Length::Auto),
     );
     let mut child_style = block(Length::Auto, Length::Px(10.0));
-    child_style.calc_lengths.max_width = Some(css::calc::CalcValue {
+    child_style.calc_lengths.max_width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 10.0,
     });
@@ -226,7 +226,7 @@ fn max_width_calc_clamps_stretch_width() {
 #[test]
 fn indefinite_height_uses_absolute_part_only() {
     let mut style = block(Length::Px(50.0), Length::Auto);
-    style.calc_lengths.height = Some(css::calc::CalcValue {
+    style.calc_lengths.height = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 10.0,
     });
@@ -249,7 +249,7 @@ fn flex_gap_calc_em_plus_px() {
     // Store the mixed gap directly on the container style before layout.
     let mut styles2 = styles;
     let mut s = styles2.get(&container).cloned().expect("style");
-    s.calc_lengths.column_gap = Some(css::calc::CalcValue {
+    s.calc_lengths.column_gap = Some(megi_css::calc::CalcValue {
         percent: 0.0,
         px: 21.0,
     });
@@ -269,7 +269,7 @@ fn absolute_left_calc_percent_minus_px() {
     let parent = add(&mut doc, html, &mut styles, parent_style);
     let mut child_style = block(Length::Px(50.0), Length::Px(50.0));
     child_style.position = Position::Absolute;
-    child_style.calc_lengths.left = Some(css::calc::CalcValue {
+    child_style.calc_lengths.left = Some(megi_css::calc::CalcValue {
         percent: 100.0,
         px: -40.0,
     });
@@ -284,15 +284,15 @@ fn grid_column_gap_calc_mixed() {
     let (mut doc, mut styles, html) = setup();
     let mut container_style = block(Length::Px(200.0), Length::Auto);
     container_style.display = Display::Grid;
-    container_style.grid_template_columns = css::GridTemplate {
+    container_style.grid_template_columns = megi_css::GridTemplate {
         tracks: vec![
-            css::TrackSize::Fixed(Length::Px(100.0)),
-            css::TrackSize::Fixed(Length::Px(100.0)),
+            megi_css::TrackSize::Fixed(Length::Px(100.0)),
+            megi_css::TrackSize::Fixed(Length::Px(100.0)),
         ],
         auto_repeat: None,
         line_names: Vec::new(),
     };
-    container_style.calc_lengths.column_gap = Some(css::calc::CalcValue {
+    container_style.calc_lengths.column_gap = Some(megi_css::calc::CalcValue {
         percent: 10.0,
         px: 5.0,
     });
@@ -324,7 +324,7 @@ fn flex_item_width_calc_mixed() {
     container_style.display = Display::Flex;
     let container = add(&mut doc, html, &mut styles, container_style);
     let mut item_style = block(Length::Auto, Length::Px(10.0));
-    item_style.calc_lengths.width = Some(css::calc::CalcValue {
+    item_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: -10.0,
     });
@@ -391,8 +391,8 @@ fn float_shrink_to_fit_clamps_min_and_max_width() {
 
     // Float with calc(50% + 50px) = 250px clamped by max-width: 180px.
     let mut float_max_style = block(Length::Auto, Length::Px(20.0));
-    float_max_style.float = css::Float::Left;
-    float_max_style.calc_lengths.width = Some(css::calc::CalcValue {
+    float_max_style.float = megi_css::Float::Left;
+    float_max_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 50.0,
     });
@@ -401,7 +401,7 @@ fn float_shrink_to_fit_clamps_min_and_max_width() {
 
     // Float with width: 40px clamped up by min-width: 120px.
     let mut float_min_style = block(Length::Px(40.0), Length::Px(20.0));
-    float_min_style.float = css::Float::Left;
+    float_min_style.float = megi_css::Float::Left;
     float_min_style.min_width = Length::Px(120.0);
     let float_min = add(&mut doc, container, &mut styles, float_min_style);
 
@@ -426,7 +426,7 @@ fn replaced_element_respects_calc_and_min_max_constraints() {
     let mut img_style = ComputedStyle::initial();
     img_style.display = Display::Block;
     // calc(50% + 100px) = 300px, clamped by max-width: 160px -> height should scale to 80px.
-    img_style.calc_lengths.width = Some(css::calc::CalcValue {
+    img_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 100.0,
     });
@@ -435,7 +435,7 @@ fn replaced_element_respects_calc_and_min_max_constraints() {
     let mut sizes = HashMap::new();
     sizes.insert(img, (200.0, 100.0));
 
-    let root = layout::layout_document_with_replaced_sizes(
+    let root = megi_layout::layout_document_with_replaced_sizes(
         &doc,
         &styles,
         Rect::new(0.0, 0.0, 800.0, 600.0),
@@ -478,7 +478,7 @@ fn definite_height_threaded_into_float_inline_block_and_grid_item() {
         block(Length::Px(400.0), Length::Px(200.0)),
     );
     let mut float_style = block(Length::Px(100.0), Length::Percent(50.0));
-    float_style.float = css::Float::Left;
+    float_style.float = megi_css::Float::Left;
     let float_node = add(&mut doc, container_f, &mut styles, float_style);
 
     // 2. Inline-block inside a 200px-tall container.
@@ -537,11 +537,11 @@ fn inline_span_resolves_calc_margin_and_padding() {
     let mut span_style = ComputedStyle::initial();
     span_style.display = Display::Inline;
     // 10% of 400 + 5 = 45px margin-left, 5% of 400 + 10 = 30px padding-left.
-    span_style.calc_lengths.margin_left = Some(css::calc::CalcValue {
+    span_style.calc_lengths.margin_left = Some(megi_css::calc::CalcValue {
         percent: 10.0,
         px: 5.0,
     });
-    span_style.calc_lengths.padding_left = Some(css::calc::CalcValue {
+    span_style.calc_lengths.padding_left = Some(megi_css::calc::CalcValue {
         percent: 5.0,
         px: 10.0,
     });
@@ -587,7 +587,7 @@ fn table_with_calc_width_uses_specified_width() {
     let mut table_style = ComputedStyle::initial();
     table_style.display = Display::Table;
     // calc(50% + 20px) = 220px
-    table_style.calc_lengths.width = Some(css::calc::CalcValue {
+    table_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
         px: 20.0,
     });

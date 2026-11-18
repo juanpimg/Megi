@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
-use css::{
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{
     AlignItems, AlignSelf, ComputedStyle, Display, GridLine, GridTemplate, Length, TrackSize,
 };
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style() -> ComputedStyle {
     let mut style = ComputedStyle::initial();
@@ -340,8 +340,8 @@ fn test_grid_container_inside_normal_block_does_not_change_siblings() {
 
 fn with_placement(
     mut style: ComputedStyle,
-    column: (css::GridLine, css::GridLine),
-    row: (css::GridLine, css::GridLine),
+    column: (megi_css::GridLine, megi_css::GridLine),
+    row: (megi_css::GridLine, megi_css::GridLine),
 ) -> ComputedStyle {
     style.grid_column_start = column.0;
     style.grid_column_end = column.1;
@@ -359,8 +359,8 @@ fn test_explicit_column_placement_line_slash_line() {
         vec![
             with_placement(
                 item_style(Length::Auto, Length::Px(20.0)),
-                (css::GridLine::Line(2), css::GridLine::Line(4)),
-                (css::GridLine::Auto, css::GridLine::Auto),
+                (megi_css::GridLine::Line(2), megi_css::GridLine::Line(4)),
+                (megi_css::GridLine::Auto, megi_css::GridLine::Auto),
             ),
             item_style(Length::Auto, Length::Px(20.0)),
         ],
@@ -379,8 +379,8 @@ fn test_span_columns_auto_placement_fills_around() {
         vec![
             with_placement(
                 item_style(Length::Auto, Length::Px(20.0)),
-                (css::GridLine::Auto, css::GridLine::Span(2)),
-                (css::GridLine::Auto, css::GridLine::Auto),
+                (megi_css::GridLine::Auto, megi_css::GridLine::Span(2)),
+                (megi_css::GridLine::Auto, megi_css::GridLine::Auto),
             ),
             item_style(Length::Auto, Length::Px(20.0)),
             item_style(Length::Auto, Length::Px(20.0)),
@@ -403,8 +403,8 @@ fn test_row_span_over_template_rows() {
         vec![
             with_placement(
                 item_style(Length::Auto, Length::Auto),
-                (css::GridLine::Auto, css::GridLine::Auto),
-                (css::GridLine::Line(1), css::GridLine::Span(2)),
+                (megi_css::GridLine::Auto, megi_css::GridLine::Auto),
+                (megi_css::GridLine::Line(1), megi_css::GridLine::Span(2)),
             ),
             item_style(Length::Auto, Length::Px(10.0)),
         ],
@@ -423,8 +423,8 @@ fn test_negative_line_placement() {
         container,
         vec![with_placement(
             item_style(Length::Auto, Length::Px(20.0)),
-            (css::GridLine::Line(-2), css::GridLine::Line(-1)),
-            (css::GridLine::Auto, css::GridLine::Auto),
+            (megi_css::GridLine::Line(-2), megi_css::GridLine::Line(-1)),
+            (megi_css::GridLine::Auto, megi_css::GridLine::Auto),
         )],
     );
     // `-2 / -1` is the last column (line 3 = start, line 4 = end).
@@ -437,8 +437,8 @@ fn test_placement_longhands_start_and_span_end() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0), px(100.0)]);
     let mut style = item_style(Length::Auto, Length::Px(20.0));
-    style.grid_column_start = css::GridLine::Line(2);
-    style.grid_column_end = css::GridLine::Span(2);
+    style.grid_column_start = megi_css::GridLine::Line(2);
+    style.grid_column_end = megi_css::GridLine::Span(2);
     let case = layout_case(container, vec![style]);
     assert_eq!(case.item(0).dimensions.content.x, 100.0);
     assert_eq!(case.item(0).dimensions.content.width, 200.0);
@@ -453,8 +453,8 @@ fn test_auto_placement_skips_explicitly_occupied_cells() {
         vec![
             with_placement(
                 item_style(Length::Auto, Length::Px(10.0)),
-                (css::GridLine::Line(3), css::GridLine::Auto),
-                (css::GridLine::Line(1), css::GridLine::Auto),
+                (megi_css::GridLine::Line(3), megi_css::GridLine::Auto),
+                (megi_css::GridLine::Line(1), megi_css::GridLine::Auto),
             ),
             item_style(Length::Auto, Length::Px(10.0)),
             item_style(Length::Auto, Length::Px(10.0)),
@@ -472,11 +472,11 @@ fn test_repeat_auto_fill_minmax_creates_fitting_tracks() {
     container.column_gap = Length::Px(10.0);
     container.grid_template_columns = GridTemplate {
         tracks: Vec::new(),
-        auto_repeat: Some(css::AutoRepeat {
-            kind: css::AutoRepeatKind::Fill,
+        auto_repeat: Some(megi_css::AutoRepeat {
+            kind: megi_css::AutoRepeatKind::Fill,
             tracks: vec![TrackSize::MinMax {
-                min: css::TrackMin::Fixed(Length::Px(60.0)),
-                max: css::TrackMax::Fraction(1.0),
+                min: megi_css::TrackMin::Fixed(Length::Px(60.0)),
+                max: megi_css::TrackMax::Fraction(1.0),
             }],
         }),
         line_names: Vec::new(),
@@ -500,8 +500,8 @@ fn test_repeat_auto_fill_fixed_tracks_wrap_items() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = GridTemplate {
         tracks: Vec::new(),
-        auto_repeat: Some(css::AutoRepeat {
-            kind: css::AutoRepeatKind::Fill,
+        auto_repeat: Some(megi_css::AutoRepeat {
+            kind: megi_css::AutoRepeatKind::Fill,
             tracks: vec![px(80.0)],
         }),
         line_names: Vec::new(),
@@ -527,16 +527,16 @@ fn test_repeat_auto_fill_fixed_tracks_wrap_items() {
 fn test_minmax_fixed_max_and_min_clamp() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = template(vec![TrackSize::MinMax {
-        min: css::TrackMin::Fixed(Length::Px(100.0)),
-        max: css::TrackMax::Fixed(Length::Px(150.0)),
+        min: megi_css::TrackMin::Fixed(Length::Px(100.0)),
+        max: megi_css::TrackMax::Fixed(Length::Px(150.0)),
     }]);
     let case = layout_case(container, vec![item_style(Length::Auto, Length::Px(10.0))]);
     assert!((case.item(0).dimensions.content.width - 150.0).abs() < 0.01);
 
     let mut clamp = grid_container_style(Length::Px(300.0), Length::Auto);
     clamp.grid_template_columns = template(vec![TrackSize::MinMax {
-        min: css::TrackMin::Fixed(Length::Px(120.0)),
-        max: css::TrackMax::Fixed(Length::Px(50.0)),
+        min: megi_css::TrackMin::Fixed(Length::Px(120.0)),
+        max: megi_css::TrackMax::Fixed(Length::Px(50.0)),
     }]);
     let case = layout_case(clamp, vec![item_style(Length::Auto, Length::Px(10.0))]);
     assert!((case.item(0).dimensions.content.width - 120.0).abs() < 0.01);
@@ -563,10 +563,10 @@ fn test_span_content_width_uses_all_spanned_tracks() {
     container.column_gap = Length::Px(10.0);
     let mut spanning = with_placement(
         item_style(Length::Auto, Length::Px(10.0)),
-        (css::GridLine::Line(1), css::GridLine::Span(2)),
-        (css::GridLine::Auto, css::GridLine::Auto),
+        (megi_css::GridLine::Line(1), megi_css::GridLine::Span(2)),
+        (megi_css::GridLine::Auto, megi_css::GridLine::Auto),
     );
-    spanning.justify_self = css::AlignSelf::Stretch;
+    spanning.justify_self = megi_css::AlignSelf::Stretch;
     let case = layout_case(container, vec![spanning]);
     // Two 100px columns plus the 10px inner gap, minus container gap layout:
     // spans columns 1-2 => 100 + 10 + 100 = 210.
@@ -579,8 +579,8 @@ fn test_auto_fit_is_treated_like_auto_fill() {
     container.column_gap = Length::Px(10.0);
     container.grid_template_columns = GridTemplate {
         tracks: Vec::new(),
-        auto_repeat: Some(css::AutoRepeat {
-            kind: css::AutoRepeatKind::Fit,
+        auto_repeat: Some(megi_css::AutoRepeat {
+            kind: megi_css::AutoRepeatKind::Fit,
             tracks: vec![px(60.0)],
         }),
         line_names: Vec::new(),
@@ -617,7 +617,7 @@ fn test_start_only_span_places_item_over_n_columns() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0), px(100.0)]);
     let mut style = item_style(Length::Auto, Length::Px(10.0));
-    style.grid_column_start = css::GridLine::Span(2);
+    style.grid_column_start = megi_css::GridLine::Span(2);
     let case = layout_case(container, vec![style]);
     assert_eq!(case.item(0).dimensions.content.width, 200.0);
 }
@@ -632,7 +632,7 @@ fn test_auto_flow_column_fills_down_columns() {
     let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
     container.grid_template_rows = template(vec![px(20.0), px(20.0)]);
-    container.grid_auto_flow = css::GridAutoFlow::Column;
+    container.grid_auto_flow = megi_css::GridAutoFlow::Column;
     let case = layout_case(
         container,
         vec![
@@ -652,9 +652,9 @@ fn test_auto_flow_column_fills_down_columns() {
 fn test_auto_flow_row_dense_backfills_holes() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0), px(100.0)]);
-    container.grid_auto_flow = css::GridAutoFlow::RowDense;
+    container.grid_auto_flow = megi_css::GridAutoFlow::RowDense;
     let mut explicit = item_style(Length::Auto, Length::Px(10.0));
-    explicit.grid_column_start = css::GridLine::Line(3);
+    explicit.grid_column_start = megi_css::GridLine::Line(3);
     let case = layout_case(
         container,
         vec![
@@ -675,7 +675,7 @@ fn test_template_areas_and_grid_area_name() {
     let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
     container.grid_template_rows = template(vec![px(40.0), px(40.0)]);
-    container.grid_template_areas = Some(css::GridTemplateAreas {
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
         rows: 2,
         columns: 2,
         cells: vec![
@@ -714,10 +714,10 @@ fn test_named_template_lines_place_by_name() {
     ];
     container.grid_template_columns = columns;
     let mut across = item_style(Length::Auto, Length::Px(10.0));
-    across.grid_column_start = css::GridLine::Name("mid".to_owned());
-    across.grid_column_end = css::GridLine::Name("right".to_owned());
+    across.grid_column_start = megi_css::GridLine::Name("mid".to_owned());
+    across.grid_column_end = megi_css::GridLine::Name("right".to_owned());
     let mut first = item_style(Length::Auto, Length::Px(10.0));
-    first.grid_column_start = css::GridLine::Name("left".to_owned());
+    first.grid_column_start = megi_css::GridLine::Name("left".to_owned());
     let case = layout_case(container, vec![across, first]);
     assert_eq!(case.item(0).dimensions.content.x, 100.0);
     assert_eq!(case.item(0).dimensions.content.width, 200.0);
@@ -728,7 +728,7 @@ fn test_named_template_lines_place_by_name() {
 fn test_justify_content_center_and_space_between() {
     let mut centered = grid_container_style(Length::Px(300.0), Length::Auto);
     centered.grid_template_columns = template(vec![px(100.0), px(100.0)]);
-    centered.grid_justify_content = css::GridContentDistribution::Center;
+    centered.grid_justify_content = megi_css::GridContentDistribution::Center;
     let case = layout_case(
         centered,
         vec![
@@ -741,7 +741,7 @@ fn test_justify_content_center_and_space_between() {
 
     let mut between = grid_container_style(Length::Px(300.0), Length::Auto);
     between.grid_template_columns = template(vec![px(100.0), px(100.0)]);
-    between.grid_justify_content = css::GridContentDistribution::SpaceBetween;
+    between.grid_justify_content = megi_css::GridContentDistribution::SpaceBetween;
     let case = layout_case(
         between,
         vec![
@@ -758,7 +758,7 @@ fn test_align_content_center_distributes_rows() {
     let mut container = grid_container_style(Length::Px(100.0), Length::Px(200.0));
     container.grid_template_columns = template(vec![fr(1.0)]);
     container.grid_template_rows = template(vec![px(40.0), px(40.0)]);
-    container.grid_align_content = css::GridContentDistribution::Center;
+    container.grid_align_content = megi_css::GridContentDistribution::Center;
     let case = layout_case(
         container,
         vec![
@@ -777,11 +777,11 @@ fn test_auto_fit_collapses_empty_tracks() {
     container.column_gap = Length::Px(10.0);
     container.grid_template_columns = GridTemplate {
         tracks: Vec::new(),
-        auto_repeat: Some(css::AutoRepeat {
-            kind: css::AutoRepeatKind::Fit,
+        auto_repeat: Some(megi_css::AutoRepeat {
+            kind: megi_css::AutoRepeatKind::Fit,
             tracks: vec![TrackSize::MinMax {
-                min: css::TrackMin::Fixed(Length::Px(80.0)),
-                max: css::TrackMax::Fraction(1.0),
+                min: megi_css::TrackMin::Fixed(Length::Px(80.0)),
+                max: megi_css::TrackMax::Fraction(1.0),
             }],
         }),
         line_names: Vec::new(),
@@ -798,14 +798,14 @@ fn test_area_derived_named_lines() {
     let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
     container.grid_template_rows = template(vec![px(40.0)]);
-    container.grid_template_areas = Some(css::GridTemplateAreas {
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
         rows: 1,
         columns: 2,
         cells: vec![Some("banner".to_owned()), Some("banner".to_owned())],
     });
     let mut item = item_style(Length::Auto, Length::Px(10.0));
-    item.grid_column_start = css::GridLine::Name("banner-start".to_owned());
-    item.grid_column_end = css::GridLine::Name("banner-end".to_owned());
+    item.grid_column_start = megi_css::GridLine::Name("banner-start".to_owned());
+    item.grid_column_end = megi_css::GridLine::Name("banner-end".to_owned());
     let case = layout_case(container, vec![item]);
     assert_eq!(case.item(0).dimensions.content.x, 0.0);
     assert!((case.item(0).dimensions.content.width - 200.0).abs() < 0.01);
@@ -815,13 +815,13 @@ fn test_area_derived_named_lines() {
 fn test_content_distribution_end_and_space_evenly() {
     let mut end = grid_container_style(Length::Px(300.0), Length::Auto);
     end.grid_template_columns = template(vec![px(100.0)]);
-    end.grid_justify_content = css::GridContentDistribution::End;
+    end.grid_justify_content = megi_css::GridContentDistribution::End;
     let case = layout_case(end, vec![item_style(Length::Auto, Length::Px(10.0))]);
     assert!((case.item(0).dimensions.content.x - 200.0).abs() < 0.01);
 
     let mut evenly = grid_container_style(Length::Px(300.0), Length::Auto);
     evenly.grid_template_columns = template(vec![px(60.0), px(60.0)]);
-    evenly.grid_justify_content = css::GridContentDistribution::SpaceEvenly;
+    evenly.grid_justify_content = megi_css::GridContentDistribution::SpaceEvenly;
     let case = layout_case(
         evenly,
         vec![

@@ -81,7 +81,7 @@ renders the `svg_*.html` fixtures offline and checks the
 painted pixels (`<img>` shape/colour, viewBox scaling, 300×150 default, background SVG,
 corrupt/oversized warnings, Content-Type + sniffing over loopback HTTP, direct SVG
 navigation and determinism). `crates/render/tests/scripting_tests.rs` renders these fixtures with the embedded Boa
-runtime (`render::ScriptingMode::Enabled`, default with the `js` feature) and checks the
+runtime (`megi_render::ScriptingMode::Enabled`, default with the `js` feature) and checks the
 mutated pixels, external `src` loading (`file:` and loopback HTTP), `document.write`,
 `--no-network`, console capture, exception/budget warnings and determinism. Scripts execute
 **after parsing** (parse-time execution is WP-6.4, needed for the html5lib `scripted_*`
@@ -91,15 +91,15 @@ cases); `async`/`defer` ordering and ES modules are supported (module_inline,
 Deterministic acceptance commands:
 
 ```bash
-cargo run -p render -- tests/fixtures/render/images.html /tmp/images.png
+cargo run -p megi-render -- tests/fixtures/render/images.html /tmp/images.png
 python3 tools/png_check.py /tmp/images.png
 
-cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
+cargo run -p megi-render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
 python3 tools/png_check.py /tmp/backgrounds.png
 
 # JavaScript: enabled (default) must paint the script-set red text; --no-scripting must not.
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js-text.png
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js-text-disabled.png --no-scripting
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js-text.png
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js-text-disabled.png --no-scripting
 md5sum /tmp/js-text.png /tmp/js-text-disabled.png   # different
 ```
 
@@ -111,7 +111,7 @@ rendered at **1024×768** and compared byte-for-byte against
 `showcase/golden.png` by `crates/render/tests/import_media_tests.rs`.
 
 ```bash
-cargo run -q -p render -- tests/fixtures/render/showcase/index.html \
+cargo run -q -p megi-render -- tests/fixtures/render/showcase/index.html \
     tests/fixtures/render/showcase/golden.png --width 1024 --height 768
 python3 tools/png_check.py tests/fixtures/render/showcase/golden.png
 ```

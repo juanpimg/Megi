@@ -7,7 +7,7 @@ css:
       - any-glob-to-any-file: 'crates/css/**'
 dom:
   - changed-files:
-      - any-glob-to-any-file: 'crates/dom/**'
+      - any-glob-to-any-file: 'crates/core/**'
 layout:
   - changed-files:
       - any-glob-to-any-file: 'crates/layout/**'
@@ -34,7 +34,7 @@ render:
       - any-glob-to-any-file: 'crates/render/**'
 shell:
   - changed-files:
-      - any-glob-to-any-file: 'crates/shell/**'
+      - any-glob-to-any-file: 'crates/browser/**'
 ci:
   - changed-files:
       - any-glob-to-any-file: '.github/**'

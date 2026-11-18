@@ -1026,9 +1026,9 @@ fn draw_text(
     let families = text::families(&spec.font_family);
     let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
     let style = if spec.italic {
-        fonts::FontStyle::Italic
+        megi_fonts::FontStyle::Italic
     } else {
-        fonts::FontStyle::Normal
+        megi_fonts::FontStyle::Normal
     };
     let spacing = spec.letter_spacing * scale;
     let char_count = spec.text.chars().count().max(1) as f32;
@@ -1449,7 +1449,7 @@ impl Canvas {
 
     /// Adds a glyph coverage mask at the given device position (max coverage).
     /// Adds a glyph mask rotated by `angle` radians around its baseline origin `(x, y)`.
-    fn add_mask_rotated(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask, angle: f32) {
+    fn add_mask_rotated(&mut self, x: f32, y: f32, mask: &megi_fonts::GlyphMask, angle: f32) {
         if angle.abs() < 1e-4 {
             self.add_mask(x, y, mask);
             return;
@@ -1496,7 +1496,7 @@ impl Canvas {
         }
     }
 
-    fn add_mask(&mut self, x: f32, y: f32, mask: &fonts::GlyphMask) {
+    fn add_mask(&mut self, x: f32, y: f32, mask: &megi_fonts::GlyphMask) {
         // A far-off-canvas glyph origin (e.g. `x='1e38'`) saturated the i64 cast and then
         // overflowed when adding the glyph offsets (debug panic / release divergence).
         if !x.is_finite() || !y.is_finite() {

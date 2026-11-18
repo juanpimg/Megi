@@ -40,13 +40,13 @@ mkdir -p target
 # `--screenshot` is present, so the pure `--save-png` cost is measured as
 # `--screenshot` (one PNG write) versus `--screenshot --save-png` (the second
 # write reuses the same PNG bytes). Component costs live in the `shell/save-png-*`
-# bench rows (`cargo run --release -p bench -- --filter shell`).
+# bench rows (`cargo run --release -p megi-bench -- --filter shell`).
 if [[ "${1:-}" == "--save-png-isolated" ]]; then
     shift
     fixture="${1:-tests/fixtures/render/showcase/index.html}"
     mkdir -p target/bench-save-png
     echo "==> Building release shell"
-    cargo build --release -p shell
+    cargo build --release -p megi-browser
     binary=target/release/megi
     screenshot=target/bench-save-png/screenshot.png
     saved=target/bench-save-png/saved.png
@@ -83,8 +83,8 @@ if [[ -n "${BENCH_FEATURES:-}" ]]; then
     features_args=(--features "${_bench_features[@]}")
 fi
 
-echo "==> Building release benchmark binary (cargo build --release -p bench ${features_args[*]:-})"
-cargo build --release -p bench "${features_args[@]}"
+echo "==> Building release benchmark binary (cargo build --release -p megi-bench ${features_args[*]:-})"
+cargo build --release -p megi-bench "${features_args[@]}"
 
 echo "==> Running target/release/bench $*"
 set +e
@@ -104,7 +104,7 @@ set -e
 echo
 echo "Raw table : ${OUTPUT}"
 echo "Metadata  : ${METADATA}"
-printf 'Reproduce : cargo run --release -p bench --'
+printf 'Reproduce : cargo run --release -p megi-bench --'
 printf ' %q' "$@"
 echo
 

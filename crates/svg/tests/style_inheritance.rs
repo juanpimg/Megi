@@ -1,12 +1,12 @@
 //! Regression tests for root opacity parsing and visibility inheritance (#1659, #1657).
 
-use svg::{SvgOptions, render_svg};
+use megi_svg::{SvgOptions, render_svg};
 
-fn render(source: &str) -> svg::SvgImage {
+fn render(source: &str) -> megi_svg::SvgImage {
     render_svg(source.as_bytes(), &SvgOptions::default()).expect("render")
 }
 
-fn px(image: &svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
+fn px(image: &megi_svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
     image.pixel(x, y).expect("pixel")
 }
 
@@ -119,12 +119,12 @@ fn oversized_font_size_reports_a_limit_error() {
     let source = r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
          <text x="1" y="10" font-size="5000">A</text>
     </svg>"##;
-    let result = svg::render_svg(source.as_bytes(), &svg::SvgOptions::default());
+    let result = megi_svg::render_svg(source.as_bytes(), &megi_svg::SvgOptions::default());
     assert!(
         result.is_err(),
         "oversized font size must be a typed limit error, not silent Ok"
     );
-    assert!(matches!(result.unwrap_err(), svg::SvgError::Limit(_)));
+    assert!(matches!(result.unwrap_err(), megi_svg::SvgError::Limit(_)));
 }
 
 #[test]

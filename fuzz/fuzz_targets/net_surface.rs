@@ -3,7 +3,7 @@
 //! range, referrer, CORS, proxy auth).
 
 use libfuzzer_sys::fuzz_target;
-use net::{
+use megi_net::{
     ByteRange, ContentRange, Origin, ProxyConfig, ReferrerPolicy, base64_decode, base64_encode,
     decode_data_url, parse_cache_policy, parse_http_date, parse_set_cookie, proxy_authorization,
     proxy_authorization_for, referer_value, resolve_content_type, sniff,
@@ -14,7 +14,7 @@ fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
     // Cookies: parse Set-Cookie headers with a fixed URL.
-    let url = match net::Url::parse("http://example.com/path") {
+    let url = match megi_net::Url::parse("http://example.com/path") {
         Ok(u) => u,
         Err(_) => return,
     };
@@ -43,7 +43,7 @@ fuzz_target!(|data: &[u8]| {
     let _ = base64_encode(data);
 
     // Proxy auth.
-    let proxy_url = match net::Url::parse("http://user:pass@proxy.test/") {
+    let proxy_url = match megi_net::Url::parse("http://user:pass@proxy.test/") {
         Ok(u) => u,
         Err(_) => return,
     };

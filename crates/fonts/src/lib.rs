@@ -16,11 +16,11 @@
 //!
 //! 1. Resolve the face once per style with [`FontDatabase::font`]:
 //!    ```no_run
-//!    use fonts::{FontDatabase, FontStyle};
+//!    use megi_fonts::{FontDatabase, FontStyle};
 //!    let db = FontDatabase::from_system();
 //!    let font = db.font(&["sans-serif"], 400, FontStyle::Normal, fontdb::Stretch::Normal)?;
 //!    let metrics = font.metrics(16.0)?;
-//!    # Ok::<(), fonts::FontError>(())
+//!    # Ok::<(), megi_fonts::FontError>(())
 //!    ```
 //! 2. Compute the line box from [`FontMetrics`]: `line_height() = ascent + descent +
 //!    line_gap`; place the **baseline** at `line_top + ascent` (see

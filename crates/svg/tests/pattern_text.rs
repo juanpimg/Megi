@@ -1,6 +1,6 @@
 //! `<pattern>` and `<text>` rendering tests (deterministic pixels and anti-DoS limits).
 
-use svg::{Limits, SvgError, SvgImage, SvgOptions, render_svg, render_svg_with_limits};
+use megi_svg::{Limits, SvgError, SvgImage, SvgOptions, render_svg, render_svg_with_limits};
 
 fn render(source: &str, width: u32, height: u32) -> SvgImage {
     render_svg(

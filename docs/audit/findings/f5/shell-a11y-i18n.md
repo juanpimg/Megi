@@ -13,7 +13,7 @@ Status legend: `present` (works, documented), `partial` (works with material lim
 
 ---
 
-## A. Shell / UX (`crates/shell/src/**`, 28 modules, 16,501 lines)
+## A. Shell / UX (`crates/browser/src/**`, 28 modules, 16,501 lines)
 
 | # | Feature | Status | Evidence | Consequence | Rank |
 |---|---------|--------|----------|-------------|------|
@@ -28,7 +28,7 @@ Status legend: `present` (works, documented), `partial` (works with material lim
 | A9 | Scrollbars | absent | page scroll is wheel/keys only (`window.rs:2120-2140`, `scroll.rs`); only scrollbar is the dropdown list (`chrome.rs:1685-1706`) | No visual scroll position/thumb; discoverability and a11y of scrolling poor; no drag-to-scroll | 14 |
 | A10 | Keyboard shortcuts | present | `window.rs:45-56` keymap table, handler `window.rs:2071-2426` | Rich (Ctrl+L/F/T/W/S/H/D, F5, zoom, tab cycling); no Ctrl+C/V for page, no Ctrl+P, no F11, no Ctrl+N | 7 |
 | A11 | Context menu | present | `window.rs:700-800`, `chrome.rs:1105-1256` | Open/copy link, save image, reload, save PNG/HTML; "copy image" explicitly unsupported | 13 |
-| A12 | DevTools | absent | no inspector/console surface anywhere in `crates/shell`; only Ctrl+D prints URL/title to stdout (`window.rs:1899`) | No way to inspect DOM/CSS/computed styles or script errors beyond stderr; debugging is opaque | 19 |
+| A12 | DevTools | absent | no inspector/console surface anywhere in `crates/browser`; only Ctrl+D prints URL/title to stdout (`window.rs:1899`) | No way to inspect DOM/CSS/computed styles or script errors beyond stderr; debugging is opaque | 19 |
 | A13 | View source | absent | no `view-source` handling (`rg view-source` empty) | Cannot inspect the received/serialized source | 20 |
 | A14 | Print | absent | `render/lib.rs:826,1274` always build `MediaContext::with_viewport` (`screen: true`, `css/src/media.rs:33-57`); no Ctrl+P; no print path | `@media print` never applies; no page-to-printer/PDF pipeline | 17 |
 | A15 | Fullscreen | absent | no `set_fullscreen`/`Fullscreen` window events (`rg fullscreen` empty) | No F11/fullscreen kiosk mode | 21 |
@@ -42,7 +42,7 @@ Status legend: `present` (works, documented), `partial` (works with material lim
 | A23 | Title / status bar | present | `title.rs:127` `window_title` (`title — short URL`, scroll %, `[recortado]` marker), `chrome.rs:1202-1217` status bar (hover URL, download text) | Title reflects doc/scroll/errors; status bar shows hover target and download progress | 26 |
 | A24 | Error pages | present | `pages.rs:273-291` `error_html` (code + message + retry link), `pages.rs:341-364` `error_code`, caller in `window.rs` render-error path | DNS/TLS/HTTP/FILE_IO codes and "Reintentar" retry link (Spanish string, see C12) | 27 |
 | A25 | Dialogs (alert/confirm/prompt) | absent | no `alert`/`confirm`/`prompt` bindings in `crates/js/src` host (`rg alert` only test `role=alert`); no modal surface in shell | Page scripts calling `alert()` throw instead of showing a dialog; forms/data flows using `confirm()` break silently or throw | 2 |
-| A26 | Autofill | absent | no credential/autofill code in `crates/shell` | No password manager hints, no form autofill | 28 |
+| A26 | Autofill | absent | no credential/autofill code in `crates/browser` | No password manager hints, no form autofill | 28 |
 | A27 | Permission prompts | absent | no permission model/UI (only CORS/cookies via `net`); no `navigator.permissions` host | Geolocation/notifications/clipboard-read requests cannot be granted or denied | 29 |
 | A28 | PDF viewer | absent | only a `.pdf` extension heuristic in `chrome.rs:441`; no PDF decoder/layout | PDFs show as unknown/binary content or fail to render | 30 |
 | A29 | Media playback | absent | layout only gives placeholders (`layout/src/tree_builder.rs:511` `video` → 300×150, `:514` `audio` → 300×30); no decoder/controls pipeline | `<video>`/`<audio>` render as empty boxes; no playback, no controls | 30 |
@@ -57,7 +57,7 @@ Status legend: `present` (works, documented), `partial` (works with material lim
   `forms.rs` handles focus), ~250 LOC across shell + js host + `dom` text. Blocking semantics
   (script paused) can be synchronous read of modal result.
 - **A31 dark mode (rank 3).** Missing → dark-preference pages render light. Sketch:
-  extend `css::MediaContext` (`css/src/media.rs:33`) with `color_scheme: Light|Dark` and
+  extend `megi_css::MediaContext` (`css/src/media.rs:33`) with `color_scheme: Light|Dark` and
   `prefers_color_scheme_queries`; build it in `render/src/lib.rs:826,1274`; add shell flag
   `--color-scheme` + `prefers-color-scheme` in chrome palette (`chrome.rs:47-89`), ~120 LOC.
 - **A16 copy/paste (rank 11).** Missing → no text selection/copy or paste into pages. Sketch:
@@ -86,12 +86,12 @@ Status legend: `present` (works, documented), `partial` (works with material lim
 
 ## B. Accessibility
 
-**Bottom line: there is no accessibility exposure.** A `crates/shell/src/a11y.rs` module
+**Bottom line: there is no accessibility exposure.** A `crates/browser/src/a11y.rs` module
 (321 lines) computes a *pure snapshot* — roles via implicit tag/`role` mapping, names via
 `aria-label`/`aria-labelledby`/`title`/`alt`/`value`/`placeholder`, hidden/disabled state,
 and a document-order focus list — but it is **never used by the window or any consumer**:
 `rg 'collect_access|focus_order|AccessNode|a11y::' crates --glob '!**/a11y.rs'` matches only
-the `pub use` re-export at `crates/shell/src/lib.rs:206`. Consequently:
+the `pub use` re-export at `crates/browser/src/lib.rs:206`. Consequently:
 
 - No a11y tree is exposed to platform APIs (AccessKit/AT-SPI/UIA/NSAccessibility); a screen
   reader sees an opaque blank window. Module doc says so plainly: "no screen-reader bridge"
@@ -131,10 +131,10 @@ the `pub use` re-export at `crates/shell/src/lib.rs:206`. Consequently:
 ### B — what a minimal a11y layer would need (ranked, with rough size)
 
 1. **Expose the tree (P1, ~300 LOC).** Adopt `accesskit` + `accesskit_winit`; new
-   `crates/shell/src/a11y_bridge.rs` maps `a11y::collect(doc, root)` → `accesskit::Node`
+   `crates/browser/src/a11y_bridge.rs` maps `a11y::collect(doc, root)` → `accesskit::Node`
    (role, name, hidden, disabled, focusable), rebuild on frame delivery
    (`window.rs::drain_worker_messages`) and push focus/scroll events; add the crate deps in
-   `crates/shell/Cargo.toml`. This alone makes pages readable by AT.
+   `crates/browser/Cargo.toml`. This alone makes pages readable by AT.
 2. **Keyboard focus for all focusables (P1, ~180 LOC).** In `window.rs:1599`, replace the
    forms-only Tab with `a11y::focus_order(&doc)` union form fields; paint a focus ring for
    non-form nodes (reuse `forms.rs:830` style in `present()`); add Enter/Space activation for
@@ -150,7 +150,7 @@ the `pub use` re-export at `crates/shell/src/lib.rs:206`. Consequently:
 6. **Chrome nodes (P2, ~150 LOC).** Build AccessKit nodes for tab strip, address bar, find
    bar, status bar from `chrome.rs` layout data; add Tab traversal and activation.
 7. **Reduced motion + forced colors (P2, ~110 LOC).** Add `prefers_reduced_motion: bool` and
-   `forced_colors: bool` to `css::MediaContext` (`css/src/media.rs:33`), populate in
+   `forced_colors: bool` to `megi_css::MediaContext` (`css/src/media.rs:33`), populate in
    `render/src/lib.rs:826,1274` from shell flags/OS query, and honor in animations
    (`css/src/animation_runtime.rs`) and scroll animations.
 8. **Scroll-into-view on focus, skip links, caret announcements (P3, ~80 LOC).**
@@ -211,7 +211,7 @@ the `pub use` re-export at `crates/shell/src/lib.rs:206`. Consequently:
 - **C11 writing-mode (rank 11, ~800 LOC).** Add `writing-mode`/`text-orientation` to
   `css/src/properties.rs`, thread through `layout` (inline axis selection, block flow) and
   `paint` (rotate glyph runs, vertical metrics). Low priority.
-- **C12 UI strings (rank 8, ~150 LOC).** New `crates/shell/src/strings.rs` with a `Key` enum
+- **C12 UI strings (rank 8, ~150 LOC).** New `crates/browser/src/strings.rs` with a `Key` enum
   + `en`/`es` tables, `--lang` flag in `cli.rs`, replace the hardcoded strings above
   (`title.rs:25`, `download.rs:333`, `pages.rs:285`, `tabs.rs:34`, chrome menu labels in
   `chrome.rs:1105-1200`).

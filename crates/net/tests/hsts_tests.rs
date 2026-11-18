@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::hsts;
-use net::{FetchOptions, HstsStore, ResourceLoader, Url, fetch, fetch_streaming};
+use megi_net::hsts;
+use megi_net::{FetchOptions, HstsStore, ResourceLoader, Url, fetch, fetch_streaming};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};

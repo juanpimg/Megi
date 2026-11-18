@@ -2,7 +2,7 @@
 //! viewBox/preserveAspectRatio, paths, strokes, opacity/AA, determinism, limits
 //! and robustness against malformed input.
 
-use svg::{Limits, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits};
+use megi_svg::{Limits, SvgImage, SvgOptions, intrinsic_size, render_svg, render_svg_with_limits};
 
 fn render(source: &str, options: SvgOptions) -> SvgImage {
     render_svg(source.as_bytes(), &options).expect("valid SVG")

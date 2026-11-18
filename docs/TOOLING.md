@@ -83,7 +83,7 @@ Para acelerar la inspección de código, el formateo, el análisis estático (`c
 
 - **Alias de Cargo (`.cargo/config.toml`)**:
   - `cargo test-all` → `cargo test --workspace`
-  - `cargo test-harness` → `cargo test -p test_harness`
+  - `cargo test-harness` → `cargo test -p megi-test-harness`
   - `cargo lint` → `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo doc-check` → `cargo doc --workspace --no-deps`
 - **Script unificado (`tools/dev.sh`)**:
@@ -127,9 +127,9 @@ Directorio versionado con documentos HTML autocontenidos (sin red ni JavaScript)
 
 ```bash
 # Render + validación + tests
-cargo run -p paint --example html_to_png --     tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run -p megi-paint --example html_to_png --     tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
-cargo test -p paint --test end_to_end_html
+cargo test -p megi-paint --test end_to_end_html
 ```
 
 El golden sólo debe regenerarse ante un cambio intencionado de renderizado y revisarse en el mismo commit (ver `tests/fixtures/phase4/README.md`). Las capturas para documentación (versión comprimida del render) se guardan en `docs/images/` — p. ej. `docs/images/phase4-basic.png`, usada en el README.
@@ -139,8 +139,8 @@ El golden sólo debe regenerarse ante un cambio intencionado de renderizado y re
 Ejemplo del crate `fonts` (Fase 4) que carga la fuente DejaVu Sans empaquetada, imprime métricas a 16 px, mide con y sin shaping, y rasteriza un glifo para que los integradores de layout/paint comprueben sus números:
 
 ```bash
-cargo run -p fonts --example report
-cargo test -p fonts
+cargo run -p megi-fonts --example report
+cargo test -p megi-fonts
 ```
 
 ---
@@ -150,7 +150,7 @@ cargo test -p fonts
 Arnés de benchmarks **sin dependencias** (`criterion`/`hyperfine` descartados) para detectar regresiones de complejidad con números medibles:
 
 - `crates/bench`: cargas sintéticas deterministas generadas en memoria (sin reloj/red/`rand`), grupos de parseo HTML, resolución de estilos, layout, rasterizado, render-to-PNG y pipeline completo; `--scale`, `--filter`, `--iterations`, `--warmup` y salida JSON. 12 tests.
-- `tools/bench.sh`: compila en release (`cargo build --release -p bench`), ejecuta el binario y guarda `target/bench-latest.txt` + metadatos (`target/bench-latest-meta.txt`: fecha, commit, rustc, args). Argumentos reenviados al binario.
+- `tools/bench.sh`: compila en release (`cargo build --release -p megi-bench`), ejecuta el binario y guarda `target/bench-latest.txt` + metadatos (`target/bench-latest-meta.txt`: fecha, commit, rustc, args). Argumentos reenviados al binario.
 - `docs/PERFORMANCE.md`: metodología, cargas, máquina, baseline medida y limitaciones; **otro agente lo actualiza** con la baseline de esta ronda (no editar desde tareas de documentación general).
 
 ```bash
@@ -190,11 +190,11 @@ cargo +nightly fuzz run net_url    -- -max_total_time=30
 bash tools/render_fixture.sh /tmp/render-fixture.png
 
 # Equivalente manual, con JSON de stats por etapa
-cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
+cargo run -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
 
 # URL real (requiere red/TLS); --no-network para offline
-cargo run -p render -- https://example.com/ /tmp/example.png
-cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
+cargo run -p megi-render -- https://example.com/ /tmp/example.png
+cargo run -p megi-render -- file:///ruta/pagina.html /tmp/local.png --no-network
 ```
 
 `tools/render_fixture.sh` renderiza `tests/fixtures/render/basic.html` (640×400), valida el PNG con `png_check.py` e imprime su md5. El fixture comprueba `<base>`, hoja externa `screen.css` (canvas verde), hoja `media="print"` ignorada y `<style>` inline; resultado de referencia: **15.498 B**, `md5 7324e851…`.
@@ -204,52 +204,52 @@ cargo run -p render -- file:///ruta/pagina.html /tmp/local.png --no-network
 `crates/image` (std puro, sin dependencias) decodifica PNG a RGBA8 straight y expone un inflate zlib/DEFLATE reutilizable:
 
 ```bash
-cargo test -p image                 # 121 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
-cargo run -p render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
+cargo test -p megi-image                 # 121 tests + 1 doctest (PNG/JPEG/GIF/WebP/EXIF/inflate)
+cargo run -p megi-render -- tests/fixtures/phase4/basic.html /tmp/basic.png 2>/dev/null || true
 # El test de integración decodifica el PNG generado por paint y lo compara con basic.rgba
-cargo test -p paint --test end_to_end_html
+cargo test -p megi-paint --test end_to_end_html
 ```
 
 En tests actúa como **oráculo** del codificador de `paint` (ida y vuelta PNG → RGBA = golden `basic.rgba`). Límites anti-DoS (`PngLimits`: 16384 px/lado, 16 Mpx, 64 MiB/chunk, 256 MiB IDAT) documentados en el crate.
 
-### 2.11 `crates/shell` + `tools/megi.sh` — Ventana nativa y screenshots headless (Fase 7)
+### 2.11 `crates/browser` + `tools/megi.sh` — Ventana nativa y screenshots headless (Fase 7)
 
 ```bash
 # Ventana nativa (requiere X11/Wayland)
 tools/megi.sh https://example.com/
-cargo run -p shell -- tests/fixtures/render/basic.html
+cargo run -p megi-browser -- tests/fixtures/render/basic.html
 
 # Screenshot headless (CI-friendly; no crea EventLoop)
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
 tools/megi.sh tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png
 md5sum /tmp/megi-shot.png     # 7324e851… (idéntico al pipeline render)
 ```
 
-`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 310 tests (`#[test]` en `crates/shell`, fuente de verdad: `cargo test -p shell -- --list`). Incluye historial/sesión, pestañas, formularios básicos, descargas, find-in-page y chrome/headless; limitaciones actuales: fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no totalmente integrados en el bucle interactivo del host, widgets/submit/validación nativos completos pendientes y ventana no testeada en CI. Ver `crates/shell/src/lib.rs`.
+`megi` presenta el `Pixmap` como framebuffer `0RGB` con `softbuffer` (winit 0.30, backends X11/Wayland por dlopen, sin GPU). `--screenshot` usa el mismo pipeline `render` sin `EventLoop` y se testea en CI. **Navegación (rondas 9–10)**: clic izquierdo en enlaces (`Url::join`), historial `NavigationState` (back/forward/replace/reload, cap 256, truncado forward; fallos conservan la entrada), **Alt+←/Backspace/b** atrás, **Alt+→/n** adelante, **r** recargar, **q/Esc** cerrar, scroll completo, HiDPI y **título dinámico** `<title>`+URL+% scroll+`[recortado]` (errores «Megi — error: …»); hit regions y título del mismo render que los píxeles; desde la ronda 10 los enlaces se resuelven con **`RenderOutput.hit_regions` + `megi_paint::find_link_at`** (fallback layout+DOM), el shell acepta `--cookies`/`--origin` y la **ronda 13** añade **zoom** (`Ctrl+=/-/0`, `--zoom` 0.5–3.0) y **auto-refresh opt-in** (`--refresh-ms`). 310 tests (`#[test]` en `crates/browser`, fuente de verdad: `cargo test -p megi-browser -- --list`). Incluye historial/sesión, pestañas, formularios básicos, descargas, find-in-page y chrome/headless; limitaciones actuales: fragmentos = nueva navegación, >8192 CSS px recortado, JS/eventos no totalmente integrados en el bucle interactivo del host, widgets/submit/validación nativos completos pendientes y ventana no testeada en CI. Ver `crates/browser/src/lib.rs`.
 
 ### 2.12 Fixtures de imágenes y captura E2E
 
 `tests/fixtures/render/images.html` + `assets/px.png` (PNG 4×4 de 82 B) ejercitan la carga/decodificación/pintado de `<img>` con una imagen válida escalada bilinealmente y una ausente que debe convertirse en placeholder gris con warning no fatal. Captura de referencia versionada en `docs/images/images-e2e.png` (15.625 B, `md5 1de31699…` a 800×600); el golden `basic.rgba` no cambia.
 
 ```bash
-cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
-cargo test -p paint -p image -p render
+cargo run -p megi-render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
+cargo test -p megi-paint -p megi-image -p megi-render
 ```
 
 ### 2.13 Showcase de navegador real y controles del shell (rondas 7–8)
 
 ```bash
 # Showcase 1024×768: CSS externo + @import + media + 2 PNG + tabla + stage posicionado
-cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
+cargo run -p megi-render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
 python3 tools/png_check.py docs/images/showcase.png     # 80.220 B, md5 c95c7eff…
-cargo test -p render
+cargo test -p megi-render
 
 # Shell usable: ventana con scroll/entrada/HiDPI y render en worker
 tools/megi.sh tests/fixtures/render/showcase/index.html
 # controles: rueda/touchpad/↑↓/PageUp/PageDown/Home/End = scroll; r = re-render;
 #            q/Esc/cerrar = salir; clic izquierdo = imprime la URL actual.
 # Páginas > 8192 CSS px se recortan (título con "[recortado]").
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/megi-shot.png --width 640 --height 400
 ```
 
 El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7eff…`) y los tests de render lo verifican tanto por `file://` como por HTTP local. En la ronda 8 se regeneró tras el **fix del texto de celdas de tabla** (paint) y el soporte de **`background-image`/`list-style-image`** E2E (WP-5.9): ahora se ven el texto y las cabeceras en negrita de la tabla, el patrón de fondo de la cabecera/escenario y los marcadores con imagen. Limitaciones visibles restantes: `background-repeat`/`size`/`position`, colores de `border-collapse` y block-in-inline.
@@ -263,23 +263,23 @@ El golden del showcase compara byte a byte (1024×768, **80.220 B**, `md5 c95c7e
 `render` integra el runtime (WP-6.2 host): descubre los `<script>` clásicos y `<script type="module">` (inline/`src`, en orden), los ejecuta con `JsRuntime::with_document` bajo `ScriptingLimits`/`ScriptBudget` (budget por script + total), drena microtasks y hasta 10.000 timers, captura `console` (`scripts_executed/failed/bytes/console`, `timings.scripting`) y **re-renderiza estilos→layout→paint sobre el DOM mutado** (mutaciones visibles en el PNG). Caps: 8 MiB/script, 32 MiB total, 64 scripts; `--no-scripting` desactiva todo y `--no-network` bloquea `src` externos.
 
 ```bash
-cargo test -p js                        # 178+ tests (feature js por defecto; módulos/TLA/fetch/workers)
-cargo test -p js --no-default-features  # stub mínimo sin Boa (CI)
+cargo test -p megi-js                        # 178+ tests (feature js por defecto; módulos/TLA/fetch/workers)
+cargo test -p megi-js --no-default-features  # stub mínimo sin Boa (CI)
 
 # JS del documento ejecutado de extremo a extremo (fixtures js_*)
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_on.png
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
 md5sum /tmp/js_on.png /tmp/js_off.png   # e1da51d4… (15.876 B) vs 53f67e77… (15.499 B)
-cargo test -p render --test scripting_tests
+cargo test -p megi-render --test scripting_tests
 
 # Event loop presupuestado (ronda 11): reloj virtual, DOMContentLoaded/load, timers, re-render único
-cargo run -p render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
-cargo run -p render -- tests/fixtures/render/js_event_domcontentloaded.html /tmp/dcl.png
-cargo test -p render --test event_loop_tests        # 6 fixtures js_event_*, 11 tests
+cargo run -p megi-render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
+cargo run -p megi-render -- tests/fixtures/render/js_event_domcontentloaded.html /tmp/dcl.png
+cargo test -p megi-render --test event_loop_tests        # 6 fixtures js_event_*, 11 tests
 
 # Red avanzada en el pipeline (rondas 10): cookies + CORS/credentials, gzip E2E
-cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json
-cargo run -p shell -- tests/fixtures/render/showcase/index.html --cookies --origin https://localhost
+cargo run -p megi-render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json
+cargo run -p megi-browser -- tests/fixtures/render/showcase/index.html --cookies --origin https://localhost
 ```
 
 ### 2.15 `crates/net` — HTTP/1.1, HTTP/2, TLS, cookies, CORS y streaming (Fase 5)
@@ -287,7 +287,7 @@ cargo run -p shell -- tests/fixtures/render/showcase/index.html --cookies --orig
 Además de URL/HTTP/TLS/caché: **HTTP/1.1** (`H1Pool` keep-alive, streaming real de respuestas/uploads, trailers), **HTTP/2 completo** (HPACK, framing, ALPN `h2`+`h2c`, flow control, multiplexado, `PUSH_PROMISE` y priorización), **cookies RFC 6265** (`CookieJar`, cap 4.096, `SameSite` + **PSL real vendorizada** MPL-2.0), **CORS**, **Referrer-Policy**, **Range/206**, **proxies HTTP/HTTPS** (`CONNECT` + `no_proxy`) y **streaming inflater** gzip/deflate (`StreamingInflater`, CRC32/ISIZE, `CompressionLimits`: 64 MiB descomprimidos y ratio máximo 1000:1).
 
 ```bash
-cargo test -p net        # 331+ tests offline (listeners en 127.0.0.1)
+cargo test -p megi-net        # 331+ tests offline (listeners en 127.0.0.1)
 ```
 
 ### 2.16 Fixtures de `background-image`/`list-style-image` (E2E, ronda 8)
@@ -295,9 +295,9 @@ cargo test -p net        # 331+ tests offline (listeners en 127.0.0.1)
 `tests/fixtures/render/backgrounds.html` + `assets/pattern.png` (16×16 checker) y `assets/bullet.png` (8×8 rombo) ejercitan `background-image` estirada al *padding box* y `list-style-image` como marcador, incluido fallback a color + warning con recurso ausente y caps **32 imágenes / 8 MiB por imagen / 16 MiB totales**.
 
 ```bash
-cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
+cargo run -p megi-render -- tests/fixtures/render/backgrounds.html /tmp/backgrounds.png
 python3 tools/png_check.py /tmp/backgrounds.png
-cargo test -p render --test backgrounds_tests
+cargo test -p megi-render --test backgrounds_tests
 ```
 
 ### 2.16d Rendimiento ronda 12: `Arc<ComputedStyle>` en layout y encoder PNG invariante
@@ -305,9 +305,9 @@ cargo test -p render --test backgrounds_tests
 `LayoutBox.style` es `Option<Arc<ComputedStyle>>` (`style()`, `with_shared_style`, estilo anónimo compartido por padre, tokens `Space` con `char`): `layout/realistic-1mb` **60,4-62,2 → 51,3-53,5 ms (−14,6 %)** y LayoutBox **496→176 B**. El encoder PNG (−30,5 %) fusiona filtros/LZ77/Adler en una pasada y evita el buffer RGBA intermedio, con **bitstream byte a byte idéntico** (goldens sin regenerar).
 
 ```bash
-cargo run --release -p bench -- --filter layout    # ~51-53 ms
-cargo run --release -p bench -- --filter paint     # render-to-png 13,30→9,24 ms
-cargo run --release -p bench -- --filter pipeline  # ~134-137 ms
+cargo run --release -p megi-bench -- --filter layout    # ~51-53 ms
+cargo run --release -p megi-bench -- --filter paint     # render-to-png 13,30→9,24 ms
+cargo run --release -p megi-bench -- --filter pipeline  # ~134-137 ms
 python3 tools/png_check.py docs/images/showcase.png  # md5 c95c7eff… sin cambios
 ```
 
@@ -316,17 +316,17 @@ python3 tools/png_check.py docs/images/showcase.png  # md5 c95c7eff… sin cambi
 `crates/render` drena la cola de microtasks/timers con **reloj virtual** (`max_tasks` 10.000, `max_virtual_time` 1000 ms), despacha `DOMContentLoaded` y `load` por el `EventTarget` del documento y hace **un solo re-render** tras el loop; stats `script_*`/`timings.event_loop`. Fixtures: `js_event_timeout.html`, `js_event_timeout_zero.html`, `js_event_interval.html`, `js_event_load.html`, `js_event_domcontentloaded.html`, `js_event_loop.html`.
 
 ```bash
-cargo run -p render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
-cargo test -p render --test event_loop_tests
+cargo run -p megi-render -- tests/fixtures/render/js_event_timeout.html /tmp/timer.png --json
+cargo test -p megi-render --test event_loop_tests
 ```
 
-### 2.16b `paint::hit_test` — hit-testing aditivo (ronda 9)
+### 2.16b `megi_paint::hit_test` — hit-testing aditivo (ronda 9)
 
 La API aditiva de `crates/paint` mapea píxeles a cajas/DOM en **orden de pintado**:
 `HitRegion { rect, node_id, kind }`, `hit_test`/`hit_test_all` (gana el topmost), `HitLink`/`find_link_at` (sube al `<a href>` HTML y devuelve el href crudo) y los builders `build_display_list_with_hit_regions`/`build_display_list_and_hit_regions`. Las entradas clásicas (`build_display_list`) no cambian ni un byte de golden y el coste es opt-in. Límites: granularidad caja/run, sin `pointer-events`/transforms, coordenadas CSS de página (el host ajusta scroll/scale).
 
 ```bash
-cargo test -p paint --test hit_testing   # 11 tests nuevos (108 paint)
+cargo test -p megi-paint --test hit_testing   # 11 tests nuevos (108 paint)
 # ronda 10: render construye RenderOutput.hit_regions (+0,6 µs) y el shell usa find_link_at
 ```
 
@@ -335,9 +335,9 @@ cargo test -p paint --test hit_testing   # 11 tests nuevos (108 paint)
 `crates/css` parsea `@font-face` (`Stylesheet.font_faces`), `crates/fonts` decodifica **WOFF2→sfnt** con la dependencia autorizada **`woff2-patched` 0.4** (Apache-2.0, pure Rust, sin C/FFI; **solo en `fonts`**) y `render` recoge las reglas de todas las hojas (incluido `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**), construye una **DB por render** para layout+paint y reporta `fonts_loaded/fonts_failed/font_bytes` + `timings.fonts` (fallos ⇒ warning no fatal). Fixtures OFL Open Sans (18.640 B) en `crates/fonts/tests/fixtures/` y `tests/fixtures/render/`.
 
 ```bash
-cargo test -p fonts -p css -p render
-cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json      # md5 f38aed03…; fonts_loaded=1
-cargo run -p render -- tests/fixtures/render/webfont-fallback.html /tmp/fallback.png  # md5 e2d76dee…
+cargo test -p megi-fonts -p megi-css -p megi-render
+cargo run -p megi-render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json      # md5 f38aed03…; fonts_loaded=1
+cargo run -p megi-render -- tests/fixtures/render/webfont-fallback.html /tmp/fallback.png  # md5 e2d76dee…
 ```
 
 Límites: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin unicode-range/font-display (bloqueante), sin subsetting/color fonts y DB no cacheada. La dep nueva hará rebuild del cache de CI en la próxima ejecución.
@@ -347,18 +347,18 @@ Límites: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin un
 `crates/svg` implementa XML subset + modelo SVG + path data con arcos + rasterizador **scanline AA determinista** (4 subfilas + cobertura analítica; strokes 4×4), con límites anti-DoS (8 MiB/256 profundidad/100k elementos/1M segmentos/16k lado/64 Mpx/`<use>` 16) y `#![forbid(unsafe_code)]`. Soporta `<text>` básico, CSS `class`/`style`, gradientes (`linearGradient`/`radialGradient`) y `<pattern>`; no soporta dasharray, markers, filtros/máscaras/clips, script ni refs externas. **Cableado E2E HECHO** en `render`: `<img src=*.svg>` y `background-image` (detección por Content-Type/sniffing, tamaño intrínseco width/height/viewBox con 300×150 por defecto, cap **16 Mpx/64 MiB RGBA**, corrupto ⇒ warning no fatal, navegación directa en página sintética) con stat `svgs_rendered`; 5 fixtures `svg_*` + 6 assets y 11 tests.
 
 ```bash
-cargo test -p svg
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/simple.svg /tmp/simple.png
+cargo test -p megi-svg
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/simple.svg /tmp/simple.png
 python3 tools/png_check.py /tmp/simple.png
-cargo test -p render --test svg_tests     # 11 tests SVG E2E
-cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
+cargo test -p megi-render --test svg_tests     # 11 tests SVG E2E
+cargo run -p megi-render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
 ```
 
 ### 2.16g Shell: zoom y auto-refresh (ronda 13)
 
 ```bash
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # 320×200, md5 c11903cf…
-cargo run -p shell -- tests/fixtures/render/showcase/index.html --zoom 1.5 --refresh-ms 250
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # 320×200, md5 c11903cf…
+cargo run -p megi-browser -- tests/fixtures/render/showcase/index.html --zoom 1.5 --refresh-ms 250
 ```
 
 Zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = físico/(scale·zoom)); `Ctrl+L` imprime la URL; auto-refresh opt-in solo cuando `scripts_executed>0 && script_timers_pending>0` (worker generacional, scroll conservado, sin bucles; repite el primer frame de animaciones con reloj virtual).
@@ -368,8 +368,8 @@ Zoom `Ctrl+=/-/0` y `--zoom` 0.5–3.0 (escalones 50–300 %, viewport CSS = fí
 CSS parsea `background-repeat`/`size`/`position` y el shorthand; paint calcula `background_tile_size`/`background_tiles` (cover/contain centrado, tiling con clip al padding box, **cap 4096**; space/round como repeat). **`background_geometry_explicit`** mantiene el modo legado para que los goldens (`c95c7eff…`, `60f8984e…`, `9e957177…`) sigan byte-idénticos.
 
 ```bash
-cargo test -p css -p paint
-cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
+cargo test -p megi-css -p megi-paint
+cargo run -p megi-render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
 ```
 
 ### 2.16i SVG inline, determinismo y rendimiento IFC (ronda 15)
@@ -377,10 +377,10 @@ cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
 `render` sustituye los `<svg>…</svg>` inline por un `<img>` sintético antes de styles/layout (base64 + `xmlns`; caps **256/1 MiB/8 MiB/profundidad 256**, stat `inline_svgs`, 7 fixtures `svg_inline_*`). El event loop usa **sólo reloj virtual** (`run_until` en pasos de 1 ms; fixture `js_event_timeout` md5 `07682088…`). IFC: pool de texto/ids/breaking incremental/fast path ⇒ **layout 50,5→36,3 ms** y **pipeline 132,9→120,5 ms**.
 
 ```bash
-cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
-cargo test -p render --test svg_tests -p render --test event_loop_tests
-cargo run --release -p bench -- --filter layout --iterations 5     # ~36 ms
-cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
+cargo run -p megi-render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
+cargo test -p megi-render --test svg_tests -p megi-render --test event_loop_tests
+cargo run --release -p megi-bench -- --filter layout --iterations 5     # ~36 ms
+cargo run --release -p megi-bench -- --filter pipeline --iterations 3   # ~120 ms
 ```
 
 ### 2.16j Ronda 16: SVG real, backgrounds multicapa y APIs de navegador
@@ -390,10 +390,10 @@ cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120 ms
 - **APIs de navegador**: `matchMedia`, viewport/DPR/scroll, rAF 16 ms, `onerror`, `readyState`, consola ampliada; cableadas en `render` (getComputedStyle pre-script, MediaContext real, rAF epoch fijo 48 ms, onerror/console ⇒ warnings `console_errors`); js 71/render 123 tests.
 
 ```bash
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
-cargo run -p render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260  # c357cc2c…
-cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
-cargo run -p render -- tests/fixtures/render/raf_animation.html /tmp/raf.png --json  # script_virtual_time_ms=48
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
+cargo run -p megi-render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260  # c357cc2c…
+cargo run -p megi-render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
+cargo run -p megi-render -- tests/fixtures/render/raf_animation.html /tmp/raf.png --json  # script_virtual_time_ms=48
 ```
 
 ### 2.16k Ronda 17: flexbox, decoraciones, formularios y SVG pattern/text
@@ -404,11 +404,11 @@ cargo run -p render -- tests/fixtures/render/raf_animation.html /tmp/raf.png --j
 - **SVG**: `<pattern>` (cap 10k tiles) y `<text>` básico con `crates/fonts` (caps 1.000 texts/10.000 chars); svg 73 tests.
 
 ```bash
-cargo run -p render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
-cargo run -p shell -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
-cargo test -p paint --test effects
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/text.svg /tmp/text.png
+cargo run -p megi-render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
+cargo run -p megi-browser -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
+cargo test -p megi-paint --test effects
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/text.svg /tmp/text.png
 ```
 
 ### 2.17 Skill Local para Agentes (`.agents/skills/whatwg-spec-driven-dev/SKILL.md`)
@@ -416,8 +416,8 @@ cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/text.svg /tmp
 Se instaló la skill local `whatwg-spec-driven-dev` en `.agents/skills/whatwg-spec-driven-dev/SKILL.md` (directorio ignorado en `.gitignore` para mantener limpio el árbol Git de metadatos de agentes, mientras su documentación permanente reside en este archivo `docs/TOOLING.md`). Esta skill estandariza el protocolo operativo para cualquier agente que trabaje en la Fase 1 y posteriores:
 1. Consultar primero la sección normativa con `./tools/whatwg_spec.py section <id>`.
 2. Inspeccionar los casos de prueba objetivo con `./tools/test_inspector.py show <file> <idx>`.
-3. Implementar la transición de estado o regla del árbol DOM en `crates/html` o `crates/dom`.
-4. Verificar en bucle cerrado con `cargo test -p test_harness`.
+3. Implementar la transición de estado o regla del árbol DOM en `crates/html` o `crates/core`.
+4. Verificar en bucle cerrado con `cargo test -p megi-test-harness`.
 
 ---
 
@@ -442,19 +442,19 @@ Los secretos se revisan con `gitleaks` (job `secret-scan`, configuración `.gitl
 
 ```bash
 ./tools/dev.sh all                     # fmt, clippy, 2,300+ tests, doc y gate de conformidad
-cargo run -p test_harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
-cargo run -p test_harness -- --summary --strict # exit 1 por fallos conocidos
+cargo run -p megi-test-harness -- --summary # gate de 4 suites: PASS, exit 0 (árbol 3904/3904, 100 %)
+cargo run -p megi-test-harness -- --summary --strict # exit 1 por fallos conocidos
 
-cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
+cargo run --release -p megi-paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
-cargo run -p render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
+cargo run -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --width 640 --height 400 --json
 bash tools/render_fixture.sh
-cargo test -p net -p render -p image -p shell
-cargo test -p js && cargo test -p js --no-default-features
-cargo test -p paint --test hit_testing
-cargo test -p html --lib scripting      # WP-6.4: hook de scripts parser-inserted
-cargo test -p render --test event_loop_tests
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
+cargo test -p megi-net -p megi-render -p megi-image -p megi-browser
+cargo test -p megi-js && cargo test -p megi-js --no-default-features
+cargo test -p megi-paint --test hit_testing
+cargo test -p megi-html --lib scripting      # WP-6.4: hook de scripts parser-inserted
+cargo test -p megi-render --test event_loop_tests
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
 ./tools/bench.sh --scale 0.1
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
@@ -470,24 +470,24 @@ cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 cd fuzz && cargo +nightly fuzz run js_eval -- -detect_leaks=0 -runs=300
 
 # Grid MVP (layout + render E2E)
-cargo test -p layout --test grid                      # 12 tests de layout grid
-cargo run -p render -- tests/fixtures/render/grid_columns.html /tmp/grid.png --json
-cargo run -p render -- tests/fixtures/render/grid_rows.html /tmp/grid_rows.png --json
-cargo run -p render -- tests/fixtures/render/grid_alignment.html /tmp/grid_align.png --json
+cargo test -p megi-layout --test grid                      # 12 tests de layout grid
+cargo run -p megi-render -- tests/fixtures/render/grid_columns.html /tmp/grid.png --json
+cargo run -p megi-render -- tests/fixtures/render/grid_rows.html /tmp/grid_rows.png --json
+cargo run -p megi-render -- tests/fixtures/render/grid_alignment.html /tmp/grid_align.png --json
 
 # Clipping + background-clip:text
-cargo test -p paint --test clipping                   # 9 tests (overflow+radius, clip:text)
-cargo test -p css --test background_clip_prefixed     # alias -webkit-background-clip (5 tests)
+cargo test -p megi-paint --test clipping                   # 9 tests (overflow+radius, clip:text)
+cargo test -p megi-css --test background_clip_prefixed     # alias -webkit-background-clip (5 tests)
 
 # CSS moderno: custom properties/var(), calc() y pseudo-clases de estado
-cargo test -p css --test state_vars_calc              # 26 tests (var/calc/pseudos)
-cargo test -p css                                    # 128 tests
+cargo test -p megi-css --test state_vars_calc              # 26 tests (var/calc/pseudos)
+cargo test -p megi-css                                    # 128 tests
 
 # Red avanzada: SameSite/PSL, Referrer-Policy, Range/206 y cache
-cargo test -p net referrer                            # Referrer-Policy
-cargo test -p net range                               # Range/206 y Content-Range
-cargo test -p net cookies                             # SameSite/PSL
-cargo test -p net cache                               # no-cache/must-revalidate/s-maxage/Age/304
+cargo test -p megi-net referrer                            # Referrer-Policy
+cargo test -p megi-net range                               # Range/206 y Content-Range
+cargo test -p megi-net cookies                             # SameSite/PSL
+cargo test -p megi-net cache                               # no-cache/must-revalidate/s-maxage/Age/304
 ```
 
 Límites documentados de la ronda: `calc()` mixto `% + px` no es representable en `Length` (⇒ invalid/inherit); `var()` cae a fallback/initial en ciclos y a los 32 niveles; el clipping y `background-clip:text` tienen cap 16,7 Mpx/4096 runs; grid no soporta named lines/subgrid/zonas/`dense`/auto-fit real (ronda 19 añade spans, placement, minmax y auto-fill); el `ReferrerConfig` se cablea en `render` en la ronda 19 (ya no pendiente); grid soporta spans/placement/minmax/auto-fill desde la ronda 19.
@@ -496,24 +496,24 @@ Límites documentados de la ronda: `calc()` mixto `% + px` no es representable e
 
 ```bash
 # Gradientes CSS E2E (linear/radial/repeating, capas de background y clip:text)
-cargo test -p css --test gradients
-cargo test -p paint --test gradients
-cargo run -p render -- tests/fixtures/render/gradient_linear.html /tmp/grad_linear.png --width 240 --height 220  # md5 6a04fdc6…
-cargo run -p render -- tests/fixtures/render/gradient_radial.html /tmp/grad_radial.png --json
+cargo test -p megi-css --test gradients
+cargo test -p megi-paint --test gradients
+cargo run -p megi-render -- tests/fixtures/render/gradient_linear.html /tmp/grad_linear.png --width 240 --height 220  # md5 6a04fdc6…
+cargo run -p megi-render -- tests/fixtures/render/gradient_radial.html /tmp/grad_radial.png --json
 
 # Grid avanzado: placement con spans/negativas, minmax y auto-fill
-cargo test -p layout --test grid                       # 26 tests
-cargo run -p render -- tests/fixtures/render/grid_span.html /tmp/grid_span.png --json       # md5 0c376406…
-cargo run -p render -- tests/fixtures/render/grid_autofill.html /tmp/grid_auto.png --json   # md5 d2255ca3…
+cargo test -p megi-layout --test grid                       # 26 tests
+cargo run -p megi-render -- tests/fixtures/render/grid_span.html /tmp/grid_span.png --json       # md5 0c376406…
+cargo run -p megi-render -- tests/fixtures/render/grid_autofill.html /tmp/grid_auto.png --json   # md5 d2255ca3…
 
 # Render: Referrer-Policy/SameSite en subrecursos y estado CSS real
-cargo test -p render --test referrer_policy_tests
-cargo test -p render --test css_state_tests
-cargo run -p render -- tests/fixtures/render/css_state.html /tmp/css_state.png --json
+cargo test -p megi-render --test referrer_policy_tests
+cargo test -p megi-render --test css_state_tests
+cargo run -p megi-render -- tests/fixtures/render/css_state.html /tmp/css_state.png --json
 
 # Shell find-in-page (headless) y navegación extra
-cargo test -p shell --test shell_tests                 # find-in-page (+17)
-cargo run -p shell -- tests/fixtures/render/find.html --find "link" --screenshot /tmp/find.png --width 640 --height 400
+cargo test -p megi-browser --test shell_tests                 # find-in-page (+17)
+cargo run -p megi-browser -- tests/fixtures/render/find.html --find "link" --screenshot /tmp/find.png --width 640 --height 400
 ```
 
 Límites de la ronda: gradientes cap **64 stops / 256 por estilo**, sin `conic-gradient`/color hints/espacios avanzados/`image-set`/`border-image`; grid avanzado cap **1.024 tracks**, sin dense/zonas/auto-fit real/solapes explícitos; find-in-page sólo texto literal case-insensitive (sin regex/imágenes/barra visual). Referrer/SameSite ya cableados en render (snapshot por render; SameSite top-level aproximado).
@@ -525,11 +525,11 @@ Cifras de referencia en la ronda 19 (snapshot histórico): **1260 tests** (bench
 La ronda 21 recupera los presupuestos de rendimiento **sin subirlos** (pipeline ≤140 ms y layout ≤43 ms son gates). A/B con binarios pre/post del mismo árbol, `taskset` y pasadas intercaladas:
 
 ```bash
-cargo run --release -p bench -- --filter html/realistic-1mb        # 20,0 → 16,4 ms (−18/−20 %)
-cargo run --release -p bench -- --filter resolve-styles-10k-nodes  # 38,84 → 33,91 ms (−12,7 %; ≤35 ✅)
-cargo run --release -p bench -- --filter layout/realistic-1mb      # 46,6 → 36,4 ms (−21,8 %; ≤43 ✅)
-cargo run --release -p bench -- --filter build-display             # 8,62 → 7,84 ms (−9,1 %)
-cargo run --release -p bench -- --filter pipeline/html-to-png      # 154,13 → 132,39 ms (−14,1 %; ≤140 ✅)
+cargo run --release -p megi-bench -- --filter html/realistic-1mb        # 20,0 → 16,4 ms (−18/−20 %)
+cargo run --release -p megi-bench -- --filter resolve-styles-10k-nodes  # 38,84 → 33,91 ms (−12,7 %; ≤35 ✅)
+cargo run --release -p megi-bench -- --filter layout/realistic-1mb      # 46,6 → 36,4 ms (−21,8 %; ≤43 ✅)
+cargo run --release -p megi-bench -- --filter build-display             # 8,62 → 7,84 ms (−9,1 %)
+cargo run --release -p megi-bench -- --filter pipeline/html-to-png      # 154,13 → 132,39 ms (−14,1 %; ≤140 ✅)
 ```
 
 Resumen de técnicas: html fast paths bulk del tokenizer + runs UTF-8 byte a byte + `has_wide` + dedupe híbrido; css hasher FNV/claves prestadas + caché de `ComputedStyle` 128-bit (umbral 2, sin inline, cap 1024); layout interning de `ComputedStyle` (fingerprint + `eq` exacta antes de compartir `Arc`) + estilos anónimos perezosos + spacing cero en IFC; paint fast path por caja + `DisplayList::with_capacity(16384)` + baseline sin `Vec`. Goldens y gate byte-idénticos; **no se subieron presupuestos**.
@@ -542,25 +542,25 @@ Cifras de referencia en la ronda 21: **1345 tests** (bench 8, css 175, dom 28, f
 
 ```bash
 # JPEG/GIF desde cero (image + render por sniffing)
-cargo test -p image --test decode                    # PNG/JPEG/GIF (54 tests)
-cargo run -p render -- tests/fixtures/render/jpeg_gif.html /tmp/jpeg_gif.png --json
+cargo test -p megi-image --test decode                    # PNG/JPEG/GIF (54 tests)
+cargo run -p megi-render -- tests/fixtures/render/jpeg_gif.html /tmp/jpeg_gif.png --json
 
 # Efectos SVG (clipPath/mask/filtros)
-cargo test -p svg --test effects                     # 12 tests + fixtures clip/mask/filter
+cargo test -p megi-svg --test effects                     # 12 tests + fixtures clip/mask/filter
 
 # HTTP/2 MVP (HPACK/framing/ALPN)
-cargo test -p net --test http2_tests                 # 18 tests
+cargo test -p megi-net --test http2_tests                 # 18 tests
 
 # Chrome del shell (address bar, tab strip, `<select>`) headless
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/chrome.png --chrome --width 640 --height 400
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/chrome.png --chrome --width 640 --height 400
 
 # Grid completo y filtros CSS/mix-blend/image-set
-cargo run -p render -- tests/fixtures/render/grid_areas.html /tmp/grid_areas.png --json     # md5 8f9a9eba…
-cargo run -p render -- tests/fixtures/render/grid_dense.html /tmp/grid_dense.png --json     # md5 1789daf8…
-cargo run -p render -- tests/fixtures/render/grid_content.html /tmp/grid_content.png --json # md5 123d1a2b…
-cargo run -p render -- tests/fixtures/render/filter_effects.html /tmp/filter.png --json     # md5 ffe06406…
-cargo run -p render -- tests/fixtures/render/blend_modes.html /tmp/blend.png --json         # md5 32788e6d…
-cargo run -p render -- tests/fixtures/render/image_set.html /tmp/image_set.png --json       # md5 dc638211…
+cargo run -p megi-render -- tests/fixtures/render/grid_areas.html /tmp/grid_areas.png --json     # md5 8f9a9eba…
+cargo run -p megi-render -- tests/fixtures/render/grid_dense.html /tmp/grid_dense.png --json     # md5 1789daf8…
+cargo run -p megi-render -- tests/fixtures/render/grid_content.html /tmp/grid_content.png --json # md5 123d1a2b…
+cargo run -p megi-render -- tests/fixtures/render/filter_effects.html /tmp/filter.png --json     # md5 ffe06406…
+cargo run -p megi-render -- tests/fixtures/render/blend_modes.html /tmp/blend.png --json         # md5 32788e6d…
+cargo run -p megi-render -- tests/fixtures/render/image_set.html /tmp/image_set.png --json       # md5 dc638211…
 ```
 
 Límites de la ronda: JPEG sin progressive/CMYK/EXIF orientation; GIF animado solo primer frame; WebP sigue aviso no fatal. HTTP/2 sin multiplexado/flow-control/push/prioridades/h2c/trailers/request bodies (caps 16 KiB frame/64 KiB headers/2 streams, headers minúsculas). SVG effects: 4096 shapes/16 primitivas/blur 64/64M muestras, sin textPath/feColorMatrix/feBlend/feMerge. Grid: overlaps en orden de documento, auto-fit solo rango repetido, sin subgrid/masonry. CSS filters/blend: caps área 16,7 Mpx/blur 64/funciones 16, sin backdrop-filter/espacios de color avanzados.
@@ -571,17 +571,17 @@ Cifras de referencia en la ronda 22: **1449 tests** (bench 9, css 195, dom 28, f
 
 ```bash
 # Perf recuperada (A/B intercalado contra el binario pre-r23)
-cargo run --release -p bench -- --filter resolve-styles-10k-nodes   # 35,81 → 26,54 ms
-cargo run --release -p bench -- --filter build-display              # 7,34–7,72 ms (≤8)
-cargo run --release -p bench -- --filter pipeline/html-to-png      # 142,64 → 105,47 ms
+cargo run --release -p megi-bench -- --filter resolve-styles-10k-nodes   # 35,81 → 26,54 ms
+cargo run --release -p megi-bench -- --filter build-display              # 7,34–7,72 ms (≤8)
+cargo run --release -p megi-bench -- --filter pipeline/html-to-png      # 142,64 → 105,47 ms
 
 # EXIF orientation, JPEG progresivo y detección WebP
-cargo test -p image --test exif                                     # orientaciones 1–8
-cargo test -p image --test decode                                   # progresivo (gris exacto)
-cargo run -p render -- tests/fixtures/render/image_formats.html /tmp/image_formats.png --json
+cargo test -p megi-image --test exif                                     # orientaciones 1–8
+cargo test -p megi-image --test decode                                   # progresivo (gris exacto)
+cargo run -p megi-render -- tests/fixtures/render/image_formats.html /tmp/image_formats.png --json
 
 # HTTP/2 flow control, multiplexado y SETTINGS
-cargo test -p net --test h2_flow_multiplex_tests                    # 12 tests loopback
+cargo test -p megi-net --test h2_flow_multiplex_tests                    # 12 tests loopback
 ```
 
 Límites de la ronda: JPEG progresivo solo subset (DC/AC first+refine, spectral selection, successive approximation; color refinement ⇒ `UnsupportedFeature`), sin CMYK/12-bit; EXIF solo orientación (sin thumbnails); WebP **detectado sin decoder** (aviso no fatal); HTTP/2 con ventanas conexión/stream y SETTINGS, pero sin push/prioridades/h2c/trailers/100-continue/request bodies; paint fast path no altera semántica; caché CSS 128-bit/umbral 2/cap 1024 con StyleCollection inmutable.
@@ -592,18 +592,18 @@ Cifras de referencia en la ronda 23: **1468 tests** (bench 9, css 195, dom 28, f
 
 ```bash
 # JS: History/location/Web Storage/MutationObserver
-cargo test -p js --test browser_features_r24
+cargo test -p megi-js --test browser_features_r24
 # CSS/paint/layout: aspect-ratio, object-fit/object-position y backdrop-filter
-cargo test -p css
-cargo run -p render -- tests/fixtures/render/aspect_ratio.html /tmp/aspect.png --json    # a1e4d950…
-cargo run -p render -- tests/fixtures/render/object_fit.html /tmp/object_fit.png --json  # b54ddebe…
-cargo run -p render -- tests/fixtures/render/backdrop_filter.html /tmp/backdrop.png --json # ff04fac9…
-cargo test -p layout --test aspect_ratio                                                 # layout 215
+cargo test -p megi-css
+cargo run -p megi-render -- tests/fixtures/render/aspect_ratio.html /tmp/aspect.png --json    # a1e4d950…
+cargo run -p megi-render -- tests/fixtures/render/object_fit.html /tmp/object_fit.png --json  # b54ddebe…
+cargo run -p megi-render -- tests/fixtures/render/backdrop_filter.html /tmp/backdrop.png --json # ff04fac9…
+cargo test -p megi-layout --test aspect_ratio                                                 # layout 215
 # Imagen: progresivo color completo + WebP VP8L subset
-cargo test -p image --test decode
-cargo run -p render -- tests/fixtures/render/webp.html /tmp/webp.png --json
+cargo test -p megi-image --test decode
+cargo run -p megi-render -- tests/fixtures/render/webp.html /tmp/webp.png --json
 # Shell: sesión persistente y descargas (headless)
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png --width 640 --height 400
 # Fuzz: 10 targets
 cd fuzz && cargo +nightly fuzz build
 ```
@@ -615,12 +615,12 @@ Cifras de referencia en la ronda 24: **1547 tests** (bench 9, css 210, dom 28, f
 ### 2.16r Ronda 25: CSS Color 4/5, ES modules, WebP VP8L, providers render y save-png
 
 ```bash
-cargo test -p css --test color4                        # color()/lab/lch/oklab/oklch/hwb/color-mix
-cargo run -p render -- tests/fixtures/render/color_spaces.html /tmp/colors.png --json
-cargo test -p js --test es_modules                     # resolver/loader, import/export, ciclos
-cargo run -p render -- tests/fixtures/render/webp_real.html /tmp/webp_real.png --json
-cargo run -p render -- tests/fixtures/render/js_observer_chain.html /tmp/observer.png --json
-cargo run -p shell -- tests/fixtures/render/basic.html --save-png /tmp/page.png --width 640 --height 400
+cargo test -p megi-css --test color4                        # color()/lab/lch/oklab/oklch/hwb/color-mix
+cargo run -p megi-render -- tests/fixtures/render/color_spaces.html /tmp/colors.png --json
+cargo test -p megi-js --test es_modules                     # resolver/loader, import/export, ciclos
+cargo run -p megi-render -- tests/fixtures/render/webp_real.html /tmp/webp_real.png --json
+cargo run -p megi-render -- tests/fixtures/render/js_observer_chain.html /tmp/observer.png --json
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --save-png /tmp/page.png --width 640 --height 400
 ```
 
 Límites r25: Color 4/5 con matrices CSS Color 4 y clamp por canal (sin HDR/color spaces arbitrarios); ES modules subset line-based (sin import() dinámico/top-level await/export-from/live bindings; ciclos ⇒ `ModuleCycle`); VP8L completo pero VP8 lossy/corrupto ⇒ warning; providers de render son canales (`history_actions`/`location_actions`) — render no navega; save-png directo valida firma y escribe atómico.
@@ -630,13 +630,13 @@ Cifras de referencia en la ronda 25: **1594 tests** (bench 9, css 230, dom 28, f
 ### 2.16s Ronda 26: module scripts, decode escalado, h2 bodies, DOM bug-bash, SVG filters/SMIL y bench aislado
 
 ```bash
-cargo test -p render --test module_scripts_tests      # <script type=module> inline/externo
-cargo test -p image --test scaled                     # decode_scaled
-cargo run -p render -- tests/fixtures/render/module_chain.html /tmp/modules.png --json
-cargo test -p net                                      # h2 bodies/trailers/100-continue + h1 POST
-cargo test -p dom && cargo test -p js                  # bug-bash DOM/JS
-cargo test -p svg --test filters_smil                  # feColorMatrix/Blend/Merge/Composite + SMIL
-cargo run --release -p bench -- --filter shell/save-png-encode-800x600
+cargo test -p megi-render --test module_scripts_tests      # <script type=module> inline/externo
+cargo test -p megi-image --test scaled                     # decode_scaled
+cargo run -p megi-render -- tests/fixtures/render/module_chain.html /tmp/modules.png --json
+cargo test -p megi-net                                      # h2 bodies/trailers/100-continue + h1 POST
+cargo test -p megi-core && cargo test -p megi-js                  # bug-bash DOM/JS
+cargo test -p megi-svg --test filters_smil                  # feColorMatrix/Blend/Merge/Composite + SMIL
+cargo run --release -p megi-bench -- --filter shell/save-png-encode-800x600
 ```
 
 Límites r26: subset ESM estático (sin dynamic import/TLA/import maps; una raíz por script; loader http con caché propia); decode escalado PNG exacto por unfilter/Adam7, JPEG/GIF/WebP post-subsample; h2 sin push/priorities/h2c y cuerpos buffered; 100-continue sin timer; bug-bash deja gaps documentados (fetch/dataset/innerText/Range/MouseEvent/URLSearchParams/queueMicrotask…); SMIL sin keyTimes/sync/CSS animations/textPath; bench `--save-png-isolated` reutiliza bytes.
@@ -646,11 +646,11 @@ Cifras de referencia en la ronda 26: **1653 tests** (bench 9, css 230, dom 33, f
 ### 2.16t Ronda 27: fix PNG, h2 push/priorities/h2c, gaps DOM/JS, perf efectos y chrome
 
 ```bash
-cargo test -p image                                   # regresión PNG 6,54 ms y escalado
-cargo test -p net --test h2_advanced                  # PUSH_PROMISE/priorities/h2c
-cargo test -p js --test gap_apis && cargo test -p dom --test gap_api
-cargo run --release -p bench -- --filter pipeline/filter-fixture-300x260
-cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
+cargo test -p megi-image                                   # regresión PNG 6,54 ms y escalado
+cargo test -p megi-net --test h2_advanced                  # PUSH_PROMISE/priorities/h2c
+cargo test -p megi-js --test gap_apis && cargo test -p megi-core --test gap_api
+cargo run --release -p megi-bench -- --filter pipeline/filter-fixture-300x260
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
 ```
 
 Límites r27: push h2 descartado (render no lo consume aún), h2c GET-only con reconexión y prioridades MVP; gaps DOM restantes (getBoundingClientRect/offset sin layout provider, fetch/XHR, crypto, dataset escritura, innerText con layout, Range, NodeList live); chrome con portapapeles interno documentado y caret sólido determinista; backdrop sigue pagando blur+PNG entrópico (byte-safe no toca el encoder de goldens).
@@ -660,11 +660,11 @@ Cifras de referencia en la ronda 27: **1695 tests** (bench 9, css 230, dom 36, f
 ### 2.16u Ronda 28: reduced IDCT/EXIF, push+uploads streaming, geometría JS, blur byte-safe y menú contextual
 
 ```bash
-cargo test -p image                                      # IDCT reducida y EXIF thumbnails
-cargo test -p net --test h2_push_tests && cargo test -p net --test upload_streaming
-cargo test -p js --test gap_apis && cargo test -p render --test js_geometry_tests
-cargo run -p render -- tests/fixtures/render/js_geometry_fixed.html /tmp/geo.png --json
-cargo run -p shell -- tests/fixtures/render/basic.html --chrome --chrome-menu --screenshot /tmp/menu.png --width 640 --height 400
+cargo test -p megi-image                                      # IDCT reducida y EXIF thumbnails
+cargo test -p megi-net --test h2_push_tests && cargo test -p megi-net --test upload_streaming
+cargo test -p megi-js --test gap_apis && cargo test -p megi-render --test js_geometry_tests
+cargo run -p megi-render -- tests/fixtures/render/js_geometry_fixed.html /tmp/geo.png --json
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --chrome --chrome-menu --screenshot /tmp/menu.png --width 640 --height 400
 ```
 
 Límites r28: reduced IDCT solo en `decode_scaled` (progresivo fallback documentado) y EXIF thumbnails con caps; push h2 solo misma conexión, preload cache por carga y sin push h1/trailers/sendfile; streaming uploads single-shot con cap 16 MiB; geometría sin scroll offsets reales/transforms/zoom y primer script sin layout ⇒ 0; blur/PNG byte-safe con objetivo 1,65 ms no alcanzable (floor ~1,54 ms); menú contextual con portapapeles interno, sin submenús/nativo y Save image re-descarga solo `<img>`.
@@ -674,11 +674,11 @@ Cifras de referencia en la ronda 28: **1738 tests** (bench 9, css 230, dom 36, f
 ### 2.16v Ronda 29: streaming/keep-alive, textPath/SMIL, import maps, WebP header, shell pages y fuzz 14
 
 ```bash
-cargo test -p net --test streaming_responses && cargo test -p net --test connection_reuse
-cargo test -p svg --test textpath_smil
-cargo test -p js --test es_modules
-cargo test -p image --test webp_lossy
-cargo run -p shell -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
+cargo test -p megi-net --test streaming_responses && cargo test -p megi-net --test connection_reuse
+cargo test -p megi-svg --test textpath_smil
+cargo test -p megi-js --test es_modules
+cargo test -p megi-image --test webp_lossy
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --chrome --screenshot /tmp/chrome.png --width 640 --height 400
 cd fuzz && cargo +nightly fuzz build   # 14/14
 ```
 
@@ -689,11 +689,11 @@ Cifras de referencia en la ronda 29: **1796 tests** (bench 9, css 230, dom 36, f
 ### 2.16w Ronda 30: VP8 lossy, container queries, PSL/trailers, workers, historial y chrome fast path
 
 ```bash
-cargo test -p image --test vp8
-cargo test -p css && cargo test -p layout
-cargo test -p net --test psl && cargo test -p net --test trailers
-cargo test -p js --test workers && cargo test -p render --test worker_tests
-cargo test -p shell --test history
+cargo test -p megi-image --test vp8
+cargo test -p megi-css && cargo test -p megi-layout
+cargo test -p megi-net --test psl && cargo test -p megi-net --test trailers
+cargo test -p megi-js --test workers && cargo test -p megi-render --test worker_tests
+cargo test -p megi-browser --test history
 ```
 
 Límites r30: VP8 keyframe only, simple filter luma-only y fixtures de 1 partición (multi-partición implementada); container queries sin style/scroll-state ni cqi/cqw completas y predicción de tamaño de una pasada; PSL IDN no implementado y trailers requieren body; workers cooperativos sin SharedWorker/importScripts y loader file://; historial cap 64/dedupe y fast path chrome con PNG final dominante (floor 22,9 ms a 1024).
@@ -703,11 +703,11 @@ Cifras de referencia en la ronda 30: **1853 tests** (bench 9, css 241, dom 36, f
 ### 2.16x Ronda 31: cascade layers, PNG single-encode, fetch, proxies y perf VP8
 
 ```bash
-cargo test -p css --test cascade_layers
-cargo test -p render --test encode_png_tests
-cargo test -p js --test fetch_tests && cargo test -p render --test fetch_tests
-cargo test -p net --test proxy
-cargo run --release -p bench -- --filter image/decode-webp-lossy
+cargo test -p megi-css --test cascade_layers
+cargo test -p megi-render --test encode_png_tests
+cargo test -p megi-js --test fetch_tests && cargo test -p megi-render --test fetch_tests
+cargo test -p megi-net --test proxy
+cargo run --release -p megi-bench -- --filter image/decode-webp-lossy
 ```
 
 Límites r31: layers sin `layer()` en imports y sublayers aproximadas; `encode_png=false` solo útil si el caller muta el pixmap y los overlays requieren un encode final; fetch sin streaming/abort/timeout, GET/POST y CORS same-origin; proxies sin PAC/WPAD/SOCKS, Basic solo y sin pooling; VP8 mantiene caps y tolerancias (keyframe-only).
@@ -717,11 +717,11 @@ Cifras de referencia en la ronda 31: **1907 tests** (bench 10, css 260, dom 36, 
 ### 2.16y Ronda 32: perf CSS/layout/PNG, TLA/live bindings, h1 streaming y push priority
 
 ```bash
-cargo run --release -p bench -- --filter css/resolve-styles
-cargo run --release -p bench -- --filter image/decode-png
-cargo run --release -p bench -- --filter paint/encode-png-1024
-cargo test -p js --test tla_live_bindings && cargo test -p render --test tla_tests
-cargo test -p net --test h1_streaming && cargo test -p net --test push_priority
+cargo run --release -p megi-bench -- --filter css/resolve-styles
+cargo run --release -p megi-bench -- --filter image/decode-png
+cargo run --release -p megi-bench -- --filter paint/encode-png-1024
+cargo test -p megi-js --test tla_live_bindings && cargo test -p megi-render --test tla_tests
+cargo test -p megi-net --test h1_streaming && cargo test -p megi-net --test push_priority
 ```
 
 Límites r32: Bloom pruning solo en relaciones descendiente/hijo (no rechaza matches válidos); PNG decode sin SIMD/unsafe y raw md5 idéntico a PIL; encode byte-safe mantiene goldens; backgrounds/inline_svg fast paths solo si el documento no puede necesitar imágenes/SVG; TLA/live bindings en la ruta de módulos nativos (import maps no se consultan ahí); h1 streaming con gzip/deflate buffered y 16 KiB slices, sin HTTP/1.0; push prioritization sin grafo completo de prioridades.
@@ -749,7 +749,7 @@ manifiesto editable es `docs/status/progress.toml` (fases F1–F7 con `items`/`p
 Datos medidos: HEAD corto y fecha del último commit (`git log -1 --format=%cs`, nunca la
 hora actual), nº de crates (`crates/*/Cargo.toml`), líneas Rust (`git ls-files '*.rs'`),
 tests (`cargo test --workspace -- --list`, cacheado por HEAD en `target/progress-stats.json`),
-gate de conformidad (`cargo run -q -p test_harness -- --summary`: tokenizer/árbol/serializer/
+gate de conformidad (`cargo run -q -p megi-test-harness -- --summary`: tokenizer/árbol/serializer/
 CSS + PASS) y crates con `#![forbid(unsafe_code)]`.
 
 ```bash

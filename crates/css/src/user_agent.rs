@@ -343,7 +343,7 @@ pub fn create_user_agent_style_collection() -> StyleCollection {
 #[cfg(test)]
 mod tests {
     use crate::properties::{BorderStyle, Color, ComputedStyle, Display, Length, Overflow};
-    use dom::{Attribute, Document, Namespace, NodeId};
+    use megi_core::{Attribute, Document, Namespace, NodeId};
     use std::collections::HashMap;
 
     /// Builds an element under `parent` in the HTML namespace.

@@ -10,9 +10,9 @@
 
 use std::collections::HashMap;
 
-use css::{BoxSizing, Color, ComputedStyle, Display, Length, RectEdges};
-use dom::{Document, Namespace, NodeId};
-use layout::{BoxType, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{BoxSizing, Color, ComputedStyle, Display, Length, RectEdges};
+use megi_layout::{BoxType, Rect, layout_document};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,7 +84,7 @@ fn layout_doc(
     doc: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
     viewport: Rect,
-) -> layout::LayoutBox {
+) -> megi_layout::LayoutBox {
     layout_document(doc, styles, viewport).expect("layout must succeed")
 }
 
@@ -123,9 +123,9 @@ fn test_anonymous_blocks_do_not_inherit_non_inherited_properties() {
     // Mixed inline/block content is wrapped in an anonymous block...
     assert_eq!(anon.box_type, BoxType::AnonymousBlock);
     // ...which must have initial (zero) margins/paddings/borders and no background.
-    assert_eq!(anon.dimensions.margin, layout::EdgeSizes::ZERO);
-    assert_eq!(anon.dimensions.padding, layout::EdgeSizes::ZERO);
-    assert_eq!(anon.dimensions.border, layout::EdgeSizes::ZERO);
+    assert_eq!(anon.dimensions.margin, megi_layout::EdgeSizes::ZERO);
+    assert_eq!(anon.dimensions.padding, megi_layout::EdgeSizes::ZERO);
+    assert_eq!(anon.dimensions.border, megi_layout::EdgeSizes::ZERO);
     let anon_style = anon.style.as_ref().expect("anonymous style");
     assert_eq!(anon_style.background_color, Color::TRANSPARENT);
     // Inherited properties are still inherited from the parent.
@@ -153,7 +153,7 @@ fn test_anonymous_blocks_do_not_inherit_non_inherited_properties() {
     assert_eq!(text_style.background_color, Color::TRANSPARENT);
     assert_eq!(text_style.color, Color::GREEN);
     assert_close(text_style.font_size, 20.0, "text font-size");
-    assert_eq!(text_box.dimensions.margin, layout::EdgeSizes::ZERO);
+    assert_eq!(text_box.dimensions.margin, megi_layout::EdgeSizes::ZERO);
 }
 
 #[test]

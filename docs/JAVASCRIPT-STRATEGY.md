@@ -24,7 +24,7 @@ Megi ha cerrado funcionalmente la Fase 4 (renderizado) y tiene un pipeline de na
 
 ### 1.2 Estado actual del stack DOM (lo que ya existe)
 
-- **Arena contigua** (`crates/dom`): `NodeId` de 4 bytes con **20 bits de slot + 12 de generación**, *free list* LIFO con reutilización, `remove_node`/`remove_subtree`, rechazo de handles *stale*/foráneos (`try_node`/`owns`), `validate_invariants()`, `estimate_bytes()` y presupuesto anti-DoS ya en el parser (`ParseOptions`).
+- **Arena contigua** (`crates/core`): `NodeId` de 4 bytes con **20 bits de slot + 12 de generación**, *free list* LIFO con reutilización, `remove_node`/`remove_subtree`, rechazo de handles *stale*/foráneos (`try_node`/`owns`), `validate_invariants()`, `estimate_bytes()` y presupuesto anti-DoS ya en el parser (`ParseOptions`).
 - **API de navegador**: `document_element`/`head`/`body`, `get_element_by_id`, `get_elements_by_tag_name`/`class_name`, factorías, atributos, `text_content`, manipulación de hijos y `DomError`; en `crates/html`: `parse_fragment_into`, `set_inner_html`, `set_outer_html` y `document_write`.
 - **Esto es exactamente lo que un binding necesita**: el ADR no requiere rediseñar el DOM, sino construir una **capa lateral** entre `NodeId` y los valores JS.
 
@@ -138,7 +138,7 @@ Fundamento (contexto de la recomendación original):
 
 - `Cargo.toml` del workspace/`crates/js`: Boa 0.21.x como dependencia **no opcional por defecto** (feature `js` default); MSRV/CI seguían en 1.88 en ese momento, pero el build por defecto crece y compila Boa. *(evaluación inicial de la ADR, superada por 0.22/MSRV 1.91)*
 - CI: el job `quality` compila/tests **con JS por defecto**; se añade un job **`minimal`** (`cargo test --workspace --no-default-features`) que garantiza el build std-only; el job MSRV cubre ambas configuraciones.
-- `crates/render`/`crates/shell` habilitan la ejecución JS por defecto y deben poder deshabilitarla con `--no-default-features`.
+- `crates/render`/`crates/browser` habilitan la ejecución JS por defecto y deben poder deshabilitarla con `--no-default-features`.
 - Fase 6 quedó **COMPLETA** (WP-6.1–6.4, WP-A/WP-B, módulos ES, TLA, fetch, workers y APIs de navegador HECHOS; árbol 3.904/3.904 sin allowlist). Siguen pendientes la memoria real/contabilidad fina y los tests de conformidad JS/DOM.
 
 ### 4.1 Reglas de integración propuestas
@@ -184,7 +184,7 @@ Fundamento (contexto de la recomendación original):
 
 ### 5.3 Modelo de ejecución y `document.write`
 
-- **Scripts parser-inserted**: al encontrar `<script>` en `crates/html`, el *tree builder* pausa, el `render`/`shell` llama al realm y, si el script ejecuta `document.write`, el HTML generado se inserta en el punto del parser usando `html::parse_fragment_into`/la API existente (respetando los contextos `table`/`select`/`template`/`rawtext` que ya implementa el parser). Al terminar, el parser continúa.
+- **Scripts parser-inserted**: al encontrar `<script>` en `crates/html`, el *tree builder* pausa, el `render`/`shell` llama al realm y, si el script ejecuta `document.write`, el HTML generado se inserta en el punto del parser usando `megi_html::parse_fragment_into`/la API existente (respetando los contextos `table`/`select`/`template`/`rawtext` que ya implementa el parser). Al terminar, el parser continúa.
 - `document.write` fuera de parseo reemplaza el documento (semántica de la spec) o se ignora con warning en el primer WP; decisión documentada.
 - **Microtareas**: ejecutar la cola de *jobs* de Boa tras cada tarea; **macrotareas** (timers/eventos) las gestiona el event loop de Megi (`render`/`shell`), no el motor.
 - **`defer`/`async`**: post-parse en orden de documento/cola; el primer WP puede limitarse a síncronos + `document.write`.
@@ -204,9 +204,9 @@ Estimaciones en días de un agente full-time, con tests y revisión; dependencia
 
 | WP | Objetivo | Dep. | Días | Criterio de aceptación |
 |---|---|---|---:|---|
-| **WP-6.1** | Crate `crates/js` + feature `js` **default ON**; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI con JS por defecto + job `--no-default-features` | — | 3 | `cargo test -p js`; `cargo test --workspace` (con JS) y `cargo test --workspace --no-default-features` (mínimo) verdes; MSRV 1.88 en ambas configuraciones (evaluación inicial de la ADR, superada por 0.22/MSRV 1.91) |
+| **WP-6.1** | Crate `crates/js` + feature `js` **default ON**; realm Boa (`Context`), `console` mínimo, presupuesto de instrucciones y errores tipados; CI con JS por defecto + job `--no-default-features` | — | 3 | `cargo test -p megi-js`; `cargo test --workspace` (con JS) y `cargo test --workspace --no-default-features` (mínimo) verdes; MSRV 1.88 en ambas configuraciones (evaluación inicial de la ADR, superada por 0.22/MSRV 1.91) |
 | **WP-6.2** | Bindings DOM core: tabla lateral por realm, wrappers `Node`/`Document`/`Element`/`Text`, generación/stale, `DomError`→excepción JS | 6.1 | 6 | Micro-tests JS↔DOM (get/set `id`, atributos, `textContent`, hijos); wrappers invalidados tras `remove_node`; sin `unsafe` en `crates/js` |
-| **WP-6.3** | Ejecución de `<script>` parser-inserted + `document.write`/`innerHTML` usando la API existente | 6.2 | 5 | **`cargo run -p test_harness -- --summary`**: suites `scripted_*` dejan de estar en la allowlist; árbol **3.904/3.904**; gate PASS con allowlist sólo de tokenizer |
+| **WP-6.3** | Ejecución de `<script>` parser-inserted + `document.write`/`innerHTML` usando la API existente | 6.2 | 5 | **`cargo run -p megi-test-harness -- --summary`**: suites `scripted_*` dejan de estar en la allowlist; árbol **3.904/3.904**; gate PASS con allowlist sólo de tokenizer |
 | **WP-6.4** | `EventTarget` mínimo + timers/microtareas + integración con el event loop de `render`/`shell` | 6.2, 6.3 | 5 | `setTimeout`/`Promise` ordenados; tests de eventos sintéticos; un script con timer acaba en el pixel esperado |
 | **WP-6.5** | `querySelector`/`querySelectorAll` (reutiliza el motor de selectores de `css`), `classList`/`style` (CSSOM básico) | 6.2 | 6 | Tests de selector JS; estilos aplicados tras mutación DOM (render cambia) |
 | **WP-6.6** | Endurecimiento: presupuestos de tiempo/memoria, fuzz de bindings, aislamiento entre realms | 6.3–6.5 | 3 | Fuzz target de bindings en CI; script malicioso (bucle/alloc) interrumpido sin tumbar el proceso |

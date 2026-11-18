@@ -267,14 +267,14 @@ fn evaluate_directives(
     target: &Url,
     host: &str,
 ) -> Result<Vec<PacDirective>, String> {
-    let mut runtime = js::JsRuntime::new().map_err(|error| format!("JS runtime: {error}"))?;
+    let evaluator = crate::pac_evaluator().ok_or_else(|| "PAC evaluator unavailable".to_owned())?;
     let call = format!(
         "{PAC_HELPERS_PRELUDE}\n{script}\nFindProxyForURL({}, {});",
         js_string(&target.as_str()),
         js_string(host)
     );
-    let result = runtime
-        .eval(&call, "proxy.pac")
+    let result = evaluator
+        .evaluate(&call, &target.as_str(), host)
         .map_err(|error| format!("evaluating PAC script: {error}"))?;
     parse_pac_directives(&result)
 }
@@ -342,6 +342,16 @@ pub(crate) fn parse_pac_directives(result: &str) -> Result<Vec<PacDirective>, St
 mod tests {
     use super::*;
 
+    struct TestJsEvaluator;
+    impl crate::PacEvaluator for TestJsEvaluator {
+        fn evaluate(&self, script: &str, _url: &str, _host: &str) -> Result<String, String> {
+            megi_js::JsRuntime::new()
+                .map_err(|e| e.to_string())?
+                .eval(script, "proxy.pac")
+                .map_err(|e| e.to_string())
+        }
+    }
+
     #[test]
     fn parses_proxy_socks_and_direct_failover_directives() {
         let directives = parse_pac_directives(
@@ -364,6 +374,7 @@ mod tests {
 
     #[test]
     fn evaluates_find_proxy_for_url_with_standard_helpers() {
+        crate::set_pac_evaluator(TestJsEvaluator);
         let target = Url::parse("http://intranet.corp.local/a").expect("url");
         let script = r#"
             function FindProxyForURL(url, host) {

@@ -6,7 +6,7 @@
 //! cargo run --example svg_to_png -- image.svg out.png --width 512
 //! ```
 
-use svg::{SvgOptions, render_svg};
+use megi_svg::{SvgOptions, render_svg};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut arguments = std::env::args().skip(1);

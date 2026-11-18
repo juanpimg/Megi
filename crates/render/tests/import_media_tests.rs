@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use render::{RenderOptions, RenderOutput, Viewport, render_url};
+use megi_render::{RenderOptions, RenderOutput, Viewport, render_url};
 
 #[derive(Clone, Debug)]
 struct RouteResponse {
@@ -158,16 +158,16 @@ fn write_response(stream: &mut std::net::TcpStream, response: &RouteResponse) {
 fn options(width: u32, height: u32) -> RenderOptions {
     RenderOptions {
         viewport: Viewport::new(width, height).expect("viewport"),
-        fetch_options: net::FetchOptions {
+        fetch_options: megi_net::FetchOptions {
             connect_timeout: Duration::from_secs(2),
             read_timeout: Duration::from_secs(2),
-            ..net::FetchOptions::default()
+            ..megi_net::FetchOptions::default()
         },
         ..RenderOptions::default()
     }
 }
 
-fn count_colored(output: &RenderOutput, predicate: impl Fn(&paint::Color) -> bool) -> usize {
+fn count_colored(output: &RenderOutput, predicate: impl Fn(&megi_paint::Color) -> bool) -> usize {
     output
         .pixmap
         .pixels
@@ -489,7 +489,7 @@ fn showcase_renders_file_url_to_the_golden_png() {
     assert_eq!(
         output.png, golden,
         "showcase render differs from tests/fixtures/render/showcase/golden.png; \
-         regenerate it with: cargo run -p render -- tests/fixtures/render/showcase/index.html \
+         regenerate it with: cargo run -p megi-render -- tests/fixtures/render/showcase/index.html \
          tests/fixtures/render/showcase/golden.png --width 1024 --height 768"
     );
 }

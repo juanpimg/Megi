@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::http::{H1Pool, fetch_pooled};
-use net::{FetchOptions, Url, fetch};
+use megi_net::http::{H1Pool, fetch_pooled};
+use megi_net::{FetchOptions, Url, fetch};
 
 fn spawn(handler: impl FnOnce(TcpListener) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -40,7 +40,7 @@ fn options(http10: bool) -> FetchOptions {
         connect_timeout: Duration::from_secs(2),
         read_timeout: Duration::from_secs(2),
         force_http10: http10,
-        accept_encoding: net::compression::AcceptEncoding::Identity,
+        accept_encoding: megi_net::compression::AcceptEncoding::Identity,
         ..FetchOptions::default()
     }
 }

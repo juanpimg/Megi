@@ -4,7 +4,7 @@ The audit found performance problems by reading code; this file records the ones
 were **measured**, so later work can compare against a number instead of an adjective.
 It also records why a complete baseline is not possible yet: the bench harness itself
 does not measure what its rows claim (#1197, #1196), so the numbers below come from
-targeted probes run during the crate audits, not from `cargo run -p bench`.
+targeted probes run during the crate audits, not from `cargo run -p megi-bench`.
 
 Provenance of each row: `M` = measured with a probe/repro (the exact command or the
 auditor's probe is named), `E` = estimate derived from the code path and its limits.

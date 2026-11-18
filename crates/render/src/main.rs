@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -129,7 +129,7 @@ fn run() -> Result<(), CliError> {
 
 /// Accepts an absolute URL or a filesystem path (converted to a `file://` URL).
 fn normalize_input(input: &str) -> Result<String, CliError> {
-    if net::Url::parse(input).is_ok() {
+    if megi_net::Url::parse(input).is_ok() {
         return Ok(input.to_string());
     }
     let path = std::fs::canonicalize(input).map_err(|error| {
@@ -145,7 +145,7 @@ fn normalize_input(input: &str) -> Result<String, CliError> {
         .replace('?', "%3F")
         .replace(' ', "%20");
     let url = format!("file://{encoded}");
-    net::Url::parse(&url)
+    megi_net::Url::parse(&url)
         .map(|parsed| parsed.as_str())
         .map_err(|error| CliError::Usage(format!("cannot build file URL for {path}: {error}")))
 }
@@ -245,7 +245,7 @@ fn parse_dimension(args: &mut impl Iterator<Item = String>, flag: &str) -> Resul
 }
 
 /// Serializes render metadata as JSON (no serde dependency for a single object).
-fn metadata_json(input: &str, output: &render::RenderOutput, args: &Args) -> String {
+fn metadata_json(input: &str, output: &megi_render::RenderOutput, args: &Args) -> String {
     let stats = &output.stats;
     let timings = &stats.timings;
     let warnings: Vec<String> = stats.warnings.iter().map(|w| json_string(w)).collect();

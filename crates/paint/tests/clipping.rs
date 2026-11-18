@@ -3,13 +3,13 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_core::{Document, Namespace};
+use megi_css::{
     BackgroundClip, BackgroundLayer, BorderRadii, Color, ComputedStyle, Display, FontStyle, Length,
     Radius, TextDecoration,
 };
-use dom::{Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
     build_display_list_with_images_and_backgrounds, rasterize_display_list,
 };
@@ -21,7 +21,7 @@ const VIEWPORT: Rect = Rect {
     height: 80.0,
 };
 
-fn document_with_nodes(count: usize) -> (Document, Vec<dom::NodeId>) {
+fn document_with_nodes(count: usize) -> (Document, Vec<megi_core::NodeId>) {
     let mut document = Document::new();
     let html = document.create_element(Namespace::Html, "html", vec![]);
     document.append_child(document.root(), html);
@@ -94,7 +94,7 @@ fn render_container(
 
 fn overflow_style(radius_px: f32) -> ComputedStyle {
     let mut style = block_style();
-    style.overflow = css::Overflow::Hidden;
+    style.overflow = megi_css::Overflow::Hidden;
     style.border_radius = uniform_radius(radius_px);
     style.background_color = Color::WHITE;
     style
@@ -178,8 +178,9 @@ fn test_overflow_hidden_radius_clips_replaced_image() {
         Rect::new(10.0, 10.0, 40.0, 40.0),
     );
     image_box.baseline = 20.0;
-    let image =
-        Arc::new(image::RgbaImage::new(40, 40, [0u8, 0, 255, 255].repeat(1600)).expect("RGBA"));
+    let image = Arc::new(
+        megi_image::RgbaImage::new(40, 40, [0u8, 0, 255, 255].repeat(1600)).expect("RGBA"),
+    );
     let images: ImageStore = [(image_node, image)].into_iter().collect();
     let (_list, pixmap) = render_container(
         overflow_style(8.0),
@@ -310,7 +311,8 @@ fn test_background_clip_text_masks_image_and_multiple_lines() {
         clip: BackgroundClip::Text,
         ..BackgroundLayer::default()
     }];
-    let image = Arc::new(image::RgbaImage::new(8, 8, [0u8, 0, 255, 255].repeat(64)).expect("RGBA"));
+    let image =
+        Arc::new(megi_image::RgbaImage::new(8, 8, [0u8, 0, 255, 255].repeat(64)).expect("RGBA"));
     let backgrounds: BackgroundImages = [("bg.png".to_string(), image)].into_iter().collect();
     let (list, pixmap) = render_container(
         style,
@@ -358,7 +360,7 @@ fn test_background_clip_text_masks_image_and_multiple_lines() {
 fn test_clip_text_mask_runs_are_capped() {
     let (_document, nodes) = document_with_nodes(1);
     let mut children = Vec::new();
-    for index in 0..(paint::MAX_TEXT_MASK_RUNS + 8) {
+    for index in 0..(megi_paint::MAX_TEXT_MASK_RUNS + 8) {
         let mut text_style = block_style();
         text_style.display = Display::Inline;
         text_style.font_size = 12.0;
@@ -386,7 +388,10 @@ fn test_clip_text_mask_runs_are_capped() {
             _ => None,
         })
         .expect("text mask group");
-    assert!(runs <= paint::MAX_TEXT_MASK_RUNS, "runs capped: {runs}");
+    assert!(
+        runs <= megi_paint::MAX_TEXT_MASK_RUNS,
+        "runs capped: {runs}"
+    );
     let _ = nodes;
 }
 

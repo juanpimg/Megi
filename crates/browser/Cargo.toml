@@ -1,0 +1,21 @@
+[package]
+name = "megi-browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer presentation and headless screenshots"
+
+[dependencies]
+megi-webview = { workspace = true, features = ["full"] }
+winit.workspace = true
+softbuffer.workspace = true
+
+[[bin]]
+name = "megi"
+path = "src/main.rs"
+
+[lints]
+workspace = true

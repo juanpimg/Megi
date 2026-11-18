@@ -1,12 +1,12 @@
 //! CSS gradient parsing for `background-image` (R113).
 
-use css::{
+use megi_core::{Attribute, Document, Namespace};
+use megi_css::{
     BackgroundClip, Gradient, GradientKind, LinearDirection, RadialExtent, RadialShape,
     resolve_document_styles,
 };
-use dom::{Attribute, Document, Namespace};
 
-fn computed_style(css_text: &str, inline: &str) -> css::ComputedStyle {
+fn computed_style(css_text: &str, inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();
     let body = document.create_element(Namespace::Html, "body", vec![]);
     let element = document.create_element(
@@ -20,7 +20,7 @@ fn computed_style(css_text: &str, inline: &str) -> css::ComputedStyle {
     resolved.get(&element).cloned().expect("computed style")
 }
 
-fn linear(style: &ComputedStyle) -> css::LinearGradient {
+fn linear(style: &ComputedStyle) -> megi_css::LinearGradient {
     match &gradient_from(style).kind {
         GradientKind::Linear(linear) => linear.clone(),
         other => panic!("expected linear gradient, got {other:?}"),
@@ -72,9 +72,15 @@ fn test_linear_gradient_stops() {
     );
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops.len(), 4);
-    assert_eq!(gradient.stops[0].color, css::Color::RED);
-    assert_eq!(gradient.stops[1].position, Some(css::Length::Percent(25.0)));
-    assert_eq!(gradient.stops[2].position, Some(css::Length::Px(100.0)));
+    assert_eq!(gradient.stops[0].color, megi_css::Color::RED);
+    assert_eq!(
+        gradient.stops[1].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
+    assert_eq!(
+        gradient.stops[2].position,
+        Some(megi_css::Length::Px(100.0))
+    );
     assert_eq!(gradient.stops[2].color.a, 128);
     assert_eq!(gradient.stops[3].color.a, 0);
 }
@@ -86,8 +92,8 @@ fn test_radial_gradient_defaults_and_position() {
         GradientKind::Radial(radial) => {
             assert_eq!(radial.shape, None);
             assert_eq!(radial.extent, None);
-            assert_eq!(radial.position.x, css::Length::Percent(50.0));
-            assert_eq!(radial.position.y, css::Length::Percent(50.0));
+            assert_eq!(radial.position.x, megi_css::Length::Percent(50.0));
+            assert_eq!(radial.position.y, megi_css::Length::Percent(50.0));
         }
         other => panic!("expected radial, got {other:?}"),
     }
@@ -98,8 +104,8 @@ fn test_radial_gradient_defaults_and_position() {
     match &gradient_from(&positioned).kind {
         GradientKind::Radial(radial) => {
             assert_eq!(radial.shape, Some(RadialShape::Circle));
-            assert_eq!(radial.position.x, css::Length::Px(10.0));
-            assert_eq!(radial.position.y, css::Length::Percent(20.0));
+            assert_eq!(radial.position.x, megi_css::Length::Px(10.0));
+            assert_eq!(radial.position.y, megi_css::Length::Percent(20.0));
         }
         other => panic!("expected radial, got {other:?}"),
     }
@@ -174,7 +180,7 @@ fn test_shorthand_gradient_is_parsed() {
     assert_eq!(gradient.stops.len(), 2);
     assert_eq!(
         style.background_layers[0].repeat,
-        css::BackgroundRepeat::NO_REPEAT
+        megi_css::BackgroundRepeat::NO_REPEAT
     );
 }
 
@@ -208,11 +214,11 @@ fn test_current_color_stop_and_alpha_hex() {
     let gradient = gradient_from(&style);
     assert_eq!(
         gradient.stops[0].color,
-        css::Color::new(0x33, 0x66, 0x99, 255)
+        megi_css::Color::new(0x33, 0x66, 0x99, 255)
     );
     assert_eq!(
         gradient.stops[1].color,
-        css::Color::new(0x11, 0x22, 0x33, 0x44)
+        megi_css::Color::new(0x11, 0x22, 0x33, 0x44)
     );
 }
 
@@ -230,24 +236,24 @@ fn test_stop_cap_is_applied() {
         ),
     );
     let gradient = gradient_from(&style);
-    assert_eq!(gradient.stops.len(), css::MAX_GRADIENT_STOPS);
+    assert_eq!(gradient.stops.len(), megi_css::MAX_GRADIENT_STOPS);
     assert_eq!(
         gradient.stops.first().unwrap().color,
-        css::Color::new(0, 0, 0, 255)
+        megi_css::Color::new(0, 0, 0, 255)
     );
     assert_eq!(
         gradient.stops.last().unwrap().color,
-        css::Color::new((63 * 3) as u8, 0, 0, 255)
+        megi_css::Color::new((63 * 3) as u8, 0, 0, 255)
     );
     assert_eq!(
         gradient.stops.last().unwrap().position,
-        Some(css::Length::Percent(63.0))
+        Some(megi_css::Length::Percent(63.0))
     );
     assert!(
         !gradient
             .stops
             .iter()
-            .any(|stop| stop.color == css::Color::new((64 * 3) as u8, 0, 0, 255))
+            .any(|stop| stop.color == megi_css::Color::new((64 * 3) as u8, 0, 0, 255))
     );
 }
 
@@ -260,16 +266,16 @@ fn test_gradient_layers_keep_clip_and_background_properties() {
     );
     let layer = &style.background_layers[0];
     assert_eq!(layer.clip, BackgroundClip::PaddingBox);
-    assert_eq!(layer.size, css::BackgroundSize::Cover);
-    assert_eq!(layer.repeat, css::BackgroundRepeat::NO_REPEAT);
+    assert_eq!(layer.size, megi_css::BackgroundSize::Cover);
+    assert_eq!(layer.repeat, megi_css::BackgroundRepeat::NO_REPEAT);
     assert!(layer.gradient.is_some());
 }
 
-use css::ComputedStyle;
+use megi_css::ComputedStyle;
 
 // --- R118: conic gradients, color hints and interpolation spaces ------------
 
-fn conic(style: &ComputedStyle) -> css::ConicGradient {
+fn conic(style: &ComputedStyle) -> megi_css::ConicGradient {
     match &gradient_from(style).kind {
         GradientKind::Conic(conic) => conic.clone(),
         other => panic!("expected conic gradient, got {other:?}"),
@@ -281,8 +287,8 @@ fn test_conic_gradient_defaults() {
     let style = computed_style("", "background-image: conic-gradient(red, blue);");
     let parsed = conic(&style);
     assert_eq!(parsed.from_angle, 0.0);
-    assert_eq!(parsed.position.x, css::Length::Percent(50.0));
-    assert_eq!(parsed.position.y, css::Length::Percent(50.0));
+    assert_eq!(parsed.position.x, megi_css::Length::Percent(50.0));
+    assert_eq!(parsed.position.y, megi_css::Length::Percent(50.0));
     assert_eq!(
         style.background_layers[0]
             .gradient
@@ -302,8 +308,8 @@ fn test_conic_gradient_from_and_at() {
     );
     let parsed = conic(&style);
     assert_eq!(parsed.from_angle, 45.0);
-    assert_eq!(parsed.position.x, css::Length::Px(10.0));
-    assert_eq!(parsed.position.y, css::Length::Percent(20.0));
+    assert_eq!(parsed.position.x, megi_css::Length::Px(10.0));
+    assert_eq!(parsed.position.y, megi_css::Length::Percent(20.0));
     let turn = computed_style(
         "",
         "background-image: conic-gradient(from 0.25turn at center, red, blue);",
@@ -319,10 +325,10 @@ fn test_conic_stop_positions_angles_and_percentages() {
     );
     let stops = &gradient_from(&style).stops;
     assert_eq!(stops.len(), 4);
-    assert_eq!(stops[0].position, Some(css::Length::Percent(0.0)));
-    assert_eq!(stops[1].position, Some(css::Length::Percent(25.0)));
-    assert_eq!(stops[2].position, Some(css::Length::Percent(50.0)));
-    assert_eq!(stops[3].position, Some(css::Length::Percent(50.0)));
+    assert_eq!(stops[0].position, Some(megi_css::Length::Percent(0.0)));
+    assert_eq!(stops[1].position, Some(megi_css::Length::Percent(25.0)));
+    assert_eq!(stops[2].position, Some(megi_css::Length::Percent(50.0)));
+    assert_eq!(stops[3].position, Some(megi_css::Length::Percent(50.0)));
 }
 
 #[test]
@@ -345,8 +351,14 @@ fn test_conic_alpha_and_hard_stops() {
     );
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops[0].color.a, 128);
-    assert_eq!(gradient.stops[1].position, Some(css::Length::Percent(25.0)));
-    assert_eq!(gradient.stops[2].position, Some(css::Length::Percent(25.0)));
+    assert_eq!(
+        gradient.stops[1].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
+    assert_eq!(
+        gradient.stops[2].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
 }
 
 #[test]
@@ -372,7 +384,7 @@ fn test_color_hints_are_parsed() {
     let style = computed_style("", "background-image: linear-gradient(red, 30%, blue);");
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops.len(), 2);
-    assert_eq!(gradient.hints, vec![Some(css::Length::Percent(30.0))]);
+    assert_eq!(gradient.hints, vec![Some(megi_css::Length::Percent(30.0))]);
 
     let radial = computed_style(
         "",
@@ -380,13 +392,13 @@ fn test_color_hints_are_parsed() {
     );
     assert_eq!(
         gradient_from(&radial).hints,
-        vec![Some(css::Length::Percent(20.0))]
+        vec![Some(megi_css::Length::Percent(20.0))]
     );
 
     let conic = computed_style("", "background-image: conic-gradient(red, 90deg, blue);");
     assert_eq!(
         gradient_from(&conic).hints,
-        vec![Some(css::Length::Percent(25.0))]
+        vec![Some(megi_css::Length::Percent(25.0))]
     );
 }
 
@@ -413,7 +425,7 @@ fn test_interpolation_spaces_are_parsed() {
     let srgb = computed_style("", "background-image: linear-gradient(in srgb, red, blue);");
     assert_eq!(
         gradient_from(&srgb).interpolation,
-        css::InterpolationSpace::Srgb
+        megi_css::InterpolationSpace::Srgb
     );
     let linear_space = computed_style(
         "",
@@ -421,7 +433,7 @@ fn test_interpolation_spaces_are_parsed() {
     );
     assert_eq!(
         gradient_from(&linear_space).interpolation,
-        css::InterpolationSpace::SrgbLinear
+        megi_css::InterpolationSpace::SrgbLinear
     );
     assert_eq!(
         linear(&linear_space.clone()).direction,
@@ -433,7 +445,7 @@ fn test_interpolation_spaces_are_parsed() {
     );
     assert_eq!(
         gradient_from(&oklab).interpolation,
-        css::InterpolationSpace::Oklab
+        megi_css::InterpolationSpace::Oklab
     );
     let conic = computed_style(
         "",
@@ -441,7 +453,7 @@ fn test_interpolation_spaces_are_parsed() {
     );
     assert_eq!(
         gradient_from(&conic).interpolation,
-        css::InterpolationSpace::Oklab
+        megi_css::InterpolationSpace::Oklab
     );
 }
 

@@ -14,7 +14,7 @@ de `filter:`; una regresión real del filtro pasa el gate `bench_compare.py`.
 ## Pasos para reproducir
 1. Simular strip en python sobre fixtures → `filter_effects.html total=29 removed=0`;
    `backdrop_filter.html total=31 removed=2` (ese sí funciona).
-2. `cargo run --release -p bench -- --filter filter-fixture` en HEAD limpio:
+2. `cargo run --release -p megi-bench -- --filter filter-fixture` en HEAD limpio:
    `paint/filter-fixture` 0,816 ms vs `-no-effect` 0,818 ms (Δ 0,002, idénticos);
    Mesa A reproduce identidad: 0,307 vs 0,307 ms. Contraste:
    `paint/backdrop-fixture` 0,786 vs no-effect 0,062 (×12,7).

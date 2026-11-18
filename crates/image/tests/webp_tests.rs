@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use image::{ImageError, ImageFormat, decode, detect_format};
+use megi_image::{ImageError, ImageFormat, decode, detect_format};
 
 fn fixture(relative: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -120,7 +120,7 @@ fn decodes_large_lossy_webp_and_scaled_path() {
 
     // decode_scaled uses nearest row/column subsampling after the full decode:
     // output (ox, oy) comes from source (ox * 4, oy * 4) for a 1024px -> 256px scale.
-    let scaled = image::decode_scaled(&bytes, 256).expect("scaled 1024x768");
+    let scaled = megi_image::decode_scaled(&bytes, 256).expect("scaled 1024x768");
     assert_eq!(scaled.dimensions(), (256, 192));
     let mut max = 0i32;
     for oy in 0..192usize {
@@ -168,7 +168,7 @@ fn parses_real_pil_lossy_webp_keyframe_headers() {
         ("photo_1024x768_lossy", 1024, 768),
     ] {
         let bytes = fixture(&format!("{name}.webp"));
-        let info = image::vp8::lossy_info(&bytes, &image::PngLimits::default())
+        let info = megi_image::vp8::lossy_info(&bytes, &megi_image::PngLimits::default())
             .unwrap_or_else(|error| panic!("{name}: {error:?}"));
         assert_eq!((info.width, info.height), (width, height), "{name}");
         assert!(info.version <= 3, "{name}");
@@ -180,18 +180,18 @@ fn parses_real_pil_lossy_webp_keyframe_headers() {
 
 #[test]
 fn lossy_vp8_dimension_caps_are_enforced() {
-    let limits = image::PngLimits {
+    let limits = megi_image::PngLimits {
         max_dimension: 32,
-        ..image::PngLimits::default()
+        ..megi_image::PngLimits::default()
     };
-    let error = image::vp8::lossy_info(&fixture("photo_lossy_q75.webp"), &limits)
+    let error = megi_image::vp8::lossy_info(&fixture("photo_lossy_q75.webp"), &limits)
         .expect_err("dimension cap");
     assert!(
         matches!(error, ImageError::LimitExceeded { .. }),
         "{error:?}"
     );
     // The pixel decoder enforces the same caps (before allocating the RGBA buffer).
-    let error = image::decode_with_limits(&fixture("photo_lossy_q75.webp"), &limits)
+    let error = megi_image::decode_with_limits(&fixture("photo_lossy_q75.webp"), &limits)
         .expect_err("decode dimension cap");
     assert!(
         matches!(error, ImageError::LimitExceeded { .. }),
@@ -204,9 +204,9 @@ fn corrupt_lossy_webp_is_a_typed_error() {
     let bytes = fixture("photo_lossy_q75.webp");
     // Container/header prefixes are rejected by the header parser.
     for length in [0, 4, 12, 20] {
-        let error = image::vp8::lossy_info(
+        let error = megi_image::vp8::lossy_info(
             &bytes[..length.min(bytes.len())],
-            &image::PngLimits::default(),
+            &megi_image::PngLimits::default(),
         )
         .expect_err("truncated lossy");
         assert!(
@@ -539,7 +539,7 @@ fn decodes_animated_webp_frames_blending_and_disposal() {
     assert_eq!(first.pixel(7, 7), Some([0, 0, 255, 255]));
 
     // Full animated decode returns both composited frames with metadata.
-    let anim = image::decode_animated(&webp).expect("animated webp frames");
+    let anim = megi_image::decode_animated(&webp).expect("animated webp frames");
     assert_eq!((anim.width, anim.height, anim.loop_count), (8, 8, 3));
     assert_eq!(anim.frames.len(), 2);
     assert_eq!(anim.frames[0].delay_ms, 100);
@@ -560,7 +560,7 @@ fn rejects_out_of_bounds_anmf_frame_and_missing_anim() {
         &[(4, 0, 8, 8, 50, 0x00, &solid_vp8l)],
     );
     assert!(matches!(
-        image::decode_animated(&oob),
+        megi_image::decode_animated(&oob),
         Err(ImageError::InvalidData { .. })
     ));
 
@@ -575,7 +575,7 @@ fn rejects_out_of_bounds_anmf_frame_and_missing_anim() {
     no_anim.extend_from_slice(&(body.len() as u32).to_le_bytes());
     no_anim.extend_from_slice(&body);
     assert!(matches!(
-        image::decode_animated(&no_anim),
+        megi_image::decode_animated(&no_anim),
         Err(ImageError::InvalidData { .. })
     ));
 }
@@ -590,7 +590,7 @@ fn decodes_real_animated_webp_fixture_with_compositing() {
     assert_eq!(first.dimensions(), (8, 8));
     assert_eq!(first.data, fixture("animated_blend.frame0.rgba"));
 
-    let anim = image::decode_animated(&webp).expect("animated fixture frames");
+    let anim = megi_image::decode_animated(&webp).expect("animated fixture frames");
     assert_eq!((anim.width, anim.height, anim.loop_count), (8, 8, 3));
     assert_eq!(anim.frames.len(), 2);
     assert_eq!(anim.frames[0].delay_ms, 100);
@@ -629,8 +629,8 @@ fn alph_filtering_methods_2_and_3_decode() {
             continue;
         }
         let bytes = std::fs::read(&path).expect("read fixture");
-        let decoded =
-            image::decode(&bytes).unwrap_or_else(|error| panic!("{fixture} must decode: {error}"));
+        let decoded = megi_image::decode(&bytes)
+            .unwrap_or_else(|error| panic!("{fixture} must decode: {error}"));
         assert_eq!((decoded.width, decoded.height), (16, 16), "{fixture} size");
     }
 }

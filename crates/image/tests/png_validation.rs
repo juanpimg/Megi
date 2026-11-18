@@ -1,6 +1,6 @@
 //! PNG chunk-order/validation hardening (tRNS duplicates, ordering, sample range).
 
-use image::{ImageError, decode};
+use megi_image::{ImageError, decode};
 
 fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;

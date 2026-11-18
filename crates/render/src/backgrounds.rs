@@ -1,22 +1,22 @@
 //! # CSS background images & `list-style-image` loading (WP-5.9)
 //!
-//! After the cascade, [`css::ComputedStyle`] keeps the **raw, unresolved** URL text of
+//! After the cascade, [`megi_css::ComputedStyle`] keeps the **raw, unresolved** URL text of
 //! `background-image` and `list-style-image` (`Option<String>`). This module:
 //!
 //! 1. collects those URLs from every styled element, in document order;
 //! 2. resolves them against the **document base URL** (see the limitation below),
 //!    deduplicating by resolved URL so each bitmap is fetched/decoded once;
-//! 3. fetches the bytes with the shared [`net::ResourceLoader`] (honoring
+//! 3. fetches the bytes with the shared [`megi_net::ResourceLoader`] (honoring
 //!    `--no-network`, the HTTP cache, redirects and TLS) under defensive caps:
 //!    [`DEFAULT_MAX_BACKGROUNDS`] distinct images, [`DEFAULT_MAX_BACKGROUND_BYTES`] per
 //!    image and [`DEFAULT_MAX_TOTAL_BACKGROUND_BYTES`] per page;
 //! 4. decodes the bitmap with the in-tree `image` crate — PNG, JPEG, GIF, lossless
 //!    WebP (VP8L) and lossy WebP (VP8 keyframe); corrupt/unsupported payloads
 //!    produce a warning and no image — and
-//! 5. builds the [`paint::BackgroundImages`] map that
-//!    [`paint::build_display_list_with_images_and_backgrounds`] consumes: key = the raw
+//! 5. builds the [`megi_paint::BackgroundImages`] map that
+//!    [`megi_paint::build_display_list_with_images_and_backgrounds`] consumes: key = the raw
 //!    CSS URL string (so both `background-image` and `list-style-image` share the same
-//!    entry), value = `Arc<image::RgbaImage>`.
+//!    entry), value = `Arc<megi_image::RgbaImage>`.
 //!
 //! Failures are **non-fatal**: the URL is simply absent from the map, so paint draws the
 //! background color (or the fallback `list-style-type` marker) and the render records a
@@ -41,9 +41,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::ComputedStyle;
-use dom::{Document, NodeId};
-use net::{ResourceLoader, Scheme, Url};
+use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
+use megi_net::{ResourceLoader, Scheme, Url};
 
 use crate::svg_assets;
 
@@ -104,7 +104,7 @@ pub enum BackgroundKind {
 /// Result of the background-loading stage.
 pub struct LoadedBackgrounds {
     /// Paint-ready map: raw CSS URL → decoded RGBA bitmap (shared between both kinds).
-    pub images: paint::BackgroundImages,
+    pub images: megi_paint::BackgroundImages,
     /// References found in the cascade (before deduplication).
     pub references: usize,
     /// Distinct URLs successfully fetched and decoded.
@@ -194,9 +194,9 @@ fn push_style_background_references(
     }
 }
 
-/// Loads every referenced background image and builds the [`paint::BackgroundImages`] map.
+/// Loads every referenced background image and builds the [`megi_paint::BackgroundImages`] map.
 ///
-/// `loader` should be the same cached [`net::ResourceLoader`] used for stylesheets/images so
+/// `loader` should be the same cached [`megi_net::ResourceLoader`] used for stylesheets/images so
 /// repeated URLs share the in-memory cache. `no_network` blocks `http(s)` images with a
 /// warning (offline rendering). Warnings are appended to `warnings`.
 pub fn load_backgrounds(
@@ -208,7 +208,7 @@ pub fn load_backgrounds(
     limits: BackgroundLimits,
     warnings: &mut Vec<String>,
 ) -> LoadedBackgrounds {
-    let empty = css::PseudoStyles::new();
+    let empty = megi_css::PseudoStyles::new();
     load_backgrounds_with_pseudos(
         document, styles, &empty, base_url, loader, no_network, limits, warnings,
     )
@@ -219,7 +219,7 @@ pub fn load_backgrounds(
 pub fn load_backgrounds_with_pseudos(
     document: &Document,
     styles: &HashMap<NodeId, ComputedStyle>,
-    pseudo_styles: &css::PseudoStyles,
+    pseudo_styles: &megi_css::PseudoStyles,
     base_url: &Url,
     loader: &mut ResourceLoader,
     no_network: bool,
@@ -227,7 +227,7 @@ pub fn load_backgrounds_with_pseudos(
     warnings: &mut Vec<String>,
 ) -> LoadedBackgrounds {
     let mut result = LoadedBackgrounds {
-        images: paint::BackgroundImages::new(),
+        images: megi_paint::BackgroundImages::new(),
         references: 0,
         loaded: 0,
         failed: 0,
@@ -339,23 +339,23 @@ pub fn load_backgrounds_with_pseudos(
         }
         let mut was_svg = false;
         let bitmap = if matches!(
-            image::detect_format(&resource.bytes),
-            image::ImageFormat::Png
-                | image::ImageFormat::Jpeg
-                | image::ImageFormat::Gif
-                | image::ImageFormat::WebP
+            megi_image::detect_format(&resource.bytes),
+            megi_image::ImageFormat::Png
+                | megi_image::ImageFormat::Jpeg
+                | megi_image::ImageFormat::Gif
+                | megi_image::ImageFormat::WebP
         ) {
             let decoded = match limits.max_image_dim {
-                Some(max_dim) => image::decode_scaled(&resource.bytes, max_dim),
-                None => image::decode(&resource.bytes),
+                Some(max_dim) => megi_image::decode_scaled(&resource.bytes, max_dim),
+                None => megi_image::decode(&resource.bytes),
             };
             match decoded {
                 Ok(bitmap) => bitmap,
                 Err(error) => {
                     result.failed += 1;
                     if matches!(
-                        image::detect_format(&resource.bytes),
-                        image::ImageFormat::WebP
+                        megi_image::detect_format(&resource.bytes),
+                        megi_image::ImageFormat::WebP
                     ) && error.to_string().contains("VP8")
                     {
                         result.warnings.push(format!(
@@ -384,7 +384,7 @@ pub fn load_backgrounds_with_pseudos(
                 }
             }
         } else {
-            let format = image::detect_format(&resource.bytes);
+            let format = megi_image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
                 "skipping background image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"
@@ -420,7 +420,7 @@ pub fn load_backgrounds_with_pseudos(
 #[cfg(test)]
 mod unit_tests {
     use super::*;
-    use net::FetchOptions;
+    use megi_net::FetchOptions;
     use std::time::Duration;
 
     fn options() -> FetchOptions {
@@ -436,18 +436,18 @@ mod unit_tests {
         list_images: &[&str],
     ) -> (Document, HashMap<NodeId, ComputedStyle>) {
         let mut doc = Document::new();
-        let body = doc.create_element(dom::Namespace::Html, "body", vec![]);
+        let body = doc.create_element(megi_core::Namespace::Html, "body", vec![]);
         doc.append_child(doc.root(), body);
         let mut styles = HashMap::new();
         for raw_url in backgrounds {
-            let node = doc.create_element(dom::Namespace::Html, "div", vec![]);
+            let node = doc.create_element(megi_core::Namespace::Html, "div", vec![]);
             doc.append_child(body, node);
             let mut style = ComputedStyle::initial();
             style.background_image = Some((*raw_url).to_owned());
             styles.insert(node, style);
         }
         for raw_url in list_images {
-            let node = doc.create_element(dom::Namespace::Html, "ul", vec![]);
+            let node = doc.create_element(megi_core::Namespace::Html, "ul", vec![]);
             doc.append_child(body, node);
             let mut style = ComputedStyle::initial();
             style.list_style_image = Some((*raw_url).to_owned());

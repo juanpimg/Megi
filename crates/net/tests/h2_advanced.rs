@@ -4,10 +4,10 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::time::Duration;
 
-use net::FetchError;
-use net::h2::client::{H2Request, Limits, Priority, h2c_request, request_many};
-use net::h2::frame::{CONNECTION_PREFACE, Frame, FrameReader, flags, kind, settings};
-use net::h2::hpack::{Decoder, Encoder};
+use megi_net::FetchError;
+use megi_net::h2::client::{H2Request, Limits, Priority, h2c_request, request_many};
+use megi_net::h2::frame::{CONNECTION_PREFACE, Frame, FrameReader, flags, kind, settings};
+use megi_net::h2::hpack::{Decoder, Encoder};
 
 fn listener() -> (TcpListener, String) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -84,7 +84,7 @@ fn run_client(
     requests: Vec<H2Request>,
     limits: Limits,
     authority: &str,
-) -> Result<Vec<Result<net::h2::client::H2Response, FetchError>>, FetchError> {
+) -> Result<Vec<Result<megi_net::h2::client::H2Response, FetchError>>, FetchError> {
     let mut stream = TcpStream::connect(authority).expect("connect");
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))

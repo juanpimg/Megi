@@ -6,13 +6,13 @@ use std::fmt;
 #[derive(Debug)]
 pub enum RenderError {
     /// The input string is not a valid URL.
-    Url(net::UrlError),
+    Url(megi_net::UrlError),
     /// The URL uses a scheme the loader cannot fetch.
     UnsupportedScheme(String),
     /// `--no-network` was set but the document (or a required resource) is `http(s)`.
     NetworkDisabled { url: String },
     /// Fetching the main document failed.
-    Fetch(net::FetchError),
+    Fetch(megi_net::FetchError),
     /// The main document was served with an HTTP error status (>= 400).
     HttpStatus { url: String, status: u16 },
     /// The document exceeded [`crate::RenderOptions::max_document_bytes`].
@@ -103,15 +103,15 @@ impl std::error::Error for RenderError {
     }
 }
 
-impl From<net::UrlError> for RenderError {
-    fn from(error: net::UrlError) -> Self {
+impl From<megi_net::UrlError> for RenderError {
+    fn from(error: megi_net::UrlError) -> Self {
         Self::Url(error)
     }
 }
 
-impl From<net::FetchError> for RenderError {
-    fn from(error: net::FetchError) -> Self {
-        if let net::FetchError::UnsupportedScheme(scheme) = &error {
+impl From<megi_net::FetchError> for RenderError {
+    fn from(error: megi_net::FetchError) -> Self {
+        if let megi_net::FetchError::UnsupportedScheme(scheme) = &error {
             Self::UnsupportedScheme(scheme.clone())
         } else {
             Self::Fetch(error)
@@ -119,12 +119,12 @@ impl From<net::FetchError> for RenderError {
     }
 }
 
-impl From<net::LoadError> for RenderError {
-    fn from(error: net::LoadError) -> Self {
+impl From<megi_net::LoadError> for RenderError {
+    fn from(error: megi_net::LoadError) -> Self {
         match error {
-            net::LoadError::Url(error) => Self::Url(error),
-            net::LoadError::Fetch(error) => {
-                if let net::FetchError::UnsupportedScheme(scheme) = &error {
+            megi_net::LoadError::Url(error) => Self::Url(error),
+            megi_net::LoadError::Fetch(error) => {
+                if let megi_net::FetchError::UnsupportedScheme(scheme) = &error {
                     Self::UnsupportedScheme(scheme.clone())
                 } else {
                     Self::Fetch(error)

@@ -28,7 +28,7 @@
 //! exact layout-derived intrinsic sizes.
 
 use crate::properties::{ComputedStyle, ContainerType, Length};
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
 use std::collections::HashMap;
 
 /// One parsed `@container` condition.

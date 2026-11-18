@@ -91,10 +91,10 @@ impl TextSpec {
 }
 
 /// Bundled deterministic font database shared by every text render (read-only).
-pub(crate) fn bundled_database() -> Option<&'static fonts::FontDatabase> {
-    static DATABASE: OnceLock<Option<fonts::FontDatabase>> = OnceLock::new();
+pub(crate) fn bundled_database() -> Option<&'static megi_fonts::FontDatabase> {
+    static DATABASE: OnceLock<Option<megi_fonts::FontDatabase>> = OnceLock::new();
     DATABASE
-        .get_or_init(|| match fonts::FontDatabase::load_bundled() {
+        .get_or_init(|| match megi_fonts::FontDatabase::load_bundled() {
             Ok(database) => Some(database),
             Err(error) => {
                 eprintln!("megi: bundled fonts failed to load: {error}; SVG text may be blank");

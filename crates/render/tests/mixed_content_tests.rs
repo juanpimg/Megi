@@ -10,9 +10,9 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::FetchOptions;
+use megi_net::FetchOptions;
+use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
 use rcgen::generate_simple_self_signed;
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 

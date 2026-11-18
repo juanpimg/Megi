@@ -41,7 +41,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | Bordes por lado/shorthands, `border-style: none` ⇒ ancho 0; `float`/`clear`/`overflow`/`visibility`/`text-decoration`/`list-style-type`; `line_height_factor` | **HECHO** | Bases de Fase 4 |
 | Tablas: `display: table-*`/`inline-table`/caption, `border-spacing`, `border-collapse`, `table-layout`, `caption-side`, `empty-cells` + hoja UA §15 | **HECHO** | Propiedades computadas; el layout las consume |
 | `@import` (`Stylesheet.imports`) y **Media Queries completas** (parser/evaluador) | **HECHO** | Integrado en `render` con recursión/dedup/ciclos/media real (WP-5.8) |
-| Query API (`css::query::{query_selector, query_selector_all, matches}` + `try_*`) y `background-image`/`list-style-image` en `ComputedStyle` | **HECHO** | Pintado en paint+render (ronda 8) |
+| Query API (`megi_css::query::{query_selector, query_selector_all, matches}` + `try_*`) y `background-image`/`list-style-image` en `ComputedStyle` | **HECHO** | Pintado en paint+render (ronda 8) |
 | **Background geometry (ronda 15)**: `background-repeat` (pares, space/round), `background-size`, `background-position` y shorthand | **HECHO** | Consumido por `paint` (tiling/clip, legacy `background_geometry_explicit`) |
 | **Flexbox (ronda 17)**: `display:flex/inline-flex`, `flex-direction/wrap`, `justify-content`, `align-items/self`, `gap`/`row-gap`/`column-gap`, `flex-grow/shrink/basis` y shorthand `flex` | **HECHO** | Consumido por `layout/flex.rs`; grid/`order`/`flex-flow`/`align-content` fuera de alcance |
 | **Decoraciones (ronda 17)**: `border-radius` (1-4, slash, longhands/shorthand), `box-shadow` y `text-shadow` + UA styles de formularios | **HECHO** | Radius/sombras pintados por `paint`; UA forms en `user_agent.rs` |
@@ -112,7 +112,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 |---|:---:|---|
 | fontdb + ttf-parser + rustybuzz + ab_glyph; fallback, métricas, shaping LTR, máscaras de glifo | **HECHO** | Integrado en layout/paint; fuente DejaVu determinista |
 | `font-weight`/`font-style`, baseline en la display list | **HECHO** | — |
-| **Fuentes web `@font-face`/WOFF2 (ronda 13)**: `fonts::decode_web_font`/`is_woff2` (WOFF2→sfnt con **`woff2-patched` 0.4**, Apache-2.0, pure Rust sin C/FFI), `FontDatabase::load_font_data_family(alias, sfnt)`; `render` recoge las reglas de todas las hojas (incl. `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**) y pasa una **DB por render** a layout+paint, con stats `fonts_loaded/failed/bytes` y `timings.fonts` | **HECHO** | Fixture Open Sans OFL (18.640 B): webfont `md5 f38aed032b8d160075097f1e4ad83b49` vs fallback `e2d76dee98f7c4ef2896c5d003be74f2`; fallos ⇒ warning no fatal |
+| **Fuentes web `@font-face`/WOFF2 (ronda 13)**: `megi_fonts::decode_web_font`/`is_woff2` (WOFF2→sfnt con **`woff2-patched` 0.4**, Apache-2.0, pure Rust sin C/FFI), `FontDatabase::load_font_data_family(alias, sfnt)`; `render` recoge las reglas de todas las hojas (incl. `@import`), deduplica, descarga con `ResourceLoader` (`--no-network`, caps **8 fuentes/8 MiB/32 MiB**) y pasa una **DB por render** a layout+paint, con stats `fonts_loaded/failed/bytes` y `timings.fonts` | **HECHO** | Fixture Open Sans OFL (18.640 B): webfont `md5 f38aed032b8d160075097f1e4ad83b49` vs fallback `e2d76dee98f7c4ef2896c5d003be74f2`; fallos ⇒ warning no fatal |
 | Límites web fonts: sin WOFF1, primer `src` soportado, weight/style no eligen cara, sin unicode-range/font-display (bloqueante), sin subsetting/color fonts, DB no cacheada | **PENDIENTE** | Próximas rondas |
 | Bidi, scripts complejos, fuentes variables | **PENDIENTE** | Fuera de alcance de Fase 4 |
 | **Crate `svg`** (`crates/svg`, **73 tests**, rondas 13/16/17): CSS interno, gradientes, **`<pattern>`** (cap 10k tiles) y **`<text>` básico** (fonts bundled, caps 1.000 texts/10.000 chars); parser XML subset + modelo SVG + rasterizador vectorial AA determinista (shapes, path con arcos, transforms, viewBox, estilos, opacidad; límites anti-DoS; `examples/svg_to_png`). NO soportado: CSS class/style sheets, dasharray, markers, filtros/máscaras/clips, script y refs externas | **HECHO (crate + E2E)** | Cableado en `render` para `<img src=*.svg>` y `background-image`: detección Content-Type/sniffing, tamaño intrínseco (300×150 por defecto), cap 16 Mpx/64 MiB RGBA, corrupto ⇒ warning no fatal, navegación directa en página sintética y stat `svgs_rendered`; 5 fixtures `svg_*` + 11 tests |
@@ -139,7 +139,7 @@ Leyenda: **HECHO** = implementado y testeado; **PARCIAL** = fundamentos presente
 | `br` (Brotli)/stacked encodings y CORS completo | **PENDIENTE** | HTTP/1.0 opt-in, proxies HTTP/HTTPS/SOCKS5/PAC, HTTP/2 + h2c, streaming H1/inflate, PSL real, SameSite, Referrer-Policy y Range ya HECHOS |
 | Ventana/eventos/scroll/zoom | **PARCIAL** | Fase 7: ventana+scroll+inputs+HiDPI+worker+navegación+zoom+auto-refresh y formularios/pestañas básicos (edición, find-in-page, tabs) hechos; submit/validación real, widgets nativos avanzados, event-loop real y eventos DOM completos pendientes |
 
-## 6. DOM generacional + API de navegador (`crates/dom`, 36 tests)
+## 6. DOM generacional + API de navegador (`crates/core`, 36 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -166,11 +166,11 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 | **Integración en `render` (WP-6.2 host)**: `ScriptingMode`/`--no-scripting`, `ScriptingLimits`/`ScriptBudget`, descubrimiento y ejecución de scripts post-parseo, caps 8/32 MiB y 64 scripts, microtasks/timers, console/stats y re-render del DOM mutado | **HECHO** | 7 fixtures `js_*`; `js_text.html` 15.876 B `md5 e1da51d4…` vs 15.499 B `md5 53f67e77…` |
 | **Eventos avanzados (ronda 12)**: `currentTarget` real y `eventPhase` 1/2/3 (capture en el target), `once`/`passive`, `removeEventListener` por identidad, handlers inline `onclick`/`onload`/`onerror`, `document.close()` no-op, `estimated_heap_bytes()` aproximado, dispatch no-`Event` ⇒ `TypeError` y excepciones de listeners capturadas (`last_event_error()`) | **HECHO** | 58 tests js; Fase 6 ≈80 % |
 | **WP-B (ronda 11)**: `CSSStyleDeclaration` completa (`cssText`/`length`/`item`/`getPropertyValue`/`setProperty`/`removeProperty`), `getComputedStyle` con provider inyectable, `NodeList` snapshot, `matches`/`closest`, `insertAdjacentHTML`/`Text` e identidad de wrappers; `document` como `EventTarget`; APIs Rust `eval_on_document`/`dispatch_simple_event`/`take_document` | **HECHO** | Fase 6 ≈80 % |
-| **WP-6.4 (ronda 11)**: hook `html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
+| **WP-6.4 (ronda 11)**: hook `megi_html::scripting::{ScriptExecutor, ScriptExecution}`; scripts parser-inserted al `</script>`/EOF y `document.write` **re-tokenizado en la posición actual** (scripts anidados incluidos); externos `src` los ejecuta el host; errores no fatales; camino sin scripting zero-cost | **HECHO** | **árbol 3.904/3.904 (100 %), allowlist de tree vacía** |
 | **APIs de navegador avanzadas (rondas 27–32)**: `URL`/`URLSearchParams`, `History`/`Web Storage`, `MutationObserver`, `LayoutProvider` (`getBoundingClientRect`/offset/client), `fetch()` con `AbortController`/`ReadableStream`, `window.onerror`/`document.onerror` y Web Workers cooperativos | **HECHO** | Cableados en `render` |
 | Pendientes F6: conformance JS/DOM extendida, contabilidad fina de memoria, `fetch` streaming completo y workers con DOM | **PENDIENTE** | Fase 6 ≈98 % |
 
-## 9. Fase 7: Shell y ventana del sistema (`crates/shell`, 238 tests)
+## 9. Fase 7: Shell y ventana del sistema (`crates/browser`, 238 tests)
 
 | Capacidad | Estado | Notas |
 |---|:---:|---|
@@ -192,41 +192,41 @@ Formularios interactivos, `flex`/`grid`, `@font-face`, bidi/scripts complejos, e
 
 ```bash
 ./tools/dev.sh all                             # fmt, clippy, tests (ver badge/`PROGRESS.md`), doc y gate PASS
-cargo test -p css -p layout -p paint -p fonts -p dom -p html
-cargo test -p net -p render -p image -p shell
-cargo test -p js
-cargo test -p js --no-default-features
-cargo run -p render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
-cargo run -p render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
-cargo run -p render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260   # c357cc2c…
-cargo run -p render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
-cargo run -p render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
-cargo run -p shell -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
-cargo test -p paint --test effects
-cargo run -p svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
-cargo run -p render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
-cargo run --release -p bench -- --filter layout --iterations 5     # ~36,3 ms
-cargo run --release -p bench -- --filter pipeline --iterations 3   # ~120,5 ms
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_on.png    # JS ejecutado (mutaciones en el PNG)
-cargo run -p render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
-cargo test -p paint --test hit_testing
-cargo test -p svg                              # crate SVG (60 tests)
-cargo test -p render --test svg_tests          # SVG E2E en render (11 tests)
-cargo run -p render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
-cargo test -p fonts -p css -p render          # fuentes web @font-face/WOFF2 E2E
-cargo run -p render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03… vs e2d76dee… (fallback)
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
-cargo run -p test_harness -- --summary          # gate: árbol 3904/3904 (100 %), 230/230 serializer, 30/30 CSS; exit 0
-cargo test -p render --test event_loop_tests   # event loop presupuestado (6 fixtures js_event_*)
-cargo test -p html --lib scripting             # hook WP-6.4 (scripts parser-inserted)
-cargo run --release -p bench -- --filter layout   # ronda 12: ~51-53 ms, LayoutBox 176 B
-cargo run --release -p bench -- --filter paint    # ronda 12: encoder PNG −30,5 % invariante
-cargo run -p render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
-cargo run -p shell -- tests/fixtures/render/showcase/index.html              # navegación (clic, Alt+←/→, b/n, r, q)
-cargo run -p render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
-cargo run -p shell -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
-cargo run --release -p paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/phase4.png
+cargo test -p megi-css -p megi-layout -p megi-paint -p megi-fonts -p megi-core -p megi-html
+cargo test -p megi-net -p megi-render -p megi-image -p megi-browser
+cargo test -p megi-js
+cargo test -p megi-js --no-default-features
+cargo run -p megi-render -- tests/fixtures/render/showcase/index.html docs/images/showcase.png --width 1024 --height 768
+cargo run -p megi-render -- tests/fixtures/render/svg_inline_simple.html /tmp/inline.png --json   # inline_svgs>0
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/gradient.svg /tmp/gradient.png
+cargo run -p megi-render -- tests/fixtures/render/background_layers.html /tmp/layers.png --width 240 --height 260   # c357cc2c…
+cargo run -p megi-render -- tests/fixtures/render/browser_api.html /tmp/api.png --json
+cargo run -p megi-render -- tests/fixtures/render/flex_row.html /tmp/flex_row.png
+cargo run -p megi-browser -- tests/fixtures/render/forms.html --screenshot /tmp/forms.png --width 640 --height 480
+cargo test -p megi-paint --test effects
+cargo run -p megi-svg --example svg_to_png -- crates/svg/tests/fixtures/pattern.svg /tmp/pattern.png
+cargo run -p megi-render -- tests/fixtures/render/backgrounds.html /tmp/bg.png
+cargo run --release -p megi-bench -- --filter layout --iterations 5     # ~36,3 ms
+cargo run --release -p megi-bench -- --filter pipeline --iterations 3   # ~120,5 ms
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_on.png    # JS ejecutado (mutaciones en el PNG)
+cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_off.png --no-scripting
+cargo test -p megi-paint --test hit_testing
+cargo test -p megi-svg                              # crate SVG (60 tests)
+cargo test -p megi-render --test svg_tests          # SVG E2E en render (11 tests)
+cargo run -p megi-render -- tests/fixtures/render/svg_img.html /tmp/svg_img.png --json   # svgs_rendered=1
+cargo test -p megi-fonts -p megi-css -p megi-render          # fuentes web @font-face/WOFF2 E2E
+cargo run -p megi-render -- tests/fixtures/render/webfont.html /tmp/webfont.png --json   # md5 f38aed03… vs e2d76dee… (fallback)
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/zoom2.png --width 640 --height 400 --zoom 2  # md5 c11903cf…
+cargo run -p megi-test-harness -- --summary          # gate: árbol 3904/3904 (100 %), 230/230 serializer, 30/30 CSS; exit 0
+cargo test -p megi-render --test event_loop_tests   # event loop presupuestado (6 fixtures js_event_*)
+cargo test -p megi-html --lib scripting             # hook WP-6.4 (scripts parser-inserted)
+cargo run --release -p megi-bench -- --filter layout   # ronda 12: ~51-53 ms, LayoutBox 176 B
+cargo run --release -p megi-bench -- --filter paint    # ronda 12: encoder PNG −30,5 % invariante
+cargo run -p megi-render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
+cargo run -p megi-browser -- tests/fixtures/render/showcase/index.html              # navegación (clic, Alt+←/→, b/n, r, q)
+cargo run -p megi-render -- tests/fixtures/render/images.html docs/images/images-e2e.png --width 640 --height 400
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png
+cargo run --release -p megi-paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/phase4.png
 python3 tools/png_check.py /tmp/phase4.png
 ./tools/bench.sh
 ```

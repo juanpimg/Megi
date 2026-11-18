@@ -1,6 +1,6 @@
 # Mesa B — fiscal de dedup y severidad, REINTENTO (scope core, `f2-core.md` completo)
 
-- Informe fiscalizado: `docs/audit/findings/wave2/f2-core.md` (15 hallazgos 01–09, 10a, 10b, 11–14 + 1 latent; HEAD `3c06db8`; alcance `crates/dom|html|css` intacto según el propio informe).
+- Informe fiscalizado: `docs/audit/findings/wave2/f2-core.md` (15 hallazgos 01–09, 10a, 10b, 11–14 + 1 latent; HEAD `3c06db8`; alcance `crates/core|html|css` intacto según el propio informe).
 - Este fichero sustituye a `verify-core-B.md` (aquel fiscalizó 01–10 con cuerpo y marcó 11–14 + latent como no evaluables por truncamiento; el informe ya está completo y aquí se fiscaliza todo). No se borra ningún archivo.
 - Escala aplicada: P0 = RCE/crash remoto; P1 = crash/hang/DoS/bypass; P2 = corrupción visible o contrato roto; P3 = cosmetic/docs/perf-no-DoS.
 - Fuentes de dedup: `docs/audit/FINDINGS.md` (228 filas), `docs/GAPS.md`, `.superpowers/sdd/2026-11-18-auditoria-linea-por-linea-megi/issues-index.json` (1000 issues; 5 abiertas: #1544, #1541, #1534, #1519, #1516 — ninguna del scope), más greps directos al árbol. Ninguna abierta solapa con core.

@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::compression::crc32_ieee;
-use net::{
+use megi_net::compression::crc32_ieee;
+use megi_net::{
     AcceptEncoding, CompressionLimits, CookieJar, FetchError, FetchOptions, Url, fetch, preflight,
 };
 

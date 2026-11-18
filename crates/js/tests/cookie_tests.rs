@@ -4,12 +4,12 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::{CookieProvider, JsRuntime};
+use megi_js::{CookieProvider, JsRuntime};
 
 #[test]
 fn document_cookie_delegates_to_cookie_provider() {
     let mut runtime = JsRuntime::with_document(
-        dom::Document::new(),
+        megi_core::Document::new(),
         "https://app.example.test/checkout".to_owned(),
     )
     .expect("runtime");
@@ -24,11 +24,11 @@ fn document_cookie_delegates_to_cookie_provider() {
     let store_set = Arc::clone(&store);
 
     runtime.set_cookie_provider(CookieProvider {
-        get: Box::new(move |url| {
+        get: Arc::new(move |url| {
             reads_clone.lock().unwrap().push(url.to_owned());
             store_get.lock().unwrap().clone()
         }),
-        set: Box::new(move |url, value| {
+        set: Arc::new(move |url, value| {
             writes_clone
                 .lock()
                 .unwrap()

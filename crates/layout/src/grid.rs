@@ -54,7 +54,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use css::{
+use megi_css::{
     AlignItems, AlignSelf, AutoRepeat, AutoRepeatKind, ComputedStyle, GridAutoFlow,
     GridContentDistribution, GridLine, GridTemplateAreas, Length, TrackMax, TrackMin, TrackSize,
 };
@@ -63,8 +63,8 @@ use crate::block::{
     calculate_block_height, calculate_shrink_to_fit_width, layout_box_contents, translate_box,
 };
 use crate::box_tree::LayoutBox;
-use crate::geometry::{EdgeSizes, Rect};
 use crate::inline::TextMeasurer;
+use megi_core::geometry::{EdgeSizes, Rect};
 
 /// Maximum number of tracks after expanding `auto-fill`/`auto-fit`.
 const MAX_EXPANDED_TRACKS: usize = 1024;
@@ -97,13 +97,13 @@ struct Spec {
     doc_index: usize,
 }
 
-fn resolve(value: Length, calc: Option<css::calc::CalcValue>, reference: f32) -> f32 {
+fn resolve(value: Length, calc: Option<megi_css::calc::CalcValue>, reference: f32) -> f32 {
     crate::calc::length(value, calc, reference)
 }
 
 fn definite_length(
     value: Length,
-    calc: Option<css::calc::CalcValue>,
+    calc: Option<megi_css::calc::CalcValue>,
     reference: Option<f32>,
 ) -> Option<f32> {
     crate::calc::length_optional(value, calc, reference)
@@ -247,8 +247,8 @@ impl GridNames {
     fn build(
         columns: &[TrackSize],
         rows: &[TrackSize],
-        column_template: &css::GridTemplate,
-        row_template: &css::GridTemplate,
+        column_template: &megi_css::GridTemplate,
+        row_template: &megi_css::GridTemplate,
         areas: Option<&GridTemplateAreas>,
     ) -> Self {
         let pad = |names: &[Vec<String>], len: usize| -> Vec<Vec<String>> {
@@ -726,7 +726,7 @@ fn place_items(
 /// the index range of the repeated tracks (used to collapse empty `auto-fit`
 /// tracks after placement).
 fn expand_template(
-    template: &css::GridTemplate,
+    template: &megi_css::GridTemplate,
     available: f32,
     gap: f32,
 ) -> (Vec<TrackSize>, Option<(usize, usize)>) {
@@ -917,7 +917,7 @@ pub(crate) fn layout_grid_children(
         };
         if matches!(
             child_style.position,
-            css::Position::Absolute | css::Position::Fixed
+            megi_css::Position::Absolute | megi_css::Position::Fixed
         ) || child.is_float
         {
             continue;
@@ -1001,7 +1001,7 @@ pub(crate) fn layout_grid_children(
         };
         if matches!(
             child_style.position,
-            css::Position::Absolute | css::Position::Fixed
+            megi_css::Position::Absolute | megi_css::Position::Fixed
         ) || child.is_float
         {
             continue;
@@ -1484,7 +1484,7 @@ fn layout_item(
 #[cfg(test)]
 mod placement_probe_tests {
     use super::*;
-    use css::{GridAutoFlow, GridLine};
+    use megi_css::{GridAutoFlow, GridLine};
 
     /// N items pinned to the same column must not re-probe rows 0..N for each item (#1418).
     /// With the old from-zero scan the probe count is ~N²/2; with a per-column cursor it stays

@@ -78,10 +78,10 @@
 //! ## Example
 //!
 //! ```
-//! # fn main() -> Result<(), image::ImageError> {
+//! # fn main() -> Result<(), megi_image::ImageError> {
 //! let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/png/rgba8.png");
 //! let bytes = std::fs::read(path).unwrap();
-//! let image = image::decode(&bytes)?;
+//! let image = megi_image::decode(&bytes)?;
 //! assert_eq!(image.dimensions(), (6, 5));
 //! assert_eq!(image.pixel(0, 0), Some([0, 0, 0, 0]));
 //! # Ok(())

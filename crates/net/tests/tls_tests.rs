@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{FetchError, FetchOptions, Url, fetch};
+use megi_net::{FetchError, FetchOptions, Url, fetch};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -172,7 +172,7 @@ fn loader_fetches_https_with_bundled_client_policy() {
         b"HTTP/1.1 200 OK\r\nContent-Type: text/css\r\nContent-Length: 4\r\n\r\nbody".to_vec(),
         1,
     );
-    let mut loader = net::ResourceLoader::with_options(options(Some(client_config_trusting(
+    let mut loader = megi_net::ResourceLoader::with_options(options(Some(client_config_trusting(
         certificate.cert.clone(),
     ))));
     let resource = loader

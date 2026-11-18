@@ -87,7 +87,7 @@
 //! The test suite is **fully offline**: every HTTP test starts its own
 //! `TcpListener` on `127.0.0.1:0` and serves hand-written HTTP responses, and `file://`
 //! tests use temporary files. There are no sleeps (beyond short socket timeouts used as a
-//! safety net) and no external connections, so `cargo test -p net` passes in CI without
+//! safety net) and no external connections, so `cargo test -p megi-net` passes in CI without
 //! network access.
 //!
 //! ## Browser features (R109)
@@ -151,6 +151,34 @@ pub mod mime;
 pub mod mixed_content;
 #[cfg(feature = "pac")]
 pub mod pac;
+
+/// Evaluates a PAC script's `FindProxyForURL` function.
+///
+/// Defined here so the network crate never depends on a JavaScript engine:
+/// the host injects an implementation (e.g. backed by `megi-js`) when it wants
+/// proxy auto-configuration.
+#[cfg(feature = "pac")]
+pub trait PacEvaluator: Send + Sync {
+    /// Returns the raw PAC result string (`DIRECT`, `PROXY host:port`, ...).
+    fn evaluate(&self, script: &str, url: &str, host: &str) -> Result<String, String>;
+}
+
+#[cfg(feature = "pac")]
+static PAC_EVALUATOR: std::sync::OnceLock<std::sync::Arc<dyn PacEvaluator>> =
+    std::sync::OnceLock::new();
+
+/// Installs the process-wide PAC evaluator. The first call wins; later calls are ignored.
+#[cfg(feature = "pac")]
+pub fn set_pac_evaluator<E: PacEvaluator + Send + Sync + 'static>(evaluator: E) {
+    let _ = PAC_EVALUATOR.set(std::sync::Arc::new(evaluator));
+}
+
+/// Returns the installed PAC evaluator, if any. Without one, PAC falls back to
+/// static/direct proxy configuration (the page must not fail because of PAC).
+#[cfg(feature = "pac")]
+pub fn pac_evaluator() -> Option<&'static dyn PacEvaluator> {
+    PAC_EVALUATOR.get().map(|e| e.as_ref() as &dyn PacEvaluator)
+}
 pub mod proxy;
 pub mod psl;
 pub mod range;

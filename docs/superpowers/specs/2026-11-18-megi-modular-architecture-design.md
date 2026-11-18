@@ -100,7 +100,7 @@ js ──► test_harness ──────────────────
 | # | Deuda | Evidencia | Consecuencia |
 |---|---|---|---|
 | D1 | Docs desincronizados con el código | `GAPS.md:28,57,60-61,76-80` vs `js/src/xhr.rs`, `js/src/websocket.rs`, `css/src/query.rs`, `css/src/transform.rs`, `net/src/{csp,integrity,hsts,mixed_content}.rs` | Agente implementa dos veces una feature existente o "arregla" un falso bug. |
-| D2 | Nombres de crates genéricos | `Cargo.toml:29-40` | Imposible publicar/fork limpio; `use image::…` ambiguo; difusión de la comunidad. |
+| D2 | Nombres de crates genéricos | `Cargo.toml:29-40` | Imposible publicar/fork limpio; `use megi_image::…` ambiguo; difusión de la comunidad. |
 | D3 | `paint` mezcla display-list + raster + PNG | `paint/src/{painter,rasterizer,png,deflate,inflate}.rs`; caches `thread_local` | No se puede usar solo el pipeline de cómputo de display list en un embebido ligero sin arrastrar 4.454 líneas de raster. |
 | D4 | Sin API `WebView` reutilizable | `shell/src/window.rs:165-216` solo `run_window*` bloqueante; `WindowApp` privado | Un fork debe copiar el shell completo; no hay contrato de eventos/frame. |
 | D5 | `Rc<RefCell<Host>>` + TLS en JS | `js/src/host.rs:492-496,799-821`; `runtime.rs:167,8644-8660` | Re-entrancia frágil, ciclos padre↔worker, imposible razonar localmente al editar un binding. |

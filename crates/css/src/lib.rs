@@ -1,7 +1,7 @@
 //! # Megi CSS (`css`)
 //!
 //! Foundational types, W3C CSS Syntax Module Level 3 tokenizer & parser, and Selectors Level 4
-//! matching engine operating over [`dom::Document`] and [`dom::NodeId`].
+//! matching engine operating over [`megi_core::Document`] and [`megi_core::NodeId`].
 //!
 //! Round 2 additions: functional `:is()`/`:where()`/`:not()`/`:has()` and the remaining
 //! structural pseudo-classes, pre-cascade shorthand expansion (see [`shorthand`]) so that
@@ -105,7 +105,7 @@ pub struct SimpleSelector {
 
 impl SimpleSelector {
     /// Evaluates whether the element at `node_id` in `doc` matches this selector.
-    pub fn matches(&self, doc: &dom::Document, node_id: dom::NodeId) -> bool {
+    pub fn matches(&self, doc: &megi_core::Document, node_id: megi_core::NodeId) -> bool {
         let compound = CompoundSelector {
             tag_name: self.tag_name.clone(),
             id: self.id.clone(),
@@ -123,7 +123,7 @@ impl SimpleSelector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
     #[test]
     fn test_simple_selector_matches_dom_element() {
@@ -1683,7 +1683,7 @@ mod background_geometry_tests {
     //! `background-repeat`/`-size`/`-position` + `background` shorthand (R89).
 
     use super::*;
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
     fn style_with_inline(inline: &str) -> ComputedStyle {
         let mut doc = Document::new();
@@ -1822,7 +1822,7 @@ mod background_layers_tests {
     //! `background` shorthand (R94).
 
     use super::*;
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
     fn style_with_inline(inline: &str) -> ComputedStyle {
         let mut doc = Document::new();
@@ -1973,7 +1973,7 @@ mod decoration_tests {
 
     use super::*;
     use crate::properties::MAX_BOX_SHADOWS;
-    use dom::{Attribute, Document, Namespace};
+    use megi_core::{Attribute, Document, Namespace};
 
     fn style_with_inline(inline: &str) -> ComputedStyle {
         let mut doc = Document::new();

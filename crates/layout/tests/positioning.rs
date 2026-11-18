@@ -6,9 +6,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Length, Position};
-use dom::{Document, Namespace, NodeId};
-use layout::{LayoutBox, Rect, layout_document};
+use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Length, Position};
+use megi_layout::{LayoutBox, Rect, layout_document};
 
 fn make_block_style(width: Length, height: Length) -> ComputedStyle {
     let mut style = ComputedStyle::initial();
@@ -122,7 +122,7 @@ fn test_absolute_uses_positioned_ancestor_containing_block() {
 
     let mut wrapper_style = make_block_style(Length::Px(300.0), Length::Px(200.0));
     wrapper_style.position = Position::Relative;
-    wrapper_style.padding = css::RectEdges::all(Length::Px(10.0));
+    wrapper_style.padding = megi_css::RectEdges::all(Length::Px(10.0));
     styles.insert(wrapper, wrapper_style);
 
     let mut abs_style = make_block_style(Length::Px(50.0), Length::Px(25.0));

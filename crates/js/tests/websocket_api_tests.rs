@@ -3,10 +3,11 @@
 #![cfg(feature = "js")]
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
-use js::error::JsError;
-use js::host::{WebSocketEvent, WebSocketProvider, WebSocketTransport};
-use js::runtime::JsRuntime;
+use megi_js::error::JsError;
+use megi_js::host::{WebSocketEvent, WebSocketProvider, WebSocketTransport};
+use megi_js::runtime::JsRuntime;
 
 struct MockTransport {
     events: VecDeque<WebSocketEvent>,
@@ -30,7 +31,7 @@ fn runtime_with(
     let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let seen = std::rc::Rc::clone(&sent);
     let mut runtime = JsRuntime::new().expect("runtime");
-    let provider: WebSocketProvider = Box::new(move |_url| {
+    let provider: WebSocketProvider = Arc::new(move |_url| {
         Ok(Box::new(MockTransport {
             events: VecDeque::from(events.clone()),
             sent: Vec::new(),

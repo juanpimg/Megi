@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use render::{RenderOptions, Viewport, render_url};
+use megi_render::{RenderOptions, Viewport, render_url};
 use std::path::Path;
 
 fn fixture_path(name: &str) -> String {
@@ -17,11 +17,11 @@ fn options() -> RenderOptions {
         ..RenderOptions::default()
     }
 }
-fn render_fixture(name: &str) -> render::RenderOutput {
+fn render_fixture(name: &str) -> megi_render::RenderOutput {
     render_url(&fixture_path(name), &options())
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
-fn text(output: &render::RenderOutput, id: &str) -> String {
+fn text(output: &megi_render::RenderOutput, id: &str) -> String {
     let document = &output.document;
     let node = document
         .descendants(document.root())

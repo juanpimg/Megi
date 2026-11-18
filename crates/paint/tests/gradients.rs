@@ -3,14 +3,14 @@
 
 use std::sync::Arc;
 
-use css::{
+use megi_core::{Attribute, Document, Namespace};
+use megi_css::{
     BackgroundClip, BackgroundLayer, BorderRadii, Color, ComputedStyle, Display, Gradient,
     GradientKind, GradientStop, Length, LinearDirection, LinearGradient, RadialExtent,
     RadialGradient, RadialShape, Radius, resolve_document_styles,
 };
-use dom::{Attribute, Document, Namespace};
-use layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
-use paint::{
+use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
+use megi_paint::{
     BackgroundImages, ImageStore, Pixmap, build_display_list_with_images_and_backgrounds,
     rasterize_display_list,
 };
@@ -41,7 +41,7 @@ fn linear_gradient(direction: LinearDirection, stops: Vec<(&str, Option<f32>)>) 
         repeating: false,
         stops,
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     }
 }
 
@@ -146,7 +146,7 @@ fn test_radial_gradient_center_and_corner() {
         kind: GradientKind::Radial(RadialGradient {
             shape: Some(RadialShape::Circle),
             extent: Some(RadialExtent::FarthestCorner),
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops: vec![
@@ -160,7 +160,7 @@ fn test_radial_gradient_center_and_corner() {
             },
         ],
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     };
     let pixmap = render(
         gradient_style(gradient),
@@ -228,12 +228,12 @@ fn test_background_size_and_position_apply_to_gradients() {
         vec![("red", None), ("blue", None)],
     ));
     style.background_layers[0].size =
-        css::BackgroundSize::Explicit(Length::Px(10.0), Length::Px(10.0));
-    style.background_layers[0].position = css::BackgroundPosition {
+        megi_css::BackgroundSize::Explicit(Length::Px(10.0), Length::Px(10.0));
+    style.background_layers[0].position = megi_css::BackgroundPosition {
         x: Length::Px(10.0),
         y: Length::Px(0.0),
     };
-    style.background_layers[0].repeat = css::BackgroundRepeat::NO_REPEAT;
+    style.background_layers[0].repeat = megi_css::BackgroundRepeat::NO_REPEAT;
     let pixmap = render(style, Rect::new(0.0, 0.0, 30.0, 10.0), vec![]);
     assert_eq!(
         pixmap.pixel(2, 5),
@@ -379,7 +379,7 @@ fn test_many_stops_are_capped_and_do_not_panic() {
             position: Some(Length::Percent(index as f32)),
         });
     }
-    assert!(stops.len() > css::MAX_GRADIENT_STOPS);
+    assert!(stops.len() > megi_css::MAX_GRADIENT_STOPS);
     let gradient = Gradient {
         kind: GradientKind::Linear(LinearGradient {
             direction: LinearDirection::ToRight,
@@ -387,7 +387,7 @@ fn test_many_stops_are_capped_and_do_not_panic() {
         repeating: false,
         stops,
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     };
     let pixmap = render(
         gradient_style(gradient),
@@ -449,14 +449,14 @@ fn conic_gradient(from_angle: f32, stops: Vec<(&str, Option<f32>)>) -> Gradient 
         })
         .collect();
     Gradient {
-        kind: GradientKind::Conic(css::ConicGradient {
+        kind: GradientKind::Conic(megi_css::ConicGradient {
             from_angle,
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops,
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     }
 }
 
@@ -573,7 +573,7 @@ fn test_oklab_interpolation_differs_from_srgb() {
         vec![("red", None), ("blue", None)],
     );
     let mut oklab = srgb.clone();
-    oklab.interpolation = css::InterpolationSpace::Oklab;
+    oklab.interpolation = megi_css::InterpolationSpace::Oklab;
     let plain = render(
         gradient_style(srgb),
         Rect::new(0.0, 0.0, 20.0, 10.0),
@@ -599,7 +599,7 @@ fn test_srgb_linear_interpolation_brightens_midpoint() {
         LinearDirection::ToRight,
         vec![("red", None), ("blue", None)],
     );
-    gradient.interpolation = css::InterpolationSpace::SrgbLinear;
+    gradient.interpolation = megi_css::InterpolationSpace::SrgbLinear;
     let pixmap = render(
         gradient_style(gradient),
         Rect::new(0.0, 0.0, 20.0, 10.0),
@@ -623,14 +623,14 @@ fn test_conic_deterministic_and_many_stops_capped() {
         })
         .collect::<Vec<_>>();
     let gradient = Gradient {
-        kind: GradientKind::Conic(css::ConicGradient {
+        kind: GradientKind::Conic(megi_css::ConicGradient {
             from_angle: 30.0,
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops,
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Oklab,
+        interpolation: megi_css::InterpolationSpace::Oklab,
     };
     let first = render(
         gradient_style(gradient.clone()),
@@ -651,7 +651,8 @@ fn test_conic_deterministic_and_many_stops_capped() {
 fn test_conic_at_position_offsets_center() {
     let mut gradient = conic_gradient(0.0, vec![("red", Some(0.0)), ("blue", Some(50.0))]);
     if let GradientKind::Conic(conic) = &mut gradient.kind {
-        conic.position = css::BackgroundPosition::parse("25% 75%", 16.0, 16.0).expect("position");
+        conic.position =
+            megi_css::BackgroundPosition::parse("25% 75%", 16.0, 16.0).expect("position");
     }
     let pixmap = render(
         gradient_style(gradient),
@@ -675,9 +676,9 @@ fn test_conic_at_position_offsets_center() {
 #[test]
 fn test_conic_hard_stops_and_alpha() {
     let gradient = Gradient {
-        kind: GradientKind::Conic(css::ConicGradient {
+        kind: GradientKind::Conic(megi_css::ConicGradient {
             from_angle: 0.0,
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops: vec![
@@ -699,7 +700,7 @@ fn test_conic_hard_stops_and_alpha() {
             },
         ],
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     };
     // Half-transparent gradient over a white canvas: colors are lightened.
     let pixmap = render(
@@ -725,7 +726,7 @@ fn test_radial_hint_shifts_color_ring() {
         kind: GradientKind::Radial(RadialGradient {
             shape: Some(RadialShape::Circle),
             extent: Some(RadialExtent::FarthestCorner),
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops: vec![
@@ -741,7 +742,7 @@ fn test_radial_hint_shifts_color_ring() {
         hints: hint
             .map(|position| vec![Some(Length::Percent(position))])
             .unwrap_or_default(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     };
     let plain = render(
         gradient_style(radial(None)),
@@ -769,7 +770,7 @@ fn test_explicit_srgb_space_matches_default() {
         vec![("red", None), ("blue", None)],
     );
     let mut explicit = default.clone();
-    explicit.interpolation = css::InterpolationSpace::Srgb;
+    explicit.interpolation = megi_css::InterpolationSpace::Srgb;
     let first = render(
         gradient_style(default),
         Rect::new(0.0, 0.0, 20.0, 10.0),
@@ -824,16 +825,16 @@ fn test_conic_stop_cap_no_panic() {
             position: Some(Length::Percent(index as f32)),
         });
     }
-    assert!(stops.len() > css::MAX_GRADIENT_STOPS);
+    assert!(stops.len() > megi_css::MAX_GRADIENT_STOPS);
     let gradient = Gradient {
-        kind: GradientKind::Conic(css::ConicGradient {
+        kind: GradientKind::Conic(megi_css::ConicGradient {
             from_angle: 0.0,
-            position: css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
+            position: megi_css::BackgroundPosition::parse("center", 16.0, 16.0).expect("center"),
         }),
         repeating: false,
         stops,
         hints: Vec::new(),
-        interpolation: css::InterpolationSpace::Srgb,
+        interpolation: megi_css::InterpolationSpace::Srgb,
     };
     let pixmap = render(
         gradient_style(gradient),
@@ -855,7 +856,7 @@ fn test_background_clip_text_excludes_outer_shadow_and_border_box_layer() {
     let mut style = block_style();
     style.background_color = Color::new(0, 0, 255, 255);
     style.background_geometry_explicit = true;
-    style.box_shadows.push(css::BoxShadow {
+    style.box_shadows.push(megi_css::BoxShadow {
         offset_x: 0.0,
         offset_y: 0.0,
         blur: 0.0,
@@ -905,11 +906,13 @@ fn test_background_clip_text_excludes_outer_shadow_and_border_box_layer() {
     let mut text_grad_idx = None;
     for (idx, item) in list.items.iter().enumerate() {
         match item {
-            paint::DisplayItem::BoxShadow { .. } if shadow_idx.is_none() => shadow_idx = Some(idx),
-            paint::DisplayItem::PushTextMaskGroup { .. } if first_push_text.is_none() => {
+            megi_paint::DisplayItem::BoxShadow { .. } if shadow_idx.is_none() => {
+                shadow_idx = Some(idx)
+            }
+            megi_paint::DisplayItem::PushTextMaskGroup { .. } if first_push_text.is_none() => {
                 first_push_text = Some(idx)
             }
-            paint::DisplayItem::Gradient { .. } => {
+            megi_paint::DisplayItem::Gradient { .. } => {
                 if border_box_grad_idx.is_none() {
                     border_box_grad_idx = Some(idx);
                 } else {

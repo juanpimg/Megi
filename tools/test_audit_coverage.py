@@ -39,7 +39,7 @@ class ClassifyTests(unittest.TestCase):
             "crates/html/src/tokenizer.rs": ("src", "F2"),
             "crates/html/tests/tokenizer.rs": ("test", "F1"),
             "crates/bench/src/benches.rs": ("tool", "F4"),
-            "crates/shell/examples/demo.rs": ("example", "F3"),
+            "crates/browser/examples/demo.rs": ("example", "F3"),
             "fuzz/fuzz_targets/html.rs": ("fuzz", "F1"),
             "fuzz/corpus/html/a.html": ("exempt", "-"),
             "tests/html5lib-tests/tree-construction/x.dat": ("vendored", "-"),

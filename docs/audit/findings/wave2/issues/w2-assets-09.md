@@ -8,7 +8,7 @@ P2 — bug de corrección: WebP extended válidos (codificadores emiten 2/3) no 
 
 ## Pasos para reproducir
 1. `docs/audit/findings/wave2/repro-w2-assets/alph-f1.webp` (control OK), `alph-f2.webp`, `alph-f3.webp`.
-2. `image::decode` sobre cada uno (harness Mesa A `alph`; bytes idénticos salvo el byte 0 del chunk ALPH).
+2. `megi_image::decode` sobre cada uno (harness Mesa A `alph`; bytes idénticos salvo el byte 0 del chunk ALPH).
 
 ## Esperado vs observado
 Esperado: decode OK 16x16 en los tres (WebP Container Spec, métodos 0–3).

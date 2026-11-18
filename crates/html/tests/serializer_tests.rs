@@ -5,9 +5,9 @@
 //! verbatim, and doctypes/comments round-trip. They are deliberately end-to-end (parse then
 //! serialize) because that is how the engine uses the serializer.
 
-use html::{parse_document, serialize_html, serialize_outer_html};
+use megi_html::{parse_document, serialize_html, serialize_outer_html};
 
-fn find_first(doc: &html::Document, local_name: &str) -> Option<html::NodeId> {
+fn find_first(doc: &megi_html::Document, local_name: &str) -> Option<megi_html::NodeId> {
     doc.descendants(doc.root()).find(|id| {
         doc.node(*id)
             .as_element()

@@ -12,7 +12,7 @@
 //! blocks the specifier ([`JsError::ImportMapBlocked`]). `scopes` is ignored (documented
 //! subset); relative values are used verbatim (callers should pass absolute URLs). Invalid
 //! JSON or non-object roots are typed errors. `integrity` metadata is not consumed here: the
-//! `render` loader enforces Subresource Integrity (`net::verify_integrity`, #1527) on `<script
+//! `render` loader enforces Subresource Integrity (`megi_net::verify_integrity`, #1527) on `<script
 //! integrity=…>` elements before execution.
 
 use std::collections::BTreeMap;

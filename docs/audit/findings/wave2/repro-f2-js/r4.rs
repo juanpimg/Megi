@@ -1,4 +1,4 @@
-use js::JsRuntime;
+use megi_js::JsRuntime;
 fn main() {
     let mut r = JsRuntime::new().expect("runtime");
     // Which XHR implementation wins: xhr.rs has `upload`, gap-prelude does not... both define?

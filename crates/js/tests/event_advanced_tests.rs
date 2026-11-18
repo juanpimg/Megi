@@ -4,7 +4,7 @@
 
 #![cfg(feature = "js")]
 
-use js::{Budget, JsError, JsRuntime};
+use megi_js::{Budget, JsError, JsRuntime};
 
 fn runtime() -> JsRuntime {
     let mut runtime = JsRuntime::new().expect("runtime");
@@ -162,7 +162,7 @@ fn inline_onload_on_window() {
         .expect("window onload setter");
     assert!(
         runtime
-            .dispatch_event(js::JsEventTarget::Window, "load", false)
+            .dispatch_event(megi_js::JsEventTarget::Window, "load", false)
             .expect("dispatch load")
     );
     assert_eq!(runtime.eval("loaded", "onload.js").expect("loaded"), "1");
@@ -336,7 +336,7 @@ fn inline_onclick_on_window() {
         .expect("window onclick setter");
     assert!(
         runtime
-            .dispatch_event(js::JsEventTarget::Window, "click", false)
+            .dispatch_event(megi_js::JsEventTarget::Window, "click", false)
             .expect("dispatch window click")
     );
     assert_eq!(
@@ -596,22 +596,22 @@ fn dispatch_ui_event_builds_typed_keyboard_input_focus_events() {
     assert!(
         runtime
             .dispatch_ui_event(
-                js::JsEventTarget::Node(input_node),
+                megi_js::JsEventTarget::Node(input_node),
                 "focus",
                 false,
                 false,
-                &js::JsUiEventKind::Focus,
+                &megi_js::JsUiEventKind::Focus,
             )
             .expect("focus")
     );
     assert!(
         runtime
             .dispatch_ui_event(
-                js::JsEventTarget::Node(input_node),
+                megi_js::JsEventTarget::Node(input_node),
                 "keydown",
                 true,
                 true,
-                &js::JsUiEventKind::Keyboard {
+                &megi_js::JsUiEventKind::Keyboard {
                     key: "a".to_owned(),
                     code: "KeyA".to_owned(),
                     ctrl_key: true,
@@ -626,11 +626,11 @@ fn dispatch_ui_event_builds_typed_keyboard_input_focus_events() {
     assert!(
         !runtime
             .dispatch_ui_event(
-                js::JsEventTarget::Node(input_node),
+                megi_js::JsEventTarget::Node(input_node),
                 "keydown",
                 true,
                 true,
-                &js::JsUiEventKind::Keyboard {
+                &megi_js::JsUiEventKind::Keyboard {
                     key: "Escape".to_owned(),
                     code: "Escape".to_owned(),
                     ctrl_key: false,
@@ -646,11 +646,11 @@ fn dispatch_ui_event_builds_typed_keyboard_input_focus_events() {
     assert!(
         runtime
             .dispatch_ui_event(
-                js::JsEventTarget::Node(input_node),
+                megi_js::JsEventTarget::Node(input_node),
                 "input",
                 true,
                 false,
-                &js::JsUiEventKind::Input {
+                &megi_js::JsUiEventKind::Input {
                     data: Some("a".to_owned()),
                     input_type: "insertText".to_owned(),
                 },
@@ -661,11 +661,11 @@ fn dispatch_ui_event_builds_typed_keyboard_input_focus_events() {
     assert!(
         runtime
             .dispatch_ui_event(
-                js::JsEventTarget::Node(input_node),
+                megi_js::JsEventTarget::Node(input_node),
                 "blur",
                 false,
                 false,
-                &js::JsUiEventKind::Focus,
+                &megi_js::JsUiEventKind::Focus,
             )
             .expect("blur")
     );

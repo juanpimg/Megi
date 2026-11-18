@@ -1,13 +1,13 @@
 //! # `<img>` discovery, loading, decoding and intrinsic sizes (WP-5.7)
 //!
 //! `render` resolves every `<img src>` against the document base URL, fetches it
-//! with the shared [`net::ResourceLoader`] (HTTP cache, redirects, TLS, caps and
+//! with the shared [`megi_net::ResourceLoader`] (HTTP cache, redirects, TLS, caps and
 //! `--no-network`) and decodes it with the dependency-free `image` crate.
 //!
 //! ## Policy (mirrors the stylesheet loader)
 //!
 //! - Missing/blocked/failed subresources are **non-fatal**: the render yields a
-//!   gray placeholder box (painted by `paint::IMAGE_PLACEHOLDER`) and a warning.
+//!   gray placeholder box (painted by `megi_paint::IMAGE_PLACEHOLDER`) and a warning.
 //! - PNG, baseline/progressive JPEG, GIF (first frame), **lossless WebP (VP8L)** and
 //!   **lossy WebP (VP8 keyframe)** are decoded with the in-tree `image` crate;
 //!   unsupported JPEG variants and corrupt/unsupported WebP payloads produce a
@@ -19,14 +19,14 @@
 //!   images are skipped with a warning (offline tests use `file:`/`data:`).
 //!
 //! The decoded RGBA pixels and the intrinsic `(width, height)` sizes are handed
-//! to `paint` ([`paint::ImageStore`]) and `layout`
+//! to `paint` ([`megi_paint::ImageStore`]) and `layout`
 //! (`layout_document_with_measurer_and_replaced_sizes`), respectively.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use dom::{Document, NodeId};
-use net::{ResourceLoader, Scheme, Url};
+use megi_core::{Document, NodeId};
+use megi_net::{ResourceLoader, Scheme, Url};
 
 use crate::svg_assets;
 
@@ -72,7 +72,7 @@ impl Default for ImageLimits {
 /// Result of the image-loading stage.
 pub struct LoadedImages {
     /// Decoded images keyed by their `<img>` DOM node.
-    pub store: paint::ImageStore,
+    pub store: megi_paint::ImageStore,
     /// Intrinsic `(width, height)` in CSS px, ready for layout's replaced sizes.
     pub sizes: HashMap<NodeId, (f32, f32)>,
     /// Images successfully fetched and decoded.
@@ -252,7 +252,7 @@ pub fn parse_srcset(input: &str) -> Vec<SrcsetCandidate> {
 }
 
 /// Parses and evaluates a `<source-size-value>` CSS length against the viewport metrics.
-fn parse_size_length_px(token: &str, media: &css::MediaContext) -> Option<f32> {
+fn parse_size_length_px(token: &str, media: &megi_css::MediaContext) -> Option<f32> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
         return None;
@@ -288,7 +288,7 @@ fn parse_size_length_px(token: &str, media: &css::MediaContext) -> Option<f32> {
 /// Evaluates an HTML `sizes` attribute against `media`, returning the target CSS width in px.
 ///
 /// Falls back to the viewport width (`100vw`, default `800px` when viewport is unknown).
-pub fn resolve_sizes(sizes_attr: Option<&str>, media: &css::MediaContext) -> f32 {
+pub fn resolve_sizes(sizes_attr: Option<&str>, media: &megi_css::MediaContext) -> f32 {
     let default_width = media.viewport.map_or(800.0, |(w, _)| w.max(1.0));
     let Some(raw) = sizes_attr.map(str::trim).filter(|s| !s.is_empty()) else {
         return default_width;
@@ -341,8 +341,8 @@ pub fn resolve_sizes(sizes_attr: Option<&str>, media: &css::MediaContext) -> f32
             continue;
         };
         if let Some(cond) = cond_opt {
-            let list = css::media::parse_media_query_list(cond);
-            if !css::media::evaluate(&list, media) {
+            let list = megi_css::media::parse_media_query_list(cond);
+            if !megi_css::media::evaluate(&list, media) {
                 continue;
             }
         }
@@ -374,7 +374,7 @@ pub fn select_image_candidate(
     srcset: Option<&str>,
     fallback_src: Option<&str>,
     sizes_attr: Option<&str>,
-    media: &css::MediaContext,
+    media: &megi_css::MediaContext,
     dpr: f32,
 ) -> Option<(String, f32)> {
     let dpr = sanitize_dpr(dpr);
@@ -436,7 +436,7 @@ pub fn select_image_candidate(
 pub fn resolve_element_image_source(
     document: &Document,
     img_node: NodeId,
-    media: &css::MediaContext,
+    media: &megi_css::MediaContext,
     dpr: f32,
 ) -> Option<(String, f32)> {
     let img_el = document.node(img_node).as_element()?;
@@ -460,8 +460,8 @@ pub fn resolve_element_image_source(
             if let Some(media_attr) = source_el.get_attribute("media").map(str::trim)
                 && !media_attr.is_empty()
             {
-                let list = css::media::parse_media_query_list(media_attr);
-                if !css::media::evaluate(&list, media) {
+                let list = megi_css::media::parse_media_query_list(media_attr);
+                if !megi_css::media::evaluate(&list, media) {
                     continue;
                 }
             }
@@ -500,7 +500,7 @@ pub fn resolve_element_image_source(
 pub fn resolve_img_source(
     document: &Document,
     img_node: NodeId,
-    media: &css::MediaContext,
+    media: &megi_css::MediaContext,
     dpr: f32,
 ) -> Option<String> {
     resolve_element_image_source(document, img_node, media, dpr).map(|(url, _)| url)
@@ -510,7 +510,7 @@ pub fn resolve_img_source(
 /// selection (`<picture>` / `<source>`, `srcset`, `sizes`, `dpr`).
 pub fn collect_responsive_image_sources(
     document: &Document,
-    media: &css::MediaContext,
+    media: &megi_css::MediaContext,
     dpr: f32,
 ) -> Vec<(NodeId, String, f32)> {
     let mut sources = Vec::new();
@@ -539,7 +539,7 @@ pub fn collect_responsive_image_sources(
 /// Collects `(NodeId, src)` pairs for every `<img>` element (including `srcset`/`<picture>`),
 /// in tree order, evaluated with default media context and `1.0` DPR.
 pub fn collect_image_sources(document: &Document) -> Vec<(NodeId, String)> {
-    collect_responsive_image_sources(document, &css::MediaContext::default(), 1.0)
+    collect_responsive_image_sources(document, &megi_css::MediaContext::default(), 1.0)
         .into_iter()
         .map(|(id, src, _)| (id, src))
         .collect()
@@ -561,7 +561,7 @@ pub fn load_images(
         base_url,
         loader,
         no_network,
-        &css::MediaContext::default(),
+        &megi_css::MediaContext::default(),
         limits,
         None,
         warnings,
@@ -576,13 +576,13 @@ pub fn load_images_with_context(
     base_url: &Url,
     loader: &mut ResourceLoader,
     no_network: bool,
-    media: &css::MediaContext,
+    media: &megi_css::MediaContext,
     limits: ImageLimits,
-    csp: Option<&net::csp::ContentSecurityPolicy>,
+    csp: Option<&megi_net::csp::ContentSecurityPolicy>,
     warnings: &mut Vec<String>,
 ) -> LoadedImages {
     let mut result = LoadedImages {
-        store: paint::ImageStore::new(),
+        store: megi_paint::ImageStore::new(),
         sizes: HashMap::new(),
         loaded: 0,
         failed: 0,
@@ -595,7 +595,7 @@ pub fn load_images_with_context(
     // `Arc` across every `<img>` that references it (backgrounds already deduplicate this
     // way). The raw `(intrinsic_size, scale_with_density)` tuple lets each `<img srcset>`
     // apply its own selected density divisor while still sharing the bitmap buffer.
-    type CachedImageEntry = ((f32, f32), bool, Arc<image::RgbaImage>);
+    type CachedImageEntry = ((f32, f32), bool, Arc<megi_image::RgbaImage>);
     let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
     let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
@@ -703,15 +703,15 @@ pub fn load_images_with_context(
             continue;
         }
         if matches!(
-            image::detect_format(&resource.bytes),
-            image::ImageFormat::Png
-                | image::ImageFormat::Jpeg
-                | image::ImageFormat::Gif
-                | image::ImageFormat::WebP
+            megi_image::detect_format(&resource.bytes),
+            megi_image::ImageFormat::Png
+                | megi_image::ImageFormat::Jpeg
+                | megi_image::ImageFormat::Gif
+                | megi_image::ImageFormat::WebP
         ) {
             let decoded = match limits.max_image_dim {
-                Some(max_dim) => image::decode_scaled(&resource.bytes, max_dim),
-                None => image::decode(&resource.bytes),
+                Some(max_dim) => megi_image::decode_scaled(&resource.bytes, max_dim),
+                None => megi_image::decode(&resource.bytes),
             };
             match decoded {
                 Ok(decoded) => {
@@ -742,8 +742,8 @@ pub fn load_images_with_context(
                     // Broken/unsupported VP8 lossy payloads (e.g. VP8X containers or a
                     // truncated keyframe) keep an explicit WebP-lossy warning.
                     if matches!(
-                        image::detect_format(&resource.bytes),
-                        image::ImageFormat::WebP
+                        megi_image::detect_format(&resource.bytes),
+                        megi_image::ImageFormat::WebP
                     ) && error.to_string().contains("VP8")
                     {
                         result.warnings.push(format!(
@@ -786,7 +786,7 @@ pub fn load_images_with_context(
                 }
             }
         } else {
-            let format = image::detect_format(&resource.bytes);
+            let format = megi_image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
                 "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"
@@ -801,7 +801,7 @@ pub fn load_images_with_context(
 #[cfg(test)]
 mod dedup_tests {
     use super::*;
-    use net::FetchOptions;
+    use megi_net::FetchOptions;
 
     #[test]
     fn image_byte_cap_is_applied_during_fetch() {
@@ -809,8 +809,8 @@ mod dedup_tests {
         // (response cap), not only by the post-load size check (#1213).
         let payload = "x".repeat(4096);
         let source = format!("<body><img src='data:image/png;base64,{payload}'></body>");
-        let document = html::parse_document(&source, false);
-        let base = net::Url::parse("file:///tmp/page.html").expect("base URL");
+        let document = megi_html::parse_document(&source, false);
+        let base = megi_net::Url::parse("file:///tmp/page.html").expect("base URL");
         let mut loader = ResourceLoader::with_options(FetchOptions::default());
         let limits = ImageLimits {
             max_image_bytes: 128,
@@ -839,8 +839,8 @@ mod dedup_tests {
             fixture.display(),
             fixture.display()
         );
-        let document = html::parse_document(&source, false);
-        let base = net::Url::parse(&format!("file://{}/page.html", directory.display()))
+        let document = megi_html::parse_document(&source, false);
+        let base = megi_net::Url::parse(&format!("file://{}/page.html", directory.display()))
             .expect("base URL");
         let mut loader = ResourceLoader::with_options(FetchOptions::default());
         let loaded = load_images(

@@ -18,7 +18,7 @@ Solo se crea este fichero.
   `/tmp/opencode/browser-repro/` (fuera del repo). El veredicto se basa en
   esas copias + el texto del informe (conservado en contexto).
 - Comando base (×3 cada repro, `timeout 60s`, CWD `/tmp/opencode/megi-verify`):
-  `cargo run -q --release -p shell -- <repro> --screenshot /tmp/v-<id>-<i>.png --save-html /tmp/v-<id>-<i>.html --no-session`
+  `cargo run -q --release -p megi-browser -- <repro> --screenshot /tmp/v-<id>-<i>.png --save-html /tmp/v-<id>-<i>.html --no-session`
 
 | id | veredicto | comando | salida literal (recortada) | nota |
 |----|-----------|---------|----------------------------|------|

@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use render::{RenderOptions, ScriptingMode, Viewport};
+use megi_render::{RenderOptions, ScriptingMode, Viewport};
 
 fn fixture_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("megi-importmap-{}-{name}", std::process::id()));
@@ -12,7 +12,7 @@ fn fixture_dir(name: &str) -> PathBuf {
     dir
 }
 
-fn body_attribute(output: &render::RenderOutput, name: &str) -> Option<String> {
+fn body_attribute(output: &megi_render::RenderOutput, name: &str) -> Option<String> {
     let document = &output.document;
     let body = document.body()?;
     document
@@ -94,7 +94,12 @@ fn invalid_import_maps_are_warnings_and_do_not_break_independent_modules() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-fn render_file(html: &str, dir: &std::path::Path, width: u32, height: u32) -> render::RenderOutput {
+fn render_file(
+    html: &str,
+    dir: &std::path::Path,
+    width: u32,
+    height: u32,
+) -> megi_render::RenderOutput {
     let document = dir.join("index.html");
     std::fs::write(&document, html).expect("write document");
     let options = RenderOptions {
@@ -102,7 +107,7 @@ fn render_file(html: &str, dir: &std::path::Path, width: u32, height: u32) -> re
         scripting: ScriptingMode::Enabled,
         ..RenderOptions::default()
     };
-    render::render_url(&format!("file://{}", document.display()), &options).expect("render")
+    megi_render::render_url(&format!("file://{}", document.display()), &options).expect("render")
 }
 
 #[test]

@@ -4,7 +4,7 @@
 //! / DejaVu license in `assets/LICENSE-DejaVu.txt`), so the asserted metrics are
 //! reproducible on any machine and do not depend on installed system fonts.
 
-use fonts::{FontDatabase, FontError, FontStyle};
+use megi_fonts::{FontDatabase, FontError, FontStyle};
 
 const DEJAVU_SANS: &[u8] = include_bytes!("../assets/DejaVuSans.ttf");
 const DEJAVU_SANS_BOLD: &[u8] = include_bytes!("../assets/DejaVuSans-Bold.ttf");

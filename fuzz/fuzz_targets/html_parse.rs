@@ -2,10 +2,10 @@
 //! Fuzz target: WHATWG HTML tokenizer + tree builder + canonical serializer.
 //!
 //! The parser is the main attack surface of the engine (it consumes third-party markup), so
-//! this target drives **both** entry points with their *default* [`html::ParseOptions`]:
+//! this target drives **both** entry points with their *default* [`megi_html::ParseOptions`]:
 //!
-//! - `html::parse_document` (full document, scripting disabled);
-//! - `html::parse_fragment` with a context element derived from the fuzzer input, covering
+//! - `megi_html::parse_document` (full document, scripting disabled);
+//! - `megi_html::parse_fragment` with a context element derived from the fuzzer input, covering
 //!   HTML contexts as well as SVG/MathML foreign content.
 //!
 //! The canonical serializer is then exercised on both results, because it is the other
@@ -13,7 +13,7 @@
 //! Outputs are intentionally discarded: the target looks for panics, aborts, stack
 //! overflows, UB under ASan and timeouts, not for semantic mismatches.
 
-use dom::Namespace;
+use megi_core::Namespace;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -22,16 +22,16 @@ fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
 
     let scripting = data.first().is_some_and(|b| b & 1 != 0);
-    let mut options = html::ParseOptions::default();
+    let mut options = megi_html::ParseOptions::default();
     if let Some(&b) = data.get(1) {
         options.max_depth = (b as usize % 64).max(4);
         options.max_nodes = ((b as usize % 8) + 1) * 4096;
         options.max_attributes_per_element = (b as usize % 16) + 1;
         options.max_input_bytes = (b as usize % 4 + 1) * 256 * 1024;
     }
-    let document = html::parse_document_with_options(&text, scripting, &options);
-    let _ = html::serialize_dom_for_test(&document.document);
-    let _ = html::serialize_html(&document.document);
+    let document = megi_html::parse_document_with_options(&text, scripting, &options);
+    let _ = megi_html::serialize_dom_for_test(&document.document);
+    let _ = megi_html::serialize_html(&document.document);
 
     // Fragment parsing with a context derived from the first byte(s): this covers the
     // insertion-mode reset and foreign-content paths that full documents rarely reach.
@@ -60,6 +60,6 @@ fuzz_target!(|data: &[u8]| {
     });
     let (context_name, context_namespace) = CONTEXTS[selector % CONTEXTS.len()];
     let fragment =
-        html::parse_fragment_with_options(&text, context_namespace, context_name, false, &options);
-    let _ = html::serialize_dom_for_test(&fragment.document);
+        megi_html::parse_fragment_with_options(&text, context_namespace, context_name, false, &options);
+    let _ = megi_html::serialize_dom_for_test(&fragment.document);
 });

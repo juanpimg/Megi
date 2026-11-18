@@ -1,8 +1,8 @@
 //! Round 26: SVG filter chains (ColorMatrix/Blend/Merge/Composite arithmetic) and SMIL.
 
-use svg::{SvgOptions, render_svg, render_svg_with_time};
+use megi_svg::{SvgOptions, render_svg, render_svg_with_time};
 
-fn render(bytes: &[u8]) -> svg::SvgImage {
+fn render(bytes: &[u8]) -> megi_svg::SvgImage {
     render_svg(
         bytes,
         &SvgOptions {
@@ -13,7 +13,7 @@ fn render(bytes: &[u8]) -> svg::SvgImage {
     .expect("render")
 }
 
-fn pixel_at(image: &svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
+fn pixel_at(image: &megi_svg::SvgImage, x: u32, y: u32) -> [u8; 4] {
     image.pixel(x, y).expect("pixel")
 }
 

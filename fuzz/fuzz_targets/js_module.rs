@@ -2,7 +2,7 @@
 //! Fuzz target: ES modules + import maps preprocessing, without page DOM.
 //!
 //! `JsRuntime::eval_module` (static imports, resolver/loader callbacks), import-map parsing
-//! (`js::ImportMap::from_json` / `set_import_map_json`) and the module graph walker.
+//! (`megi_js::ImportMap::from_json` / `set_import_map_json`) and the module graph walker.
 //!
 //! Input framing: a **length-prefixed** split (`[u16 LE len][bytes]…`, see
 //! [`megi_fuzz::length_prefixed_parts`]) — part 0 is the import-map JSON, part 1 the entry
@@ -12,7 +12,7 @@
 //! (#701). Truncation is char-boundary safe ([`megi_fuzz::lossy_prefix`]).
 //!
 //! The host is bounded: ≤ 8 modules, ≤ 8 KiB per module, ≤ 24 loader calls, tiny
-//! [`js::Budget`]. Cycles, missing exports, unsupported dynamic imports and budget
+//! [`megi_js::Budget`]. Cycles, missing exports, unsupported dynamic imports and budget
 //! exhaustion are expected to return typed `JsError`s; no network, filesystem or wall-clock
 //! access is provided. The target looks for panics/aborts/UB/Sanitizer findings/timeouts.
 
@@ -46,12 +46,12 @@ fuzz_target!(|data: &[u8]| {
 
     // Import-map parsing (arbitrary bytes; valid map seeds live in the corpus).
     let map_text = megi_fuzz::lossy_prefix(import_map_source, MAX_MODULE_BYTES);
-    let _ = js::ImportMap::from_json(&map_text);
+    let _ = megi_js::ImportMap::from_json(&map_text);
 
-    let Ok(mut runtime) = js::JsRuntime::new() else {
+    let Ok(mut runtime) = megi_js::JsRuntime::new() else {
         return;
     };
-    let budget = js::Budget {
+    let budget = megi_js::Budget {
         loop_iterations: 2_000,
         recursion_limit: 64,
         stack_size_limit: 2_048,
@@ -76,7 +76,7 @@ fuzz_target!(|data: &[u8]| {
     runtime.set_module_loader(Box::new(move |url: &str| {
         let call = loads.fetch_add(1, Ordering::Relaxed);
         if call >= MAX_LOADER_CALLS {
-            return Err(js::JsError::Budget("module loader call cap".to_string()));
+            return Err(megi_js::JsError::Budget("module loader call cap".to_string()));
         }
         if modules.is_empty() {
             return Ok(String::new());

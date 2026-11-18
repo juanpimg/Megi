@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, UNIX_EPOCH};
 
-use net::{
+use megi_net::{
     ByteRange, ContentRange, CookieJar, FetchOptions, RangeError, ReferrerConfig, ReferrerPolicy,
     RequestSite, ResourceLoader, SameSite, SetCookieError, Url, fetch, is_public_suffix,
     parse_cache_policy, parse_set_cookie, registrable_domain, same_origin, same_site, site_for_url,
@@ -392,28 +392,28 @@ fn referrer_value_matrix() {
     ];
     for (policy, same_expected, cross_expected, downgrade_expected) in cases {
         assert_eq!(
-            net::referer_value(policy, &doc, &same).as_deref(),
+            megi_net::referer_value(policy, &doc, &same).as_deref(),
             same_expected,
             "same-origin under {policy:?}"
         );
         assert_eq!(
-            net::referer_value(policy, &doc, &cross).as_deref(),
+            megi_net::referer_value(policy, &doc, &cross).as_deref(),
             cross_expected,
             "cross-origin under {policy:?}"
         );
         assert_eq!(
-            net::referer_value(policy, &doc, &downgrade).as_deref(),
+            megi_net::referer_value(policy, &doc, &downgrade).as_deref(),
             downgrade_expected,
             "downgrade under {policy:?}"
         );
     }
     // Non-http(s) targets and file/data sources never send a Referer.
     assert_eq!(
-        net::referer_value(ReferrerPolicy::UnsafeUrl, &doc, &url("file:///tmp/a")),
+        megi_net::referer_value(ReferrerPolicy::UnsafeUrl, &doc, &url("file:///tmp/a")),
         None
     );
     assert_eq!(
-        net::referer_value(
+        megi_net::referer_value(
             ReferrerPolicy::UnsafeUrl,
             &url("file:///tmp/doc.html"),
             &cross
@@ -425,7 +425,7 @@ fn referrer_value_matrix() {
 #[test]
 fn referrer_strips_userinfo_fragment() {
     let doc = url("https://user:secret@example.com/path/page?x=1#fragment");
-    let referer = net::referer_value(
+    let referer = megi_net::referer_value(
         ReferrerPolicy::UnsafeUrl,
         &doc,
         &url("https://example.com/"),
@@ -658,7 +658,7 @@ fn loader_load_range_slices_files_and_rejects_unsatisfiable() {
         .expect_err("unsatisfiable range");
     assert!(matches!(
         error,
-        net::LoadError::Fetch(net::FetchError::InvalidRange(_))
+        megi_net::LoadError::Fetch(megi_net::FetchError::InvalidRange(_))
     ));
     let _ = std::fs::remove_file(path);
 }

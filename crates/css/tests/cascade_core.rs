@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
-use css::selector::{Specificity, parse_selectors};
-use css::{ComputedStyle, Length, Origin, StyleCollection};
-use dom::{Attribute, Document, Namespace, NodeId};
+use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::selector::{Specificity, parse_selectors};
+use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs
@@ -24,7 +24,7 @@ fn page() -> (Document, NodeId, HashMap<NodeId, ComputedStyle>) {
     let html = append(&mut doc, root, "html", &[]);
     let body = append(&mut doc, html, "body", &[]);
     let target = append(&mut doc, body, "div", &[("class", "x"), ("id", "t")]);
-    let styles = css::resolve_document_styles(&doc, Some(""));
+    let styles = megi_css::resolve_document_styles(&doc, Some(""));
     (doc, target, styles)
 }
 
@@ -59,7 +59,7 @@ fn cascade_prefers_higher_specificity_regardless_of_order() {
     let html = append(&mut doc, root, "html", &[]);
     let body = append(&mut doc, html, "body", &[]);
     let target = append(&mut doc, body, "div", &[("class", "x"), ("id", "t")]);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some("div { width: 5px; } #t { width: 10px; } .x { width: 7px; }"),
         800.0,
@@ -86,7 +86,7 @@ fn animation_and_transition_longhands_are_computed() {
     let html = append(&mut doc, root, "html", &[]);
     let body = append(&mut doc, html, "body", &[]);
     let target = append(&mut doc, body, "div", &[("class", "x")]);
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some(
             ".x { animation-name: fade; animation-duration: 250ms; \
@@ -108,7 +108,7 @@ fn animation_and_transition_longhands_are_computed() {
 fn style_collection_records_rules_for_each_group() {
     let mut collection = StyleCollection::new();
     collection.add_css("div { width: 1px; } span { width: 2px; }", Origin::Author);
-    let stylesheet = css::parse_stylesheet("div { color: red; }");
+    let stylesheet = megi_css::parse_stylesheet("div { color: red; }");
     assert_eq!(stylesheet.rules.len(), 1);
     let _ = &collection;
 }
@@ -133,7 +133,7 @@ fn lang_pseudo_class_matches_inherited_language_and_prefix_ranges() {
             "{selector}"
         );
     }
-    let styles = css::resolve_document_styles_with_viewport(
+    let styles = megi_css::resolve_document_styles_with_viewport(
         &doc,
         Some(":lang(fr) { width: 1px; } :lang(en) { width: 9px; }"),
         800.0,

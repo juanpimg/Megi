@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use image::{ImageError, RgbaImage, decode, decode_scaled, exif_thumbnail};
+use megi_image::{ImageError, RgbaImage, decode, decode_scaled, exif_thumbnail};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

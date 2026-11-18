@@ -5,10 +5,10 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::h2::client::{self, H2Request, Limits};
-use net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
-use net::h2::hpack::{Decoder, Encoder};
-use net::{FetchError, FetchOptions, Url};
+use megi_net::h2::client::{self, H2Request, Limits};
+use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
+use megi_net::h2::hpack::{Decoder, Encoder};
+use megi_net::{FetchError, FetchOptions, Url};
 
 fn spawn_once(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -121,7 +121,7 @@ fn h1_request_trailers_are_sent_after_the_chunked_terminator() {
         ("x-checksum".to_owned(), "abc123".to_owned()),
         ("x-done".to_owned(), "yes".to_owned()),
     ];
-    let response = net::http::fetch_with_trailers(
+    let response = megi_net::http::fetch_with_trailers(
         &url,
         &FetchOptions::default(),
         "POST",
@@ -150,9 +150,14 @@ fn h1_without_trailers_keeps_the_empty_terminator() {
         let _ = tcp.shutdown(Shutdown::Write);
     });
     let url = Url::parse(&format!("http://127.0.0.1:{port}/plain")).expect("url");
-    let response =
-        net::http::fetch_with_method(&url, &FetchOptions::default(), "POST", &[], Some(b"hello"))
-            .expect("POST without trailers");
+    let response = megi_net::http::fetch_with_method(
+        &url,
+        &FetchOptions::default(),
+        "POST",
+        &[],
+        Some(b"hello"),
+    )
+    .expect("POST without trailers");
     server.join().expect("server");
     assert_eq!(response.status, 200);
 }
@@ -160,7 +165,7 @@ fn h1_without_trailers_keeps_the_empty_terminator() {
 #[test]
 fn h1_trailer_validation_is_typed() {
     let url = Url::parse("http://127.0.0.1:9/upload").expect("url");
-    let error = net::http::fetch_with_trailers(
+    let error = megi_net::http::fetch_with_trailers(
         &url,
         &FetchOptions::default(),
         "POST",
@@ -170,7 +175,7 @@ fn h1_trailer_validation_is_typed() {
     )
     .expect_err("invalid trailer value");
     assert!(matches!(error, FetchError::RequestBody(_)), "{error}");
-    let error = net::http::fetch_with_trailers(
+    let error = megi_net::http::fetch_with_trailers(
         &url,
         &FetchOptions::default(),
         "POST",
@@ -278,7 +283,7 @@ fn h2_request_trailers_are_a_final_headers_block_with_end_stream() {
         "example.com",
         "/upload",
         &[],
-        Some(net::RequestBody::Bytes(b"payload".to_vec())),
+        Some(megi_net::RequestBody::Bytes(b"payload".to_vec())),
     )
     .with_trailers(&[("x-checksum".to_owned(), "deadbeef".to_owned())]);
     let results = client::request_many_owned(&mut stream, vec![request], &Limits::default())
@@ -311,7 +316,7 @@ fn h2_without_trailers_keeps_end_stream_on_the_last_data() {
         "example.com",
         "/plain",
         &[],
-        Some(net::RequestBody::Bytes(b"payload".to_vec())),
+        Some(megi_net::RequestBody::Bytes(b"payload".to_vec())),
     );
     let results = client::request_many_owned(&mut stream, vec![request], &Limits::default())
         .expect("h2 request");

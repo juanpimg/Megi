@@ -4,14 +4,14 @@
 
 use std::sync::{Arc, Mutex};
 
-use js::host::{FetchProvider, FetchRequest, FetchResult};
-use js::runtime::JsRuntime;
+use megi_js::host::{FetchProvider, FetchRequest, FetchResult};
+use megi_js::runtime::JsRuntime;
 
 fn mock_runtime(result: FetchResult) -> (JsRuntime, Arc<Mutex<Vec<FetchRequest>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&calls);
     let mut runtime = JsRuntime::new().expect("runtime");
-    let provider: FetchProvider = Box::new(move |request| {
+    let provider: FetchProvider = Arc::new(move |request| {
         seen.lock().expect("lock").push(request);
         Ok(result.clone())
     });
@@ -123,8 +123,8 @@ fn fetch_without_provider_rejects_typed() {
 #[test]
 fn fetch_provider_error_rejects() {
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_fetch_provider(Box::new(|_| {
-        Err(js::JsError::Runtime("network down".into()))
+    runtime.set_fetch_provider(Arc::new(|_| {
+        Err(megi_js::JsError::Runtime("network down".into()))
     }));
     runtime
         .eval(
@@ -180,13 +180,13 @@ fn fetch_caps_headers() {
 
 #[test]
 fn fetch_file_base_resolves_json_chain() {
-    use dom::Document;
+    use megi_core::Document;
     let mut runtime = JsRuntime::with_document(
         Document::new(),
         "file:///tmp/js_fetch_json.html".to_string(),
     )
     .expect("runtime");
-    runtime.set_fetch_provider(Box::new(|request| {
+    runtime.set_fetch_provider(Arc::new(|request| {
         assert!(request.url.contains("fetch_data.json"), "{}", request.url);
         Ok(ok_result())
     }));

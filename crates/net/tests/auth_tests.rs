@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::{CredentialStore, FetchOptions, Url, fetch};
+use megi_net::{CredentialStore, FetchOptions, Url, fetch};
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 

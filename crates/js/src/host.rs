@@ -2,27 +2,39 @@
 //!
 //! The bridge is deliberately small and auditable:
 //!
-//! - **One realm per runtime/document.** [`crate::JsRuntime`] owns a [`dom::Document`] and a
+//! - **One realm per runtime/document.** [`crate::JsRuntime`] owns a [`megi_core::Document`] and a
 //!   Boa `Context`; a script mutates the document through native functions.
 //! - **Side table `NodeId` ↔ JS handle.** JS wrappers carry a numeric handle (index into
 //!   the host side table); the actual generation-checked [`NodeId`] stays in Rust. Every access
-//!   revalidates it with [`dom::Document::try_node`], so stale/removed nodes raise a typed
+//!   revalidates it with [`megi_core::Document::try_node`], so stale/removed nodes raise a typed
 //!   JS error instead of panicking (handles are never dereferenced blindly).
-//! - **Per-thread current host.** Boa native functions are plain `fn` pointers (no
-//!   captures); the runtime publishes its host in a thread-local for the duration of an
-//!   `eval`. Tests run in parallel threads, so each thread sees its own runtime.
+//! - **Context-installed host.** Boa native functions are plain `fn` pointers (no
+//!   captures); the shared host cell is installed in the `Context`'s `HostDefined` data
+//!   at construction. Every native function borrows it from the `Context` it receives,
+//!   so a nested realm (iframe/worker) always reaches its own host without thread-local
+//!   state. Tests run in parallel threads with independent runtimes.
 //!
 //! Limits documented for consumers: the side table keeps one entry per distinct node
 //! handle ever exposed to JS (bounded by the DOM arena plus removed nodes until wrappers
 //! are collected; a generational arena keeps the raw ids distinct). No network/FS APIs are
 //! exposed to scripts.
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use dom::{Document, NodeId};
+use megi_core::{Document, NodeId};
+
+// Provider aliases now live in [`crate::providers`] as immutable `Arc<dyn Fn…>` closures.
+// They are re-exported here to type the legacy host-side mirror fields (and so downstream
+// `use crate::host::…` paths keep working); the authoritative slot is the `HostProviders`
+// installed in the Boa context.
+pub use crate::providers::{
+    ComputedStyleProvider, CookieGetFn, CookieSetFn, FetchProvider, FrameLoader, HistoryProvider,
+    LayoutProvider, LocationProvider, MediaProvider, ModuleLoader, ModuleResolver, StorageLoadFn,
+    StorageSaveFn, ViewportProvider, WebSocketProvider, WorkerLoader,
+};
 
 /// One captured `console.*` call.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,16 +120,6 @@ impl Default for ViewportInfo {
     }
 }
 
-/// `matchMedia` provider injected by the host (evaluates a CSS media query string).
-pub type MediaProvider = Box<dyn Fn(&str) -> bool + Send + Sync>;
-
-/// Viewport provider injected by the host (inner dimensions / DPR / scroll base).
-pub type ViewportProvider = Box<dyn Fn() -> ViewportInfo + Send + Sync>;
-
-/// Computed-style provider injected by the host (`window.getComputedStyle`).
-pub type ComputedStyleProvider =
-    Box<dyn Fn(&Document, NodeId) -> Vec<(String, String)> + Send + Sync>;
-
 /// History API action forwarded to the host provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HistoryAction {
@@ -133,9 +135,6 @@ pub enum HistoryAction {
     Go(i64),
 }
 
-/// Provider invoked by the History API (no provider ⇒ documented no-op).
-pub type HistoryProvider = Box<dyn Fn(HistoryAction) + Send + Sync>;
-
 /// `location.assign/replace/reload` action forwarded to the host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LocationAction {
@@ -143,9 +142,6 @@ pub enum LocationAction {
     Replace(String),
     Reload,
 }
-
-/// Provider invoked by `location.*` navigation methods.
-pub type LocationProvider = Box<dyn Fn(LocationAction) + Send + Sync>;
 
 /// Which Web Storage area an operation refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,10 +179,6 @@ pub struct FetchResult {
     pub body: Vec<u8>,
 }
 
-/// Injectable `fetch()` provider; without one `fetch()` rejects with a typed error.
-pub type FetchProvider =
-    Box<dyn Fn(FetchRequest) -> Result<FetchResult, crate::error::JsError> + Send + Sync>;
-
 /// An event delivered by a WebSocket transport (#1534).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WebSocketEvent {
@@ -201,19 +193,12 @@ pub enum WebSocketEvent {
 }
 
 /// Host-owned WebSocket transport: the JS side sends text and polls for incoming events.
-/// The real implementation (in the shell) drives `net::websocket::WebSocketClient`.
+/// The real implementation (in the shell) drives `megi_net::websocket::WebSocketClient`.
 pub trait WebSocketTransport: Send {
     fn send(&mut self, text: &str) -> Result<(), crate::error::JsError>;
     fn poll(&mut self) -> Vec<WebSocketEvent>;
     fn close(&mut self);
 }
-
-/// Injectable WebSocket provider; without one `new WebSocket(url)` throws a typed error.
-pub type WebSocketProvider =
-    Box<dyn Fn(&str) -> Result<Box<dyn WebSocketTransport>, crate::error::JsError> + Send + Sync>;
-
-/// Loads the source text of a worker script URL (the host owns I/O).
-pub type WorkerLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
 
 /// Parsed `<iframe sandbox="...">` permission flags (#1544).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -268,9 +253,6 @@ impl SandboxFlags {
     }
 }
 
-/// Loads HTML content for an external `<iframe src="...">` (`resolved_url`, `html`).
-pub type FrameLoader = Box<dyn Fn(&str) -> Result<(String, String), String> + Send + Sync>;
-
 /// Computes the serialized origin (`"scheme://host[:port]"` or `"null"` when opaque/non-network).
 pub fn origin_for_url(url: &str, opaque: bool) -> String {
     if opaque {
@@ -324,35 +306,11 @@ pub fn is_same_origin_url(parent_url: &str, child_url: &str, opaque: bool) -> bo
     }
 }
 
-/// Injected geometry provider (`NodeId → LayoutRect`); `None` means the node has no box
-/// (e.g. `display: none` or a node outside the laid-out document).
-pub type LayoutProvider = Box<dyn Fn(dom::NodeId) -> Option<LayoutRect> + Send + Sync>;
-
-/// Resolves an ES module specifier against the importing module's URL.
-///
-/// Returns `Ok(None)` when the specifier cannot be resolved; the runtime then reports a
-/// typed `ModuleNotFound` error. The host owns all I/O (files/network); `js` never reads.
-pub type ModuleResolver =
-    Box<dyn Fn(&str, &str) -> Result<Option<String>, crate::error::JsError> + Send + Sync>;
-
-/// Loads the source text of an already-resolved module URL.
-pub type ModuleLoader = Box<dyn Fn(&str) -> Result<String, crate::error::JsError> + Send + Sync>;
-
-/// Loads the persisted entries for one storage area.
-pub type StorageLoadFn = Box<dyn Fn(StorageKind) -> Vec<(String, String)> + Send + Sync>;
-/// Saves the current entries of one storage area (called after writes).
-pub type StorageSaveFn = Box<dyn Fn(StorageKind, &[(String, String)]) + Send + Sync>;
-
 /// Optional persistence provider: load is called once when installed, save after writes.
 pub struct StorageProvider {
     pub load: StorageLoadFn,
     pub save: StorageSaveFn,
 }
-
-/// Reads the `document.cookie` header string for the given document URL.
-pub type CookieGetFn = Box<dyn Fn(&str) -> String + Send + Sync>;
-/// Writes one `Set-Cookie`-style string from `document.cookie = ...` for the document URL.
-pub type CookieSetFn = Box<dyn Fn(&str, &str) + Send + Sync>;
 
 /// Injectable host cookie store backing `document.cookie`.
 pub struct CookieProvider {
@@ -486,9 +444,6 @@ impl FromIterator<(String, String)> for StorageMap {
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
 
-/// Outbox queue for child-to-parent `postMessage` (`(json_payload, sender_origin, target_origin)`).
-pub(crate) type FrameOutbox = Rc<RefCell<VecDeque<(String, String, String)>>>;
-
 pub(crate) struct Host {
     /// The document scripts operate on.
     pub document: Document,
@@ -593,19 +548,17 @@ pub(crate) struct Host {
     /// Monotonic handle counter for custom element constructors.
     pub custom_element_next_handle: u32,
     /// Same-origin framed documents for `iframe.contentDocument` (#1544).
-    pub frame_documents: std::collections::HashMap<u32, dom::Document>,
-    pub iframe_frames: std::collections::HashMap<dom::NodeId, u32>,
+    pub frame_documents: std::collections::HashMap<u32, megi_core::Document>,
+    pub iframe_frames: std::collections::HashMap<megi_core::NodeId, u32>,
     pub frame_next_handle: u32,
-    pub frame_nodes: std::collections::HashMap<u32, dom::NodeId>,
+    pub frame_nodes: std::collections::HashMap<u32, megi_core::NodeId>,
     pub frame_node_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
-    /// Parent host when this host belongs to a worker realm.
-    pub worker_parent: Option<Rc<RefCell<Host>>>,
     /// Worker id in the parent host (worker realms only).
     pub worker_id: Option<u32>,
-    /// Outbox queue of the worker realm (`postMessage` from the worker).
-    pub worker_outbox: Option<Rc<RefCell<std::collections::VecDeque<String>>>>,
+    /// Outbox queue of the worker realm (`postMessage` from the worker), owned by this host.
+    pub worker_outbox: Option<VecDeque<String>>,
     /// ES module resolver/loader injected by the host (no I/O in `js`).
     pub module_resolver: Option<ModuleResolver>,
     pub module_loader: Option<ModuleLoader>,
@@ -631,8 +584,9 @@ pub(crate) struct Host {
     pub parent_origin: Option<String>,
     /// Whether this child frame is same-origin with its parent (and not opaque).
     pub parent_same_origin: bool,
-    /// Outbox for `window.parent.postMessage(...)` (`(json_payload, child_origin, target_origin)`).
-    pub parent_outbox: Option<FrameOutbox>,
+    /// Outbox for `window.parent.postMessage(...)` (`(json_payload, child_origin, target_origin)`),
+    /// owned by this (child) host; the parent drains it through the child's context.
+    pub parent_outbox: Option<VecDeque<(String, String, String)>>,
     /// Pending self-targeted `window.postMessage(...)` messages (`(json_payload, origin)`).
     pub self_messages: VecDeque<(String, String)>,
     /// Child `<iframe>` browsing contexts owned by this document.
@@ -702,7 +656,6 @@ impl Host {
             frame_nodes: std::collections::HashMap::new(),
             frame_node_next_handle: 1,
             workers: Vec::new(),
-            worker_parent: None,
             worker_id: None,
             worker_outbox: None,
             module_resolver: None,
@@ -943,38 +896,93 @@ impl Host {
     }
 }
 
-thread_local! {
-    static CURRENT_HOST: RefCell<Option<Rc<RefCell<Host>>>> = const { RefCell::new(None) };
+// ---------------------------------------------------------------------------
+// Context bridge: the host cell lives in Boa's `HostDefined` data.
+// ---------------------------------------------------------------------------
+
+use boa_engine::{Context, JsError as BoaError, JsNativeError, JsResult};
+
+/// The shared handle stored in Boa's `HostDefined` map.
+///
+/// This is the single owner of the host cell: the `Context` keeps it alive, and
+/// every native function borrows it from the `Context` it receives. There is no
+/// thread-local "current host" and no second owner on `JsRuntime`.
+type ContextHost = Rc<RefCell<Host>>;
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn missing_host() -> BoaError {
+    JsNativeError::error()
+        .with_message("no JavaScript host installed in this context")
+        .into()
 }
 
-/// Publishes `host` as the current thread's host; restores the previous value on drop.
-pub(crate) struct HostScope(Option<Rc<RefCell<Host>>>);
+/// Installs the shared `host` handle in `context`'s `HostDefined` data.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn install_host(context: &mut Context, host: ContextHost) {
+    context.insert_data(host);
+}
 
-impl HostScope {
-    pub fn enter(host: &Rc<RefCell<Host>>) -> Self {
-        let previous = CURRENT_HOST.with(|cell| cell.borrow_mut().replace(Rc::clone(host)));
-        Self(previous)
+/// Mutably borrows the host attached to `context`; re-entry is a typed error.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn host_cell(context: &mut Context) -> JsResult<RefMut<'_, Host>> {
+    let cell = context
+        .host_defined_mut()
+        .get_mut::<ContextHost>()
+        .ok_or_else(missing_host)?;
+    cell.try_borrow_mut().map_err(|error| {
+        JsNativeError::error()
+            .with_message(format!("JavaScript host is already borrowed: {error}"))
+            .into()
+    })
+}
+
+/// Immutably borrows the host attached to `context`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn host_ref(context: &Context) -> JsResult<Ref<'_, Host>> {
+    let cell = context.get_data::<ContextHost>().ok_or_else(missing_host)?;
+    cell.try_borrow().map_err(|error| {
+        JsNativeError::error()
+            .with_message(format!(
+                "JavaScript host is already mutably borrowed: {error}"
+            ))
+            .into()
+    })
+}
+
+#[cfg(test)]
+mod context_host_tests {
+    use super::*;
+    use boa_engine::Context;
+
+    /// A standalone host cell installed into a fresh context.
+    fn demo_host() -> ContextHost {
+        Rc::new(RefCell::new(Host::new(
+            Document::new(),
+            "about:blank".into(),
+        )))
     }
-}
 
-impl Drop for HostScope {
-    fn drop(&mut self) {
-        CURRENT_HOST.with(|cell| {
-            *cell.borrow_mut() = self.0.take();
-        });
+    #[test]
+    fn host_is_reachable_from_the_context() {
+        let mut context = Context::default();
+        install_host(&mut context, demo_host());
+        assert!(host_ref(&context).is_ok());
+        assert_eq!(host_ref(&context).unwrap().url, "about:blank");
     }
-}
 
-/// Returns a clone of the current thread's host, if a runtime is evaluating.
-pub(crate) fn current_host() -> Option<Rc<RefCell<Host>>> {
-    CURRENT_HOST.with(|cell| cell.borrow().clone())
-}
+    #[test]
+    fn host_cell_and_host_ref_observe_the_same_host() {
+        let mut context = Context::default();
+        install_host(&mut context, demo_host());
+        host_cell(&mut context).unwrap().url = "https://example.com/".to_string();
+        assert_eq!(host_ref(&context).unwrap().url, "https://example.com/");
+    }
 
-/// Runs `f` with exclusive access to the current host.
-pub(crate) fn with_host<R>(f: impl FnOnce(&mut Host) -> R) -> Option<R> {
-    let host = current_host()?;
-    let mut borrowed = host.borrow_mut();
-    Some(f(&mut borrowed))
+    #[test]
+    fn missing_host_returns_a_typed_error() {
+        let context = Context::default();
+        assert!(host_ref(&context).is_err());
+    }
 }
 
 #[cfg(test)]
@@ -1015,7 +1023,7 @@ mod storage_and_console_tests {
 #[cfg(test)]
 mod mutation_observer_index_tests {
     use super::*;
-    use dom::Namespace;
+    use megi_core::Namespace;
 
     #[test]
     fn observer_index_updates_cleans_up_and_preserves_order() {

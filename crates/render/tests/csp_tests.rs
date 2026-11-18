@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread::JoinHandle;
 
-use render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
 
 fn options() -> RenderOptions {
     RenderOptions {

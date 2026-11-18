@@ -9,12 +9,12 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::FetchError;
-use net::h2::client::{self, H2Request, Limits};
-use net::h2::frame::{
+use megi_net::FetchError;
+use megi_net::h2::client::{self, H2Request, Limits};
+use megi_net::h2::frame::{
     self, Frame, FrameReader, HeaderAssembler, error_code, flags, kind, settings,
 };
-use net::h2::hpack::{Decoder, Encoder};
+use megi_net::h2::hpack::{Decoder, Encoder};
 
 fn spawn_server(handler: impl FnOnce(TcpStream) + Send + 'static) -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");

@@ -52,4 +52,4 @@ mv -f "${out}" "${target}"
 echo "wrote ${target} (${lines} lines, snapshot ${snapshot})"
 
 cd "${repo_root}"
-cargo test -p net psl
+cargo test -p megi-net psl

@@ -1,8 +1,8 @@
 //! Integration tests for CSS `direction` / `unicode-bidi` and UAX #9 inline reordering (#986, #944).
 
-use css::{Direction, TextAlign, UnicodeBidi, resolve_document_styles_with_viewport};
-use dom::{Attribute, Document, Namespace};
-use layout::{BoxType, LayoutBox, Rect, layout_document};
+use megi_core::{Attribute, Document, Namespace};
+use megi_css::{Direction, TextAlign, UnicodeBidi, resolve_document_styles_with_viewport};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn collect_line_text(b: &LayoutBox) -> String {
     let mut out = String::new();
@@ -23,7 +23,7 @@ fn collect_line_text(b: &LayoutBox) -> String {
     out
 }
 
-fn doc_with_p(style_attr: &str, text: &str) -> (Document, dom::NodeId) {
+fn doc_with_p(style_attr: &str, text: &str) -> (Document, megi_core::NodeId) {
     let mut doc = Document::new();
     let html = doc.create_element(Namespace::Html, "html", vec![]);
     let body = doc.create_element(Namespace::Html, "body", vec![]);

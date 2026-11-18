@@ -1,5 +1,5 @@
 [package]
-name = "render"
+name = "megi-render"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,19 +12,23 @@ description = "Megi Engine — first real browser pipeline: URL → HTML → ext
 # JavaScript integration is on by default; `--no-default-features` builds a renderer
 # whose `ScriptingMode` default is `Disabled` and that does not link the `js` crate/engine.
 default = ["js"]
-js = ["dep:js"]
+js = ["dep:megi-js"]
+# Enable PAC proxy auto-configuration: net defines the trait, render supplies the JS evaluator.
+pac = ["megi-net/pac"]
 
 [dependencies]
-dom.workspace = true
-html.workspace = true
-css.workspace = true
-layout.workspace = true
-fonts.workspace = true
-paint.workspace = true
-net.workspace = true
-image.workspace = true
-js = { workspace = true, optional = true }
-svg.workspace = true
+megi-core.workspace = true
+megi-html.workspace = true
+megi-css.workspace = true
+megi-layout.workspace = true
+megi-fonts.workspace = true
+megi-paint.workspace = true
+megi-display.workspace = true
+megi-raster.workspace = true
+megi-net.workspace = true
+megi-image.workspace = true
+megi-js = { workspace = true, optional = true }
+megi-svg.workspace = true
 
 [[bin]]
 name = "render"
@@ -33,3 +37,6 @@ path = "src/main.rs"
 [dev-dependencies]
 rcgen.workspace = true
 rustls.workspace = true
+
+[lints]
+workspace = true

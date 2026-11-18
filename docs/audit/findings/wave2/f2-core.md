@@ -1,11 +1,11 @@
-# F2-core — auditoría línea por línea (`crates/dom`, `crates/html`, `crates/css`)
+# F2-core — auditoría línea por línea (`crates/core`, `crates/html`, `crates/css`)
 
 - Prefijo: `w2-core`. Alcance: 33 archivos, 38 580 líneas (lista `find … | sort` verificada).
 - Base verificada: worktree limpio `/tmp/opencode/megi-verify`, HEAD `3c06db8`, sin WIP.
-  Alcance intacto entre `3c06db8` y HEAD actual (diff vacío en `crates/dom|html|css`).
+  Alcance intacto entre `3c06db8` y HEAD actual (diff vacío en `crates/core|html|css`).
   WIP del principal sólo en `crates/js/**`, `crates/render/**`, `crates/net/**`
   (fuera de alcance) → **ningún hallazgo depende de WIP** (`excluir: WIP del usuario` — no aplica).
-- `cargo test -p dom -p html -p css` (desde verify, `CARGO_TARGET_DIR`/`TMPDIR` en disco
+- `cargo test -p megi-core -p megi-html -p megi-css` (desde verify, `CARGO_TARGET_DIR`/`TMPDIR` en disco
   porque `/tmp` tmpfs estaba lleno): **529 passed, 0 failed** (css lib 164, dom lib 54,
   html lib 36 + 30 suites de integración/doc).
 - Dedup: `docs/audit/FINDINGS.md` (228), `docs/GAPS.md`, `docs/audit/findings/f2/00-index.md`,
@@ -20,7 +20,7 @@ custom.rs (582), flex.rs (393), grid.rs (884), lib.rs (2131), media.rs (634),
 parser.rs (861), properties.rs (6006), query.rs (370), rule.rs (332), selector.rs (2145),
 shorthand.rs (966), state.rs (242), token.rs (125), tokenizer.rs (570),
 transform.rs (271), user_agent.rs (578).
-`crates/dom/src/`: lib.rs (4011).
+`crates/core/src/`: lib.rs (4011).
 `crates/html/src/`: browser.rs (398), entities.rs (2234, tabla de datos WHATWG §13.5),
 fast_hash.rs (146), input_stream.rs (225), lib.rs (97), scripting.rs (246),
 serializer.rs (688), tokenizer.rs (3576), tree_builder.rs (5036).
@@ -156,7 +156,7 @@ serializer.rs (688), tokenizer.rs (3576), tree_builder.rs (5036).
 - archivo:línea: `crates/css/src/selector.rs:1725-1727` (dos brazos idénticos patrón+guarda)
 - lente: código muerto | severidad: P3 | categoría: cleanup
 - title: duplicación exacta; el segundo brazo nunca ejecuta y rustc no avisa con guardas
-- evidence: compilación limpia (`cargo build -p css` sin warnings tras `cargo clean -p css`) + programa mínimo que imprime `1` (rama 1) — el brazo 2 es código muerto verificado
+- evidence: compilación limpia (`cargo build -p megi-css` sin warnings tras `cargo clean -p megi-css`) + programa mínimo que imprime `1` (rama 1) — el brazo 2 es código muerto verificado
 - impact: nulo en runtime; ruido de mantenimiento
 - expected: un solo brazo
 - fix: eliminar el duplicado
@@ -239,14 +239,14 @@ serializer.rs (688), tokenizer.rs (3576), tree_builder.rs (5036).
 
 ## Comandos ejecutados (todos desde `/tmp/opencode/megi-verify`, HEAD `3c06db8`)
 
-- `cargo test -p dom -p html -p css` → 529 passed, 0 failed (con `CARGO_TARGET_DIR`/`TMPDIR`
+- `cargo test -p megi-core -p megi-html -p megi-css` → 529 passed, 0 failed (con `CARGO_TARGET_DIR`/`TMPDIR`
   en disco por tmpfs lleno; doctests incluidos en el total final).
-- `cargo build -p css` tras `cargo clean -p css` → 0 warnings (evidencia w2-core-09).
+- `cargo build -p megi-css` tras `cargo clean -p megi-css` → 0 warnings (evidencia w2-core-09).
 - Sonda `/tmp/probe` (deps re-apuntadas al worktree limpio), 2 ejecuciones idénticas:
   T1–T10, L1–L7, O1/O2, H1–H3, W1, B1/B2, Q1/Q2, V1, M1/M2, F1, C1/C2, S1 + `mem`
   (2 MiB `\n` → ΔRSS 24 612 KB, `nodes=4`, sin violaciones).
 - `rustc /tmp/dup.rs` → sin warning, imprime `1` (evidencia w2-core-09).
-- `git diff 3c06db8 HEAD -- crates/dom crates/html crates/css` → vacío (alcance intacto).
+- `git diff 3c06db8 HEAD -- crates/core crates/html crates/css` → vacío (alcance intacto).
 
 ## Concern
 

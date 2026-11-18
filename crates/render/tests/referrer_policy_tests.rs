@@ -12,8 +12,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use net::{CookieJar, Url};
-use render::{RenderOptions, Viewport, render_url};
+use megi_net::{CookieJar, Url};
+use megi_render::{RenderOptions, Viewport, render_url};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -181,7 +181,7 @@ fn css_response() -> RouteResponse {
     }
 }
 
-fn render_page(server: &TestServer) -> render::RenderOutput {
+fn render_page(server: &TestServer) -> megi_render::RenderOutput {
     render_url(&server.url("/page.html"), &options()).expect("render loopback page")
 }
 

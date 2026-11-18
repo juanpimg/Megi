@@ -10,10 +10,10 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use net::h2::client::{self, Limits};
-use net::h2::frame::{self, Frame, FrameReader, kind};
-use net::h2::hpack::{Decoder, Encoder};
-use net::{FetchError, FetchOptions, Url, fetch};
+use megi_net::h2::client::{self, Limits};
+use megi_net::h2::frame::{self, Frame, FrameReader, kind};
+use megi_net::h2::hpack::{Decoder, Encoder};
+use megi_net::{FetchError, FetchOptions, Url, fetch};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};

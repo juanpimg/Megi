@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use css::{ComputedStyle, Display, Position, resolve_document_styles_with_viewport};
-use dom::{Attribute, Document, Namespace, NodeId};
-use layout::{BoxType, LayoutBox, Rect, layout_document, layout_document_with_replaced_sizes};
+use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Position, resolve_document_styles_with_viewport};
+use megi_layout::{BoxType, LayoutBox, Rect, layout_document, layout_document_with_replaced_sizes};
 use proptest::prelude::*;
 
 fn assert_finite_non_negative_box_tree(b: &LayoutBox) {
