@@ -21,14 +21,14 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .gitignore	46	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
-CONTRIBUTING.md	337	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+CONTRIBUTING.md	339	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
 Cargo.toml	66	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
 PROGRESS.md	208	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-README.md	169	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+README.md	170	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	231	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/bench/Cargo.toml	26	tool	F4	lead	2026-11-17	covered	bench harness manifest, read in the F4 pass	read in the F3/F4 pass

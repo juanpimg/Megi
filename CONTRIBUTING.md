@@ -78,6 +78,8 @@ crates/
 
 ---
 
+> **Trabajas con un agente de IA?** Empieza por [`docs/AI-QUICKSTART.md`](docs/AI-QUICKSTART.md): contiene un prompt autocontenido con el flujo de orientación, TDD, verificación y entrega específico de este repo.
+
 ## 3. Cómo Encontrar Tareas para Colaborar
 
 La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](docs/ROADMAP.md). Allí se desglosa el trabajo en **micro-paquetes atómicos** (`WP-*`) de 1 a 2 días de duración máxima cada uno, vinculados a:
