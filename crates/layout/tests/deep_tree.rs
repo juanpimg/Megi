@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Length};
 use megi_core::{Document, Namespace};
+use megi_css::{ComputedStyle, Display, Length};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 /// Builds a linked chain of anonymous layout boxes (no DOM required).

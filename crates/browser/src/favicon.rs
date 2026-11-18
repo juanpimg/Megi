@@ -47,7 +47,10 @@ impl Favicon {
 
 /// Extracts the first `<link rel="...icon...">` URL from `document`, or the conventional
 /// `/favicon.ico` of `page`'s origin as a fallback candidate.
-pub fn icon_url(document: &Document, page: &megi_webview::net::Url) -> Option<megi_webview::net::Url> {
+pub fn icon_url(
+    document: &Document,
+    page: &megi_webview::net::Url,
+) -> Option<megi_webview::net::Url> {
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -90,7 +93,8 @@ pub fn fetch(
                 return None;
             }
             use std::io::Read as _;
-            let path = std::path::PathBuf::from(megi_webview::net::url::percent_decode(icon_url.path()));
+            let path =
+                std::path::PathBuf::from(megi_webview::net::url::percent_decode(icon_url.path()));
             let file = std::fs::File::open(path).ok()?;
             let metadata = file.metadata().ok()?;
             if !metadata.is_file() || metadata.len() > MAX_FAVICON_BYTES as u64 {

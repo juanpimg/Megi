@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
+use megi_core::{Document, Namespace};
 use megi_css::{
     BackgroundPosition, BackgroundRepeat, BackgroundSize, Color, ComputedStyle, Display, Length,
 };
-use megi_core::{Document, Namespace};
 use megi_image::RgbaImage;
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{
@@ -72,7 +72,10 @@ fn box_with_style(
 }
 
 /// Builds `html > div` with a patterned background and paints it.
-fn render_background(style: ComputedStyle, image: Arc<RgbaImage>) -> (megi_paint::DisplayList, Pixmap) {
+fn render_background(
+    style: ComputedStyle,
+    image: Arc<RgbaImage>,
+) -> (megi_paint::DisplayList, Pixmap) {
     let (_document, ids) = node_ids(2);
     let mut root_style = block_style();
     root_style.background_color = Color::WHITE; // keep canvas propagation on root

@@ -132,27 +132,27 @@ fn run() -> Result<(), ShellError> {
                     reason: "the render produced no PNG bytes".to_string(),
                 });
             }
-            megi_browser::download::write_png_bytes_to(&path, &png).map_err(|reason| ShellError::Io {
-                path: path.display().to_string(),
-                reason,
+            megi_browser::download::write_png_bytes_to(&path, &png).map_err(|reason| {
+                ShellError::Io {
+                    path: path.display().to_string(),
+                    reason,
+                }
             })?;
             if let Some(save_path) = &args.save_png {
-                let bytes =
-                    megi_browser::download::write_png_bytes_to(save_path, &png).map_err(|reason| {
-                        ShellError::Io {
-                            path: save_path.display().to_string(),
-                            reason,
-                        }
-                    })?;
-                println!("saved png ({bytes} bytes) to {}", save_path.display());
-            }
-            if let Some(save_path) = &args.save_html {
-                let bytes = megi_browser::download::write_html_to(save_path, &output.document).map_err(
+                let bytes = megi_browser::download::write_png_bytes_to(save_path, &png).map_err(
                     |reason| ShellError::Io {
                         path: save_path.display().to_string(),
                         reason,
                     },
                 )?;
+                println!("saved png ({bytes} bytes) to {}", save_path.display());
+            }
+            if let Some(save_path) = &args.save_html {
+                let bytes = megi_browser::download::write_html_to(save_path, &output.document)
+                    .map_err(|reason| ShellError::Io {
+                        path: save_path.display().to_string(),
+                        reason,
+                    })?;
                 println!("saved html ({bytes} bytes) to {}", save_path.display());
             }
             println!(

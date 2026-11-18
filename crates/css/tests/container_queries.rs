@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, ContainerType, Length};
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, ContainerType, Length};
 
 fn element(doc: &mut Document, tag: &str, attributes: Vec<Attribute>) -> NodeId {
     doc.create_element(Namespace::Html, tag, attributes)
@@ -25,7 +25,8 @@ fn page(css: &str, viewport_width: f32) -> Page {
     doc.append_child(html, body);
     doc.append_child(body, container);
     doc.append_child(container, child);
-    let styles = megi_css::resolve_document_styles_with_viewport(&doc, Some(css), viewport_width, 600.0);
+    let styles =
+        megi_css::resolve_document_styles_with_viewport(&doc, Some(css), viewport_width, 600.0);
     Page {
         styles,
         container,

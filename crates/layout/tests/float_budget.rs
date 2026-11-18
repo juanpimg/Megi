@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Float, Length};
 use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Float, Length};
 use megi_layout::block::MAX_FLOATS_PER_CONTEXT;
 use megi_layout::{LayoutBox, Rect, layout_document};
 

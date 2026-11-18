@@ -6,8 +6,8 @@
 //! (`z-index: 0`/`auto`), phase 8 (positive `z-index`), opacity groups and
 //! `overflow` clipping.
 
-use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_layout::{BoxType, Dimensions, LayoutBox, Rect};
 use megi_paint::{
     DisplayItem, DisplayList, Pixmap, RenderConfig, build_display_list,
@@ -191,7 +191,8 @@ fn test_replaced_image_respects_opacity() {
 
     let mut images = std::collections::HashMap::new();
     let red_pixel = vec![255, 0, 0, 255];
-    let image = std::sync::Arc::new(megi_image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
+    let image =
+        std::sync::Arc::new(megi_image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
     images.insert(ids[2], image);
 
     let viewport = Rect::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32);

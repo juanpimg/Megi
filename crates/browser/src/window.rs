@@ -620,7 +620,11 @@ impl WindowApp {
     /// reloaded: the current DOM snapshot is re-rendered with `hashchange` and `popstate`
     /// dispatched on `window` so SPA routers can react (#1503). Any other navigation falls back
     /// to a full render.
-    fn apply_history_navigation(&mut self, url: &megi_webview::net::Url, previous: Option<&megi_webview::net::Url>) {
+    fn apply_history_navigation(
+        &mut self,
+        url: &megi_webview::net::Url,
+        previous: Option<&megi_webview::net::Url>,
+    ) {
         let same_document = previous.is_some_and(|current| current.cache_key() == url.cache_key());
         let fragment_changed = previous.and_then(|current| current.fragment()) != url.fragment();
         if same_document
@@ -1591,7 +1595,9 @@ impl WindowApp {
                         {
                             let ui_events = vec![megi_webview::render::HostDomEvent {
                                 event_type: "input".to_owned(),
-                                target: megi_webview::render::HostEventTarget::FormControl(control.form_id),
+                                target: megi_webview::render::HostEventTarget::FormControl(
+                                    control.form_id,
+                                ),
                                 bubbles: true,
                                 cancelable: false,
                                 kind: megi_webview::render::HostUiEventKind::Input {
@@ -1656,8 +1662,8 @@ impl WindowApp {
             }
             return false;
         }
-        let target =
-            crate::forms::form_get_target(&submission).and_then(|url| megi_webview::net::Url::parse(&url).ok());
+        let target = crate::forms::form_get_target(&submission)
+            .and_then(|url| megi_webview::net::Url::parse(&url).ok());
         let Some(target) = target else {
             return false;
         };
@@ -1968,7 +1974,8 @@ impl WindowApp {
                 && !control.disabled
             {
                 if matches!(key, Key::Named(NamedKey::Space)) && control.kind.is_checkable() {
-                    let target = megi_webview::render::HostEventTarget::FormControl(control.form_id);
+                    let target =
+                        megi_webview::render::HostEventTarget::FormControl(control.form_id);
                     let mut ui_events = Vec::new();
                     if let Some(ev) = host_keydown_event(
                         target.clone(),
@@ -1996,7 +2003,8 @@ impl WindowApp {
                     return true;
                 }
                 if control.kind.is_button() {
-                    let target = megi_webview::render::HostEventTarget::FormControl(control.form_id);
+                    let target =
+                        megi_webview::render::HostEventTarget::FormControl(control.form_id);
                     let mut ui_events = Vec::new();
                     if let Some(ev) =
                         host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
@@ -3057,10 +3065,16 @@ mod ui_event_forwarding_tests {
         let moved = host_focus_events(Some(1), Some(4));
         assert_eq!(moved.len(), 2);
         assert_eq!(moved[0].event_type, "blur");
-        assert_eq!(moved[0].target, megi_webview::render::HostEventTarget::FormControl(1));
+        assert_eq!(
+            moved[0].target,
+            megi_webview::render::HostEventTarget::FormControl(1)
+        );
         assert!(!moved[0].bubbles);
         assert_eq!(moved[1].event_type, "focus");
-        assert_eq!(moved[1].target, megi_webview::render::HostEventTarget::FormControl(4));
+        assert_eq!(
+            moved[1].target,
+            megi_webview::render::HostEventTarget::FormControl(4)
+        );
         assert!(!moved[1].bubbles);
     }
 
@@ -3170,7 +3184,11 @@ mod focus_target_tests {
             .iter()
             .position(|target| *target == FocusTarget::Control(7));
         assert_eq!(pos, Some(1));
-        assert!(targets.contains(&FocusTarget::Link(megi_webview::core::NodeId::from_index(3))));
+        assert!(
+            targets.contains(&FocusTarget::Link(megi_webview::core::NodeId::from_index(
+                3
+            )))
+        );
     }
 }
 

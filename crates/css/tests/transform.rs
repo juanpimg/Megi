@@ -1,8 +1,8 @@
 //! CSS `transform` parsing (#1539): translate/scale/rotate resolve into a 2D matrix
 //! on `ComputedStyle`; `none` and malformed values stay unset.
 
-use megi_css::resolve_document_styles;
 use megi_core::{Document, Namespace};
+use megi_css::resolve_document_styles;
 
 fn style_for(css_text: &str) -> megi_css::ComputedStyle {
     let mut doc = Document::new();

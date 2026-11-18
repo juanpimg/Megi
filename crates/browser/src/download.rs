@@ -212,7 +212,11 @@ pub(crate) fn create_new_temp_file(path: &Path) -> std::io::Result<(PathBuf, fs:
 ///
 /// `png` must be a complete PNG file (validated by [`is_png`]); the render's `RenderOutput.png`
 /// is passed through byte for byte, so `Ctrl+S`/`--save-png` are identical to `--screenshot`.
-pub fn save_png(dir: &Path, url: &megi_webview::net::Url, png: &[u8]) -> Result<SavedDownload, String> {
+pub fn save_png(
+    dir: &Path,
+    url: &megi_webview::net::Url,
+    png: &[u8],
+) -> Result<SavedDownload, String> {
     if !is_png(png) {
         return Err("not a PNG image (missing signature)".to_string());
     }
@@ -257,7 +261,11 @@ pub fn image_extension(bytes: &[u8], url: &megi_webview::net::Url) -> &'static s
 }
 
 /// Saves fetched image bytes as a download `megi-<host>-<n>.<ext>` (atomic, no re-encode).
-pub fn save_image(dir: &Path, url: &megi_webview::net::Url, bytes: &[u8]) -> Result<SavedDownload, String> {
+pub fn save_image(
+    dir: &Path,
+    url: &megi_webview::net::Url,
+    bytes: &[u8],
+) -> Result<SavedDownload, String> {
     if bytes.is_empty() {
         return Err("the image resource is empty".to_string());
     }
@@ -295,7 +303,10 @@ pub fn write_png_bytes_to(path: &Path, png: &[u8]) -> Result<usize, String> {
 }
 
 /// Writes the serialized DOM (doctype included) to an explicit path (`--save-html`).
-pub fn write_html_to(path: &Path, document: &megi_webview::core::Document) -> Result<usize, String> {
+pub fn write_html_to(
+    path: &Path,
+    document: &megi_webview::core::Document,
+) -> Result<usize, String> {
     let html = serialize_document(document);
     write_atomic(path, html.as_bytes())
 }
@@ -724,7 +735,8 @@ mod tests {
     #[test]
     fn download_names_are_unique_and_sanitized() {
         let dir = temp_dir("progress-naming");
-        let url = megi_webview::net::Url::parse("https://example.com/some image.PNG?x=1").expect("url");
+        let url =
+            megi_webview::net::Url::parse("https://example.com/some image.PNG?x=1").expect("url");
         let png = [0x89u8, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
         let first = save_image(&dir, &url, &png).expect("first");
         let second = save_image(&dir, &url, &png).expect("second");

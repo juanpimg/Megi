@@ -1,10 +1,10 @@
 //! CSS gradient parsing for `background-image` (R113).
 
+use megi_core::{Attribute, Document, Namespace};
 use megi_css::{
     BackgroundClip, Gradient, GradientKind, LinearDirection, RadialExtent, RadialShape,
     resolve_document_styles,
 };
-use megi_core::{Attribute, Document, Namespace};
 
 fn computed_style(css_text: &str, inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();
@@ -73,8 +73,14 @@ fn test_linear_gradient_stops() {
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops.len(), 4);
     assert_eq!(gradient.stops[0].color, megi_css::Color::RED);
-    assert_eq!(gradient.stops[1].position, Some(megi_css::Length::Percent(25.0)));
-    assert_eq!(gradient.stops[2].position, Some(megi_css::Length::Px(100.0)));
+    assert_eq!(
+        gradient.stops[1].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
+    assert_eq!(
+        gradient.stops[2].position,
+        Some(megi_css::Length::Px(100.0))
+    );
     assert_eq!(gradient.stops[2].color.a, 128);
     assert_eq!(gradient.stops[3].color.a, 0);
 }
@@ -345,8 +351,14 @@ fn test_conic_alpha_and_hard_stops() {
     );
     let gradient = gradient_from(&style);
     assert_eq!(gradient.stops[0].color.a, 128);
-    assert_eq!(gradient.stops[1].position, Some(megi_css::Length::Percent(25.0)));
-    assert_eq!(gradient.stops[2].position, Some(megi_css::Length::Percent(25.0)));
+    assert_eq!(
+        gradient.stops[1].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
+    assert_eq!(
+        gradient.stops[2].position,
+        Some(megi_css::Length::Percent(25.0))
+    );
 }
 
 #[test]

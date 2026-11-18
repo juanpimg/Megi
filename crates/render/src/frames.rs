@@ -52,7 +52,8 @@ pub const MAX_FRAME_PIXELS: u64 = 4_000_000;
 
 /// Pre-scripted child `<iframe>` state captured from the parent `JsRuntime` (#1544).
 #[cfg(feature = "js")]
-pub type PreScriptedFrameMap = HashMap<NodeId, (megi_core::Document, megi_js::SandboxFlags, String)>;
+pub type PreScriptedFrameMap =
+    HashMap<NodeId, (megi_core::Document, megi_js::SandboxFlags, String)>;
 #[cfg(not(feature = "js"))]
 pub type PreScriptedFrameMap = HashMap<NodeId, ()>;
 

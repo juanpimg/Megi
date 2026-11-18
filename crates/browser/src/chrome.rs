@@ -434,7 +434,10 @@ fn next_char_index(text: &str, index: usize) -> usize {
 /// Resolves address-bar text into a URL: absolute URLs are used as-is; bare hosts/domains
 /// without a scheme (e.g. `wikipedia.org`, `localhost:8080`) default to `https://` (or
 /// `http://` for loopback); explicit relative references (`/path`, `./page`) join `base`.
-pub fn resolve_address(input: &str, base: Option<&megi_webview::net::Url>) -> Result<megi_webview::net::Url, String> {
+pub fn resolve_address(
+    input: &str,
+    base: Option<&megi_webview::net::Url>,
+) -> Result<megi_webview::net::Url, String> {
     let input = input.trim();
     if input.is_empty() {
         return Err("empty address".to_string());
@@ -2409,7 +2412,8 @@ mod tests {
 
     #[test]
     fn resolve_address_parses_absolute_and_joins_relative() {
-        let base = megi_webview::net::Url::parse("https://example.com/dir/page.html").expect("base");
+        let base =
+            megi_webview::net::Url::parse("https://example.com/dir/page.html").expect("base");
         assert_eq!(
             resolve_address("https://other.example/x", Some(&base))
                 .expect("absolute")

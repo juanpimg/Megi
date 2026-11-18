@@ -1,8 +1,8 @@
 //! CSS 2D transform layout application (#1539): `translate`/`scale`/`rotate` move the
 //! painted box geometry through the transform's axis-aligned bounding box.
 
-use megi_css::resolve_document_styles;
 use megi_core::{Document, Namespace};
+use megi_css::resolve_document_styles;
 use megi_layout::{Rect, layout_document};
 
 fn layout_for_style(css_text: &str) -> megi_layout::LayoutBox {

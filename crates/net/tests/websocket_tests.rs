@@ -311,8 +311,9 @@ fn fragmented_text_message_is_reassembled() {
 
     let (port, server) = spawn();
     let url = megi_net::websocket::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
-    let mut client = megi_net::websocket::WebSocketClient::connect(&url, &megi_net::FetchOptions::default())
-        .expect("connect");
+    let mut client =
+        megi_net::websocket::WebSocketClient::connect(&url, &megi_net::FetchOptions::default())
+            .expect("connect");
     let frame = client.recv().expect("reassembled frame");
     assert_eq!(frame.opcode, megi_net::websocket::Opcode::Text);
     assert!(frame.fin);
@@ -383,7 +384,8 @@ fn raw_recv_replies_to_ping_and_recv_bytes_returns_binary() {
         read_timeout: std::time::Duration::from_secs(2),
         ..megi_net::FetchOptions::default()
     };
-    let mut client = megi_net::websocket::WebSocketClient::connect(&url, &options).expect("connect");
+    let mut client =
+        megi_net::websocket::WebSocketClient::connect(&url, &options).expect("connect");
     let ping = client.recv().expect("ping");
     assert_eq!(ping.opcode, megi_net::websocket::Opcode::Ping);
     let binary = client.recv().expect("binary");
@@ -433,7 +435,8 @@ fn websocket_wrapper_recv_bytes_returns_binary() {
         let _ = stream.flush();
         std::thread::sleep(std::time::Duration::from_millis(30));
     });
-    let mut socket = megi_net::WebSocket::connect(&format!("ws://127.0.0.1:{port}/")).expect("connect");
+    let mut socket =
+        megi_net::WebSocket::connect(&format!("ws://127.0.0.1:{port}/")).expect("connect");
     assert_eq!(socket.recv_bytes().expect("recv_bytes"), vec![0xAB, 0xCD]);
     server.join().expect("server");
 }

@@ -8,8 +8,8 @@
 
 use std::sync::Arc;
 
-use megi_css::{BorderStyle, Color, ComputedStyle, Display, TextDecoration};
 use megi_core::{Document, Namespace};
+use megi_css::{BorderStyle, Color, ComputedStyle, Display, TextDecoration};
 use megi_image::RgbaImage;
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{
@@ -62,7 +62,13 @@ fn transparent_root(id: megi_core::NodeId) -> LayoutBox {
 
 /// Renders an HTML document to (display list, hit regions) with the bundled
 /// deterministic fonts, mirroring the real render pipeline's layout call.
-fn html_regions(source: &str) -> (Document, megi_paint::DisplayList, Vec<megi_paint::HitRegion>) {
+fn html_regions(
+    source: &str,
+) -> (
+    Document,
+    megi_paint::DisplayList,
+    Vec<megi_paint::HitRegion>,
+) {
     let document = megi_html::parse_document(source, false);
     let styles = megi_paint::resolve_embedded_styles(&document);
     let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts");

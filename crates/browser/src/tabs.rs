@@ -319,7 +319,11 @@ mod tests {
         assert_eq!(state.active_index(), 0);
         assert_eq!(state.active().url, "https://example.com/");
         assert_eq!(
-            state.active().navigation.current().map(megi_webview::net::Url::as_str),
+            state
+                .active()
+                .navigation
+                .current()
+                .map(megi_webview::net::Url::as_str),
             Some("https://example.com/".to_string())
         );
     }

@@ -4,9 +4,9 @@
 
 use std::collections::HashMap;
 
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use megi_css::selector::{Specificity, parse_selectors};
 use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
-use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs

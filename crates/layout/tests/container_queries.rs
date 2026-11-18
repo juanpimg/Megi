@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::ComputedStyle;
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::ComputedStyle;
 use megi_layout::{LayoutBox, Rect, layout_document};
 
 struct Page {

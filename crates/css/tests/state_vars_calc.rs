@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use megi_css::{
     CalcContext, StateContext, evaluate_calc, matches_with_state, resolve_document_styles,
     with_calc_viewport, with_state,
 };
-use megi_core::{Attribute, Document, Namespace, NodeId};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs
@@ -495,7 +495,10 @@ fn calc_vw_vh_use_the_injected_viewport() {
     let styles = with_calc_viewport(1000.0, 500.0, || {
         computed(&doc, "div { width: calc(10vw + 2vh) }")
     });
-    assert_eq!(style_of(&styles, &doc, "d").width, megi_css::Length::Px(110.0));
+    assert_eq!(
+        style_of(&styles, &doc, "d").width,
+        megi_css::Length::Px(110.0)
+    );
 }
 
 #[test]

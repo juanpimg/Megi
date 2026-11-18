@@ -8,10 +8,10 @@
 
 use std::collections::HashMap;
 
+use megi_core::{Document, Namespace, NodeId};
 use megi_css::{
     AlignItems, AlignSelf, ComputedStyle, Display, FlexDirection, FlexWrap, JustifyContent, Length,
 };
-use megi_core::{Document, Namespace, NodeId};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style() -> ComputedStyle {

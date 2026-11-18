@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Position, resolve_document_styles_with_viewport};
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Position, resolve_document_styles_with_viewport};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document, layout_document_with_replaced_sizes};
 use proptest::prelude::*;
 

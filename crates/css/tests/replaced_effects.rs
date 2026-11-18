@@ -1,7 +1,7 @@
 //! `aspect-ratio`, `object-fit`/`object-position` and `backdrop-filter` parsing (R149).
 
-use megi_css::{BackgroundPosition, Length, ObjectFit, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
+use megi_css::{BackgroundPosition, Length, ObjectFit, resolve_document_styles};
 
 fn computed_style(inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();

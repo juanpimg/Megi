@@ -11,7 +11,6 @@ use std::time::Duration;
 use megi_net::proxy::ProxyConfig;
 use megi_net::{FetchOptions, ResourceLoader, Url, fetch};
 
-
 /// PAC tests supply the same JS-backed evaluator the browser installs in production.
 struct TestJsEvaluator;
 

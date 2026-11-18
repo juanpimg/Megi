@@ -53,15 +53,17 @@
 //! * The baseline of an `inline-table` is the baseline of its **first** row box
 //!   (CSS 2.2 §10.8.1), falling back to the bottom margin edge when there are no rows.
 
-use megi_css::{BorderCollapse, BorderStyle, CaptionSide, Length, Position, TableLayout, VerticalAlign};
+use megi_css::{
+    BorderCollapse, BorderStyle, CaptionSide, Length, Position, TableLayout, VerticalAlign,
+};
 
 use crate::block::{
     PositioningContext, intrinsic_content_widths, layout_box_contents, resolve_horizontal_edges,
     resolve_vertical_edges, translate_box,
 };
 use crate::box_tree::{BoxType, LayoutBox};
-use megi_core::geometry::EdgeSizes;
 use crate::inline::TextMeasurer;
+use megi_core::geometry::EdgeSizes;
 
 /// Fallback `border-spacing` when the CSS declaration is absent (HTML default: 2px).
 const DEFAULT_BORDER_SPACING: f32 = 2.0;
@@ -1083,8 +1085,8 @@ mod legacy {
         resolve_horizontal_edges, resolve_vertical_edges, translate_box,
     };
     use crate::box_tree::{BoxType, LayoutBox};
-    use megi_core::geometry::EdgeSizes;
     use crate::inline::TextMeasurer;
+    use megi_core::geometry::EdgeSizes;
     use megi_css::{BorderCollapse, CaptionSide, Length, Position, VerticalAlign};
 
     use super::DEFAULT_BORDER_SPACING;
@@ -1224,7 +1226,8 @@ mod legacy {
                     }
                 }
             } else if matches!(child.box_type, BoxType::TableColumn(_)) {
-                child.dimensions.content = megi_core::geometry::Rect::new(table_x, table_y, 0.0, 0.0);
+                child.dimensions.content =
+                    megi_core::geometry::Rect::new(table_x, table_y, 0.0, 0.0);
             }
         }
         let row_count = count_rows(table);

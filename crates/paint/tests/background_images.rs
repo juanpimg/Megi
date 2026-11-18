@@ -13,8 +13,8 @@
 
 use std::sync::Arc;
 
-use megi_css::{Color, ComputedStyle, Display, ListStyleType};
 use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, ListStyleType};
 use megi_image::RgbaImage;
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{

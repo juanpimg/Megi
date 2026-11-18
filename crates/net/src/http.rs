@@ -2352,9 +2352,9 @@ fn stream_encoded_body(
         ContentEncoding::Gzip => {
             megi_image::StreamingInflater::new_gzip(megi_image::InflateLimits::new(output_cap))
         }
-        ContentEncoding::Deflate => {
-            megi_image::StreamingInflater::new_auto_deflate(megi_image::InflateLimits::new(output_cap))
-        }
+        ContentEncoding::Deflate => megi_image::StreamingInflater::new_auto_deflate(
+            megi_image::InflateLimits::new(output_cap),
+        ),
         ContentEncoding::Identity => unreachable!("identity responses are streamed directly"),
     };
     let mut compressed_seen = 0usize;

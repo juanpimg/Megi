@@ -1,7 +1,7 @@
 //! Paint and hit-test ordering tests for top-layer `<dialog>` and `::backdrop`.
 
-use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_layout::{BoxType, Dimensions, LayoutBox, Rect};
 use megi_paint::{
     DisplayItem, HitKind, RenderConfig, build_display_list_and_hit_regions, hit_test,

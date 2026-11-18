@@ -715,5 +715,8 @@ fn hit_regions_are_exposed_without_changing_the_png() {
             break;
         }
     }
-    assert!(found_link, "megi_paint::find_link_at did not find the anchor");
+    assert!(
+        found_link,
+        "megi_paint::find_link_at did not find the anchor"
+    );
 }

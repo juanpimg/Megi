@@ -16,8 +16,8 @@ use std::time::Duration;
 use megi_net::FetchOptions;
 use megi_net::h2::frame::{self, Frame, FrameReader, HeaderAssembler, flags, kind};
 use megi_net::h2::hpack::{Decoder, Encoder};
-use rcgen::generate_simple_self_signed;
 use megi_render::{RenderOptions, Viewport, render_url};
+use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 

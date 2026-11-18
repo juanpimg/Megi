@@ -80,8 +80,8 @@
 //! `body` child. The propagated color is emitted as the first display item over
 //! the whole viewport and the originating element does not paint it again.
 
-use megi_css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, Visibility};
 use megi_core::NodeId;
+use megi_css::{BorderStyle, Color, Display, ListStyleType, Position, TextDecoration, Visibility};
 use megi_layout::{BoxType, LayoutBox, Rect};
 
 use std::cell::RefCell;
@@ -444,7 +444,10 @@ fn canvas_background(root: &LayoutBox, effects_present: bool) -> CanvasBackgroun
 
 /// Builds the four computed border sides of a box (CSS order: top, right,
 /// bottom, left), zeroing the width of `none`/`hidden` sides (CSS 2.2 §8.5.3).
-fn border_sides(style: &megi_css::ComputedStyle, border: megi_layout::EdgeSizes) -> [BorderSide; 4] {
+fn border_sides(
+    style: &megi_css::ComputedStyle,
+    border: megi_layout::EdgeSizes,
+) -> [BorderSide; 4] {
     let widths = [border.top, border.right, border.bottom, border.left];
     let styles = [
         style.border_style.top,
@@ -554,8 +557,10 @@ fn tree_has_effects(root: &LayoutBox) -> bool {
 /// clipped by the inner curve, not by the outer border box.
 fn overflow_rounded_clip(layout_box: &LayoutBox) -> Option<(Rect, megi_css::BorderRadii)> {
     let style = layout_box.style.as_ref()?;
-    if !matches!(style.overflow, megi_css::Overflow::Hidden | megi_css::Overflow::Clip)
-        || style.border_radius.is_zero()
+    if !matches!(
+        style.overflow,
+        megi_css::Overflow::Hidden | megi_css::Overflow::Clip
+    ) || style.border_radius.is_zero()
     {
         return None;
     }
@@ -1421,8 +1426,12 @@ fn object_fit_rect(
             return content;
         }
         megi_css::ObjectFit::None => 1.0,
-        megi_css::ObjectFit::Contain => (content.width / image_width).min(content.height / image_height),
-        megi_css::ObjectFit::Cover => (content.width / image_width).max(content.height / image_height),
+        megi_css::ObjectFit::Contain => {
+            (content.width / image_width).min(content.height / image_height)
+        }
+        megi_css::ObjectFit::Cover => {
+            (content.width / image_width).max(content.height / image_height)
+        }
         megi_css::ObjectFit::ScaleDown => {
             let contain = (content.width / image_width).min(content.height / image_height);
             contain.min(1.0)

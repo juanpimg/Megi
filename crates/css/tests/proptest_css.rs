@@ -1,12 +1,12 @@
 //! Property-based tests for `css` tokenizer, stylesheet/declaration parsers,
 //! selector matching, `@media`, `calc()`, color parsing, and style cascade (#961).
 
+use megi_core::{Attribute, Document, Namespace};
 use megi_css::{
     MediaContext, parse_list_of_declarations, parse_media_query_list, parse_stylesheet,
     resolve_document_styles_with_viewport, tokenizer::tokenize, try_query_selector,
     try_query_selector_all,
 };
-use megi_core::{Attribute, Document, Namespace};
 use proptest::prelude::*;
 
 fn sample_document() -> Document {

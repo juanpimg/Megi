@@ -11,8 +11,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use megi_net::FetchOptions;
-use rcgen::generate_simple_self_signed;
 use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 

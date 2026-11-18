@@ -656,19 +656,21 @@ fn render_view(
     base_options: &megi_webview::render::RenderOptions,
     probe: bool,
 ) -> Result<megi_webview::render::RenderOutput, String> {
-    let viewport = megi_webview::render::Viewport::new(request.css_width, height).map_err(|error| {
-        format!(
-            "invalid render viewport {}x{height}: {error}",
-            request.css_width
-        )
-    })?;
+    let viewport =
+        megi_webview::render::Viewport::new(request.css_width, height).map_err(|error| {
+            format!(
+                "invalid render viewport {}x{height}: {error}",
+                request.css_width
+            )
+        })?;
     let options = view_options(request, viewport, base_options, probe);
     let prepared = match crate::pages::prepare_input(&request.input) {
         Ok(prepared) => prepared,
         Err((code, message)) => {
             let page =
                 crate::pages::data_url(&crate::pages::error_html(&request.input, &code, &message));
-            return megi_webview::render::render_url(&page, &options).map_err(|error| error.to_string());
+            return megi_webview::render::render_url(&page, &options)
+                .map_err(|error| error.to_string());
         }
     };
     match megi_webview::render::render_url(&prepared, &options) {
@@ -812,7 +814,12 @@ mod unit_tests {
             form_post: None,
         };
         let viewport = megi_webview::render::Viewport::new(100, 100).expect("viewport");
-        let options = view_options(&request, viewport, &megi_webview::render::RenderOptions::default(), false);
+        let options = view_options(
+            &request,
+            viewport,
+            &megi_webview::render::RenderOptions::default(),
+            false,
+        );
         assert_eq!(options.host_events, vec!["popstate".to_owned()]);
     }
 
@@ -839,7 +846,12 @@ mod unit_tests {
         assert!(request.scripting);
         assert_eq!(request.host_dom_events, events);
         let viewport = megi_webview::render::Viewport::new(320, 200).expect("viewport");
-        let options = view_options(&request, viewport, &megi_webview::render::RenderOptions::default(), false);
+        let options = view_options(
+            &request,
+            viewport,
+            &megi_webview::render::RenderOptions::default(),
+            false,
+        );
         assert_eq!(options.host_dom_events, events);
     }
 

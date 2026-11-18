@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use megi_core::Document;
-use megi_render::{HistoryAction, LocationAction, RenderOptions, RenderStorage, Viewport, render_url};
+use megi_render::{
+    HistoryAction, LocationAction, RenderOptions, RenderStorage, Viewport, render_url,
+};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render")
@@ -139,8 +141,9 @@ fn storage_is_per_render_without_the_shared_option() {
 #[test]
 fn host_hashchange_and_popstate_events_mutate_before_the_final_render() {
     let no_events = render_fixture("js_host_events.html");
-    let red =
-        |pixmap: &megi_paint::Pixmap| count_where(pixmap, |[r, g, b, _]| r > 200 && g < 60 && b < 60);
+    let red = |pixmap: &megi_paint::Pixmap| {
+        count_where(pixmap, |[r, g, b, _]| r > 200 && g < 60 && b < 60)
+    };
     assert!(
         red(&no_events.pixmap) > 700,
         "both boxes red without host events"

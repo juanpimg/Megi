@@ -2,7 +2,11 @@
 
 use megi_core::{Document, Namespace};
 
-fn el(document: &mut Document, name: &str, attributes: Vec<megi_core::Attribute>) -> megi_core::NodeId {
+fn el(
+    document: &mut Document,
+    name: &str,
+    attributes: Vec<megi_core::Attribute>,
+) -> megi_core::NodeId {
     document.create_element(Namespace::Html, name, attributes)
 }
 

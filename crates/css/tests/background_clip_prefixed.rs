@@ -4,8 +4,8 @@
 //! (browsers expose it for compatibility); the computed clip is used by the
 //! painter to mask backgrounds through the element's glyphs.
 
-use megi_css::{BackgroundClip, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
+use megi_css::{BackgroundClip, resolve_document_styles};
 
 fn computed_style(css_text: &str, inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();

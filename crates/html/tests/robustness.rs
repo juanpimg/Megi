@@ -490,7 +490,12 @@ fn table_text_buffer_is_bounded_by_the_text_budget() {
     );
 }
 
-fn collect_text_bytes(doc: &megi_core::Document, node: megi_core::NodeId, total: &mut usize, depth: usize) {
+fn collect_text_bytes(
+    doc: &megi_core::Document,
+    node: megi_core::NodeId,
+    total: &mut usize,
+    depth: usize,
+) {
     if depth > 64 {
         return;
     }

@@ -150,9 +150,14 @@ fn h1_without_trailers_keeps_the_empty_terminator() {
         let _ = tcp.shutdown(Shutdown::Write);
     });
     let url = Url::parse(&format!("http://127.0.0.1:{port}/plain")).expect("url");
-    let response =
-        megi_net::http::fetch_with_method(&url, &FetchOptions::default(), "POST", &[], Some(b"hello"))
-            .expect("POST without trailers");
+    let response = megi_net::http::fetch_with_method(
+        &url,
+        &FetchOptions::default(),
+        "POST",
+        &[],
+        Some(b"hello"),
+    )
+    .expect("POST without trailers");
     server.join().expect("server");
     assert_eq!(response.status, 200);
 }

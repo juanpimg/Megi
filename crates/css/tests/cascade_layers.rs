@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
 
 fn page(css: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId) {
     let mut doc = Document::new();

@@ -2,8 +2,10 @@
 
 use std::sync::Arc;
 
-use megi_css::{BackgroundPosition, Color, ComputedStyle, Display, FilterFunction, Length, ObjectFit};
 use megi_core::{Document, Namespace};
+use megi_css::{
+    BackgroundPosition, Color, ComputedStyle, Display, FilterFunction, Length, ObjectFit,
+};
 use megi_image::RgbaImage;
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{

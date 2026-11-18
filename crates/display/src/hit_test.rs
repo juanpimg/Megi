@@ -39,8 +39,8 @@
 //! sub-rectangle precision, `pointer-events`, transforms and stacking-context
 //! 3D effects are out of scope for Phase 7.
 
-use megi_core::{Document, NodeId};
 use megi_core::Rect;
+use megi_core::{Document, NodeId};
 
 /// Coarse kind of painted primitive that produced a [`HitRegion`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

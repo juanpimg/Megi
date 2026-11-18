@@ -390,8 +390,9 @@ fn request_headers_are_validated_before_connecting() {
         ("X-Test", "bad\u{7f}value"),
     ];
     for (name, value) in cases {
-        let error = megi_net::http::fetch_with_method(&url, &options, "GET", &[(name, value)], None)
-            .expect_err("header must be rejected before the connection");
+        let error =
+            megi_net::http::fetch_with_method(&url, &options, "GET", &[(name, value)], None)
+                .expect_err("header must be rejected before the connection");
         assert!(
             matches!(error, FetchError::InvalidRequestHeader(_)),
             "{name:?}: {error}"

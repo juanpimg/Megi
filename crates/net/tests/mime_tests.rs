@@ -71,7 +71,10 @@ fn mime_types_are_canonical() {
     assert_eq!(MimeHint::Svg.mime_type(), "image/svg+xml");
     assert_eq!(MimeHint::Png.mime_type(), "image/png");
     assert_eq!(MimeHint::Binary.mime_type(), "application/octet-stream");
-    assert_eq!(megi_net::mime::mime_type(MimeHint::Json), "application/json");
+    assert_eq!(
+        megi_net::mime::mime_type(MimeHint::Json),
+        "application/json"
+    );
 }
 
 #[test]

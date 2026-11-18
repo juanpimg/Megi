@@ -629,8 +629,8 @@ fn alph_filtering_methods_2_and_3_decode() {
             continue;
         }
         let bytes = std::fs::read(&path).expect("read fixture");
-        let decoded =
-            megi_image::decode(&bytes).unwrap_or_else(|error| panic!("{fixture} must decode: {error}"));
+        let decoded = megi_image::decode(&bytes)
+            .unwrap_or_else(|error| panic!("{fixture} must decode: {error}"));
         assert_eq!((decoded.width, decoded.height), (16, 16), "{fixture} size");
     }
 }

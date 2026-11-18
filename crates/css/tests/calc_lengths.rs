@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::ComputedStyle;
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::ComputedStyle;
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs

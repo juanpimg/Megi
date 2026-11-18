@@ -1328,4 +1328,3 @@ mod template_child_edges {
         assert_eq!(doc.node(span).parent, Some(fragment));
     }
 }
-

@@ -15,8 +15,8 @@ pub const WHITE_0RGB: u32 = 0x00FF_FFFF;
 
 /// Largest framebuffer accepted by [`expected_buffer_len`]: the renderer's maximum viewport
 /// dimension squared (8K-class surfaces stay accepted; hostile u32 dimensions do not).
-pub const MAX_FRAMEBUFFER_PIXELS: usize =
-    (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize) * (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize);
+pub const MAX_FRAMEBUFFER_PIXELS: usize = (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize)
+    * (megi_webview::render::MAX_VIEWPORT_DIMENSION as usize);
 
 /// Number of `u32` pixels required for a `width * height` framebuffer, or `None` on
 /// overflow **or** beyond [`MAX_FRAMEBUFFER_PIXELS`] (hostile resize values must not panic or

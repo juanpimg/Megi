@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
+use megi_core::{Attribute, Document, Namespace};
 use megi_css::{
     BackgroundClip, BackgroundLayer, BorderRadii, Color, ComputedStyle, Display, Gradient,
     GradientKind, GradientStop, Length, LinearDirection, LinearGradient, RadialExtent,
     RadialGradient, RadialShape, Radius, resolve_document_styles,
 };
-use megi_core::{Attribute, Document, Namespace};
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{
     BackgroundImages, ImageStore, Pixmap, build_display_list_with_images_and_backgrounds,
@@ -651,7 +651,8 @@ fn test_conic_deterministic_and_many_stops_capped() {
 fn test_conic_at_position_offsets_center() {
     let mut gradient = conic_gradient(0.0, vec![("red", Some(0.0)), ("blue", Some(50.0))]);
     if let GradientKind::Conic(conic) = &mut gradient.kind {
-        conic.position = megi_css::BackgroundPosition::parse("25% 75%", 16.0, 16.0).expect("position");
+        conic.position =
+            megi_css::BackgroundPosition::parse("25% 75%", 16.0, 16.0).expect("position");
     }
     let pixmap = render(
         gradient_style(gradient),
@@ -905,7 +906,9 @@ fn test_background_clip_text_excludes_outer_shadow_and_border_box_layer() {
     let mut text_grad_idx = None;
     for (idx, item) in list.items.iter().enumerate() {
         match item {
-            megi_paint::DisplayItem::BoxShadow { .. } if shadow_idx.is_none() => shadow_idx = Some(idx),
+            megi_paint::DisplayItem::BoxShadow { .. } if shadow_idx.is_none() => {
+                shadow_idx = Some(idx)
+            }
             megi_paint::DisplayItem::PushTextMaskGroup { .. } if first_push_text.is_none() => {
                 first_push_text = Some(idx)
             }

@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
+use megi_core::{Attribute, Document, Namespace, NodeId};
 use megi_css::{
     BorderCollapse, BorderStyle, ComputedStyle, Display, Length, Position, TableLayout,
     VerticalAlign,
 };
-use megi_core::{Attribute, Document, Namespace, NodeId};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn block_style(width: Length) -> ComputedStyle {

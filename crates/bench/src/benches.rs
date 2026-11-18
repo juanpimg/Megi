@@ -139,7 +139,11 @@ fn register_html(suite: &mut Suite, scale: f64) {
     {
         let depth = generators::scale(generators::NESTED_DEPTHS[2], scale);
         let input = generators::nested_divs(depth);
-        let probe = megi_html::parse_document_with_options(&input, false, &megi_html::ParseOptions::DEFAULT);
+        let probe = megi_html::parse_document_with_options(
+            &input,
+            false,
+            &megi_html::ParseOptions::DEFAULT,
+        );
         let nodes = probe.document.len();
         let dropped = probe.limit_violations.depth_exceeded;
         let detail = format!(
@@ -271,7 +275,10 @@ fn register_css(suite: &mut Suite, scale: f64) {
                 "css",
                 format!("{elements} elementos, {rule_count} reglas de autor"),
                 move || {
-                    black_box(megi_css::resolve_document_styles(&document, Some(&author_css)));
+                    black_box(megi_css::resolve_document_styles(
+                        &document,
+                        Some(&author_css),
+                    ));
                 },
             )
             .with_units(elements as f64, "elements"),
@@ -529,7 +536,10 @@ fn register_feature_e2e(suite: &mut Suite, scale: f64) {
                 "css",
                 format!("{elements} elementos, {vars} var(), {calcs} calc()"),
                 move || {
-                    black_box(megi_css::resolve_document_styles(&document, Some(&author_css)));
+                    black_box(megi_css::resolve_document_styles(
+                        &document,
+                        Some(&author_css),
+                    ));
                 },
             )
             .with_units(elements as f64, "elements"),
@@ -717,8 +727,10 @@ fn register_layer_effects(suite: &mut Suite) {
         let mut root_style = megi_css::ComputedStyle::initial();
         root_style.display = megi_css::Display::Block;
         root_style.background_color = megi_css::Color::WHITE;
-        let mut root =
-            megi_layout::LayoutBox::new(megi_layout::BoxType::BlockNode(html_node), Some(root_style));
+        let mut root = megi_layout::LayoutBox::new(
+            megi_layout::BoxType::BlockNode(html_node),
+            Some(root_style),
+        );
         root.dimensions.content = viewport;
         let image = Arc::new(
             megi_image::RgbaImage::new(16, 10, vec![120u8; 16 * 10 * 4]).expect("RGBA fixture"),
@@ -737,7 +749,8 @@ fn register_layer_effects(suite: &mut Suite) {
             let mut style = megi_css::ComputedStyle::initial();
             style.display = megi_css::Display::Block;
             style.object_fit = fits[index as usize % fits.len()];
-            let mut child = megi_layout::LayoutBox::new(megi_layout::BoxType::Replaced(node), Some(style));
+            let mut child =
+                megi_layout::LayoutBox::new(megi_layout::BoxType::Replaced(node), Some(style));
             child.dimensions = megi_layout::Dimensions {
                 content: Rect::new(
                     (index % 16) as f32 * 50.0,
@@ -775,8 +788,11 @@ fn register_layer_effects(suite: &mut Suite) {
 
     // (c) Isolated save-png components (encode / write / both).
     {
-        let mut pattern =
-            megi_paint::Pixmap::new_with_background(VIEWPORT_WIDTH, VIEWPORT_HEIGHT, megi_css::Color::WHITE);
+        let mut pattern = megi_paint::Pixmap::new_with_background(
+            VIEWPORT_WIDTH,
+            VIEWPORT_HEIGHT,
+            megi_css::Color::WHITE,
+        );
         for y in (0..VIEWPORT_HEIGHT).step_by(16) {
             for x in (0..VIEWPORT_WIDTH).step_by(16) {
                 pattern.fill_rect(
@@ -826,7 +842,8 @@ fn register_layer_effects(suite: &mut Suite) {
     // painted, then the full PNG is re-encoded). R196 baseline: +16,91 ms total
     // chrome overhead; these rows document the encoder share at both viewports.
     for (width, height) in [(640u32, 400u32), (1024, 768)] {
-        let mut pattern = megi_paint::Pixmap::new_with_background(width, height, megi_css::Color::WHITE);
+        let mut pattern =
+            megi_paint::Pixmap::new_with_background(width, height, megi_css::Color::WHITE);
         for y in 0..height {
             let color = if y < 58 {
                 megi_css::Color::new(0x20, 0x21, 0x24, 255)
@@ -1063,7 +1080,11 @@ fn register_backdrop_stage_rows(suite: &mut Suite) {
         "paint",
         "same fixture without backdrop-filter → pixmap (no PNG)".to_string(),
         move || {
-            black_box(megi_paint::rasterize_display_list(&display_list_bare, 300, 260));
+            black_box(megi_paint::rasterize_display_list(
+                &display_list_bare,
+                300,
+                260,
+            ));
         },
     ));
     suite.add(BenchEntry::new(
@@ -1166,7 +1187,9 @@ fn register_backdrop_blur_rows(suite: &mut Suite) {
             "paint",
             "same checker background without backdrop filters".to_string(),
             move || {
-                black_box(megi_paint::rasterize_display_list(&no_effect, width, height));
+                black_box(megi_paint::rasterize_display_list(
+                    &no_effect, width, height,
+                ));
             },
         )
         .heavy(),

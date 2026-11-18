@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
 use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Length, TextAlign, VerticalAlign, WhiteSpace};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 // ---------------------------------------------------------------------------

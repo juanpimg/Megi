@@ -1,7 +1,7 @@
 //! `filter`, `mix-blend-mode` and `image-set()` parsing (R137).
 
-use megi_css::{FilterFunction, MAX_FILTER_FUNCTIONS, MixBlendMode, resolve_document_styles};
 use megi_core::{Attribute, Document, Namespace};
+use megi_css::{FilterFunction, MAX_FILTER_FUNCTIONS, MixBlendMode, resolve_document_styles};
 
 fn computed_style(css_text: &str, inline: &str) -> megi_css::ComputedStyle {
     let mut document = Document::new();

@@ -983,10 +983,11 @@ fn resolve_action(base: &megi_webview::net::Url, action: &str) -> Option<String>
     if action.is_empty() {
         return Some(base.as_str());
     }
-    base.join(action)
-        .map(|url| url.as_str())
-        .ok()
-        .or_else(|| megi_webview::net::Url::parse(action).ok().map(|url| url.as_str()))
+    base.join(action).map(|url| url.as_str()).ok().or_else(|| {
+        megi_webview::net::Url::parse(action)
+            .ok()
+            .map(|url| url.as_str())
+    })
 }
 
 /// Builds the submission parameters for a form from its controls (#1538).

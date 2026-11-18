@@ -21,8 +21,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
 
 /// Resolves the computed styles of `doc`, applying the embedded `<style>`
 /// elements as author CSS on top of the default user-agent stylesheet.

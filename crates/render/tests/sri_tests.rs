@@ -145,13 +145,19 @@ where
 
 #[test]
 fn sri_supports_sha384_and_sha512_on_scripts() {
-    let s384 = format!("sha384-{}", megi_net::base64_encode(&megi_net::sha384(SCRIPT)));
+    let s384 = format!(
+        "sha384-{}",
+        megi_net::base64_encode(&megi_net::sha384(SCRIPT))
+    );
     let (base_ok, srv_ok) = serve(&s384);
     let out_ok = render_url(&format!("{base_ok}/page.html"), &options()).expect("render");
     assert_eq!(out_ok.stats.scripts_executed, 1);
     srv_ok.join().expect("srv");
 
-    let s512 = format!("sha512-{}", megi_net::base64_encode(&megi_net::sha512(SCRIPT)));
+    let s512 = format!(
+        "sha512-{}",
+        megi_net::base64_encode(&megi_net::sha512(SCRIPT))
+    );
     let (base_512, srv_512) = serve(&s512);
     let out_512 = render_url(&format!("{base_512}/page.html"), &options()).expect("render");
     assert_eq!(out_512.stats.scripts_executed, 1);
@@ -161,8 +167,14 @@ fn sri_supports_sha384_and_sha512_on_scripts() {
 #[test]
 fn sri_enforces_integrity_on_external_stylesheets() {
     let css_bytes = b"body { background-color: rgb(255, 0, 0); }";
-    let valid_sri = format!("sha384-{}", megi_net::base64_encode(&megi_net::sha384(css_bytes)));
-    let bad_sri = format!("sha384-{}", megi_net::base64_encode(&megi_net::sha384(b"other css")));
+    let valid_sri = format!(
+        "sha384-{}",
+        megi_net::base64_encode(&megi_net::sha384(css_bytes))
+    );
+    let bad_sri = format!(
+        "sha384-{}",
+        megi_net::base64_encode(&megi_net::sha384(b"other css"))
+    );
 
     let valid_page = format!(
         "<html><head><link rel='stylesheet' href='/style.css' integrity='{valid_sri}'></head><body>hi</body></html>"
@@ -175,7 +187,10 @@ fn sri_enforces_integrity_on_external_stylesheets() {
         }
     });
     let out_ok = render_url(&format!("{base_ok}/page.html"), &options()).expect("render ok");
-    assert_eq!(out_ok.pixmap.pixels[0], megi_css::Color::new(255, 0, 0, 255));
+    assert_eq!(
+        out_ok.pixmap.pixels[0],
+        megi_css::Color::new(255, 0, 0, 255)
+    );
     srv_ok.join().expect("srv ok");
 
     let bad_page = format!(
@@ -209,8 +224,14 @@ fn sri_enforces_integrity_on_external_stylesheets() {
 #[test]
 fn sri_enforces_integrity_from_importmap_on_es_modules() {
     let mod_bytes = b"export const answer = '42';";
-    let valid_sri = format!("sha512-{}", megi_net::base64_encode(&megi_net::sha512(mod_bytes)));
-    let bad_sri = format!("sha512-{}", megi_net::base64_encode(&megi_net::sha512(b"tampered")));
+    let valid_sri = format!(
+        "sha512-{}",
+        megi_net::base64_encode(&megi_net::sha512(mod_bytes))
+    );
+    let bad_sri = format!(
+        "sha512-{}",
+        megi_net::base64_encode(&megi_net::sha512(b"tampered"))
+    );
 
     let build_page = |base: &str, sri: &str| {
         format!(

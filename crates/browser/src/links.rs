@@ -113,7 +113,10 @@ pub const MAX_HREF_LEN: usize = 4096;
 pub fn is_navigable(url: &megi_webview::net::Url) -> bool {
     matches!(
         url.scheme(),
-        megi_webview::net::Scheme::Http | megi_webview::net::Scheme::Https | megi_webview::net::Scheme::File | megi_webview::net::Scheme::Data
+        megi_webview::net::Scheme::Http
+            | megi_webview::net::Scheme::Https
+            | megi_webview::net::Scheme::File
+            | megi_webview::net::Scheme::Data
     )
 }
 
@@ -121,7 +124,10 @@ pub fn is_navigable(url: &megi_webview::net::Url) -> bool {
 ///
 /// Whitespace around the attribute value is trimmed (HTML attribute semantics); an empty
 /// `href` is rejected.
-pub fn resolve_href(base: &megi_webview::net::Url, href: &str) -> Result<megi_webview::net::Url, LinkError> {
+pub fn resolve_href(
+    base: &megi_webview::net::Url,
+    href: &str,
+) -> Result<megi_webview::net::Url, LinkError> {
     let href = href.trim();
     if href.is_empty() {
         return Err(LinkError::Empty);
@@ -251,7 +257,9 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
 
 /// Documented fallback for [`collect_link_regions`]: walks the layout tree and matches
 /// element boxes to DOM `<a href>` nodes (`LayoutBox::node_id`).
-fn collect_link_regions_from_layout(output: &megi_webview::render::RenderOutput) -> Vec<LinkRegion> {
+fn collect_link_regions_from_layout(
+    output: &megi_webview::render::RenderOutput,
+) -> Vec<LinkRegion> {
     let mut regions = Vec::new();
     let mut stack: Vec<&LayoutBox> = vec![&output.layout];
     while let Some(layout_box) = stack.pop() {
@@ -384,11 +392,15 @@ mod tests {
         let base = url("https://example.com/");
         assert!(matches!(
             resolve_href(&base, "mailto:a@example.com"),
-            Err(LinkError::Invalid(megi_webview::net::UrlError::UnsupportedScheme(_)))
+            Err(LinkError::Invalid(
+                megi_webview::net::UrlError::UnsupportedScheme(_)
+            ))
         ));
         assert!(matches!(
             resolve_href(&base, "javascript:alert(1)"),
-            Err(LinkError::Invalid(megi_webview::net::UrlError::UnsupportedScheme(_)))
+            Err(LinkError::Invalid(
+                megi_webview::net::UrlError::UnsupportedScheme(_)
+            ))
         ));
     }
 
@@ -469,7 +481,8 @@ mod tests {
         assert!(regions[0].rect.height > 0.0);
         let center_x = regions[0].rect.x + regions[0].rect.width / 2.0;
         let center_y = regions[0].rect.y + regions[0].rect.height / 2.0;
-        let page = megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+        let page =
+            megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
         let resolved = link_url_at(Some(&page), &regions, center_x, center_y)
             .expect("resolution")
             .expect("navigable");

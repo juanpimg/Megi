@@ -49,8 +49,9 @@ fn render(source: &str, width: u32, height: u32) -> (Pixmap, DisplayList) {
     let viewport = Rect::new(0.0, 0.0, width as f32, height as f32);
     // Real typography with the deterministic bundled font (WP-4.4 phase 2).
     let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts must load");
-    let layout_root = megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-        .expect("layout must produce a root box");
+    let layout_root =
+        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
+            .expect("layout must produce a root box");
     let display_list = build_display_list(&layout_root, viewport);
     let pixmap = rasterize_display_list(&display_list, width, height);
     (pixmap, display_list)
@@ -503,8 +504,9 @@ fn test_text_baseline_is_propagated_per_line() {
     let styles = resolve_embedded_styles(&doc);
     let viewport = Rect::new(0.0, 0.0, 200.0, 200.0);
     let measurer = megi_layout::FontTextMeasurer::bundled().expect("bundled fonts");
-    let layout_root = megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
-        .expect("layout root");
+    let layout_root =
+        megi_layout::layout_document_with_measurer(&doc, &styles, viewport, &measurer)
+            .expect("layout root");
     let mut fragments = Vec::new();
     collect_text_baselines(&layout_root, &mut fragments);
     assert_eq!(fragments.len(), 2, "two lines => two text fragments");

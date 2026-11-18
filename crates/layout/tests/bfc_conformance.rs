@@ -10,8 +10,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{BoxSizing, Color, ComputedStyle, Display, Length, RectEdges};
 use megi_core::{Document, Namespace, NodeId};
+use megi_css::{BoxSizing, Color, ComputedStyle, Display, Length, RectEdges};
 use megi_layout::{BoxType, Rect, layout_document};
 
 // ---------------------------------------------------------------------------

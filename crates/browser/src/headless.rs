@@ -30,7 +30,12 @@ pub fn render_target(
     width: u32,
     height: u32,
 ) -> Result<megi_webview::render::RenderOutput, ShellError> {
-    render_target_with_options(input, width, height, &megi_webview::render::RenderOptions::default())
+    render_target_with_options(
+        input,
+        width,
+        height,
+        &megi_webview::render::RenderOptions::default(),
+    )
 }
 
 /// Renders `input` and returns the accessibility tree of the resulting document as JSON (#1516).

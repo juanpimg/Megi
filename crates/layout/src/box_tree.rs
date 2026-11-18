@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use megi_css::{ComputedStyle, Float, Position};
 use megi_core::NodeId;
+use megi_css::{ComputedStyle, Float, Position};
 
 use megi_core::geometry::{Dimensions, Rect};
 

@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Length, Position, TextTransform, WhiteSpace};
 use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Length, Position, TextTransform, WhiteSpace};
 use megi_layout::{BoxType, DefaultTextMeasurer, LayoutBox, Rect, layout_document_with_measurer};
 
 fn block_style() -> ComputedStyle {

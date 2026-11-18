@@ -26,25 +26,27 @@ pub mod style;
 
 pub use background::{MAX_BACKGROUND_TILES, background_tile_size, background_tiles};
 pub use megi_css::Color;
-pub use megi_raster::{deflate, inflate, png, rasterizer};
-pub use megi_raster::zlib_compress;
+pub use megi_display::RegionCollector;
 pub use megi_display::{
     BackgroundImages, BorderSide, DisplayItem, DisplayList, ImageStore, MAX_DISPLAY_LIST_ITEMS,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
 pub use megi_display::{HitKind, HitLink, HitRegion, find_link_at, hit_test, hit_test_all};
-pub use megi_display::RegionCollector;
 pub use megi_raster::inflate_zlib;
-pub use painter::{
-    IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,
-    build_display_list_and_hit_regions, build_display_list_with_hit_regions,
-    build_display_list_with_images, build_display_list_with_images_and_backgrounds,
-};
-pub use megi_raster::{PngRegionEncoder, encode_pixels, encode_png_regions, encode_rgba, filter_scanlines};
+pub use megi_raster::zlib_compress;
 pub use megi_raster::{
     MAX_PIXMAP_PIXELS, Pixmap, RasterStats, RenderConfig, bundled_font_database,
     rasterize_display_list, rasterize_display_list_with_config,
     rasterize_display_list_with_font_database, rasterize_display_list_with_font_database_and_stats,
+};
+pub use megi_raster::{
+    PngRegionEncoder, encode_pixels, encode_png_regions, encode_rgba, filter_scanlines,
+};
+pub use megi_raster::{deflate, inflate, png, rasterizer};
+pub use painter::{
+    IMAGE_PLACEHOLDER, MAX_FLOAT_DEPTH, MAX_STACKING_CONTEXT_DEPTH, build_display_list,
+    build_display_list_and_hit_regions, build_display_list_with_hit_regions,
+    build_display_list_with_images, build_display_list_with_images_and_backgrounds,
 };
 pub use style::{collect_style_text, resolve_embedded_styles};
 
@@ -53,8 +55,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use megi_css::{ComputedStyle, Display, Length};
     use megi_core::{Document, Namespace};
+    use megi_css::{ComputedStyle, Display, Length};
     use megi_layout::{Rect, layout_document};
 
     fn make_box_style(

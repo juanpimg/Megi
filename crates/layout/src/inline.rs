@@ -7,8 +7,8 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use megi_css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
 use megi_core::NodeId;
+use megi_css::{ComputedStyle, Length, TextAlign, TextTransform, VerticalAlign, WhiteSpace};
 
 use crate::box_tree::{BoxType, LayoutBox};
 use megi_core::geometry::Rect;
@@ -575,7 +575,8 @@ fn reorder_line_tokens_bidi(
                         let st = &styles[*style as usize];
                         if matches!(
                             st.unicode_bidi,
-                            megi_css::UnicodeBidi::BidiOverride | megi_css::UnicodeBidi::IsolateOverride
+                            megi_css::UnicodeBidi::BidiOverride
+                                | megi_css::UnicodeBidi::IsolateOverride
                         ) {
                             found = Some(match st.direction {
                                 megi_css::Direction::Ltr => BidiClass::L,

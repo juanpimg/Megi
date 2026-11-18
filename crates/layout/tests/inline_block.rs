@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display, Length, VerticalAlign};
 use megi_core::{Document, Namespace, NodeId};
+use megi_css::{ComputedStyle, Display, Length, VerticalAlign};
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
 fn make_block_style(width: Length) -> ComputedStyle {

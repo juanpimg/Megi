@@ -6,10 +6,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use megi_core::{Document, Namespace, NodeId, NodeKind};
 use megi_css::{
     ComputedStyle, ContentItem, Display, Float, Overflow, Position, PseudoElement, PseudoStyles,
 };
-use megi_core::{Document, Namespace, NodeId, NodeKind};
 
 use crate::box_tree::{BoxType, LayoutBox, anonymous_style_from, is_collapsible_whitespace_box};
 

@@ -85,4 +85,3 @@ impl Iterator for DescendantsIter<'_> {
         Some(current)
     }
 }
-

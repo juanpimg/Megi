@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, Display};
 use megi_core::{Document, Namespace};
+use megi_css::{ComputedStyle, Display};
 use megi_layout::{
     BoxType, FontTextMeasurer, LayoutBox, Rect, TextMeasurer, layout_document,
     layout_document_with_measurer,

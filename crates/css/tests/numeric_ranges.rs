@@ -1,7 +1,7 @@
 //! Regression tests for out-of-range numeric CSS values (#1670, #1671, #1676).
 
-use megi_css::{ComputedStyle, resolve_document_styles};
 use megi_core::{Document, Namespace};
+use megi_css::{ComputedStyle, resolve_document_styles};
 
 fn computed(css: &str) -> ComputedStyle {
     let mut doc = Document::new();

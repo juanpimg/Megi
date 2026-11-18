@@ -44,15 +44,15 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
+use megi_display::Rect;
 use megi_display::{BorderRadii, BoxShadow, Color};
 use megi_fonts::{Font, FontDatabase, FontStyle as FontsFontStyle, GlyphMask, ShapedRun};
-use megi_display::Rect;
 
+use crate::png;
 use megi_display::{
     BorderSide, DisplayItem, DisplayList, MAX_ROUNDED_GROUP_PIXELS, MAX_SHADOW_BLUR,
     MAX_TEXT_MASK_RUNS, MarkerKind, TextMaskRun,
 };
-use crate::png;
 
 /// Upper bound on the number of pixels a [`Pixmap`] may allocate (67.1 M
 /// pixels ≈ 256 MiB of RGBA). Prevents absurd allocations/overflow from
@@ -1226,7 +1226,11 @@ struct TextCache {
 
 impl TextCache {
     /// Resolves (and caches) the face of a shaped-run font reference.
-    fn face_index(&mut self, database: &FontDatabase, info: &megi_fonts::FontRefInfo) -> Option<u32> {
+    fn face_index(
+        &mut self,
+        database: &FontDatabase,
+        info: &megi_fonts::FontRefInfo,
+    ) -> Option<u32> {
         if let Some(&index) = self.face_ids.get(&info.post_script_name) {
             return (index != u32::MAX).then_some(index);
         }
@@ -3123,7 +3127,10 @@ fn interpolate_color(
 }
 
 /// Resolves color-hint positions to normalized `0..=1` values.
-fn resolve_gradient_hints(hints: &[Option<megi_display::Length>], line_length: f32) -> Vec<Option<f32>> {
+fn resolve_gradient_hints(
+    hints: &[Option<megi_display::Length>],
+    line_length: f32,
+) -> Vec<Option<f32>> {
     hints
         .iter()
         .map(|hint| {
@@ -3144,7 +3151,10 @@ fn resolve_gradient_hints(hints: &[Option<megi_display::Length>], line_length: f
 
 /// Resolves stop positions to normalized `0..=1` values, filling implicit
 /// positions and clamping to a non-decreasing sequence (CSS Images 3 §3.4.1).
-fn resolve_gradient_stops(stops: &[megi_display::GradientStop], line_length: f32) -> Vec<(f32, Color)> {
+fn resolve_gradient_stops(
+    stops: &[megi_display::GradientStop],
+    line_length: f32,
+) -> Vec<(f32, Color)> {
     let mut positions: Vec<Option<f32>> = stops
         .iter()
         .map(|stop| {
@@ -3273,7 +3283,10 @@ fn sample_gradient(
 }
 
 /// Linear gradient geometry: `(center_x, center_y, dir_x, dir_y, line_length)`.
-fn linear_gradient_axis(rect: Rect, direction: megi_display::LinearDirection) -> (f32, f32, f32, f32, f32) {
+fn linear_gradient_axis(
+    rect: Rect,
+    direction: megi_display::LinearDirection,
+) -> (f32, f32, f32, f32, f32) {
     let (mut dx, mut dy) = match direction {
         megi_display::LinearDirection::Angle(degrees) => {
             let radians = degrees.to_radians();
@@ -3332,7 +3345,9 @@ fn radial_gradient_geometry(
         (rect.x + rect.width, rect.y + rect.height),
     ];
     let distance = |(x, y): (f32, f32)| ((x - center_x).powi(2) + (y - center_y).powi(2)).sqrt();
-    let extent = radial.extent.unwrap_or(megi_display::RadialExtent::FarthestCorner);
+    let extent = radial
+        .extent
+        .unwrap_or(megi_display::RadialExtent::FarthestCorner);
     let shape = match radial.shape {
         Some(shape) => shape,
         None => match extent {
@@ -3362,7 +3377,8 @@ fn radial_gradient_geometry(
         megi_display::RadialShape::Ellipse => match extent {
             megi_display::RadialExtent::ClosestSide => (left.min(right), top.min(bottom)),
             megi_display::RadialExtent::FarthestSide => (left.max(right), top.max(bottom)),
-            megi_display::RadialExtent::ClosestCorner | megi_display::RadialExtent::FarthestCorner => {
+            megi_display::RadialExtent::ClosestCorner
+            | megi_display::RadialExtent::FarthestCorner => {
                 let mut chosen = corners[0];
                 let mut best = distance(corners[0]);
                 for corner in corners.iter().skip(1) {
@@ -3635,7 +3651,8 @@ fn apply_color_filter(pixel: &mut Color, filter: &megi_display::FilterFunction) 
             pixel.g = clamp_channel(matrix[1][0] * r + matrix[1][1] * g + matrix[1][2] * b);
             pixel.b = clamp_channel(matrix[2][0] * r + matrix[2][1] * g + matrix[2][2] * b);
         }
-        megi_display::FilterFunction::Blur(_) | megi_display::FilterFunction::DropShadow { .. } => {}
+        megi_display::FilterFunction::Blur(_) | megi_display::FilterFunction::DropShadow { .. } => {
+        }
     }
 }
 
@@ -4032,7 +4049,11 @@ fn paint_effect_group(
 /// buffer); spatial filters (blur/drop-shadow) use a reused thread-local pixmap
 /// for the intersected region only (R166). Groups larger than the documented
 /// area cap are left untouched (DoS bound).
-fn paint_backdrop_filter(pixmap: &mut Pixmap, rect: Rect, filters: &[megi_display::FilterFunction]) {
+fn paint_backdrop_filter(
+    pixmap: &mut Pixmap,
+    rect: Rect,
+    filters: &[megi_display::FilterFunction],
+) {
     if filters.is_empty() {
         return;
     }
@@ -4378,7 +4399,13 @@ mod geometry_sanity_tests {
             (1.0, Color::WHITE),
         ];
         assert_eq!(
-            sample_gradient(&stops, &[], false, 0.5, megi_display::InterpolationSpace::Srgb),
+            sample_gradient(
+                &stops,
+                &[],
+                false,
+                0.5,
+                megi_display::InterpolationSpace::Srgb
+            ),
             Color::GREEN
         );
     }
@@ -4386,8 +4413,20 @@ mod geometry_sanity_tests {
     #[test]
     fn repeating_gradient_wraps_below_the_first_stop() {
         let stops = [(0.2, Color::RED), (0.8, Color::BLUE)];
-        let wrapped = sample_gradient(&stops, &[], true, 0.0, megi_display::InterpolationSpace::Srgb);
-        let middle = sample_gradient(&stops, &[], true, 0.6, megi_display::InterpolationSpace::Srgb);
+        let wrapped = sample_gradient(
+            &stops,
+            &[],
+            true,
+            0.0,
+            megi_display::InterpolationSpace::Srgb,
+        );
+        let middle = sample_gradient(
+            &stops,
+            &[],
+            true,
+            0.6,
+            megi_display::InterpolationSpace::Srgb,
+        );
         assert_eq!(wrapped, middle, "t=0 must wrap into the repeated interval");
     }
 }

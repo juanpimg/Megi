@@ -155,18 +155,18 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
     // send:/close:<handle>
     let (command, handle_str) = op.split_once(':').unwrap_or((&op, ""));
     let handle = handle_str.parse::<u32>().unwrap_or(0);
-    if let Ok(mut host) = crate::host::host_cell(context) {
-        if let Some(transport) = host.websockets.get_mut(&handle) {
-            match command {
-                "send" => {
-                    let _ = transport.send(&payload);
-                }
-                "close" => {
-                    transport.close();
-                    host.websockets.remove(&handle);
-                }
-                _ => {}
+    if let Ok(mut host) = crate::host::host_cell(context)
+        && let Some(transport) = host.websockets.get_mut(&handle)
+    {
+        match command {
+            "send" => {
+                let _ = transport.send(&payload);
             }
+            "close" => {
+                transport.close();
+                host.websockets.remove(&handle);
+            }
+            _ => {}
         }
     }
     Ok(JsValue::undefined())

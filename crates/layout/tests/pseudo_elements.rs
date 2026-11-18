@@ -1,7 +1,7 @@
 //! Layout box-tree, clearfix, attr(), CSS counter, and inline wrapping tests for `::before` / `::after` (#1540).
 
-use megi_css::{MediaContext, resolve_document_styles_with_pseudos};
 use megi_core::{Attribute, Document, Namespace, NodeId};
+use megi_css::{MediaContext, resolve_document_styles_with_pseudos};
 use megi_layout::{
     BoxType, LayoutBox, Rect, build_layout_tree_with_pseudos, layout_document_with_pseudos,
 };

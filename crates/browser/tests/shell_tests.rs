@@ -7,13 +7,13 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use megi_webview::paint::Color;
 use megi_browser::worker::{Debounce, FrameStore, RenderRequest, spawn_worker};
 use megi_browser::{
     LaunchMode, MAX_CONTENT_HEIGHT, PIXEL_FORMAT, ScrollState, ShellError, WorkerMessage,
     expected_buffer_len, logical_to_physical, parse_args, parse_cli, physical_to_logical,
     pixmap_to_0rgb, present_region, render_target, screenshot, viewport_slice, window_metrics,
 };
+use megi_webview::paint::Color;
 
 fn fixture_url() -> String {
     let path =
@@ -341,7 +341,8 @@ fn worker_render_document_exposes_links_title_and_final_url() {
     assert_eq!(frame.links[0].href, "next.html");
     assert!(frame.links[0].rect.width > 0.0);
     // The stored hit map answers the same question the window asks on click.
-    let page = megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+    let page =
+        megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
     let center_x = frame.links[0].rect.x + frame.links[0].rect.width / 2.0;
     let center_y = frame.links[0].rect.y + frame.links[0].rect.height / 2.0;
     let url = megi_browser::link_url_at(Some(&page), &frame.links, center_x, center_y)
@@ -353,7 +354,8 @@ fn worker_render_document_exposes_links_title_and_final_url() {
 #[test]
 fn click_navigation_sequence_pushes_and_back_returns() {
     // Pure end-to-end of the click path: resolve href -> navigate -> back.
-    let page = megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
+    let page =
+        megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
     let regions = vec![megi_browser::LinkRegion {
         rect: megi_browser::CssRect::new(10.0, 10.0, 100.0, 20.0),
         href: "other.html".to_string(),
@@ -364,7 +366,10 @@ fn click_navigation_sequence_pushes_and_back_returns() {
         .expect("navigable");
     let mut state = megi_browser::NavigationState::new();
     state.navigate_to(page.clone());
-    assert_eq!(state.navigate_to(clicked), megi_browser::NavigationOutcome::Pushed);
+    assert_eq!(
+        state.navigate_to(clicked),
+        megi_browser::NavigationOutcome::Pushed
+    );
     assert_eq!(
         state.current_url().as_deref(),
         Some("https://example.com/docs/other.html")
@@ -374,7 +379,10 @@ fn click_navigation_sequence_pushes_and_back_returns() {
         Some("https://example.com/docs/page.html")
     );
     assert_eq!(
-        state.reload_target().map(megi_webview::net::Url::as_str).as_deref(),
+        state
+            .reload_target()
+            .map(megi_webview::net::Url::as_str)
+            .as_deref(),
         Some("https://example.com/docs/page.html")
     );
 }
@@ -807,7 +815,8 @@ fn find_is_case_insensitive_and_absent_without_query() {
 
 #[test]
 fn headless_find_paints_yellow_highlights() {
-    let output = megi_browser::headless::render_target(&find_fixture_url(), 480, 320).expect("render");
+    let output =
+        megi_browser::headless::render_target(&find_fixture_url(), 480, 320).expect("render");
     let (highlighted, hits) = megi_browser::headless::render_target_with_find(
         &find_fixture_url(),
         480,
@@ -960,7 +969,8 @@ fn cli_tabs_flag_builds_multiple_tabs_and_documents_headless_policy() {
 
 #[test]
 fn chrome_overlay_paints_tab_strip_and_address_bar() {
-    let plain = megi_browser::render_target("data:text/html,<h1>chrome</h1>", 640, 400).expect("plain");
+    let plain =
+        megi_browser::render_target("data:text/html,<h1>chrome</h1>", 640, 400).expect("plain");
     let chromed = megi_browser::headless::render_target_with_chrome(
         "data:text/html,<h1>chrome</h1>",
         640,
@@ -1079,7 +1089,11 @@ fn select_options_survive_a_patched_rerender() {
     assert_eq!(select.options[0].label, "One");
     let mut document = (*frame.document).clone();
     megi_browser::forms::assign_form_ids(&mut document);
-    assert!(megi_browser::forms::patch_select(&mut document, select.form_id, 1));
+    assert!(megi_browser::forms::patch_select(
+        &mut document,
+        select.form_id,
+        1
+    ));
     let snapshot = megi_browser::forms::snapshot_data_url(&document);
     let patched_request = RenderRequest {
         generation: 2,
@@ -1147,8 +1161,8 @@ fn chrome_geometry_scales_with_the_device_scale() {
 
 #[test]
 fn cli_parses_chrome_flag_and_documents_it() {
-    let cli =
-        megi_browser::parse_cli(["data:,x", "--chrome"].into_iter().map(str::to_string)).expect("parse");
+    let cli = megi_browser::parse_cli(["data:,x", "--chrome"].into_iter().map(str::to_string))
+        .expect("parse");
     assert!(cli.chrome);
     assert!(megi_browser::cli::USAGE.contains("--chrome"));
     assert!(megi_browser::cli::USAGE.contains("address bar"));
@@ -1220,7 +1234,8 @@ fn headless_never_writes_a_session_file() {
 fn worker_frame_png_bytes_match_the_render_screenshot() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
-    let input = megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let input =
+        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
     let request = RenderRequest {
         generation: 1,
         input: input.clone(),
@@ -1440,10 +1455,12 @@ fn headless_chrome_decodes_a_file_favicon_in_the_tab() {
     .expect("write page");
     let with_icon = format!("file://{}", dir.join("page.html").display());
     let options = megi_webview::render::RenderOptions::default();
-    let first = megi_browser::headless::render_target_with_chrome(&with_icon, 320, 220, &options, None)
-        .expect("chrome render");
-    let second = megi_browser::headless::render_target_with_chrome(&with_icon, 320, 220, &options, None)
-        .expect("second chrome render");
+    let first =
+        megi_browser::headless::render_target_with_chrome(&with_icon, 320, 220, &options, None)
+            .expect("chrome render");
+    let second =
+        megi_browser::headless::render_target_with_chrome(&with_icon, 320, 220, &options, None)
+            .expect("second chrome render");
     assert_eq!(
         first.pixmap.to_png(),
         second.pixmap.to_png(),
@@ -1522,10 +1539,12 @@ fn headless_about_history_renders_known_entries_and_dimensions() {
 fn chrome_and_find_outputs_are_encoded_exactly_once() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
-    let input = megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let input =
+        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
     let options = megi_webview::render::RenderOptions::default();
-    let chrome = megi_browser::headless::render_target_with_chrome(&input, 320, 240, &options, None)
-        .expect("chrome render");
+    let chrome =
+        megi_browser::headless::render_target_with_chrome(&input, 320, 240, &options, None)
+            .expect("chrome render");
     assert!(!chrome.png.is_empty(), "chrome output has PNG bytes");
     assert_eq!(
         chrome.png,
@@ -1540,7 +1559,8 @@ fn chrome_and_find_outputs_are_encoded_exactly_once() {
         "deterministic"
     );
     let (find, hits) =
-        megi_browser::headless::render_target_with_find(&input, 320, 240, &options, "Megi").expect("find");
+        megi_browser::headless::render_target_with_find(&input, 320, 240, &options, "Megi")
+            .expect("find");
     let _ = hits;
     assert!(!find.png.is_empty());
     assert_eq!(
@@ -1548,8 +1568,9 @@ fn chrome_and_find_outputs_are_encoded_exactly_once() {
         find.pixmap.to_png(),
         "find PNG encoded once after overlay"
     );
-    let menu = megi_browser::headless::render_target_with_chrome_menu(&input, 320, 240, &options, None)
-        .expect("menu render");
+    let menu =
+        megi_browser::headless::render_target_with_chrome_menu(&input, 320, 240, &options, None)
+            .expect("menu render");
     assert_eq!(
         menu.png,
         menu.pixmap.to_png(),
@@ -1561,7 +1582,8 @@ fn chrome_and_find_outputs_are_encoded_exactly_once() {
 fn plain_render_still_encodes_eagerly_and_skips_on_request() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
-    let input = megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let input =
+        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
     let eager = megi_browser::headless::render_target_with_options(
         &input,
         200,
@@ -1574,8 +1596,8 @@ fn plain_render_still_encodes_eagerly_and_skips_on_request() {
         encode_png: false,
         ..megi_webview::render::RenderOptions::default()
     };
-    let mut lazy =
-        megi_browser::headless::render_target_with_options(&input, 200, 160, &options).expect("lazy");
+    let mut lazy = megi_browser::headless::render_target_with_options(&input, 200, 160, &options)
+        .expect("lazy");
     assert!(lazy.png.is_empty(), "encode_png=false skips the page PNG");
     lazy.ensure_png();
     assert_eq!(lazy.png, eager.png, "lazy shell encode is byte-identical");
@@ -1657,8 +1679,9 @@ fn worker_render_dispatches_host_popstate_before_the_final_frame() {
         megi_browser::worker::render_document(&request).expect("render")
     };
     let blue: u32 = 0x0000_00FF;
-    let count_blue =
-        |frame: &megi_browser::worker::RenderFrame| frame.pixels.iter().filter(|&&p| p == blue).count();
+    let count_blue = |frame: &megi_browser::worker::RenderFrame| {
+        frame.pixels.iter().filter(|&&p| p == blue).count()
+    };
     let without = render(Vec::new());
     let with = render(vec!["popstate".to_owned()]);
     assert_eq!(
@@ -1711,7 +1734,10 @@ fn session_path_docs_match_implementation() {
         megi_browser::session::default_session_path(None, Some(home)),
         Some(home.join(".local/share/megi/session.json"))
     );
-    assert_eq!(megi_browser::session::default_session_path(None, None), None);
+    assert_eq!(
+        megi_browser::session::default_session_path(None, None),
+        None
+    );
 }
 
 #[test]

@@ -94,7 +94,12 @@ fn invalid_import_maps_are_warnings_and_do_not_break_independent_modules() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-fn render_file(html: &str, dir: &std::path::Path, width: u32, height: u32) -> megi_render::RenderOutput {
+fn render_file(
+    html: &str,
+    dir: &std::path::Path,
+    width: u32,
+    height: u32,
+) -> megi_render::RenderOutput {
     let document = dir.join("index.html");
     std::fs::write(&document, html).expect("write document");
     let options = RenderOptions {

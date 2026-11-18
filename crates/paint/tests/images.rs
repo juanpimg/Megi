@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use megi_css::{Color, ComputedStyle, Display};
 use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display};
 use megi_image::RgbaImage;
 use megi_layout::{BoxType, LayoutBox, Rect};
 use megi_paint::{

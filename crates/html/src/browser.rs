@@ -210,7 +210,10 @@ pub fn document_write_with_options(
 }
 
 /// Returns the namespace/local-name fragment-parsing context for `element`.
-fn fragment_context(doc: &Document, element: NodeId) -> Result<(megi_core::Namespace, String), DomError> {
+fn fragment_context(
+    doc: &Document,
+    element: NodeId,
+) -> Result<(megi_core::Namespace, String), DomError> {
     let element_data = doc
         .try_node(element)
         .ok_or(DomError::UnknownNode(element))?

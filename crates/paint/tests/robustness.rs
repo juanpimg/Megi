@@ -6,8 +6,8 @@
 //! for all unbounded traversals, with documented caps for stacking-context and
 //! float nesting and a hard display-list item limit.
 
-use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_core::{Document, Namespace};
+use megi_css::{Color, ComputedStyle, Display, Position};
 use megi_layout::{BoxType, LayoutBox, Rect};
 use megi_paint::{
     DisplayList, MAX_DISPLAY_LIST_ITEMS, MAX_STACKING_CONTEXT_DEPTH, Pixmap, build_display_list,

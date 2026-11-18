@@ -23,8 +23,10 @@
 
 use std::collections::HashMap;
 
-use megi_css::{BorderStyle, Color, ComputedStyle, Display, FontStyle, Length, Position, TextAlign};
 use megi_core::{Document, NodeId};
+use megi_css::{
+    BorderStyle, Color, ComputedStyle, Display, FontStyle, Length, Position, TextAlign,
+};
 
 /// Serializes one computed style into `(kebab-case property, CSS value)` pairs.
 pub(crate) fn computed_style_pairs(style: &ComputedStyle) -> Vec<(String, String)> {

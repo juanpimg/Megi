@@ -44,8 +44,8 @@ use megi_css::{
 
 use crate::block::{calculate_block_height, layout_box_contents, translate_box};
 use crate::box_tree::{BoxType, LayoutBox};
-use megi_core::geometry::{EdgeSizes, Rect};
 use crate::inline::TextMeasurer;
+use megi_core::geometry::{EdgeSizes, Rect};
 
 /// Resolved box-model edges of one flex item.
 #[derive(Clone, Copy, Debug, Default)]

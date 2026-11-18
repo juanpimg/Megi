@@ -41,8 +41,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
 use megi_net::{ResourceLoader, Scheme, Url};
 
 use crate::svg_assets;

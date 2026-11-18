@@ -267,8 +267,7 @@ fn evaluate_directives(
     target: &Url,
     host: &str,
 ) -> Result<Vec<PacDirective>, String> {
-    let evaluator = crate::pac_evaluator()
-        .ok_or_else(|| "PAC evaluator unavailable".to_owned())?;
+    let evaluator = crate::pac_evaluator().ok_or_else(|| "PAC evaluator unavailable".to_owned())?;
     let call = format!(
         "{PAC_HELPERS_PRELUDE}\n{script}\nFindProxyForURL({}, {});",
         js_string(&target.as_str()),

@@ -219,8 +219,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use megi_css::ComputedStyle;
 use megi_core::{Document, NodeId};
+use megi_css::ComputedStyle;
 use megi_net::{FetchOptions, ResourceLoader, Scheme, Url};
 
 use images::{
@@ -959,7 +959,8 @@ pub(crate) fn render_url_with_context(
         loaded.url.clone(),
         referrer_policy,
     )));
-    let parse = megi_html::parse_document_with_options(&decoded.text, false, &options.parse_options);
+    let parse =
+        megi_html::parse_document_with_options(&decoded.text, false, &options.parse_options);
     let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let decode_parse_time = decode_start.elapsed();
 
@@ -1213,8 +1214,10 @@ fn render_parsed_document_inner(
     // Canvas 2D surfaces painted by scripts (#1545); inserted into the image store after images load.
     // The map is only meaningful with the `js` feature: without scripts there is no canvas.
     #[cfg(feature = "js")]
-    let mut canvas_surfaces: std::collections::HashMap<megi_core::NodeId, megi_js::canvas::CanvasSurface> =
-        std::collections::HashMap::new();
+    let mut canvas_surfaces: std::collections::HashMap<
+        megi_core::NodeId,
+        megi_js::canvas::CanvasSurface,
+    > = std::collections::HashMap::new();
     if script_requested && !cfg!(feature = "js") {
         warnings.push(
             "scripting was requested but this build has no `js` feature; scripts are ignored"
@@ -1465,7 +1468,9 @@ fn render_parsed_document_inner(
     #[cfg(feature = "js")]
     {
         for (node, surface) in canvas_surfaces {
-            if let Ok(rgba) = megi_image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
+            if let Ok(rgba) =
+                megi_image::RgbaImage::new(surface.width, surface.height, surface.pixels)
+            {
                 let size = (surface.width as f32, surface.height as f32);
                 loaded_images.store.insert(node, std::sync::Arc::new(rgba));
                 loaded_images.sizes.insert(node, size);
@@ -2027,7 +2032,8 @@ fn document_csp(
     headers: &[(String, String)],
     document: &Document,
 ) -> Option<megi_net::csp::ContentSecurityPolicy> {
-    let mut combined = megi_net::csp::ContentSecurityPolicy::from_headers(headers).unwrap_or_default();
+    let mut combined =
+        megi_net::csp::ContentSecurityPolicy::from_headers(headers).unwrap_or_default();
     for node_id in document.descendants(document.root()) {
         let Some(element) = document.node(node_id).as_element() else {
             continue;
@@ -2491,7 +2497,8 @@ fn load_stylesheet_text(
                 return Ok(None);
             }
             if let Some(integrity) = integrity
-                && let Err(error) = megi_net::integrity::verify_integrity(&resource.bytes, integrity)
+                && let Err(error) =
+                    megi_net::integrity::verify_integrity(&resource.bytes, integrity)
             {
                 warnings.push(format!(
                     "skipping stylesheet {url}: integrity check failed: {error}"
@@ -2600,7 +2607,13 @@ fn resolve_styles_with_collection(
             let root_style = styles.get(&root);
             Some((
                 *node_id,
-                megi_css::resolve_backdrop_color(doc, *node_id, collection, parent_style, root_style),
+                megi_css::resolve_backdrop_color(
+                    doc,
+                    *node_id,
+                    collection,
+                    parent_style,
+                    root_style,
+                ),
             ))
         })
         .collect();

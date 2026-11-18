@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use megi_css::{ComputedStyle, PseudoElement, PseudoStyles};
 use megi_core::{Document, NodeId, NodeKind};
+use megi_css::{ComputedStyle, PseudoElement, PseudoStyles};
 use megi_layout::{LayoutBox, Rect, TextMeasurer};
 
 const MAX_LAYOUT_CACHE_ENTRIES: usize = 16;

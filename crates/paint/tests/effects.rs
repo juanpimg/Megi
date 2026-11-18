@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use megi_css::{BorderRadii, BoxShadow, Color, ComputedStyle, Display, Length, Radius};
 use megi_core::{Document, Namespace};
+use megi_css::{BorderRadii, BoxShadow, Color, ComputedStyle, Display, Length, Radius};
 use megi_layout::{BoxType, Dimensions, EdgeSizes, LayoutBox, Rect};
 use megi_paint::{
     BackgroundImages, DisplayItem, DisplayList, ImageStore, Pixmap,
@@ -143,7 +143,8 @@ fn test_rounded_background_image_is_clipped() {
     root.dimensions.content = VIEWPORT;
     root.children
         .push(box_at(nodes[1], style, Rect::new(10.0, 10.0, 20.0, 20.0)));
-    let image = Arc::new(megi_image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
+    let image =
+        Arc::new(megi_image::RgbaImage::new(4, 4, [0u8, 0, 255, 255].repeat(16)).expect("RGBA"));
     let backgrounds: BackgroundImages = [("bg.png".to_string(), image)].into_iter().collect();
     let list = build_display_list_with_images_and_backgrounds(
         &root,

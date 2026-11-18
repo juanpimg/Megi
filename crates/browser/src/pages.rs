@@ -420,10 +420,14 @@ pub fn error_code(error: &megi_webview::render::RenderError) -> &'static str {
         megi_webview::render::RenderError::HttpStatus { .. } => "HTTP",
         megi_webview::render::RenderError::Fetch(fetch) => match fetch {
             megi_webview::net::FetchError::Dns(_) => "DNS",
-            megi_webview::net::FetchError::Tls(_) | megi_webview::net::FetchError::TlsUnsupported => "TLS",
+            megi_webview::net::FetchError::Tls(_)
+            | megi_webview::net::FetchError::TlsUnsupported => "TLS",
             megi_webview::net::FetchError::Timeout => "TIMEOUT",
-            megi_webview::net::FetchError::Connect(_) | megi_webview::net::FetchError::Io(_) => "NETWORK",
-            megi_webview::net::FetchError::Http2(_) | megi_webview::net::FetchError::InvalidResponse(_) => "HTTP",
+            megi_webview::net::FetchError::Connect(_) | megi_webview::net::FetchError::Io(_) => {
+                "NETWORK"
+            }
+            megi_webview::net::FetchError::Http2(_)
+            | megi_webview::net::FetchError::InvalidResponse(_) => "HTTP",
             _ => "NETWORK",
         },
         megi_webview::render::RenderError::DocumentTooLarge { .. }

@@ -1207,7 +1207,8 @@ mod tests {
     fn capture_remaps_the_history_index_and_keeps_the_current_entry() {
         let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
         for index in 1..100 {
-            let url = megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            let url =
+                megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
             tabs.active_mut().navigation.navigate_to(url);
         }
         for _ in 0..90 {
@@ -1305,7 +1306,8 @@ mod tests {
     fn capture_slides_the_window_when_the_current_entry_is_late() {
         let mut tabs = crate::tabs::TabsState::new("data:text/html,0");
         for index in 1..256 {
-            let url = megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
+            let url =
+                megi_webview::net::Url::parse(&format!("data:text/html,{index}")).expect("url");
             tabs.active_mut().navigation.navigate_to(url);
         }
         let current = tabs

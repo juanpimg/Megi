@@ -35,7 +35,10 @@ impl WebViewOptions {
     /// Creates options with validated dimensions.
     pub fn new(width: u32, height: u32) -> Result<Self, WebError> {
         let viewport = Viewport::new(width, height).map_err(WebError::Render)?;
-        Ok(Self { viewport, no_network: false })
+        Ok(Self {
+            viewport,
+            no_network: false,
+        })
     }
 }
 
@@ -191,7 +194,9 @@ impl WebView {
 
     /// Navigates to the previous entry.
     pub fn back(&mut self) -> Option<&WebFrame> {
-        if !self.can_back() { return None; }
+        if !self.can_back() {
+            return None;
+        }
         self.index -= 1;
         let url = self.history[self.index].clone();
         let frame = self.render(&url).ok()?;
@@ -201,7 +206,9 @@ impl WebView {
 
     /// Navigates to the next entry.
     pub fn forward(&mut self) -> Option<&WebFrame> {
-        if !self.can_forward() { return None; }
+        if !self.can_forward() {
+            return None;
+        }
         self.index += 1;
         let url = self.history[self.index].clone();
         let frame = self.render(&url).ok()?;
