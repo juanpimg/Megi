@@ -427,6 +427,8 @@ pub(crate) struct Host {
     pub shadow_roots: std::collections::HashMap<NodeId, NodeId>,
     /// Reverse map: shadow-root `NodeId` -> host element `NodeId`.
     pub shadow_hosts: std::collections::HashMap<NodeId, NodeId>,
+    /// Canvas 2D surfaces keyed by `<canvas>` node id (#1545).
+    pub canvas_store: crate::canvas::CanvasStore,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Parent host when this host belongs to a worker realm.
@@ -489,6 +491,7 @@ impl Host {
             fetch_provider: None,
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
+            canvas_store: crate::canvas::CanvasStore::new(),
             workers: Vec::new(),
             worker_parent: None,
             worker_id: None,

@@ -187,6 +187,8 @@
 //! `innerText` block layout, `Range`, `URLSearchParams` relative-state sync and
 //! live `NodeList`.
 //!
+#[cfg(feature = "js")]
+pub mod canvas;
 pub mod error;
 #[cfg(feature = "js")]
 pub mod events;

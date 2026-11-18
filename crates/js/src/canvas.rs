@@ -1,0 +1,440 @@
+//! Canvas 2D surface (#1545): a bounded RGBA surface backing `<canvas>` elements.
+//!
+//! The surface is a simple straight-alpha `Vec<u8>` (RGBA, 4 bytes per pixel) with the small
+//! subset of 2D drawing operations the JS bindings expose. It lives in `js` (no `image`/`paint`
+//! dependency); the renderer converts it to a `RgbaImage` when building the display list.
+
+use std::collections::HashMap;
+
+use dom::NodeId;
+
+/// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
+pub const MAX_CANVAS_DIM: u32 = 4096;
+pub const MAX_CANVAS_PIXELS: u64 = 16_777_216;
+
+/// A parsed RGBA color.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rgba {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
+}
+
+impl Rgba {
+    /// Parses a CSS color string: `#rgb`, `#rrggbb`, `rgb(r,g,b)`, `rgba(r,g,b,a)`, or a small
+    /// set of named colors. Returns `None` for anything else (callers keep the previous style).
+    pub fn parse(value: &str) -> Option<Self> {
+        let value = value.trim();
+        if let Some(hex) = value.strip_prefix('#') {
+            return match hex.len() {
+                3 => {
+                    let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?;
+                    let g = u8::from_str_radix(&hex[1..2].repeat(2), 16).ok()?;
+                    let b = u8::from_str_radix(&hex[2..3].repeat(2), 16).ok()?;
+                    Some(Self { r, g, b, a: 255 })
+                }
+                6 => Some(Self {
+                    r: u8::from_str_radix(&hex[0..2], 16).ok()?,
+                    g: u8::from_str_radix(&hex[2..4], 16).ok()?,
+                    b: u8::from_str_radix(&hex[4..6], 16).ok()?,
+                    a: 255,
+                }),
+                _ => None,
+            };
+        }
+        let (rgb, alpha) = if let Some(inner) = value
+            .strip_prefix("rgba(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
+            if parts.len() != 4 {
+                return None;
+            }
+            let alpha = parts[3].parse::<f32>().ok()?.clamp(0.0, 1.0);
+            (parts, Some(alpha))
+        } else if let Some(inner) = value.strip_prefix("rgb(").and_then(|s| s.strip_suffix(')')) {
+            let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
+            if parts.len() != 3 {
+                return None;
+            }
+            (parts, None)
+        } else {
+            return match value.to_ascii_lowercase().as_str() {
+                "red" => Some(Self {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                }),
+                "green" => Some(Self {
+                    r: 0,
+                    g: 128,
+                    b: 0,
+                    a: 255,
+                }),
+                "blue" => Some(Self {
+                    r: 0,
+                    g: 0,
+                    b: 255,
+                    a: 255,
+                }),
+                "white" => Some(Self {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                    a: 255,
+                }),
+                "black" => Some(Self {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                }),
+                "transparent" => Some(Self {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                }),
+                _ => None,
+            };
+        };
+        Some(Self {
+            r: rgb[0].parse::<u8>().ok()?,
+            g: rgb[1].parse::<u8>().ok()?,
+            b: rgb[2].parse::<u8>().ok()?,
+            a: alpha.map_or(255, |a| (a * 255.0).round() as u8),
+        })
+    }
+}
+
+/// Serializes a color back to a CSS hex string (used by the `fillStyle`/`strokeStyle` getters).
+pub fn rgba_to_css(color: Rgba) -> String {
+    if color.a == 255 {
+        format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
+    } else {
+        format!(
+            "rgba({},{},{},{})",
+            color.r,
+            color.g,
+            color.b,
+            color.a as f32 / 255.0
+        )
+    }
+}
+
+/// A bounded RGBA drawing surface.
+#[derive(Clone, Debug)]
+pub struct CanvasSurface {
+    pub width: u32,
+    pub height: u32,
+    pub pixels: Vec<u8>,
+    pub fill_style: Rgba,
+    pub stroke_style: Rgba,
+}
+
+impl CanvasSurface {
+    /// Creates a transparent surface, or `None` when dimensions exceed the caps.
+    pub fn new(width: u32, height: u32) -> Option<Self> {
+        if width == 0
+            || height == 0
+            || width > MAX_CANVAS_DIM
+            || height > MAX_CANVAS_DIM
+            || u64::from(width) * u64::from(height) > MAX_CANVAS_PIXELS
+        {
+            return None;
+        }
+        Some(Self {
+            width,
+            height,
+            pixels: vec![0; (width as usize) * (height as usize) * 4],
+            fill_style: Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            },
+            stroke_style: Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 255,
+            },
+        })
+    }
+
+    /// Blends a pixel into the surface using straight-alpha source-over compositing.
+    fn blend(&mut self, x: i64, y: i64, color: Rgba) {
+        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
+            return;
+        }
+        let index = ((y as usize) * self.width as usize + (x as usize)) * 4;
+        let (dr, dg, db, da) = (
+            self.pixels[index],
+            self.pixels[index + 1],
+            self.pixels[index + 2],
+            self.pixels[index + 3],
+        );
+        let sa = f32::from(color.a) / 255.0;
+        let da = f32::from(da) / 255.0;
+        let out_a = sa + da * (1.0 - sa);
+        if out_a <= 0.0 {
+            return;
+        }
+        let mix = |src: u8, dst: u8| -> u8 {
+            let value = (f32::from(src) * sa + f32::from(dst) * da * (1.0 - sa)) / out_a;
+            value.round().min(255.0) as u8
+        };
+        self.pixels[index] = mix(color.r, dr);
+        self.pixels[index + 1] = mix(color.g, dg);
+        self.pixels[index + 2] = mix(color.b, db);
+        self.pixels[index + 3] = (out_a * 255.0).round().min(255.0) as u8;
+    }
+
+    /// Fills a rectangle with `fill_style` (CSS `fillRect`).
+    pub fn fill_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
+        let (x0, y0) = (x.round() as i64, y.round() as i64);
+        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        let color = self.fill_style;
+        for py in y0..y1 {
+            for px in x0..x1 {
+                self.blend(px, py, color);
+            }
+        }
+    }
+
+    /// Clears a rectangle to transparent black (CSS `clearRect`).
+    pub fn clear_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
+        let (x0, y0) = (x.round() as i64, y.round() as i64);
+        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        for py in y0..y1 {
+            for px in x0..x1 {
+                if px < 0 || py < 0 || px >= self.width as i64 || py >= self.height as i64 {
+                    continue;
+                }
+                let index = ((py as usize) * self.width as usize + px as usize) * 4;
+                self.pixels[index..index + 4].fill(0);
+            }
+        }
+    }
+
+    /// Strokes a 1px rectangle outline with `stroke_style` (CSS `strokeRect`).
+    pub fn stroke_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
+        let (x0, y0) = (x.round() as i64, y.round() as i64);
+        let (x1, y1) = ((x + w).round() as i64, (y + h).round() as i64);
+        let color = self.stroke_style;
+        for px in x0..x1 {
+            self.blend(px, y0, color);
+            self.blend(px, y1 - 1, color);
+        }
+        for py in y0..y1 {
+            self.blend(x0, py, color);
+            self.blend(x1 - 1, py, color);
+        }
+    }
+
+    /// Returns a copy of a rectangular region as RGBA bytes (CSS `getImageData`).
+    pub fn get_image_data(&self, x: i64, y: i64, w: u32, h: u32) -> Option<Vec<u8>> {
+        if w == 0
+            || h == 0
+            || x < 0
+            || y < 0
+            || x + w as i64 > self.width as i64
+            || y + h as i64 > self.height as i64
+        {
+            return None;
+        }
+        let mut out = Vec::with_capacity((w as usize) * (h as usize) * 4);
+        for py in y..y + h as i64 {
+            let start = ((py as usize) * self.width as usize + x as usize) * 4;
+            out.extend_from_slice(&self.pixels[start..start + (w as usize) * 4]);
+        }
+        Some(out)
+    }
+
+    /// Overwrites a rectangular region from RGBA bytes (CSS `putImageData`), source-over.
+    pub fn put_image_data(&mut self, x: i64, y: i64, w: u32, h: u32, data: &[u8]) -> bool {
+        if w == 0
+            || h == 0
+            || x < 0
+            || y < 0
+            || x + w as i64 > self.width as i64
+            || y + h as i64 > self.height as i64
+            || data.len() < (w as usize) * (h as usize) * 4
+        {
+            return false;
+        }
+        let mut index = 0;
+        for py in y..y + h as i64 {
+            for px in x..x + w as i64 {
+                self.blend(
+                    px,
+                    py,
+                    Rgba {
+                        r: data[index],
+                        g: data[index + 1],
+                        b: data[index + 2],
+                        a: data[index + 3],
+                    },
+                );
+                index += 4;
+            }
+        }
+        true
+    }
+}
+
+/// All live canvas surfaces, keyed by the `<canvas>` node id.
+#[derive(Default)]
+pub struct CanvasStore {
+    surfaces: HashMap<NodeId, CanvasSurface>,
+}
+
+impl CanvasStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the surface for `node`, creating it with the element's `width`/`height` attributes
+    /// (clamped by the caps) on first use. `None` when the element cannot back a canvas.
+    pub fn surface_for(
+        &mut self,
+        node: NodeId,
+        width: u32,
+        height: u32,
+    ) -> Option<&mut CanvasSurface> {
+        if let std::collections::hash_map::Entry::Vacant(entry) = self.surfaces.entry(node) {
+            let surface = CanvasSurface::new(width, height)?;
+            entry.insert(surface);
+        }
+        self.surfaces.get_mut(&node)
+    }
+
+    pub fn get(&self, node: NodeId) -> Option<&CanvasSurface> {
+        self.surfaces.get(&node)
+    }
+
+    /// Runs `f` with a mutable borrow of an existing surface, if any.
+    pub fn with_surface_mut(&mut self, node: NodeId, f: impl FnOnce(&mut CanvasSurface)) {
+        if let Some(surface) = self.surfaces.get_mut(&node) {
+            f(surface);
+        }
+    }
+
+    pub fn into_surfaces(self) -> HashMap<NodeId, CanvasSurface> {
+        self.surfaces
+    }
+
+    /// Clones all surfaces (used by `JsRuntime::canvas_surfaces`).
+    pub fn clone_surfaces(&self) -> HashMap<NodeId, CanvasSurface> {
+        self.surfaces.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_css_colors() {
+        assert_eq!(
+            Rgba::parse("#f00"),
+            Some(Rgba {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255
+            })
+        );
+        assert_eq!(
+            Rgba::parse("#00ff00"),
+            Some(Rgba {
+                r: 0,
+                g: 255,
+                b: 0,
+                a: 255
+            })
+        );
+        assert_eq!(
+            Rgba::parse("rgb(1, 2, 3)"),
+            Some(Rgba {
+                r: 1,
+                g: 2,
+                b: 3,
+                a: 255
+            })
+        );
+        assert_eq!(
+            Rgba::parse("rgba(0,0,0,0.5)"),
+            Some(Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 128
+            })
+        );
+        assert_eq!(Rgba::parse("not-a-color"), None);
+    }
+
+    #[test]
+    fn rejects_oversized_surfaces() {
+        assert!(CanvasSurface::new(0, 10).is_none());
+        assert!(CanvasSurface::new(MAX_CANVAS_DIM + 1, 10).is_none());
+        assert!(CanvasSurface::new(5000, 5000).is_none());
+        assert!(CanvasSurface::new(300, 150).is_some());
+    }
+
+    #[test]
+    fn fill_clear_and_stroke_rect_manipulate_pixels() {
+        let mut surface = CanvasSurface::new(4, 4).expect("surface");
+        surface.fill_style = Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
+        surface.fill_rect(0.0, 0.0, 2.0, 2.0);
+        assert_eq!(&surface.pixels[0..4], &[255, 0, 0, 255], "top-left filled");
+        assert_eq!(
+            &surface.pixels[(3 * 4 * 4)..(3 * 4 * 4 + 4)],
+            &[0, 0, 0, 0],
+            "outside untouched"
+        );
+        surface.clear_rect(0.0, 0.0, 1.0, 1.0);
+        assert_eq!(&surface.pixels[0..4], &[0, 0, 0, 0], "cleared");
+        surface.stroke_style = Rgba {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: 255,
+        };
+        surface.stroke_rect(0.0, 0.0, 4.0, 4.0);
+        assert_eq!(&surface.pixels[0..4], &[0, 0, 255, 255], "stroke top-left");
+    }
+
+    #[test]
+    fn get_put_image_data_round_trips() {
+        let mut surface = CanvasSurface::new(2, 2).expect("surface");
+        surface.fill_style = Rgba {
+            r: 10,
+            g: 20,
+            b: 30,
+            a: 255,
+        };
+        surface.fill_rect(0.0, 0.0, 1.0, 1.0);
+        let data = surface.get_image_data(0, 0, 1, 1).expect("data");
+        assert_eq!(data, vec![10, 20, 30, 255]);
+        let mut other = CanvasSurface::new(2, 2).expect("surface");
+        assert!(other.put_image_data(1, 1, 1, 1, &data));
+        assert_eq!(
+            &other.pixels[12..16],
+            &[10, 20, 30, 255],
+            "bottom-right pixel"
+        );
+        assert!(
+            !other.put_image_data(1, 1, 4, 4, &data),
+            "out of bounds rejected"
+        );
+    }
+}

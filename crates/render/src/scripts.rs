@@ -349,6 +349,8 @@ pub struct ConsoleMessage {
 pub struct ScriptExecution {
     /// Document after all scripts, microtasks and timer callbacks have run.
     pub document: Document,
+    /// Canvas 2D surfaces created/filled by scripts (#1545), keyed by `<canvas>` node.
+    pub canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface>,
     /// Scripts evaluated without an error.
     pub executed: usize,
     /// Scripts that raised an exception or exhausted a budget.
@@ -773,6 +775,7 @@ pub fn execute_scripts(
 ) -> ScriptExecution {
     let mut execution = ScriptExecution {
         document,
+        canvas_surfaces: std::collections::HashMap::new(),
         executed: 0,
         failed: 0,
         console: Vec::new(),
@@ -1358,6 +1361,7 @@ pub fn execute_scripts(
         execution.console.push(message);
     }
     execution.document = std::mem::take(&mut *runtime.document_mut());
+    execution.canvas_surfaces = runtime.canvas_surfaces();
     execution.location_actions = std::mem::take(
         &mut *location_actions
             .lock()
