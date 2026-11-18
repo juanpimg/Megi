@@ -181,7 +181,10 @@ impl fmt::Display for FetchError {
                 write!(f, "redirect ({status}) disallowed by redirect policy")
             }
             Self::HttpsDowngradeBlocked(url) => {
-                write!(f, "blocked insecure HTTPS-to-HTTP redirect to `{url}`")
+                write!(
+                    f,
+                    "blocked mixed content: insecure HTTPS-to-HTTP redirect to `{url}`"
+                )
             }
             Self::FileNotFound(path) => write!(f, "file not found: {}", path.display()),
             Self::FilePermissionDenied(path) => {
