@@ -112,3 +112,49 @@ fn extended_css_named_colors_paint() {
         assert_eq!(px(&image, 5, 5), expected, "named color {name}");
     }
 }
+
+#[test]
+fn oversized_font_size_reports_a_limit_error() {
+    // #1663: a <text font-size="5000"> must not be silently skipped.
+    let source = r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+         <text x="1" y="10" font-size="5000">A</text>
+    </svg>"##;
+    let result = svg::render_svg(source.as_bytes(), &svg::SvgOptions::default());
+    assert!(
+        result.is_err(),
+        "oversized font size must be a typed limit error, not silent Ok"
+    );
+    assert!(matches!(result.unwrap_err(), svg::SvgError::Limit(_)));
+}
+
+#[test]
+fn gradient_many_stops_binary_search_keeps_output() {
+    // #1687: replacing the per-pixel linear stop scan with partition_point must not change
+    // the rendered pixels. Compare a 4-stop and a 256-stop gradient against expected colors.
+    let stops = |n: usize| -> String {
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / (n - 1) as f32;
+                let c = (t * 255.0).round() as u8;
+                format!("<stop offset='{t}' stop-color='rgb({c},{c},{c})'/>")
+            })
+            .collect()
+    };
+    for n in [4usize, 256] {
+        let source = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
+                 <defs><linearGradient id="g">{}</linearGradient></defs>
+                 <rect width="16" height="16" fill="url(#g)"/>
+            </svg>"##,
+            stops(n)
+        );
+        let image = render(&source);
+        let a = px(&image, 0, 8);
+        let b = px(&image, 15, 8);
+        assert_eq!(a[3], 255, "n={n} opaque");
+        assert!(
+            b[0] >= a[0],
+            "n={n} gradient increases left to right: {a:?} -> {b:?}"
+        );
+    }
+}
