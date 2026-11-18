@@ -41,7 +41,7 @@ unsafe_forbidden_crates = 14
 
 [gate]
 status = "PASS"
-verified_commit = "35566fc"
+verified_commit = "261ee5f"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
