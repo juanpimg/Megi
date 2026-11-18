@@ -88,6 +88,27 @@ fn ws_handshake_and_text_roundtrip() {
 }
 
 #[test]
+fn ws_scheme_is_case_insensitive() {
+    // #1644: the gate lowercases but parse_ws_url must also handle uppercase prefixes.
+    let upper = net::websocket::parse_ws_url("WS://example.test/chat").expect("uppercase ws");
+    let lower = net::websocket::parse_ws_url("ws://example.test/chat").expect("lowercase ws");
+    assert_eq!(upper.as_str(), lower.as_str());
+    let upper_secure =
+        net::websocket::parse_ws_url("WSS://example.test/chat").expect("uppercase wss");
+    let lower_secure =
+        net::websocket::parse_ws_url("wss://example.test/chat").expect("lowercase wss");
+    assert_eq!(upper_secure.as_str(), lower_secure.as_str());
+}
+
+#[test]
+fn ws_url_with_surrounding_whitespace_is_rejected() {
+    // #1641: silent trimming hides caller mistakes; reject instead.
+    assert!(net::websocket::parse_ws_url("  ws://example.test/x  ").is_err());
+    assert!(net::websocket::parse_ws_url("\tws://example.test/x").is_err());
+    assert!(net::websocket::parse_ws_url("ws://example.test/x\n").is_err());
+}
+
+#[test]
 fn non_ws_scheme_is_rejected() {
     assert!(matches!(
         WebSocket::connect("https://example.test/"),

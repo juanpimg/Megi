@@ -453,6 +453,10 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
                 return Err(protocol("truncated 16-bit length"));
             }
             length = u16::from_be_bytes([bytes[2], bytes[3]]) as u64;
+            // RFC 6455 §5.2: extended length encodings MUST use the shortest form (#1642).
+            if length < 126 {
+                return Err(protocol("non-minimal 16-bit length"));
+            }
             offset = 4;
         }
         127 => {
@@ -462,6 +466,9 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
             let mut array = [0u8; 8];
             array.copy_from_slice(&bytes[2..10]);
             length = u64::from_be_bytes(array);
+            if length <= u16::MAX as u64 {
+                return Err(protocol("non-minimal 64-bit length"));
+            }
             offset = 10;
         }
         _ => {}
@@ -507,6 +514,9 @@ fn frame_total_len(bytes: &[u8]) -> Option<usize> {
                 return None;
             }
             length = u16::from_be_bytes([bytes[2], bytes[3]]) as usize;
+            if length < 126 {
+                return None;
+            } // non-minimal encoding (#1642)
             offset = 4;
         }
         127 => {
@@ -515,7 +525,12 @@ fn frame_total_len(bytes: &[u8]) -> Option<usize> {
             }
             let mut array = [0u8; 8];
             array.copy_from_slice(&bytes[2..10]);
-            length = u64::from_be_bytes(array) as usize;
+            let wide = u64::from_be_bytes(array);
+            if wide <= u16::MAX as u64 {
+                return None;
+            } // non-minimal encoding (#1642)
+            // #1643: reject lengths that cannot fit `usize` (e.g. on 32-bit) instead of wrapping.
+            length = usize::try_from(wide).ok()?;
             offset = 10;
         }
         _ => {}
@@ -554,12 +569,20 @@ fn protocol(reason: &str) -> FetchError {
 /// header while still identifying the scheme as WebSocket at the API boundary. `wss://`
 /// handshakes are performed over TLS and are never downgraded to plaintext.
 pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
-    let input = input.trim();
-    if let Some(rest) = input.strip_prefix("wss://") {
+    // #1641: do not silently trim — whitespace in a pasted URL is a caller error.
+    if input.chars().any(char::is_whitespace) {
+        return Err(FetchError::InvalidResponse(
+            "invalid ws URL: surrounding or embedded whitespace".to_owned(),
+        ));
+    }
+    // #1644: URL schemes are ASCII case-insensitive; the gate in `WebSocket::connect` also
+    // lowercases, so both paths must agree.
+    let lower = input.to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix("wss://") {
         return Url::parse(&format!("https://{rest}"))
             .map_err(|error| FetchError::InvalidResponse(format!("invalid wss URL: {error}")));
     }
-    if let Some(rest) = input.strip_prefix("ws://") {
+    if let Some(rest) = lower.strip_prefix("ws://") {
         return Url::parse(&format!("http://{rest}"))
             .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")));
     }
@@ -684,6 +707,24 @@ mod tests {
         // RFC 6455 sample key, split so the secret scanner does not read it as a credential.
         let key = concat!("dGhlIH", "NhbXBs", "ZSBub2", "5jZQ==");
         assert_eq!(accept_value(key), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+    }
+
+    #[test]
+    fn non_minimal_lengths_are_rejected() {
+        // #1642: RFC 6455 §5.2 requires the shortest length encoding.
+        // 0x7E with a 16-bit value < 126 must be rejected.
+        let short_16 = [0x81u8, 0x7E, 0x00, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        assert!(decode_frame(&short_16, 1024).is_err());
+        // 0x7F with a 64-bit value <= u16::MAX must be rejected.
+        let mut short_64 = vec![0x81u8, 0x7F, 0, 0, 0, 0, 0, 0, 0, 5];
+        short_64.extend_from_slice(b"hello");
+        assert!(decode_frame(&short_64, 1024).is_err());
+        // Minimal encodings still work.
+        let minimal = [0x81u8, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        assert_eq!(
+            decode_frame(&minimal, 1024).expect("valid").frame.payload,
+            b"hello"
+        );
     }
 
     #[test]
