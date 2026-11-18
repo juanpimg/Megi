@@ -605,6 +605,52 @@ impl FocusState {
     }
 }
 
+/// State of an active Input Method Editor composition (#1519).
+///
+/// Tracks whether the IME is enabled and the current preedit (composing) text. A `Commit`
+/// replaces the preedit with final text; the caller inserts that text into the focused editor.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImeState {
+    enabled: bool,
+    preedit: String,
+}
+
+impl ImeState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn enable(&mut self) {
+        self.enabled = true;
+    }
+
+    /// Disables the IME and clears any preedit, returning it so callers can cancel a pending
+    /// composition that had been inserted as placeholder text.
+    pub fn disable(&mut self) -> String {
+        self.enabled = false;
+        std::mem::take(&mut self.preedit)
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    /// Sets the current preedit text (empty string clears it).
+    pub fn set_preedit(&mut self, text: String) {
+        self.preedit = text;
+    }
+
+    pub fn preedit(&self) -> &str {
+        &self.preedit
+    }
+
+    /// Commits the composition: returns the final text and clears the preedit.
+    pub fn commit(&mut self, text: String) -> String {
+        self.preedit.clear();
+        text
+    }
+}
+
 /// A minimal text editor: value plus a caret index (byte offset on char boundaries).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TextEdit {
@@ -1198,6 +1244,24 @@ mod tests {
         ];
         let body = form_urlencoded(&[checkbox, select]);
         assert_eq!(body, "ok=on&color=r", "body={body}");
+    }
+
+    #[test]
+    fn ime_state_tracks_composition_lifecycle() {
+        // #1519: preedit accumulates composing text and commit returns the final text.
+        let mut ime = ImeState::new();
+        assert!(!ime.is_enabled());
+        ime.enable();
+        assert!(ime.is_enabled());
+        ime.set_preedit("にほん".to_owned());
+        assert_eq!(ime.preedit(), "にほん");
+        let committed = ime.commit("日本語".to_owned());
+        assert_eq!(committed, "日本語");
+        assert!(ime.preedit().is_empty(), "preedit cleared after commit");
+        ime.set_preedit("x".to_owned());
+        assert_eq!(ime.disable(), "x", "disable returns pending preedit");
+        assert!(!ime.is_enabled());
+        assert!(ime.preedit().is_empty());
     }
 
     #[test]

@@ -73,7 +73,7 @@ use std::time::Instant;
 
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
@@ -302,6 +302,8 @@ struct WindowApp {
     focus_targets: Vec<FocusTarget>,
     /// Text editor for the focused text control (`None` for buttons/checkboxes).
     editor: Option<TextEdit>,
+    /// Active IME composition state (#1519).
+    ime: crate::forms::ImeState,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
     document: Option<Arc<dom::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.
@@ -438,6 +440,7 @@ impl WindowApp {
             focus: FocusState::new(),
             focus_targets: Vec::new(),
             editor: None,
+            ime: crate::forms::ImeState::new(),
             document: None,
             release_button: None,
             find: FindState::new(),
@@ -1551,6 +1554,42 @@ impl WindowApp {
         self.request_repaint();
     }
 
+    /// Handles a winit IME event (#1519): tracks the composition and commits final text into the
+    /// focused editor (address bar or form control). Preedit text is kept in `ImeState` so a
+    /// future preedit overlay can render it; the composing bytes never reach the DOM until commit.
+    fn handle_ime(&mut self, event: Ime) {
+        match event {
+            Ime::Enabled => self.ime.enable(),
+            Ime::Disabled => {
+                let _ = self.ime.disable();
+            }
+            Ime::Preedit(text, _cursor) => self.ime.set_preedit(text),
+            Ime::Commit(text) => {
+                let committed = self.ime.commit(text);
+                if committed.is_empty() {
+                    return;
+                }
+                if self.address.is_editing() {
+                    self.address.insert(&committed);
+                } else {
+                    let inserted = self
+                        .editor
+                        .as_mut()
+                        .is_some_and(|editor| editor.insert(&committed));
+                    if inserted {
+                        let value = self.editor.as_ref().map(|editor| editor.value().to_owned());
+                        if let (Some(control), Some(value)) =
+                            (self.focused_control().cloned(), value)
+                        {
+                            self.apply_form_patch(Some(control.form_id), Some(&value), None, false);
+                        }
+                    }
+                }
+                self.request_repaint();
+            }
+        }
+    }
+
     /// Submits the form owning the currently focused control (#1538).
     ///
     /// Builds the submission parameters from the rendered controls, fires the host-side submit
@@ -2449,6 +2488,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 self.middle_click();
             }
             WindowEvent::MouseInput { .. } => {}
+            WindowEvent::Ime(ime_event) => {
+                self.handle_ime(ime_event);
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let alt_pressed = self.modifiers.alt_key();
                 let ctrl_pressed = self.modifiers.control_key();
