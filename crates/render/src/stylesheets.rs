@@ -35,11 +35,13 @@ pub enum CssSource {
         nonce: Option<String>,
     },
     /// External `<link rel="stylesheet">` URL (resolved against `<base>`), its `media`
-    /// attribute value (empty = all), and whether `crossorigin` was specified (no-cors mode).
+    /// attribute value (empty = all), whether `crossorigin` was specified (no-cors mode),
+    /// and its optional Subresource Integrity attribute (#1527).
     External {
         url: Url,
         media: String,
         crossorigin: bool,
+        integrity: Option<String>,
     },
 }
 
@@ -251,6 +253,7 @@ pub fn collect_stylesheets(
                             url,
                             media: media_attr,
                             crossorigin: attr(element, "crossorigin").is_some(),
+                            integrity: attr(element, "integrity").map(str::to_owned),
                         });
                     }
                 }

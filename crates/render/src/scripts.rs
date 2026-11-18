@@ -817,10 +817,20 @@ pub fn execute_scripts(
         }
     };
 
-    if let Some(json) = &import_map_json
-        && let Err(error) = runtime.set_import_map_json(json)
-    {
-        warnings.push(format!("invalid import map: {error}"));
+    let mut import_map_integrity: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    if let Some(json) = &import_map_json {
+        if let Ok(parsed) = js::ImportMap::from_json(json) {
+            for (raw_url, sri) in parsed.integrity_entries() {
+                import_map_integrity.insert(raw_url.to_owned(), sri.to_owned());
+                if let Ok(resolved) = document_url.join(raw_url) {
+                    import_map_integrity.insert(resolved.as_str().to_owned(), sri.to_owned());
+                }
+            }
+        }
+        if let Err(error) = runtime.set_import_map_json(json) {
+            warnings.push(format!("invalid import map: {error}"));
+        }
     }
     if let Some(policy) = &host.csp {
         runtime.set_allow_eval(policy.allows_eval());
@@ -1187,6 +1197,18 @@ pub fn execute_scripts(
                     return Err(js::JsError::ModuleNotFound(format!(
                         "module {url}: {} bytes exceeds max_script_bytes={max_module_bytes}",
                         resource.bytes.len()
+                    )));
+                }
+                // Subresource Integrity (#1527): verify against `<script type="importmap">`
+                // `"integrity"` entries (keyed by resolved URL or raw target string).
+                if let Some(expected_sri) = import_map_integrity
+                    .get(&url.as_str())
+                    .or_else(|| import_map_integrity.get(url_str))
+                    && let Err(error) =
+                        net::integrity::verify_integrity(&resource.bytes, expected_sri)
+                {
+                    return Err(js::JsError::ModuleNotFound(format!(
+                        "module {url}: integrity check failed: {error}"
                     )));
                 }
                 let text = String::from_utf8(resource.bytes.clone()).map_err(|error| {

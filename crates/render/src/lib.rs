@@ -1740,7 +1740,15 @@ fn stylesheet_signature(document: &Document) -> u64 {
             }
         } else if local.eq_ignore_ascii_case("link") {
             mix(&mut hash, b"L");
-            for attr_name in ["rel", "href", "media", "type", "disabled", "crossorigin"] {
+            for attr_name in [
+                "rel",
+                "href",
+                "media",
+                "type",
+                "disabled",
+                "crossorigin",
+                "integrity",
+            ] {
                 if let Some(val) = element.get_attribute(attr_name) {
                     mix(&mut hash, attr_name.as_bytes());
                     mix(&mut hash, val.as_bytes());
@@ -1841,7 +1849,10 @@ fn build_author_stylesheet_collection(
                 collection.add_stylesheet(&sheet, css::Origin::Author);
             }
             stylesheets::CssSource::External {
-                url, crossorigin, ..
+                url,
+                crossorigin,
+                integrity,
+                ..
             } => {
                 if let Some(policy) = walk.csp
                     && !policy.allows_external_style(url, base_url)
@@ -1866,6 +1877,7 @@ fn build_author_stylesheet_collection(
                 }
                 let Some(text) = load_stylesheet_text(
                     url,
+                    integrity.as_deref(),
                     &mut *walk.loader,
                     options,
                     &mut *walk.warnings,
@@ -2015,6 +2027,7 @@ fn walk_imports(
         walk.attempts += 1;
         let Some(text) = load_stylesheet_text(
             &url,
+            None,
             &mut *walk.loader,
             walk.options,
             &mut *walk.warnings,
@@ -2060,11 +2073,12 @@ fn walk_imports(
     Ok(())
 }
 
-/// Loads one stylesheet body honouring `--no-network` and the per-sheet size cap.
+/// Loads one stylesheet body honouring `--no-network`, optional SRI, and the per-sheet size cap.
 ///
-/// Missing/unreachable sheets are non-fatal (browser behaviour) and reported as warnings.
+/// Missing/unreachable sheets (or SRI mismatches) are non-fatal (browser behaviour) and reported as warnings.
 fn load_stylesheet_text(
     url: &Url,
+    integrity: Option<&str>,
     loader: &mut ResourceLoader,
     options: &RenderOptions,
     warnings: &mut Vec<String>,
@@ -2084,6 +2098,14 @@ fn load_stylesheet_text(
                     "skipping stylesheet {url}: {} bytes exceeds the {} byte cap",
                     resource.bytes.len(),
                     options.max_css_bytes_per_sheet
+                ));
+                return Ok(None);
+            }
+            if let Some(integrity) = integrity
+                && let Err(error) = net::integrity::verify_integrity(&resource.bytes, integrity)
+            {
+                warnings.push(format!(
+                    "skipping stylesheet {url}: integrity check failed: {error}"
                 ));
                 return Ok(None);
             }
