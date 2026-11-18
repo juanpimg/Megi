@@ -15,7 +15,7 @@
 //! `:nth-of-type()`, `:nth-last-child()` and `:nth-last-of-type()`. `@media` is handled by the
 //! cascade with a basic [`crate::MediaContext`].
 //!
-//! Still pending (documented, out of scope for this milestone): `:lang()`, `:nth-col()`,
+//! Still pending (documented, out of scope for this milestone): `:nth-col()`,
 //! namespace prefixes, pseudo-element boxes and full relative-selector anchoring for `:has()`
 //! (`:scope`). Dynamic pseudo-classes without tracked interaction state match nothing, and
 //! unknown/unsupported pseudo-classes invalidate the whole selector list instead of silently
@@ -329,8 +329,11 @@ pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
 /// (`::before`, `::after`, ...) are parsed as [`PseudoClass::Never`]: the selector stays
 /// valid but can never match, instead of over-matching every element.
 ///
-/// Not implemented yet (selectors using them are currently rejected as invalid): `:lang()`,
-/// `:nth-col()`, attribute namespaces and the `s`/`i` case-sensitivity flags of `@namespace`.
+/// `:lang(<language-range>)` matches the nearest ancestor-or-self `lang` value, with
+/// case-insensitive hyphen-prefix semantics (Selectors 4 §12.1).
+///
+/// Not implemented yet: `:nth-col()`, attribute namespaces and the `s`/`i`
+/// case-sensitivity flags of `@namespace`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PseudoClass {
     FirstChild,
@@ -377,6 +380,8 @@ pub enum PseudoClass {
     PlaceholderShown,
     /// `:modal` — `<dialog open>` opened modally into the top layer (`data-megi-modal`).
     Modal,
+    /// `:lang(<range>)` — nearest ancestor-or-self `lang`, hyphen-prefix match (#1523).
+    Lang(String),
     /// `::backdrop` — pseudo-element behind a top-layer modal `<dialog>`.
     Backdrop,
     /// Known pseudo-class/pseudo-element whose state this engine cannot observe.
@@ -419,6 +424,7 @@ impl PseudoClass {
             Self::Required => crate::state::is_required(doc, node_id),
             Self::PlaceholderShown => crate::state::is_placeholder_shown(doc, node_id),
             Self::Modal => crate::state::is_modal(doc, node_id),
+            Self::Lang(range) => matches_language(doc, node_id, range),
             Self::Backdrop | Self::Never => false,
             Self::Is(selectors) | Self::Where(selectors) => selectors.matches(doc, node_id),
             Self::Not(selectors) => !selectors.matches(doc, node_id),
@@ -1697,6 +1703,7 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
                     "required" if argument.is_none() => PseudoClass::Required,
                     "placeholder-shown" if argument.is_none() => PseudoClass::PlaceholderShown,
                     "modal" if argument.is_none() => PseudoClass::Modal,
+                    "lang" => PseudoClass::Lang(parse_language_range(argument.as_deref()?)?),
                     // Legacy CSS2 single-colon syntax for `:before` and `:after`.
                     "before" if argument.is_none() => {
                         if compound.pseudo_element.is_some() {
@@ -1774,6 +1781,45 @@ fn parse_compound_selector(tokens: &mut SelectorTokens) -> Option<CompoundSelect
 }
 
 /// Parses the argument of `:is()`, `:where()` or `:not()` into a selector list.
+/// Parses the first language range of `:lang(en, fr)`, trimming quotes and normalising case.
+fn parse_language_range(input: &str) -> Option<String> {
+    let first = input.split(',').next()?.trim();
+    let unquoted = first
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .or_else(|| {
+            first
+                .strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+        })
+        .unwrap_or(first);
+    let range = unquoted.trim().to_ascii_lowercase();
+    if range.is_empty()
+        || !range
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        return None;
+    }
+    Some(range)
+}
+
+/// Selectors 4 §12.1: the element's language is the `lang` of the nearest ancestor-or-self.
+/// A range matches when it equals the language or is a hyphen-prefix of it, case-insensitively.
+fn matches_language(doc: &Document, node_id: NodeId, range: &str) -> bool {
+    let mut current = Some(node_id);
+    while let Some(id) = current {
+        if let Some(element) = doc.node(id).as_element()
+            && let Some(lang) = element.get_attribute("lang")
+        {
+            let language = lang.trim().to_ascii_lowercase();
+            return language == range || language.starts_with(&format!("{range}-"));
+        }
+        current = doc.node(id).parent;
+    }
+    false
+}
+
 fn parse_selector_argument(argument: &Option<String>) -> Option<SelectorList> {
     let selectors = parse_selectors(argument.as_deref()?);
     if selectors.selectors.is_empty() {
