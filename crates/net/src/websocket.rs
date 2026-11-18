@@ -460,7 +460,8 @@ pub fn handshake_key(bytes: [u8; 16]) -> String {
 
 /// Computes the expected `Sec-WebSocket-Accept` for a handshake key (RFC 6455 §4.2.2).
 pub fn accept_value(key: &str) -> String {
-    const GUID: &[u8] = concat!("258E", "AFA5-E9", "14-47DA-", "95CA-C5", "AB0DC85", "B11").as_bytes();
+    const GUID: &[u8] =
+        concat!("258E", "AFA5-E9", "14-47DA-", "95CA-C5", "AB0DC85", "B11").as_bytes();
     let mut input = Vec::with_capacity(key.len() + GUID.len());
     input.extend_from_slice(key.as_bytes());
     input.extend_from_slice(GUID);
