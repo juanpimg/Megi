@@ -516,7 +516,7 @@ crates/shell/tests/fixtures/links.html	10	test	F1	waveF1	2026-11-17	covered	#137
 crates/shell/tests/shell_tests.rs	1694	test	F1	waveF1	2026-11-17	covered	#1379	
 crates/svg/Cargo.toml	13	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/svg/examples/svg_to_png.rs	114	example	F3	lead	2026-11-17	covered	example read	read in the F3/F4 pass
-crates/svg/src/color.rs	258	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
+crates/svg/src/color.rs	314	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/css.rs	532	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/document.rs	2936	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
 crates/svg/src/gradient.rs	494	src	F2	wave1	2026-11-16	covered	#1266-#1282,#1324-#1338	
@@ -544,7 +544,7 @@ crates/svg/tests/render.rs	796	test	F1	waveF1	2026-11-17	covered	P3 only, see fi
 crates/svg/tests/scanline_budget.rs	62	test	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 crates/svg/tests/shape_budget.rs	106	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/style_budget.rs	59	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
-crates/svg/tests/style_inheritance.rs	94	test	F1	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 code line-by-line audit (re-synced after security fixes)
+crates/svg/tests/style_inheritance.rs	114	test	F1	wave2	2026-11-18	covered	#1618-#1687,#1689-#1691	Wave 2 code line-by-line audit (re-synced after security fixes)
 crates/svg/tests/textpath_smil.rs	231	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/svg/tests/textpath_use.rs	186	test	F1	waveF1	2026-11-17	covered	P3 only, see findings/f1/css-svg-html.md	
 crates/test_harness/Cargo.toml	17	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
