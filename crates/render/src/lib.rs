@@ -899,6 +899,7 @@ fn render_url_inner(
     let mut script_bytes = 0usize;
     let mut scripting_execution: Option<scripts::ScriptExecution> = None;
     // Canvas 2D surfaces painted by scripts (#1545); inserted into the image store after images load.
+    #[cfg(feature = "js")]
     let mut canvas_surfaces: std::collections::HashMap<dom::NodeId, js::canvas::CanvasSurface> =
         std::collections::HashMap::new();
     if script_requested && !cfg!(feature = "js") {
@@ -963,7 +964,10 @@ fn render_url_inner(
             &mut script_warnings,
         );
         document = std::mem::take(&mut execution.document);
-        canvas_surfaces = std::mem::take(&mut execution.canvas_surfaces);
+        #[cfg(feature = "js")]
+        {
+            canvas_surfaces = std::mem::take(&mut execution.canvas_surfaces);
+        }
         warnings.extend(script_warnings);
         scripting_execution = Some(execution);
     } else {
@@ -1077,6 +1081,7 @@ fn render_url_inner(
     let fonts_time = fonts_start.elapsed();
 
     let images_start = Instant::now();
+    #[cfg_attr(not(feature = "js"), allow(unused_mut))]
     let mut loaded_images = images::load_images(
         &document,
         &base_url,
@@ -1095,6 +1100,7 @@ fn render_url_inner(
 
     // Blit script-painted canvas surfaces into the replaced-element image store (#1545). They
     // are keyed by `<canvas>` NodeId, so the painter's existing replaced-element path draws them.
+    #[cfg(feature = "js")]
     for (node, surface) in canvas_surfaces {
         if let Ok(rgba) = image::RgbaImage::new(surface.width, surface.height, surface.pixels) {
             let size = (surface.width as f32, surface.height as f32);

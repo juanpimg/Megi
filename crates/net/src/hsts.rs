@@ -2,7 +2,7 @@
 //!
 //! Remembers hosts that sent `Strict-Transport-Security` over HTTPS and upgrades later
 //! `http://` navigations/subresources for those hosts to `https://`, preventing downgrade
-//! attacks. The store is process-global (like [`crate::pac`]'s cache) and can be reset with
+//! attacks. The store is process-global (like the PAC resolver cache) and can be reset with
 //! [`clear`] so callers/sessions do not leak state. The core [`HstsStore`] is pure and takes an
 //! explicit clock, so its behaviour is deterministic and unit-testable.
 
