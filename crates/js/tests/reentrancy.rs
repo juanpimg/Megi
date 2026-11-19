@@ -1,6 +1,8 @@
 //! Re-entrancy: nested synchronous event dispatch must not double-borrow the host
 //! (Task 4.1 RED fixture).
 
+#![cfg(feature = "js")]
+
 use megi_js::JsRuntime;
 
 #[test]

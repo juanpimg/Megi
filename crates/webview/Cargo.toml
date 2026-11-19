@@ -23,7 +23,7 @@ megi-paint = { workspace = true }
 megi-net = { workspace = true }
 megi-display = { workspace = true }
 megi-raster = { workspace = true }
-megi-render = { workspace = true, default-features = false }
+megi-render.workspace = true
 
 [lints]
 workspace = true

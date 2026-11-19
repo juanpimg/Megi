@@ -267,5 +267,6 @@ pub use output::{RenderOutput, RenderStats, RenderTimings};
 pub use url::install_pac_evaluator;
 pub use url::{render_url, render_url_cached};
 
+#[cfg(feature = "js")]
 pub(crate) use final_stage::render_pre_scripted_document;
 pub(crate) use url::{FrameRenderContext, render_url_with_context};

@@ -36,7 +36,7 @@ tests = 2880
 tests_commit = "fed153c"
 tests_date = "2026-11-19"
 crates = 17
-rust_lines = 217920
+rust_lines = 217935
 unsafe_forbidden_crates = 16
 
 [gate]
