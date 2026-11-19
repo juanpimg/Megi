@@ -109,6 +109,33 @@ fn test_table_row_and_cell_anonymous_fixups() {
 }
 
 #[test]
+fn test_caption_uses_shrink_to_fit_and_is_centered() {
+    // #1708: CSS 2.1 §17.4 — the caption box uses shrink-to-fit and is
+    // centered over the table, not stretched to the table width.
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    styles.insert(table, table_style(Length::Px(200.0)));
+    let caption = mk(&mut doc, table, "caption");
+    let mut caption_style = ComputedStyle::initial();
+    caption_style.display = Display::TableCaption;
+    styles.insert(caption, caption_style);
+    doc.append_text(caption, "Cap");
+
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let caption_box = &table_box.children[0];
+    let caption_width = caption_box.dimensions.content.width;
+    assert!(
+        caption_width > 0.0 && caption_width < 100.0,
+        "caption must shrink to its text, got {caption_width}"
+    );
+    assert!(
+        caption_box.dimensions.content.x > table_box.dimensions.content.x,
+        "caption must be centered, not left-aligned"
+    );
+}
+
+#[test]
 fn test_table_row_group_and_caption() {
     let (mut doc, mut styles, body) = setup();
     let table = mk(&mut doc, body, "table");
@@ -132,9 +159,14 @@ fn test_table_row_group_and_caption() {
     let table_box = &tree.children[0].children[0];
     let caption_box = &table_box.children[0];
     assert!(matches!(caption_box.box_type, BoxType::TableCaption(_)));
-    // Caption is laid out above the grid at the table width.
+    // #1708: the caption sits above the grid and shrink-wraps its text instead
+    // of stretching to the full table width (CSS 2.1 §17.4).
     assert!((caption_box.dimensions.content.y - table_box.dimensions.content.y).abs() < 0.001);
-    assert!((caption_box.dimensions.content.width - 120.0).abs() < 0.001);
+    assert!(
+        caption_box.dimensions.content.width > 0.0 && caption_box.dimensions.content.width < 120.0,
+        "caption must shrink to fit, got {}",
+        caption_box.dimensions.content.width
+    );
     let group_box = &table_box.children[1];
     assert!(matches!(group_box.box_type, BoxType::TableRowGroup(_)));
     let row_box = &group_box.children[0];

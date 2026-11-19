@@ -125,7 +125,7 @@ fn event_constructors_have_prototypes_and_instanceof_works() {
     let out = runtime
         .eval(
             "var e = new Event('x'); var c = new CustomEvent('y'); var m = new MessageEvent('z'); \
-             String(typeof Event.prototype === 'object') + ':' + (e instanceof Event) + ':' + \
+             String(typeof Event.prototype) + ':' + (e instanceof Event) + ':' + \
              (c instanceof CustomEvent) + ':' + (c instanceof Event) + ':' + \
              (m instanceof MessageEvent);",
             "t",
@@ -144,4 +144,24 @@ fn debug_event_properties() {
         )
         .expect("eval");
     assert_eq!(out, "true:true:KeyA:x:insertText:focus:null");
+}
+
+#[test]
+fn new_event_subclasses_keep_the_internal_event_marker() {
+    // Regression after #1806: `Base.call(this, ...)` discarded the object
+    // returned by the native constructor, leaving subclasses without the
+    // `__megi_event` marker required by dispatchEvent's type check.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new KeyboardEvent('keydown', { key: 'A' });
+             String([e.__megi_event, e.type, e.key, e instanceof Event,
+                     typeof e.preventDefault].join(','))",
+            "t",
+        )
+        .expect("keyboard event marker");
+    assert_eq!(
+        out, "true,keydown,A,true,function",
+        "subclass lost Event state: {out}"
+    );
 }

@@ -83,3 +83,99 @@ pub fn read_u32(data: &[u8], offset: usize) -> u32 {
     }
     u32::from_le_bytes(bytes)
 }
+
+/// Headers derived from length-prefixed fuzz parts (#1762).
+pub fn net_surface_headers(data: &[u8]) -> Vec<(String, String)> {
+    let parts = length_prefixed_parts(data, 8);
+    parts
+        .chunks(2)
+        .filter(|pair| pair.len() == 2)
+        .map(|pair| {
+            (
+                String::from_utf8_lossy(pair[0]).into_owned(),
+                String::from_utf8_lossy(pair[1]).into_owned(),
+            )
+        })
+        .collect()
+}
+
+/// Referrer policy derived from a fuzz part (#1762).
+pub fn net_surface_referrer_policy(data: &[u8]) -> megi_net::ReferrerPolicy {
+    megi_net::ReferrerPolicy::parse(&String::from_utf8_lossy(data)).unwrap_or_default()
+}
+
+/// URL derived from a fuzz part, for APIs that need a parsed `Url` (#1762).
+pub fn net_surface_data_url(data: &[u8]) -> Option<megi_net::Url> {
+    let parts = length_prefixed_parts(data, 8);
+    let first = parts.first()?;
+    megi_net::Url::parse(&String::from_utf8_lossy(first)).ok()
+}
+
+/// Chunk returned by the harness-owned producer (#1762).
+///
+/// Mode 2 exercises the `chunk == max` boundary by padding a short source to
+/// exactly `max`, instead of duplicating mode 0 and leaving the boundary untested.
+pub fn producer_chunk(source: &[u8], max: usize, mode: usize) -> Vec<u8> {
+    match mode % 3 {
+        0 => source[..source.len().min(max)].to_vec(),
+        1 => {
+            if source.len() > max {
+                source[..max].to_vec()
+            } else {
+                source.to_vec()
+            }
+        }
+        _ => {
+            if source.len() >= max {
+                source[..max].to_vec()
+            } else {
+                let mut out = source.to_vec();
+                out.resize(max, 0);
+                out
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod net_surface_tests {
+    use super::*;
+
+    #[test]
+    fn headers_are_derived_from_the_fuzz_input() {
+        // #1762: fixed empty headers meant parse_cache_policy and
+        // resolve_content_type only ever saw one branch.
+        let mut data = Vec::new();
+        for part in [b"cache-control".as_slice(), b"no-store".as_slice()] {
+            data.extend_from_slice(&(part.len() as u16).to_le_bytes());
+            data.extend_from_slice(part);
+        }
+        let headers = net_surface_headers(&data);
+        assert_eq!(
+            headers,
+            vec![("cache-control".to_owned(), "no-store".to_owned())]
+        );
+    }
+
+    #[test]
+    fn referrer_policy_is_derived_from_the_fuzz_input() {
+        assert_eq!(
+            net_surface_referrer_policy(b"no-referrer"),
+            megi_net::ReferrerPolicy::NoReferrer
+        );
+        assert_eq!(
+            net_surface_referrer_policy(b"garbage"),
+            megi_net::ReferrerPolicy::default()
+        );
+    }
+
+    #[test]
+    fn producer_chunk_mode_two_returns_a_boundary_chunk() {
+        // #1762: mode 2 used to be identical to mode 0, so the boundary path
+        // (`chunk == max`) was never exercised.
+        assert_eq!(producer_chunk(b"abc", 8, 0), b"abc");
+        assert_eq!(producer_chunk(b"abc", 8, 1), b"abc");
+        assert_eq!(producer_chunk(b"abc", 8, 2).len(), 8);
+        assert_eq!(producer_chunk(b"abcdefghij", 4, 2).len(), 4);
+    }
+}

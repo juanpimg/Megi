@@ -61,34 +61,10 @@ fuzz_target!(|data: &[u8]| {
                 return Ok(None);
             }
             let chunk = chunks[position].clone();
-            // Derive a producer mode from the chunk index so the transport contract
-            // is actually exercised: truncate (current), exact (no change), or a chunk
-            // much larger than `max` that must still be clamped to it (#1421).
-            // Every mode must honour the `next_chunk(max)` contract (chunk ≤ max): the
-            // fuzz harness owns this producer, so deliberately returning an oversized
-            // chunk only tripped our own assertion below — a harness bug, not a crate
-            // bug that stalls the nightly matrix with a fake "crash".
             let mode = position % 3;
-            let chunk = if max == 0 {
-                Vec::new()
-            } else {
-                match mode {
-                    0 => chunk[..chunk.len().min(max)].to_vec(),
-                    1 => {
-                        if chunk.len() > max {
-                            chunk[..max].to_vec()
-                        } else {
-                            chunk
-                        }
-                    }
-                    _ => {
-                        // Oversized-source path: exercise the clamp with a chunk far
-                        // larger than `max`, then clamp to `max` before returning so
-                        // the producer honours its own contract.
-                        chunk[..chunk.len().min(max)].to_vec()
-                    }
-                }
-            };
+            // #1762: mode 2 now exercises the `chunk == max` boundary instead
+            // of duplicating mode 0. The producer still honours next_chunk(max).
+            let chunk = megi_fuzz::producer_chunk(&chunk, max, mode);
             Ok(Some(chunk))
         }
     });

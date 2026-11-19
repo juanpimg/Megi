@@ -29,6 +29,23 @@ fn test_auto_item_with_a_huge_span_is_clamped() {
 }
 
 #[test]
+fn test_positive_grid_line_beyond_explicit_creates_implicit_tracks() {
+    // #1706: a positive line number past the explicit grid creates implicit
+    // tracks; it must not be clamped to the end of the explicit grid.
+    let mut container = grid_container_style(Length::Px(600.0), Length::Auto);
+    container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
+    let mut item = item_style(Length::Px(50.0), Length::Px(10.0));
+    item.grid_column_start = GridLine::Line(5);
+    item.grid_column_end = GridLine::Line(6);
+    let case = layout_case(container, vec![item]);
+    let x = case.item(0).dimensions.content.x;
+    assert!(
+        x > 300.0,
+        "line 5 must place the item past the two explicit 100px columns, got x={x}"
+    );
+}
+
+#[test]
 fn test_explicit_line_and_end_beyond_the_track_cap_terminate() {
     // `grid-column-start: 2147483647` / `grid-column-end: 2147483647` used to request ~2e9
     // tracks; both are clamped with the span so start + span <= MAX_EXPANDED_TRACKS.

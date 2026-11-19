@@ -107,6 +107,7 @@ jobs:
           tools.test_update_coverage
           tools.test_png_check
           tools.test_real_site_check
+          tools.test_check_arch
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
