@@ -272,6 +272,24 @@ fn scaled(color: Color, alpha_scale: f32) -> Color {
     Color::new(color.r, color.g, color.b, alpha)
 }
 
+/// Clip that applies to a box's **own** background/border (#1713).
+///
+/// A box that establishes clipping carries its own padding box in `clip`; CSS
+/// 2.2 §11.1.1 excludes that part from clipping its own background, so use only
+/// the clip inherited from ancestors in that case.
+#[inline]
+pub(super) fn own_background_clip(layout_box: &LayoutBox) -> Option<Rect> {
+    let own_clip = layout_box
+        .style
+        .as_ref()
+        .is_some_and(|style| !matches!(style.overflow, megi_css::Overflow::Visible));
+    if own_clip {
+        layout_box.inherited_clip
+    } else {
+        layout_box.clip
+    }
+}
+
 /// True when the box's own style is hidden (CSS 2.2 §11.2 `visibility`).
 #[inline]
 fn is_hidden(layout_box: &LayoutBox) -> bool {
