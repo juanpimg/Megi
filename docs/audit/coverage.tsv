@@ -305,7 +305,7 @@ crates/css/tests/transform.rs	110	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/display/src/lib.rs	473	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/display/src/lib.rs	474	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/tests/contract.rs	16	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/Cargo.toml	20	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by line: binary
@@ -315,7 +315,7 @@ crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#m
 crates/fonts/src/db.rs	308	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/db/query.rs	286	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/shape.rs	312	src	F2	wave2	2026-11-19	covered	#1976 via PR #1983	Re-read font_for_rendering fallback path
+crates/fonts/src/db/shape.rs	324	src	F2	wave2	2026-11-19	covered	#1976 via PR #1983	Re-read font_for_rendering fallback path
 crates/fonts/src/db/tests.rs	59	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -329,7 +329,7 @@ crates/fonts/tests/font_engine/database.rs	218	test	F1	wave-max-mod	2026-11-19	c
 crates/fonts/tests/font_engine/main.rs	11	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/font_engine/metrics.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/font_engine/raster.rs	97	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/tests/font_engine/shaping.rs	186	test	F1	wave2	2026-11-19	covered	#1976 via PR #1983	Re-read unknown-family regression test
+crates/fonts/tests/font_engine/shaping.rs	209	test	F1	wave2	2026-11-19	covered	#1976 via PR #1983	Re-read unknown-family regression test
 crates/fonts/tests/web_fonts.rs	195	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/Cargo.toml	18	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/browser.rs	401	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -685,7 +685,8 @@ crates/js/tests/wpt_conformance_r233_extra.rs	429	test	F1	wave-max-mod	2026-11-1
 crates/js/tests/wpt_like_r167.rs	320	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/xhr_tests.rs	310	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/Cargo.toml	20	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/bidi.rs	531	src	F2	wave2	2026-11-19	covered	#1978 via PR #1984	Re-read LTR-inside-RTL fix
+crates/layout/src/bidi.rs	419	src	F2	wave2	2026-11-19	covered	#1978 via PR #1984	Re-read LTR-inside-RTL fix
+crates/layout/src/bidi/bidi_tests.rs	116	src	F2	wave2	2026-11-19	covered	refactor	Tests split from bidi.rs to meet 500-line cap
 crates/layout/src/block.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/absolute.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/core.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! # CSS Display List Primitives
 //!
 //! A [`DisplayList`] represents a flat vector of deterministic drawing commands
