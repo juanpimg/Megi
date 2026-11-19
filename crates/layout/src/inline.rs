@@ -6,13 +6,13 @@
 //!
 //! The engine is split into cohesive submodules that are declared here (the
 //! crate root only re-exports the public API):
-//! - [`text`]: font metrics, text measurement and `text-transform`.
-//! - [`tokens`]: the linearized inline token stream and text-node tokenization.
-//! - [`line_breaking`]: greedy wrapping at soft wrap opportunities.
-//! - [`baseline`]: strut, half-leading and `vertical-align` extent math.
-//! - [`inline_boxes`] / [`format_line`]: line box and fragment assembly.
-//! - [`bidi`]: UAX #9 reordering of a line's token run.
-//! - [`ifc`]: the formatting-context entry points that drive the pipeline.
+//! - `text`: font metrics, text measurement and `text-transform`.
+//! - `tokens`: the linearized inline token stream and text-node tokenization.
+//! - `line_breaking`: greedy wrapping at soft wrap opportunities.
+//! - `baseline`: strut, half-leading and `vertical-align` extent math.
+//! - `inline_boxes` / `format_line`: line box and fragment assembly.
+//! - `bidi`: UAX #9 reordering of a line's token run.
+//! - `ifc`: the formatting-context entry points that drive the pipeline.
 
 use std::borrow::Cow;
 use std::sync::Arc;

@@ -42,8 +42,8 @@ impl Namespace {
 }
 
 /// Error returned by the browser-style DOM mutation helpers
-/// ([`Document::remove_child`], [`Document::insert_before_child`],
-/// [`Document::replace_all_children`], [`Document::set_text_content`], ...).
+/// (`Document::remove_child`, `Document::insert_before_child`,
+/// `Document::replace_all_children`, `Document::set_text_content`, ...).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DomError {
     /// The handle does not belong to this document (out of range, stale or foreign).
@@ -139,7 +139,7 @@ pub struct ElementData {
     pub local_name: String,
     pub attributes: Vec<Attribute>,
     /// For `<template>` elements in the HTML namespace, holds the [`NodeId`] of its
-    /// inert `DocumentFragment` allocated within the same [`Document`] arena.
+    /// inert `DocumentFragment` allocated within the same `Document` arena.
     pub template_contents: Option<NodeId>,
 }
 
@@ -281,7 +281,7 @@ pub enum NodeKind {
     },
 }
 
-/// A single DOM node stored contiguously inside [`Document`].
+/// A single DOM node stored contiguously inside `Document`.
 ///
 /// The 5 tree links (`parent`, `first_child`, `last_child`, `prev_sibling`, `next_sibling`)
 /// occupy exactly 20 bytes (`5 * 4` bytes) and allow `O(1)` splices without borrowing

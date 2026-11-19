@@ -231,7 +231,7 @@ pub struct Limits {
     /// [`PushPriority::Fifo`] the previous promise-arrival order is kept and the
     /// resource cap discards later promises.
     pub pushed_priority: PushPriority,
-    /// Allow the HTTP/1.1 `Upgrade: h2c` handshake in [`h2c_request`].
+    /// Allow the HTTP/1.1 `Upgrade: h2c` handshake in `h2c_request`.
     pub allow_h2c: bool,
 }
 

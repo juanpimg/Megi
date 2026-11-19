@@ -10,6 +10,9 @@ use megi_css::ComputedStyle;
 use megi_net::Url;
 
 use crate::{ConsoleMessage, HistoryAction, LocationAction};
+// Intra-doc links moved out of scope when the pipeline was split into modules.
+#[allow(unused_imports)]
+use crate::{RenderOptions, render_url_cached};
 
 /// Wall-clock breakdown of one render, per pipeline stage.
 #[derive(Clone, Copy, Debug, Default)]

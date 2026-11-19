@@ -11,6 +11,9 @@ use crate::images::{
     DEFAULT_MAX_TOTAL_IMAGE_BYTES,
 };
 use crate::{RenderError, RenderStorage, ScriptingLimits, backgrounds, webfonts};
+// Intra-doc links moved out of scope when the pipeline was split into modules.
+#[allow(unused_imports)]
+use crate::{RenderOutput, render_url};
 
 /// Largest accepted viewport dimension for a single render.
 pub const MAX_VIEWPORT_DIMENSION: u32 = 8192;

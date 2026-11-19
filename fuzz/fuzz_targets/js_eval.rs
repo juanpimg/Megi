@@ -79,7 +79,7 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     // fetch(): typed error, hostile headers/status, or a body larger than the caller expects.
     let fetch_seed = Arc::clone(&seed);
     let fetch_calls = Arc::new(AtomicUsize::new(0));
-    runtime.set_fetch_provider(Box::new(move |request| {
+    runtime.set_fetch_provider(Arc::new(move |request| {
         let call = fetch_calls.fetch_add(1, Ordering::Relaxed);
         if call >= 4 {
             return Err(megi_js::JsError::Budget(
@@ -127,7 +127,7 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     let save_calls = Arc::new(AtomicUsize::new(0));
     let saves = Arc::clone(&save_calls);
     runtime.set_storage_provider(megi_js::host::StorageProvider {
-        load: Box::new(move |_kind| {
+        load: Arc::new(move |_kind| {
             vec![
                 (String::new(), "empty-key".to_string()),
                 ("k\u{0}ey".to_string(), "v".to_string()),
@@ -144,14 +144,14 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
                 ),
             ]
         }),
-        save: Box::new(move |_kind, _entries| {
+        save: Arc::new(move |_kind, _entries| {
             saves.fetch_add(1, Ordering::Relaxed);
         }),
     });
 
     // Layout: NaN/±∞/negative boxes, or no box at all.
     let layout_seed = Arc::clone(&seed);
-    runtime.set_layout_provider(Box::new(move |_node| {
+    runtime.set_layout_provider(Arc::new(move |_node| {
         match layout_seed.first().copied().unwrap_or(0) % 3 {
             0 => None,
             1 => Some(megi_js::host::LayoutRect {
@@ -167,7 +167,7 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
 
     // Viewport: zero / u32::MAX sizes and non-finite offsets/DPR.
     let viewport_seed = Arc::clone(&seed);
-    runtime.set_viewport_provider(Box::new(move || {
+    runtime.set_viewport_provider(Arc::new(move || {
         let b = |i: usize| u32::from(viewport_seed.get(i).copied().unwrap_or(0));
         megi_js::ViewportInfo {
             width: b(0).wrapping_mul(97),
@@ -179,7 +179,7 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     }));
 
     let media_seed = Arc::clone(&seed);
-    runtime.set_media_provider(Box::new(move |_query| {
+    runtime.set_media_provider(Arc::new(move |_query| {
         media_seed
             .get(5 % media_seed.len().max(1))
             .copied()
@@ -190,7 +190,7 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
 
     // Computed style: hostile property names/values, including an empty list.
     let style_seed = Arc::clone(&seed);
-    runtime.set_computed_style_provider(Box::new(move |_doc, _node| {
+    runtime.set_computed_style_provider(Arc::new(move |_doc, _node| {
         if style_seed.first().copied().unwrap_or(0) % 3 == 0 {
             return Vec::new();
         }
@@ -204,19 +204,19 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     // History/location: record-and-ignore (no navigation happens in the harness).
     let history_calls = Arc::new(AtomicUsize::new(0));
     let hist = Arc::clone(&history_calls);
-    runtime.set_history_provider(Box::new(move |_action| {
+    runtime.set_history_provider(Arc::new(move |_action| {
         hist.fetch_add(1, Ordering::Relaxed);
     }));
     let location_calls = Arc::new(AtomicUsize::new(0));
     let loc = Arc::clone(&location_calls);
-    runtime.set_location_provider(Box::new(move |_action| {
+    runtime.set_location_provider(Arc::new(move |_action| {
         loc.fetch_add(1, Ordering::Relaxed);
     }));
 
     // Worker loader: bounded calls, typed error after the cap, source from the seed.
     let worker_seed = Arc::clone(&seed);
     let worker_calls = Arc::new(AtomicUsize::new(0));
-    runtime.set_worker_loader(Box::new(move |_url| {
+    runtime.set_worker_loader(Arc::new(move |_url| {
         let call = worker_calls.fetch_add(1, Ordering::Relaxed);
         if call >= 2 {
             return Err(megi_js::JsError::Budget(

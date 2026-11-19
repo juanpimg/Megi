@@ -17,11 +17,11 @@
 //!   the nearest HTML `<a href>` and returns the raw (unresolved) `href`.
 //!
 //! Regions are **optional**: the plain painting entry points
-//! ([`crate::build_display_list`], [`crate::build_display_list_with_images`],
-//! [`crate::build_display_list_with_images_and_backgrounds`]) do not pay for
+//! (`crate::build_display_list`, `crate::build_display_list_with_images`,
+//! `crate::build_display_list_with_images_and_backgrounds`) do not pay for
 //! them, so the Phase 4 golden image and the benchmark stay byte/timing
-//! identical. Use [`crate::build_display_list_with_hit_regions`]
-//! (or [`crate::build_display_list_and_hit_regions`]) to obtain both the
+//! identical. Use `crate::build_display_list_with_hit_regions`
+//! (or `crate::build_display_list_and_hit_regions`) to obtain both the
 //! display list and the regions.
 //!
 //! ## Coordinate contract (with `render`/shell)

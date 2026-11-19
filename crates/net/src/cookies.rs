@@ -32,7 +32,7 @@
 //!   (`__Host-`/`__Secure-`), no RFC 6265bis `SameSite=Lax-by-default`, no date formats
 //!   other than IMF-fixdate (the same parser used for HTTP dates).
 //! - The clock is injectable for tests ([`CookieJar::with_clock`]); the default is
-//!   [`SystemTime::now`]. Expired cookies are lazily filtered on read and purged on
+//!   `SystemTime::now`. Expired cookies are lazily filtered on read and purged on
 //!   write, so an idle jar can still contain stale entries between operations.
 //!
 //! `fetch` integrates this jar optionally through
