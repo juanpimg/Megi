@@ -109,6 +109,11 @@ pub struct LayoutBox {
     /// inherit the intersection with every ancestor clip. Paint applies it to the box
     /// content (a clipping box's own border/background follow CSS 2.2 §11 rules).
     pub clip: Option<Rect>,
+    /// Clip inherited from ancestors only, excluding this box's own padding box
+    /// when it establishes clipping (`overflow` != visible). Paint uses this for
+    /// the box's own background/border, which CSS 2.2 §11.1.1 excludes from its
+    /// own clip (#1713).
+    pub inherited_clip: Option<Rect>,
     /// `true` when the box is a float (`float: left|right`, CSS 2.2 §9.5).
     pub is_float: bool,
     /// Used `float` side (`Float::None` for non-floated boxes).
@@ -172,6 +177,7 @@ impl LayoutBox {
             opacity: 1.0,
             establishes_stacking_context: false,
             clip: None,
+            inherited_clip: None,
             is_float: false,
             float_side: Float::None,
             is_top_layer: false,
