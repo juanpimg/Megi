@@ -19,6 +19,14 @@ pub(crate) fn resolve_pseudo_cascaded_with_candidates<'a>(
         candidates,
     );
     merge_container_rules_for(doc, node_id, Some(pseudo), collection, &mut best);
+    apply_revert_for(
+        doc,
+        node_id,
+        Some(pseudo),
+        collection,
+        candidates,
+        &mut best,
+    );
     apply_revert_layer_for(
         doc,
         node_id,
@@ -209,6 +217,24 @@ pub(crate) fn is_revert_layer(declaration: &Declaration) -> bool {
         .eq_ignore_ascii_case("revert-layer")
 }
 
+pub(crate) fn is_revert(declaration: &Declaration) -> bool {
+    declaration.raw_value.trim().eq_ignore_ascii_case("revert")
+}
+
+fn origin_of(origin_importance: CascadeOriginImportance) -> Origin {
+    match origin_importance {
+        CascadeOriginImportance::UserAgentNormal | CascadeOriginImportance::UserAgentImportant => {
+            Origin::UserAgent
+        }
+        CascadeOriginImportance::UserNormal | CascadeOriginImportance::UserImportant => {
+            Origin::User
+        }
+        CascadeOriginImportance::AuthorNormal | CascadeOriginImportance::AuthorImportant => {
+            Origin::Author
+        }
+    }
+}
+
 pub(crate) fn is_important(origin_importance: CascadeOriginImportance) -> bool {
     matches!(
         origin_importance,
@@ -336,6 +362,72 @@ pub(crate) fn apply_revert_layer_for<'a>(
                 best.insert(property, candidate);
             }
             _ => {
+                best.remove(property);
+            }
+        }
+    }
+}
+
+/// Applies CSS-wide `revert` (CSS Cascade 4 §7.3.4): a winning declaration from one origin
+/// rolls back to the value that origin would have had if the containing origin had declared
+/// nothing. Author `revert` therefore falls back to user/UA styles for that property.
+pub(crate) fn apply_revert_for<'a>(
+    doc: &Document,
+    node_id: NodeId,
+    pseudo: Option<PseudoElement>,
+    collection: &'a StyleCollection,
+    candidates: &[Candidate],
+    best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) {
+    let losers: Vec<&'a str> = best
+        .iter()
+        .filter(|(_, matched)| is_revert(matched.declaration))
+        .map(|(name, _)| *name)
+        .collect();
+    for property in losers {
+        let Some(winner) = best.get(property).cloned() else {
+            continue;
+        };
+        let reverted_origin = origin_of(winner.origin_importance);
+        let important = is_important(winner.origin_importance);
+        let mut matched: Vec<MatchedDeclaration<'a>> = Vec::new();
+        for candidate in candidates {
+            let Some(rule) = collection.rules.get(candidate.rule as usize) else {
+                continue;
+            };
+            let Some(selector) = rule.selectors.selectors.get(candidate.selector as usize) else {
+                continue;
+            };
+            if !selector_matches(selector, doc, node_id, pseudo) {
+                continue;
+            }
+            for (declaration_order, declaration) in rule.declarations.iter().enumerate() {
+                if declaration.name != property || is_revert(declaration) {
+                    continue;
+                }
+                let origin_importance =
+                    CascadeOriginImportance::new(rule.origin, declaration.important);
+                if origin_of(origin_importance) == reverted_origin
+                    || is_important(origin_importance) != important
+                {
+                    continue;
+                }
+                matched.push(MatchedDeclaration {
+                    declaration,
+                    origin_importance,
+                    layer_rank: rule.layer_rank,
+                    specificity: selector.specificity(),
+                    source_order: rule.source_order,
+                    declaration_order: declaration_order as u32,
+                });
+            }
+        }
+        matched.sort_by(|a, b| b.cmp(a));
+        match matched.into_iter().next() {
+            Some(candidate) => {
+                best.insert(property, candidate);
+            }
+            None => {
                 best.remove(property);
             }
         }
