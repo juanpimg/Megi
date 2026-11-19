@@ -3,6 +3,14 @@
 use super::*;
 use crate::input_stream::is_ascii_whitespace;
 
+/// Appends a code point to PI data only if its encoded width fits the byte cap (#1738).
+fn push_pi_data_bounded(data: &mut String, cp: u32, cap: usize) {
+    let ch = char::from_u32(cp).unwrap_or('\u{FFFD}');
+    if data.len() + ch.len_utf8() <= cap {
+        data.push(ch);
+    }
+}
+
 impl Tokenizer {
     /// CDATA section and processing instruction states.
     pub(super) fn step_markup_states(&mut self) -> bool {
@@ -130,11 +138,7 @@ impl Tokenizer {
                     self.record_error(ParseErrorCode::EofInProcessingInstruction);
                     self.tokens.push(Token::Eof);
                 }
-                Some(cp) => {
-                    if self.pending_pi_data.len() < MAX_PI_DATA_BYTES {
-                        Self::push_cp_to_string(&mut self.pending_pi_data, cp);
-                    }
-                }
+                Some(cp) => push_pi_data_bounded(&mut self.pending_pi_data, cp, MAX_PI_DATA_BYTES),
             },
 
             // 13.2.5.76 Processing instruction questionable state
@@ -156,5 +160,22 @@ impl Tokenizer {
             _ => return false,
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::push_pi_data_bounded;
+
+    #[test]
+    fn pi_data_never_overshoots_the_byte_cap() {
+        // #1738: a 4-byte code point at cap-1 must not push the buffer past the cap.
+        let cap = 7;
+        let mut data = "abcd".to_string(); // cap - 3: a 4-byte char would overshoot
+        push_pi_data_bounded(&mut data, '😀' as u32, cap);
+        assert!(data.len() <= cap, "overshot: {}", data.len());
+        assert_eq!(data, "abcd", "the 4-byte code point must be dropped");
+        push_pi_data_bounded(&mut data, 'a' as u32, cap);
+        assert_eq!(data, "abcda");
     }
 }
