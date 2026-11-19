@@ -273,3 +273,38 @@ fn xhr_rejects_synchronous_and_invalid_state_operations() {
         "NotSupportedError|InvalidStateError|InvalidStateError|json"
     );
 }
+
+#[test]
+fn xhr_open_validates_method_token_and_forbidden_methods() {
+    // #1854: WHATWG XHR §3.5.1 steps 2-3. A method must be an HTTP token
+    // (RFC 9110 §5.6.2). Tokens are NOT trimmed: surrounding whitespace makes
+    // them invalid. CONNECT/TRACE/TRACK are forbidden (SecurityError).
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            r#"
+            function openResult(method) {
+              var x = new XMLHttpRequest();
+              try { x.open(method, 'https://example.test/'); return 'ok:' + x._method; }
+              catch (e) { return e.name; }
+            }
+            [
+              openResult('get'),
+              openResult('BAD METHOD'),
+              openResult(' GET'),
+              openResult('GET '),
+              openResult(''),
+              openResult('TRaCe'),
+              openResult('connect'),
+              openResult('TRACK'),
+              openResult('X-CUSTOM')
+            ].join('|');
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    assert_eq!(
+        out,
+        "ok:GET|SyntaxError|SyntaxError|SyntaxError|SyntaxError|SecurityError|SecurityError|SecurityError|ok:X-CUSTOM"
+    );
+}
