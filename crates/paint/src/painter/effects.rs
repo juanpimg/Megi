@@ -95,7 +95,7 @@ pub(super) fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun>
     let mut runs = Vec::new();
     let mut stack: Vec<(&LayoutBox, bool)> = Vec::new();
     for child in layout_box.children.iter().rev() {
-        stack.push((child, is_hidden(child)));
+        stack.push((child, effective_hidden(child, false)));
     }
     while let Some((child, hidden)) = stack.pop() {
         if hidden {
@@ -134,7 +134,7 @@ pub(super) fn collect_text_mask_runs(layout_box: &LayoutBox) -> Vec<TextMaskRun>
             }
         }
         for grandchild in child.children.iter().rev() {
-            stack.push((grandchild, hidden || is_hidden(grandchild)));
+            stack.push((grandchild, effective_hidden(grandchild, hidden)));
         }
     }
     runs

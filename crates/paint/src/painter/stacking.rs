@@ -13,7 +13,7 @@ pub(super) fn paint_stacking_context(
     contexts: &HashMap<*const LayoutBox, ContextBuckets<'_>>,
 ) {
     let start = list.len();
-    let hidden = inherited_hidden || is_hidden(layout_box);
+    let hidden = effective_hidden(layout_box, inherited_hidden);
     let opacity = layout_box.opacity.clamp(0.0, 1.0);
 
     // Step 2: background and borders of the element establishing the context.

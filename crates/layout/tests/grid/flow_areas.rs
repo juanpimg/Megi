@@ -76,6 +76,38 @@ fn test_template_areas_and_grid_area_name() {
 }
 
 #[test]
+fn test_grid_area_fills_axes_without_an_explicit_longhand() {
+    // #1709: grid-area is a shorthand for the four placement longhands. An
+    // explicit column-start must override only that axis; the row placement
+    // from the named area must still apply.
+    let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
+    container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
+    container.grid_template_rows = template(vec![px(40.0), px(40.0)]);
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
+        rows: 2,
+        columns: 2,
+        cells: vec![
+            Some("header".to_owned()),
+            Some("header".to_owned()),
+            Some("main".to_owned()),
+            Some("side".to_owned()),
+        ],
+    });
+    let mut item = item_style(Length::Auto, Length::Px(10.0));
+    item.grid_area = Some("main".to_owned());
+    item.grid_column_start = megi_css::GridLine::Line(2);
+    let case = layout_case(container, vec![item]);
+    assert!(
+        (case.item(0).dimensions.content.y - 40.0).abs() < 0.01,
+        "the row from grid-area must survive an explicit column-start"
+    );
+    assert!(
+        (case.item(0).dimensions.content.x - 100.0).abs() < 0.01,
+        "the explicit column-start must win on its own axis"
+    );
+}
+
+#[test]
 fn test_named_template_lines_place_by_name() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     let mut columns = template(vec![px(100.0), px(100.0), px(100.0)]);

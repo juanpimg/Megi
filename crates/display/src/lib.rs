@@ -309,7 +309,9 @@ impl DisplayItem {
             | Self::EffectGroup { rect, .. }
             | Self::BackdropFilter { rect, .. } => Some(*rect),
             Self::BoxShadow { rect, shadow, .. } => {
-                let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
+                // #1716: the three-pass box blur reaches ~1.5 * blur; use
+                // that support so culling does not clip the shadow tail.
+                let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR) * 1.5;
                 Some(Rect::new(
                     rect.x + shadow.offset_x.min(0.0) - blur,
                     rect.y + shadow.offset_y.min(0.0) - blur,
@@ -324,7 +326,7 @@ impl DisplayItem {
                 blur,
                 ..
             } => {
-                let blur = blur.clamp(0.0, MAX_SHADOW_BLUR);
+                let blur = blur.clamp(0.0, MAX_SHADOW_BLUR) * 1.5;
                 Some(Rect::new(
                     rect.x + offset_x.min(0.0) - blur,
                     rect.y + offset_y.min(0.0) - blur,
@@ -442,3 +444,30 @@ pub use hit_test::{
 };
 
 pub use megi_image::RgbaImage;
+
+#[cfg(test)]
+mod shadow_bounds_tests {
+    use super::*;
+
+    #[test]
+    fn box_shadow_bounds_cover_three_pass_support() {
+        let item = DisplayItem::BoxShadow {
+            rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+            radii: BorderRadii::default(),
+            shadow: BoxShadow {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur: 64.0,
+                spread: 0.0,
+                color: Color::BLACK,
+                inset: false,
+            },
+        };
+        let bounds = item.bounds().expect("box shadow bounds");
+        // #1716: three passes with radius blur/2 reach ~1.5 * blur, not blur.
+        assert!(
+            (bounds.x + 96.0).abs() < 0.001,
+            "bounds must include the full blur support, got {bounds:?}"
+        );
+    }
+}

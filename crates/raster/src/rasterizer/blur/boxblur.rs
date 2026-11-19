@@ -136,3 +136,21 @@ pub(crate) fn expand_radii(radii: BorderRadii, spread: f32) -> BorderRadii {
         bottom_left: expand(radii.bottom_left),
     }
 }
+
+/// Padding needed around a shadow mask for the three-pass blur (#1716).
+pub(crate) fn shadow_padding(blur: f32) -> i64 {
+    (blur * 1.5).ceil() as i64 + 2
+}
+
+#[cfg(test)]
+mod shadow_padding_tests {
+    use super::*;
+
+    #[test]
+    fn shadow_padding_covers_three_pass_support() {
+        // blur_mask uses three passes with radius round(blur * 0.5), so the
+        // support is ~1.5 * blur, not 1 * blur.
+        assert_eq!(shadow_padding(0.0), 2);
+        assert_eq!(shadow_padding(64.0), 98);
+    }
+}
