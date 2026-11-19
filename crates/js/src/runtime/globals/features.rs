@@ -322,6 +322,7 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         accessor_fn(context, get)
     };
     let document_element = pick(context, document_element);
+    let document_current_script = pick(context, document_current_script);
     let document_body = pick(context, document_body);
     let document_head = pick(context, document_head);
     let title_get = pick(context, document_title_get);
@@ -377,6 +378,12 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
     init.accessor(
         js_string!("documentElement"),
         Some(document_element),
+        None,
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("currentScript"),
+        Some(document_current_script),
         None,
         Attribute::all(),
     );

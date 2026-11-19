@@ -250,6 +250,7 @@ mod websocket_policy_tests {
         let document = megi_html::parse_document(&html, true);
         let https_url = Url::parse("https://secure.example.test/app.html").expect("url");
         let scripts = vec![LoadedScript {
+            element: document.root(),
             text: script_text.to_owned(),
             source_name: "inline-script-0".to_owned(),
             bytes: script_text.len(),
@@ -282,6 +283,56 @@ mod websocket_policy_tests {
                 .is_some_and(|msg| msg.contains("Mixed content")),
             "expected mixed content block, got {:?}",
             elem.get_attribute("data-msg")
+        );
+    }
+}
+
+#[cfg(all(test, feature = "js"))]
+mod current_script_tests {
+    use super::*;
+
+    #[test]
+    fn current_script_exposes_the_running_script_element() {
+        // #1887: analytics scripts read `document.currentScript.getAttribute(...)`.
+        let script_text = "var s = document.currentScript; \
+             document.body.setAttribute('data-current', s ? s.getAttribute('data-id') : 'null');";
+        let html =
+            format!("<!DOCTYPE html><body><script data-id=\"ok\">{script_text}</script></body>");
+        let document = megi_html::parse_document(&html, true);
+        let script_element = document.get_elements_by_tag_name("script")[0];
+        let scripts = vec![LoadedScript {
+            element: script_element,
+            text: script_text.to_owned(),
+            source_name: "inline-script-0".to_owned(),
+            bytes: script_text.len(),
+            is_module: false,
+            module_url: None,
+        }];
+        let url = Url::parse("https://example.test/").expect("url");
+        let host = ScriptingHostContext::new(
+            None,
+            megi_css::MediaContext::with_viewport(320.0, 200.0),
+            (320, 200),
+        );
+        let mut warnings = Vec::new();
+        let execution = execute_scripts(
+            document,
+            &url,
+            scripts,
+            ScriptingLimits::default(),
+            &host,
+            &mut warnings,
+        );
+        let body = execution.document.body().expect("body");
+        assert_eq!(
+            execution
+                .document
+                .node(body)
+                .as_element()
+                .unwrap()
+                .get_attribute("data-current")
+                .as_deref(),
+            Some("ok")
         );
     }
 }

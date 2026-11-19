@@ -52,6 +52,15 @@ pub(crate) fn document_create_text_node(
     }
 }
 
+pub(crate) fn document_current_script(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = with_context_host(context, |host| host.current_script).flatten();
+    wrap_optional(context, node)
+}
+
 pub(crate) fn document_element(
     _this: &JsValue,
     _args: &[JsValue],

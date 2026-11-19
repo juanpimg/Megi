@@ -278,6 +278,7 @@ pub fn load_scripts_with_csp(
         }
         report.script_bytes += text.len();
         report.scripts.push(LoadedScript {
+            element: candidate.element,
             bytes: text.len(),
             text,
             source_name,
