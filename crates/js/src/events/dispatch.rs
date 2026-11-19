@@ -46,20 +46,28 @@ pub(crate) fn propagation_path(
         return Ok(path);
     }
     let mut ancestors: Vec<TargetKey> = Vec::new();
+    let mut connected = !matches!(target, TargetKey::Node(_));
     if let TargetKey::Node(handle) = target
         && let Ok(node) = node_id_of(context, handle)
     {
-        let chain = {
+        let (chain, root) = {
             let host = host_ref(context)?;
+            let root = host.document.root();
             let mut ids = Vec::new();
             let mut current = Some(node);
             while let Some(id) = current {
                 ids.push(id);
                 current = host.document.try_node(id).and_then(|node| node.parent);
             }
-            ids
+            (ids, root)
         };
+        // #1743: DOM §2.9 — a detached node's event path stops at its own root; only nodes
+        // connected to the document reach `Document`/`Window`.
+        connected = chain.last().copied() == Some(root);
         for id in chain.iter().skip(1) {
+            if *id == root {
+                continue; // represented by TargetKey::Document, not a node wrapper
+            }
             if let Ok(handle) = host_cell(context)?.handle_for(*id) {
                 ancestors.push(TargetKey::Node(handle));
             }
@@ -68,7 +76,7 @@ pub(crate) fn propagation_path(
     let mut path = Vec::new();
     // Capture ancestors above the target, top-down. The target itself appears exactly once:
     // at-target listeners run in the AT_TARGET phase regardless of their capture flag.
-    if !matches!(target, TargetKey::Window) {
+    if connected && !matches!(target, TargetKey::Window) {
         path.push((PropPhase::Capture, TargetKey::Window));
         if !matches!(target, TargetKey::Document) {
             path.push((PropPhase::Capture, TargetKey::Document));
@@ -82,10 +90,10 @@ pub(crate) fn propagation_path(
         for ancestor in &ancestors {
             path.push((PropPhase::Bubble, *ancestor));
         }
-        if !matches!(target, TargetKey::Document) {
+        if connected && !matches!(target, TargetKey::Document) {
             path.push((PropPhase::Bubble, TargetKey::Document));
         }
-        if !matches!(target, TargetKey::Window) {
+        if connected && !matches!(target, TargetKey::Window) {
             path.push((PropPhase::Bubble, TargetKey::Window));
         }
     }
