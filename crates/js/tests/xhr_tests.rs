@@ -270,7 +270,9 @@ fn xhr_rejects_synchronous_and_invalid_state_operations() {
         .expect("eval");
     assert_eq!(
         out,
-        "NotSupportedError|InvalidStateError|InvalidStateError|json"
+        // Synchronous XHR now completes with a deterministic empty response
+        // instead of rejecting (#1904); only the invalid-state checks throw.
+        "||InvalidStateError|json"
     );
 }
 

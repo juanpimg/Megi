@@ -79,3 +79,24 @@ fn failing_stylesheet_is_a_warning_not_a_fatal_error() {
     );
     server.join();
 }
+
+/// Real sites exceed the old conservative caps (#1901 scripts, #1889 fonts,
+/// #1913 CSS bytes). The new defaults must accommodate them while keeping the
+/// per-option overrides used by the anti-DoS tests.
+#[test]
+fn default_caps_accommodate_real_sites() {
+    use megi_render::RenderOptions;
+    let defaults = RenderOptions::default();
+    assert!(
+        defaults.scripting_limits.max_scripts >= 256,
+        "scripts cap too low (#1901)"
+    );
+    assert!(
+        defaults.max_web_fonts >= 64,
+        "web fonts cap too low (#1889)"
+    );
+    assert!(
+        defaults.max_css_bytes_per_sheet >= 8 * 1024 * 1024,
+        "CSS sheet cap too low (#1913)"
+    );
+}

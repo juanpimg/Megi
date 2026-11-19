@@ -117,3 +117,17 @@ fn bidi_override_control_is_not_rendered_as_a_glyph() {
     );
     assert_eq!(visual, "dcba", "RLO must reverse the run: {visual:?}");
 }
+
+#[test]
+fn debug_ltr_words_in_rtl_paragraph() {
+    use megi_layout::bidi::{BidiClass, reorder_visual_indices, resolve_levels, word_bidi_class};
+    let words = ["RTL", "AR:", "مرحبا", "بالعالم"];
+    let classes: Vec<BidiClass> = words.iter().map(|w| word_bidi_class(w)).collect();
+    eprintln!("classes={classes:?}");
+    let levels = resolve_levels(&classes, 1);
+    eprintln!("levels={levels:?}");
+    let order = reorder_visual_indices(&levels);
+    eprintln!("order={order:?}");
+    let visual: Vec<&str> = order.iter().map(|&i| words[i]).collect();
+    eprintln!("visual={visual:?}");
+}

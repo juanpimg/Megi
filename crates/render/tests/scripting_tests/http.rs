@@ -240,3 +240,40 @@ fn script_mutating_existing_style_element_invalidates_stylesheet_cache() {
     assert_eq!(count_color(&output.pixmap, RED), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An explicit `charset="gbk"` on <script> must decode legacy bytes instead of
+/// producing lossy U+FFFD inside the script's strings (#1910).
+#[test]
+fn script_charset_gbk_decodes_legacy_bytes() {
+    let page = "<!doctype html><html><body><p id=\"t\">before</p>\
+                <script charset=\"gbk\" src=\"/legacy.js\"></script></body></html>";
+    // JS is pure ASCII; the GBK bytes live inside a string literal and previously
+    // triggered "not valid UTF-8; decoding lossily".
+    let script = b"document.getElementById('t').textContent = '\xD6\xD0\xCE\xC4';";
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/page.html",
+        RouteResponse {
+            content_type: "text/html; charset=utf-8",
+            body: page.as_bytes().to_vec(),
+        },
+    );
+    routes.insert(
+        "/legacy.js",
+        RouteResponse {
+            content_type: "text/javascript",
+            body: script.to_vec(),
+        },
+    );
+    let server = TestServer::spawn(routes, 2);
+    let output = render_url(&server.url("/page.html"), &options()).expect("render");
+    assert!(
+        !output
+            .stats
+            .warnings
+            .iter()
+            .any(|w| w.contains("not valid UTF-8")),
+        "gbk script decoded lossily (#1910)"
+    );
+    assert_eq!(output.stats.scripts_executed, 1);
+}

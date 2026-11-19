@@ -120,6 +120,34 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             context,
         )
         .map_err(|error| JsError::Internal(error.to_string()))?;
+    // #1915: `HTMLElement` is a subclass of Element; element wrappers inherit from
+    // its prototype so both `instanceof Element` and `instanceof HTMLElement` hold.
+    let element_proto = element_constructor
+        .constructor()
+        .get(js_string!("prototype"), context)?;
+    let mut html_builder =
+        boa_engine::object::ConstructorBuilder::new(context, native(element_illegal_constructor));
+    html_builder.name("HTMLElement").length(0).constructor(true);
+    let html_constructor = html_builder.build();
+    if let (Some(html_proto), Some(element_proto)) = (
+        html_constructor
+            .constructor()
+            .get(js_string!("prototype"), context)?
+            .as_object(),
+        element_proto.as_object(),
+    ) {
+        let _ = html_proto.set_prototype(Some(element_proto.clone()));
+    }
+    context
+        .global_object()
+        .set(
+            js_string!("HTMLElement"),
+            JsValue::from(html_constructor.constructor()),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+
     let constructor =
         FunctionObjectBuilder::new(context.realm(), native(mutation_observer_constructor))
             .name(js_string!("MutationObserver"))

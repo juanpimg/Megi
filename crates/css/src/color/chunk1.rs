@@ -35,6 +35,8 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
         ("hsl", &s[4..])
     } else if lower.starts_with("hsla(") {
         ("hsl", &s[5..])
+    } else if lower.starts_with("light-dark(") {
+        ("light-dark", &s[11..])
     } else {
         return None;
     };
@@ -48,6 +50,13 @@ pub(crate) fn parse_modern(input: &str) -> Option<Color> {
         "hwb" => parse_hwb(inner),
         "hsl" => parse_hsl(inner),
         "color-mix" => parse_color_mix(inner),
+        // CSS Color 5 light-dark(<color>, <color>): the deterministic renderer
+        // uses the light value by default (#1962).
+        "light-dark" => {
+            let parts = crate::properties::split_top_level_commas(inner);
+            let light = parts.first()?;
+            Color::parse(light.trim())
+        }
         _ => None,
     }
 }

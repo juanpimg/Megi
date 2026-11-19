@@ -83,12 +83,9 @@
     if (arguments.length < 2) {
       throw new TypeError("Failed to execute 'open': 2 arguments required.");
     }
-    if (arguments.length >= 3 && async !== undefined && !async) {
-      throw new DOMException(
-        "Synchronous XMLHttpRequest is not supported",
-        "NotSupportedError"
-      );
-    }
+    // Synchronous XHR: the deterministic engine cannot block on the network,
+    // so complete with an empty response rather than aborting the script (#1904).
+    this._sync = arguments.length >= 3 && async !== undefined && !async;
     // #1854: WHATWG XHR §3.5.1 steps 2-3. The method must be an HTTP token
     // (RFC 9110 §5.6.2) with no surrounding whitespace, and CONNECT/TRACE/TRACK
     // are forbidden. Fail here rather than surfacing a generic error in send().
@@ -249,6 +246,25 @@
     var payload = (method === "GET" || method === "HEAD") ? "" : serializeRequestBody(body);
     var timeoutLimit = this._timeout;
     var hasUploadPayload = payload.length > 0 && method !== "GET" && method !== "HEAD";
+
+    if (this._sync) {
+      // The native fetch bridge is synchronous, so a blocking XHR can use it
+      // directly: real status/body and, crucially, CSP connect-src enforcement
+      // (#1904). A CSP/network error propagates to the caller like the spec's
+      // synchronous NetworkError.
+      var raw = __megi_fetch_native(url, method, headerText, payload);
+      this._readyState = 4;
+      this.status = raw.status;
+      this.statusText = raw.statusText;
+      this._responseText = raw.bodyText;
+      this._responseBytes = raw.bodyBytes;
+      this._responseBuffer = raw.bodyBytes ? raw.bodyBytes.slice().buffer : new ArrayBuffer(0);
+      this._responseHeaders = raw.headers || [];
+      this._sendFlag = false;
+      dispatchTargetEvent(this, new ProgressEvent('readystatechange'));
+      dispatchTargetEvent(this, new ProgressEvent('load'));
+      return;
+    }
 
     var self = this;
     dispatchTargetEvent(self, new ProgressEvent("loadstart", { lengthComputable: false, loaded: 0, total: 0 }));

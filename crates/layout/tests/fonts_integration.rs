@@ -58,6 +58,29 @@ fn collect_text_fragments(layout_box: &LayoutBox, out: &mut Vec<(String, f32, f3
     }
 }
 
+/// An explicit but unavailable family (e.g. `Arial`) must fall back to the UA
+/// default face, exactly like a generic family (#1976). Before the fix the
+/// measurer returned ratio-based fallback metrics, which disagreed with the
+/// rasterizer and broke lowercase glyphs.
+#[test]
+fn unknown_explicit_family_falls_back_to_bundled_face_metrics() {
+    let measurer = FontTextMeasurer::bundled().expect("bundled DejaVu fonts load");
+    let generic = measurer.font_metrics("sans-serif", 16.0, None);
+    let explicit = measurer.font_metrics("Arial", 16.0, None);
+    assert!(
+        (explicit.ascent - generic.ascent).abs() < 0.02,
+        "explicit unknown family ascent {} != bundled ascent {} (#1976)",
+        explicit.ascent,
+        generic.ascent
+    );
+    let generic_width = measurer.measure_text("hello World 123", "sans-serif", 16.0);
+    let explicit_width = measurer.measure_text("hello World 123", "Arial", 16.0);
+    assert!(
+        (explicit_width - generic_width).abs() < 0.05,
+        "explicit unknown family width {explicit_width} != bundled {generic_width} (#1976)"
+    );
+}
+
 #[test]
 fn font_text_measurer_returns_real_opentype_metrics() {
     let measurer = FontTextMeasurer::bundled().expect("bundled DejaVu fonts load");

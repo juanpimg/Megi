@@ -51,7 +51,17 @@ pub(crate) fn module_quote(value: &str) -> String {
 pub(crate) fn import_specifier(rest: &str) -> Option<(String, String)> {
     // Returns (binding head, specifier). Import declarations must be single-line.
     let rest = rest.trim().trim_end_matches(';').trim();
-    if let Some((head, tail)) = rest.rsplit_once(" from ") {
+    let split = rest
+        .rsplit_once(" from ")
+        // Minified modules omit whitespace between the named list and `from`
+        // (`import{x}from"./a.js"`); ES grammar allows it (#1936).
+        .or_else(|| rest.rsplit_once("}from"));
+    if let Some((head, tail)) = split {
+        let head = if head.starts_with('{') {
+            head
+        } else {
+            head.trim_end()
+        };
         let specifier = tail.trim().trim_matches(['"', '\'']);
         if specifier.is_empty() {
             return None;
@@ -107,8 +117,13 @@ pub(crate) fn export_declared_names(decl: &str) -> Vec<String> {
         .or_else(|| decl.strip_prefix("let "))
         .or_else(|| decl.strip_prefix("var "))
         .unwrap_or(decl);
-    // Naive top-level declarator split; enough for the documented subset.
-    rest.split(',')
+    // Split declarators on top-level commas only: object/array literals may
+    // legally contain trailing commas (#1911), and splitting inside them used
+    // to produce bogus export names like `}`.
+    let declarators = split_top_level_commas(rest);
+    declarators
+        .iter()
+        .map(String::as_str)
         .filter_map(|declarator| {
             let name = declarator
                 .split('=')
@@ -120,4 +135,48 @@ pub(crate) fn export_declared_names(decl: &str) -> Vec<String> {
             (!name.is_empty()).then(|| name.to_string())
         })
         .collect()
+}
+
+/// Splits on commas at bracket/brace depth 0, ignoring quoted strings.
+fn split_top_level_commas(input: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '\'' | '"' | '`' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' | '{' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' | '}' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                out.push(std::mem::take(&mut current));
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        out.push(current);
+    }
+    out
 }

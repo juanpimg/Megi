@@ -99,7 +99,13 @@ impl TextCache {
         let families = self
             .families
             .entry(font_family.to_string())
-            .or_insert_with(|| megi_fonts::db::parse_font_families(font_family))
+            .or_insert_with(|| {
+                let mut families = megi_fonts::db::parse_font_families(font_family);
+                // CSS Fonts §5.2: an unavailable explicit family falls back to the
+                // UA default face instead of the 8x8 bitmap stub (#1976).
+                megi_fonts::db::ensure_generic_fallback(&mut families);
+                families
+            })
             .clone();
         let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
         let style = if font_italic {

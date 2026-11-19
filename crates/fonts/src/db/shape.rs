@@ -68,21 +68,35 @@ impl FontDatabase {
 
     /// Re-resolves a previously observed [`FontRefInfo`] to a [`Font`].
     pub fn font_by_ref(&self, info: &FontRefInfo) -> Result<Font, FontError> {
-        let id = self
-            .order
-            .iter()
-            .filter_map(|id| self.db.face(*id))
-            .find(|face| {
-                face.post_script_name == info.post_script_name
-                    && face.weight.0 == info.weight
-                    && face.style == DbStyle::from(info.style)
-                    && face.stretch == info.stretch
+        let find_in = |db: &FontDatabase| -> Option<fontdb::ID> {
+            db.order
+                .iter()
+                .filter_map(|id| db.db.face(*id))
+                .find(|face| {
+                    face.post_script_name == info.post_script_name
+                        && face.weight.0 == info.weight
+                        && face.style == DbStyle::from(info.style)
+                        && face.stretch == info.stretch
+                })
+                .map(|face| face.id)
+        };
+        // A shaped run can reference a face selected by the per-glyph system
+        // fallback (CJK, Arabic, emoji). The rasterizer uses a bundled-only
+        // database, so also search the shared system fallback DB before
+        // giving up (#1977).
+        let found = find_in(self)
+            .map(|id| (self as &FontDatabase, id))
+            .or_else(|| {
+                if self.system_loaded {
+                    return None;
+                }
+                let sys_db = system_fallback_db();
+                find_in(sys_db).map(|id| (sys_db, id))
             })
-            .map(|face| face.id)
             .ok_or_else(|| FontError::FontNotFound {
                 families: info.family.clone(),
             })?;
-        self.build_font(id)
+        found.0.build_font(found.1)
     }
 
     /// Resolves a shaped run's font reference, consulting the system fallback database when

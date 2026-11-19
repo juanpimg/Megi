@@ -353,3 +353,181 @@ fn string_prototype_substr_is_available() {
         assert_eq!(actual, expected, "{expression}");
     }
 }
+
+/// Element.prototype must expose the standard navigation/mutation methods and
+/// HTMLElement must exist as a subclass, so `instanceof` checks work (#1915/#1876).
+#[test]
+fn element_prototype_methods_and_htmlelement() {
+    let mut rt = runtime();
+    for (expr, expected) in [
+        ("typeof HTMLElement", "function"),
+        (
+            "document.createElement('div') instanceof HTMLElement",
+            "true",
+        ),
+        ("typeof Element.prototype.matches", "function"),
+        ("typeof Element.prototype.closest", "function"),
+        ("typeof Element.prototype.append", "function"),
+        ("typeof Element.prototype.prepend", "function"),
+    ] {
+        assert_eq!(
+            rt.eval(expr, "t").unwrap(),
+            expected,
+            "{expr} (#1915/#1876)"
+        );
+    }
+}
+
+/// Analytics (Plausible) and lazy-loading libraries feature-detect these
+/// observers; a missing global aborts their initialization (#1921, #1892).
+#[test]
+fn resize_and_intersection_observers_exist() {
+    let mut rt = runtime();
+    assert_eq!(rt.eval("typeof ResizeObserver", "t").unwrap(), "function");
+    assert_eq!(
+        rt.eval("typeof IntersectionObserver", "t").unwrap(),
+        "function"
+    );
+    rt.eval(
+        "var ro = new ResizeObserver(function(){}); ro.observe(document.body); ro.unobserve(document.body); ro.disconnect(); 'ok'",
+        "t",
+    )
+    .expect("ResizeObserver stub must not throw (#1921)");
+    rt.eval(
+        "var io = new IntersectionObserver(function(){}); io.observe(document.body); io.unobserve(document.body); io.disconnect(); 'ok'",
+        "t",
+    )
+    .expect("IntersectionObserver stub must not throw (#1892)");
+}
+
+/// A batch of standard DOM/browser globals that scripts feature-detect. Missing
+/// constructors cause ReferenceError and abort initialization on real sites.
+#[test]
+fn standard_browser_globals_are_exposed() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof Blob",
+        "typeof FileReader",
+        "typeof CSS",
+        "typeof screen",
+        "typeof NodeList",
+        "typeof HTMLCollection",
+        "typeof DocumentFragment",
+        "typeof Text",
+        "typeof Comment",
+        "typeof SVGElement",
+        "typeof HTMLInputElement",
+        "typeof HTMLScriptElement",
+        "typeof escape",
+        "typeof unescape",
+        "typeof close",
+        "typeof scroll",
+        "typeof getSelection",
+        "typeof frames",
+        "typeof console.trace",
+        "typeof console.group",
+        "typeof document.open",
+        "typeof document.baseURI",
+        "typeof document.referrer",
+        "typeof history.scrollRestoration",
+        "typeof navigator.cookieEnabled",
+        "typeof Element.prototype.getAnimations",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+    assert_eq!(rt.eval("escape('a b')", "t").unwrap(), "a%20b");
+    assert_eq!(rt.eval("unescape('a%20b')", "t").unwrap(), "a b");
+}
+
+/// More feature-detected DOM/web APIs from real-site probes (#1944/#1945/#1947/
+/// #1952/#1965/#1970/#1971).
+#[test]
+fn geometry_cookie_intl_and_fetch_members() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof document.getElementById('x')",
+        "typeof Object.getOwnPropertyDescriptor(Element.prototype, 'offsetTop')?.get",
+        "typeof document.forms",
+        "typeof document.images",
+        "typeof document.scripts",
+        "typeof document.documentURI",
+        "typeof document.compatMode",
+        "typeof document.characterSet",
+        "typeof Object.getOwnPropertyDescriptor(document, 'cookie')?.set",
+        "typeof Intl.Collator",
+        "typeof Response.json",
+        "typeof Headers.prototype[Symbol.iterator]",
+        "typeof AbortSignal.timeout",
+        "typeof URL.canParse",
+        "typeof URLSearchParams.prototype[Symbol.iterator]",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+    rt.eval(
+        "var e = new Event('x', {cancelable:true}); e.preventDefault(); if (!e.defaultPrevented) throw new Error('defaultPrevented');",
+        "t",
+    )
+    .expect("defaultPrevented must reflect preventDefault (#1952)");
+}
+
+/// SVG geometry methods and HTML table/element APIs used by data-grid and
+/// vector libraries (#1973/#1974/#1975).
+#[test]
+fn svg_geometry_and_table_apis() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof SVGSVGElement",
+        "typeof SVGElement.prototype.getBBox",
+        "typeof SVGElement.prototype.getCTM",
+        "typeof SVGElement.prototype.getScreenCTM",
+        "typeof HTMLTableElement.prototype.insertRow",
+        "typeof HTMLTableElement.prototype.deleteRow",
+        "typeof HTMLTableRowElement",
+        "typeof HTMLTableRowElement.prototype.insertCell",
+        "typeof HTMLTemplateElement",
+        "typeof HTMLTemplateElement.prototype.content",
+        "typeof Object.getOwnPropertyDescriptor(HTMLElement.prototype,'hidden')?.get",
+        "typeof Object.getOwnPropertyDescriptor(HTMLOListElement.prototype,'start')?.get",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+}
+
+/// Streaming text globals used by modern fetch pipelines (#1902).
+#[test]
+fn text_encoder_stream_exists() {
+    let mut rt = runtime();
+    assert_eq!(
+        rt.eval("typeof TextEncoderStream", "t").unwrap(),
+        "function"
+    );
+    assert_eq!(
+        rt.eval("typeof TextDecoderStream", "t").unwrap(),
+        "function"
+    );
+}
+
+/// Legacy sites use synchronous XHR; aborting open() with NotSupportedError
+/// kills their initialization (#1904). A deterministic empty response keeps
+/// the rest of the script running.
+#[test]
+fn synchronous_xhr_does_not_throw() {
+    let mut rt = runtime();
+    rt.set_fetch_provider(std::sync::Arc::new(|_| {
+        Ok(megi_js::host::FetchResult {
+            status: 200,
+            status_text: "OK".into(),
+            url: "https://example.test/sync-data".into(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        })
+    }));
+    rt.eval(
+        "var x = new XMLHttpRequest(); x.open('GET', '/sync-data', false); x.send(); if (x.readyState !== 4) throw new Error('readyState ' + x.readyState); 'ok'",
+        "t",
+    )
+    .expect("synchronous XHR must complete without throwing (#1904)");
+}

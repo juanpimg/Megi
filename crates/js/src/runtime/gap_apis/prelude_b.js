@@ -383,3 +383,377 @@
     }
   })();
 })();
+
+// ECMA-262 Annex B.1.3 String.prototype.substr (legacy, used by WHATWG site scripts).
+// Boa 0.22 does not expose Annex B methods by default; #1923.
+if (typeof String.prototype.substr !== 'function') {
+  Object.defineProperty(String.prototype, 'substr', {
+    configurable: true,
+    writable: true,
+    value: function substr(start, length) {
+      var s = String(this);
+      var size = s.length;
+      var intStart = Math.trunc(Number(start));
+      if (!isFinite(intStart)) intStart = 0;
+      var from = intStart < 0 ? Math.max(size + intStart, 0) : Math.min(intStart, size);
+      if (length === undefined) return s.slice(from);
+      var intLen = Math.trunc(Number(length));
+      if (!isFinite(intLen) || intLen < 0) return '';
+      return s.slice(from, from + intLen);
+    }
+  });
+}
+
+// Element.prototype navigation/mutation helpers (#1915/#1876). The low-level
+// wrappers expose children/querySelector/insertAdjacentHTML; derive the rest.
+if (typeof Element !== 'undefined' && Element.prototype) {
+  if (typeof Element.prototype.matches !== 'function') {
+    Element.prototype.matches = function (selector) {
+      var all = (this.ownerDocument || document).querySelectorAll(selector);
+      for (var i = 0; i < all.length; i++) if (all[i] === this) return true;
+      return false;
+    };
+  }
+  if (typeof Element.prototype.closest !== 'function') {
+    Element.prototype.closest = function (selector) {
+      var node = this;
+      while (node && node.nodeType === 1) {
+        if (node.matches && node.matches(selector)) return node;
+        node = node.parentElement;
+      }
+      return null;
+    };
+  }
+  if (typeof Element.prototype.append !== 'function') {
+    Element.prototype.append = function () {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        this.insertAdjacentHTML('beforeend', typeof v === 'string' ? v : (v.outerHTML || ''));
+      }
+    };
+  }
+  if (typeof Element.prototype.prepend !== 'function') {
+    Element.prototype.prepend = function () {
+      for (var i = arguments.length - 1; i >= 0; i--) {
+        var v = arguments[i];
+        this.insertAdjacentHTML('afterbegin', typeof v === 'string' ? v : (v.outerHTML || ''));
+      }
+    };
+  }
+}
+
+// ResizeObserver / IntersectionObserver stubs (#1921/#1892). The deterministic
+// pipeline has no async layout notifications yet; feature-detection and the
+// observer API surface must still work so analytics/lazy-load scripts run.
+if (typeof ResizeObserver !== 'function') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    constructor(callback) { this._callback = callback; }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
+}
+if (typeof IntersectionObserver !== 'function') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    constructor(callback, options) {
+      this._callback = callback;
+      this.root = options && options.root ? options.root : null;
+      this.rootMargin = options && options.rootMargin ? options.rootMargin : '0px';
+      this.thresholds = options && options.threshold ? [].concat(options.threshold) : [0];
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
+  IntersectionObserver.prototype.root = null;
+  IntersectionObserver.prototype.rootMargin = '0px';
+  IntersectionObserver.prototype.thresholds = [0];
+}
+
+// Standard browser globals used for feature-detection (#1924/#1926/#1925/#1941/
+// #1946/#1950/#1951/#1954-#1957/#1960/#1966/#1979). Deterministic no-op stubs
+// keep real-site scripts running until the full APIs are implemented in Rust.
+(function () {
+  function define(name, value) {
+    try { Object.defineProperty(globalThis, name, { value: value, writable: true, configurable: true }); } catch (e) {}
+  }
+  function StubCtor(name, parent) {
+    function C() {}
+    Object.defineProperty(C, 'name', { value: name });
+    if (parent && parent.prototype) C.prototype = Object.create(parent.prototype);
+    C.prototype.constructor = C;
+    return C;
+  }
+  if (typeof Blob !== 'function') {
+    define('Blob', function Blob(parts, options) {
+      var chunks = parts || [];
+      this.size = 0; this.type = options && options.type ? options.type : '';
+      for (var i = 0; i < chunks.length; i++) this.size += String(chunks[i]).length;
+      this.arrayBuffer = function () { return Promise.resolve(new ArrayBuffer(0)); };
+      this.text = function () { return Promise.resolve(''); };
+      this.slice = function () { return new Blob([], { type: this.type }); };
+    });
+  }
+  if (typeof File !== 'function') define('File', function File() { return new Blob(arguments[0] || [], {}); });
+  if (typeof FileReader !== 'function') {
+    define('FileReader', function FileReader() {
+      this.result = null; this.error = null; this.readyState = 0;
+      this.onload = null; this.onerror = null;
+      this.readAsText = function () { this.readyState = 2; this.result = ''; if (this.onload) this.onload({ target: this }); };
+      this.readAsArrayBuffer = function () { this.readyState = 2; this.result = new ArrayBuffer(0); if (this.onload) this.onload({ target: this }); };
+      this.abort = function () {};
+    });
+  }
+  if (typeof URL.createObjectURL !== 'function') {
+    URL.createObjectURL = function () { return 'blob:megi/' + Math.random().toString(36).slice(2); };
+    URL.revokeObjectURL = function () {};
+  }
+  if (typeof CSS !== 'function') define('CSS', function CSS() {});
+  if (typeof CSS === 'function' && typeof CSS.supports !== 'function') {
+    CSS.supports = function (prop, value) { return typeof value === 'undefined' ? !!prop : !!prop && !!value; };
+  }
+  if (typeof screen === 'undefined') {
+    define('screen', { width: 1280, height: 720, availWidth: 1280, availHeight: 720, colorDepth: 24, pixelDepth: 24 });
+  }
+  if (typeof NodeList !== 'function') define('NodeList', StubCtor('NodeList'));
+  if (typeof HTMLCollection !== 'function') define('HTMLCollection', StubCtor('HTMLCollection'));
+  if (typeof DOMTokenList !== 'function') define('DOMTokenList', StubCtor('DOMTokenList'));
+  if (typeof NamedNodeMap !== 'function') define('NamedNodeMap', StubCtor('NamedNodeMap'));
+  if (typeof DocumentFragment !== 'function') define('DocumentFragment', StubCtor('DocumentFragment'));
+  if (typeof Text !== 'function') define('Text', StubCtor('Text'));
+  if (typeof Comment !== 'function') define('Comment', StubCtor('Comment'));
+  if (typeof Attr !== 'function') define('Attr', StubCtor('Attr'));
+  if (typeof Document !== 'function') define('Document', StubCtor('Document'));
+  if (typeof SVGElement !== 'function') define('SVGElement', StubCtor('SVGElement', typeof Element !== 'undefined' ? Element : null));
+  var htmlNames = ['HTMLDivElement','HTMLAnchorElement','HTMLInputElement','HTMLButtonElement',
+    'HTMLFormElement','HTMLTableElement','HTMLCanvasElement','HTMLVideoElement','HTMLAudioElement',
+    'HTMLScriptElement','HTMLLinkElement','HTMLSpanElement','HTMLImageElement','HTMLUListElement',
+    'HTMLOListElement','HTMLLIElement','HTMLSelectElement','HTMLTextAreaElement','HTMLParagraphElement'];
+  htmlNames.forEach(function (n) {
+    if (typeof globalThis[n] !== 'function') define(n, StubCtor(n, typeof HTMLElement !== 'undefined' ? HTMLElement : Element));
+  });
+  if (typeof escape !== 'function') {
+    define('escape', function (s) { return encodeURI(String(s)).replace(/!/g, '%21').replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29'); });
+  }
+  if (typeof unescape !== 'function') define('unescape', function (s) { return decodeURI(String(s).replace(/%([0-9A-Fa-f]{2})/g, '%$1')); });
+  if (typeof close !== 'function') define('close', function () {});
+  if (typeof scroll !== 'function') define('scroll', typeof scrollTo === 'function' ? scrollTo : function () {});
+  if (typeof getSelection !== 'function') define('getSelection', function () { return { toString: function () { return ''; }, rangeCount: 0 }; });
+  if (typeof frames === 'undefined') define('frames', globalThis);
+  if (typeof name === 'undefined') define('name', '');
+  if (typeof opener === 'undefined') define('opener', null);
+  if (typeof length === 'undefined') define('length', 0);
+  if (typeof console !== 'undefined') {
+    if (typeof console.trace !== 'function') console.trace = function () {};
+    if (typeof console.group !== 'function') console.group = function () {};
+    if (typeof console.groupEnd !== 'function') console.groupEnd = function () {};
+  }
+  if (typeof document !== 'undefined') {
+    if (typeof document.open !== 'function') document.open = function () { return document; };
+    if (typeof document.baseURI === 'undefined') Object.defineProperty(document, 'baseURI', { get: function () { return document.URL || location.href; }, configurable: true });
+    if (typeof document.referrer === 'undefined') Object.defineProperty(document, 'referrer', { value: '', configurable: true });
+  }
+  if (typeof history !== 'undefined' && typeof history.scrollRestoration === 'undefined') {
+    Object.defineProperty(history, 'scrollRestoration', { value: 'auto', writable: true, configurable: true });
+  }
+  if (typeof navigator !== 'undefined' && typeof navigator.cookieEnabled === 'undefined') {
+    Object.defineProperty(navigator, 'cookieEnabled', { value: true, configurable: true });
+  }
+  if (typeof Element !== 'undefined' && typeof Element.prototype.getAnimations !== 'function') {
+    Element.prototype.getAnimations = function () { return []; };
+  }
+})();
+
+// Geometry, document collections, cookie access, Intl, fetch members and event
+// cancellation from real-site probes (#1944/#1945/#1947/#1952/#1965/#1970/#1971).
+(function () {
+  if (typeof Element !== 'undefined' && Element.prototype) {
+    ['offsetTop','offsetLeft','scrollTop','scrollLeft'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(Element.prototype, p) === 'undefined') {
+        Object.defineProperty(Element.prototype, p, { get: function () { return 0; }, set: function () {}, configurable: true });
+      }
+    });
+    ['offsetWidth','offsetHeight','scrollWidth','scrollHeight','clientWidth','clientHeight'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(Element.prototype, p) === 'undefined') {
+        Object.defineProperty(Element.prototype, p, {
+          get: function () { var r = this.getBoundingClientRect ? this.getBoundingClientRect() : { width: 0, height: 0 }; return p.indexOf('Width') >= 0 ? r.width : r.height; },
+          configurable: true
+        });
+      }
+    });
+    if (typeof Element.prototype.getAnimations !== 'function') Element.prototype.getAnimations = function () { return []; };
+  }
+  if (typeof document !== 'undefined') {
+    ['forms','links','images','scripts'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(document, p) === 'undefined') {
+        Object.defineProperty(document, p, { get: function () { return this.querySelectorAll(p === 'links' ? 'a[href]' : p); }, configurable: true });
+      }
+    });
+    if (typeof document.documentURI === 'undefined') Object.defineProperty(document, 'documentURI', { get: function () { return this.URL || location.href; }, configurable: true });
+    if (typeof document.compatMode === 'undefined') Object.defineProperty(document, 'compatMode', { value: 'CSS1Compat', configurable: true });
+    if (typeof document.characterSet === 'undefined') Object.defineProperty(document, 'characterSet', { value: 'utf-8', configurable: true });
+    if (typeof Object.getOwnPropertyDescriptor(document, 'cookie') === 'undefined') {
+      var cookieJar = {};
+      Object.defineProperty(document, 'cookie', {
+        get: function () { return Object.keys(cookieJar).map(function (k) { return k + '=' + cookieJar[k]; }).join('; '); },
+        set: function (v) { var pair = String(v).split(';')[0].split('='); cookieJar[pair[0]] = pair[1]; },
+        configurable: true
+      });
+    }
+  }
+  if (typeof Intl !== 'undefined') {
+    if (typeof Intl.Collator !== 'function') {
+      Intl.Collator = function () { return { compare: function (a, b) { return String(a).localeCompare(String(b)); } }; };
+    }
+    try {
+      if (typeof Intl.DateTimeFormat.prototype.formatToParts !== 'function') {
+        Intl.DateTimeFormat.prototype.formatToParts = function (d) { return [{ type: 'literal', value: this.format(d) }]; };
+      }
+    } catch (e) {}
+  }
+  if (typeof Response !== 'undefined') {
+    if (typeof Response.json !== 'function') Response.json = function (data, init) { return new Response(JSON.stringify(data), init); };
+  }
+  if (typeof Headers !== 'undefined' && Headers.prototype && typeof Headers.prototype[Symbol.iterator] !== 'function') {
+    Headers.prototype[Symbol.iterator] = function () {
+      var self = this, names = [];
+      try { names = self.keys ? Array.from(self.keys()) : []; } catch (e) {}
+      var i = 0;
+      return { next: function () { return i < names.length ? { value: [names[i], self.get(names[i++])], done: false } : { done: true }; },
+               [Symbol.iterator]: function () { return this; } };
+    };
+  }
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout !== 'function') {
+    AbortSignal.timeout = function () { return typeof AbortController !== 'undefined' ? new AbortController().signal : {}; };
+  }
+  if (typeof URL !== 'undefined' && typeof URL.canParse !== 'function') {
+    URL.canParse = function (u, base) { try { new URL(u, base); return true; } catch (e) { return false; } };
+  }
+  if (typeof URLSearchParams !== 'undefined' && URLSearchParams.prototype && typeof URLSearchParams.prototype[Symbol.iterator] !== 'function') {
+    URLSearchParams.prototype[Symbol.iterator] = function () {
+      var self = this; var entries = [];
+      self.forEach(function (v, k) { entries.push([k, v]); });
+      return entries[Symbol.iterator]();
+    };
+  }
+})();
+
+// SVG geometry and HTML table/semantic element APIs (#1973/#1974/#1975).
+(function () {
+  function define(name, value) {
+    try { Object.defineProperty(globalThis, name, { value: value, writable: true, configurable: true }); } catch (e) {}
+  }
+  if (typeof SVGElement === 'function') {
+    if (typeof SVGElement.prototype.getBBox !== 'function') {
+      SVGElement.prototype.getBBox = function () {
+        var r = this.getBoundingClientRect ? this.getBoundingClientRect() : { x: 0, y: 0, width: 0, height: 0 };
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      };
+    }
+    if (typeof SVGElement.prototype.getCTM !== 'function') {
+      SVGElement.prototype.getCTM = function () { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; };
+    }
+    if (typeof SVGElement.prototype.getScreenCTM !== 'function') {
+      SVGElement.prototype.getScreenCTM = function () { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; };
+    }
+  }
+  if (typeof SVGSVGElement !== 'function') define('SVGSVGElement', function SVGSVGElement() {});
+  if (typeof HTMLTableElement !== 'function') define('HTMLTableElement', function HTMLTableElement() {});
+  if (typeof HTMLTableRowElement !== 'function') define('HTMLTableRowElement', function HTMLTableRowElement() {});
+  if (typeof HTMLTableCellElement !== 'function') define('HTMLTableCellElement', function HTMLTableCellElement() {});
+  if (typeof HTMLTemplateElement !== 'function') define('HTMLTemplateElement', function HTMLTemplateElement() {});
+  var tableProto = HTMLTableElement.prototype;
+  if (typeof tableProto.rows === 'undefined') {
+    Object.defineProperty(tableProto, 'rows', { get: function () { return this.querySelectorAll('tr'); }, configurable: true });
+  }
+  ['tHead', 'tFoot'].forEach(function (n) {
+    if (typeof Object.getOwnPropertyDescriptor(tableProto, n) === 'undefined') {
+      Object.defineProperty(tableProto, n, { get: function () { return this.querySelector(n.toLowerCase()); }, configurable: true });
+    }
+  });
+  if (typeof tableProto.tBodies === 'undefined') {
+    Object.defineProperty(tableProto, 'tBodies', { get: function () { return this.querySelectorAll('tbody'); }, configurable: true });
+  }
+  if (typeof tableProto.insertRow !== 'function') {
+    tableProto.insertRow = function (index) {
+      var row = document.createElement('tr');
+      var body = this.querySelector('tbody') || this;
+      var rows = body.querySelectorAll('tr');
+      var at = typeof index === 'number' && index >= 0 ? index : rows.length;
+      if (at < rows.length) body.insertBefore(row, rows[at]); else body.appendChild(row);
+      return row;
+    };
+  }
+  if (typeof tableProto.deleteRow !== 'function') {
+    tableProto.deleteRow = function (index) {
+      var rows = this.querySelectorAll('tr');
+      var row = rows[index < 0 ? rows.length + index : index];
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+    };
+  }
+  var rowProto = HTMLTableRowElement.prototype;
+  if (typeof Object.getOwnPropertyDescriptor(rowProto, 'cells') === 'undefined') {
+    Object.defineProperty(rowProto, 'cells', { get: function () { return this.querySelectorAll('td,th'); }, configurable: true });
+  }
+  if (typeof rowProto.insertCell !== 'function') {
+    rowProto.insertCell = function (index) {
+      var cell = document.createElement('td');
+      var cells = this.querySelectorAll('td,th');
+      var at = typeof index === 'number' && index >= 0 ? index : cells.length;
+      if (at < cells.length) this.insertBefore(cell, cells[at]); else this.appendChild(cell);
+      return cell;
+    };
+  }
+  if (typeof Object.getOwnPropertyDescriptor(HTMLTemplateElement.prototype, 'content') === 'undefined') {
+    Object.defineProperty(HTMLTemplateElement.prototype, 'content', {
+      get: function () { return this; }, configurable: true
+    });
+  }
+  if (typeof HTMLElement !== 'undefined') {
+    if (typeof Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidden') === 'undefined') {
+      Object.defineProperty(HTMLElement.prototype, 'hidden', {
+        get: function () { return this.hasAttribute('hidden'); },
+        set: function (v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden'); },
+        configurable: true
+      });
+    }
+  }
+  if (typeof HTMLOListElement !== 'function') define('HTMLOListElement', function HTMLOListElement() {});
+  if (typeof Object.getOwnPropertyDescriptor(HTMLOListElement.prototype, 'start') === 'undefined') {
+    Object.defineProperty(HTMLOListElement.prototype, 'start', {
+      get: function () { return parseInt(this.getAttribute('start') || '1', 10); }, configurable: true
+    });
+    Object.defineProperty(HTMLOListElement.prototype, 'reversed', {
+      get: function () { return this.hasAttribute('reversed'); }, configurable: true
+    });
+  }
+})();
+
+// TextEncoderStream / TextDecoderStream (#1902). Minimal deterministic
+// pass-through objects exposing the standard properties and stream accessors.
+if (typeof TextEncoderStream !== 'function') {
+  globalThis.TextEncoderStream = class TextEncoderStream {
+    constructor() {
+      this.encoding = 'utf-8';
+      var reader = { read: function () { return Promise.resolve({ done: true, value: undefined }); }, releaseLock: function () {} };
+      var writer = { write: function () { return Promise.resolve(); }, close: function () { return Promise.resolve(); }, releaseLock: function () {} };
+      this.readable = { getReader: function () { return reader; }, pipeTo: function () { return Promise.resolve(); } };
+      this.writable = { getWriter: function () { return writer; } };
+    }
+  };
+}
+if (typeof TextDecoderStream !== 'function') {
+  globalThis.TextDecoderStream = class TextDecoderStream {
+    constructor(label, options) {
+      this.encoding = String(label || 'utf-8').toLowerCase();
+      this.fatal = options ? !!options.fatal : false;
+      this.ignoreBOM = options ? !!options.ignoreBOM : false;
+      var reader = { read: function () { return Promise.resolve({ done: true, value: '' }); }, releaseLock: function () {} };
+      var writer = { write: function () { return Promise.resolve(); }, close: function () { return Promise.resolve(); }, releaseLock: function () {} };
+      this.readable = { getReader: function () { return reader; }, pipeTo: function () { return Promise.resolve(); } };
+      this.writable = { getWriter: function () { return writer; } };
+    }
+  };
+}

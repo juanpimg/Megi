@@ -109,7 +109,9 @@ impl FontTextMeasurer {
 
     /// Resolves a CSS family value into the owned family-name list used by `fonts`.
     fn families(font_family: &str) -> Vec<String> {
-        megi_fonts::db::parse_font_families(font_family)
+        let mut families = megi_fonts::db::parse_font_families(font_family);
+        megi_fonts::db::ensure_generic_fallback(&mut families);
+        families
     }
 
     fn weight_and_italic(weight: u16, italic: bool) -> (u16, megi_fonts::FontStyle) {

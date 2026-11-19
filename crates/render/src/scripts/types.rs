@@ -12,7 +12,7 @@ pub const DEFAULT_MAX_SCRIPT_BYTES: usize = 8 * 1024 * 1024;
 /// Default total script byte budget per page (32 MiB).
 pub const DEFAULT_MAX_TOTAL_SCRIPT_BYTES: usize = 32 * 1024 * 1024;
 /// Default maximum number of scripts executed per page.
-pub const DEFAULT_MAX_SCRIPTS: usize = 64;
+pub const DEFAULT_MAX_SCRIPTS: usize = 256;
 /// Maximum script fetch attempts (successful or not) per page.
 const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
 /// Maximum module-graph fetches (including nested imports) per page.
@@ -135,6 +135,8 @@ pub struct ScriptCandidate {
     pub nonce: Option<String>,
     /// `crossorigin` attribute; classic scripts without it fetch in `no-cors` mode (#1537).
     pub crossorigin: bool,
+    /// `charset` attribute of an external script, used to decode legacy bytes (#1910).
+    pub charset: Option<String>,
 }
 
 /// A script ready to be evaluated.

@@ -64,11 +64,12 @@ fn windows_1252_meta_charset_is_decoded() {
 
 #[test]
 fn unsupported_charset_is_a_typed_error() {
-    let url = "data:text/html,%3Cmeta%20charset=gbk%3E%3Cp%3Ex%3C/p%3E";
+    // GBK is supported now (#1910); use a genuinely unsupported label.
+    let url = "data:text/html,%3Cmeta%20charset=shift_jis%3E%3Cp%3Ex%3C/p%3E";
     let error = render_url(url, &options(100, 60)).expect_err("unsupported charset");
     let message = format!("{error:?}");
     assert!(
-        matches!(error, RenderError::UnsupportedCharset(ref label) if label == "gbk"),
+        matches!(error, RenderError::UnsupportedCharset(ref label) if label == "shift_jis"),
         "{message}"
     );
 }

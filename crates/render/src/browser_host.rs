@@ -95,6 +95,21 @@ pub(crate) fn computed_style_pairs(style: &ComputedStyle) -> Vec<(String, String
         );
     }
     push("opacity", format_f32(style.opacity));
+    // Animation/transition/effect properties: the deterministic renderer does
+    // not animate, but CSSOM must still expose their initial values (#1980).
+    for (name, value) in [
+        ("animation-name", "none"),
+        ("animation-duration", "0s"),
+        ("transition-property", "all"),
+        ("transition-duration", "0s"),
+        ("mix-blend-mode", "normal"),
+        ("filter", "none"),
+        ("backdrop-filter", "none"),
+        ("contain", "none"),
+        ("content-visibility", "visible"),
+    ] {
+        push(name, value.to_owned());
+    }
     pairs
 }
 
@@ -275,6 +290,34 @@ fn border_style_css(border_style: BorderStyle) -> &'static str {
 mod tests {
     use super::*;
     use megi_core::{Attribute, Namespace};
+
+    /// CSSOM must expose animation/transition/effect properties with their
+    /// initial values so feature-detection sees a string, not undefined (#1980).
+    #[test]
+    fn computed_style_pairs_include_effect_properties() {
+        let pairs = computed_style_pairs(&ComputedStyle::initial());
+        let expected = [
+            ("animation-name", "none"),
+            ("animation-duration", "0s"),
+            ("transition-property", "all"),
+            ("transition-duration", "0s"),
+            ("mix-blend-mode", "normal"),
+            ("filter", "none"),
+            ("backdrop-filter", "none"),
+            ("contain", "none"),
+            ("content-visibility", "visible"),
+        ];
+        for (name, value) in expected {
+            assert_eq!(
+                pairs
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, v)| v.as_str()),
+                Some(value),
+                "missing CSSOM property {name} (#1980)"
+            );
+        }
+    }
 
     #[test]
     fn computed_style_for_bounds_oversized_inline_style() {

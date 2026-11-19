@@ -16,6 +16,8 @@
 
 use crate::error::RenderError;
 
+mod charset_gbk;
+
 /// Maximum number of leading bytes scanned for a `<meta charset>` declaration.
 const META_PRESCAN_BYTES: usize = 1024;
 
@@ -49,6 +51,8 @@ pub fn decode_html(bytes: &[u8], content_type: &str) -> Result<DecodedHtml, Rend
     let text = match normalized.as_str() {
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
+        "iso-8859-15" => decode_iso_8859_15(bytes),
+        "gbk" => decode_gbk(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedHtml {
@@ -58,7 +62,7 @@ pub fn decode_html(bytes: &[u8], content_type: &str) -> Result<DecodedHtml, Rend
 }
 
 /// Normalizes an encoding label into `utf-8` or `windows-1252`.
-fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
+pub(crate) fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
     let label = label
         .trim()
         .trim_matches('"')
@@ -68,6 +72,8 @@ fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
         "utf-8" | "utf8" | "unicode-1-1-utf-8" => Ok("utf-8".to_owned()),
         "us-ascii" | "ascii" | "iso-8859-1" | "iso8859-1" | "latin1" | "latin-1"
         | "windows-1252" | "cp1252" | "x-cp1252" => Ok("windows-1252".to_owned()),
+        "iso-8859-15" | "iso8859-15" | "latin-9" | "latin9" | "l9" => Ok("iso-8859-15".to_owned()),
+        "gbk" | "gb2312" | "gb18030" | "x-gbk" => Ok("gbk".to_owned()),
         other => Err(RenderError::UnsupportedCharset(other.to_owned())),
     }
 }
@@ -135,6 +141,8 @@ pub fn decode_stylesheet(
     let text = match normalized.as_str() {
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
+        "iso-8859-15" => decode_iso_8859_15(bytes),
+        "gbk" => decode_gbk(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedStylesheet {
@@ -167,45 +175,6 @@ fn charset_from_css_declaration(bytes: &[u8]) -> Option<String> {
     Some(String::from_utf8_lossy(label).into_owned())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::charset_from_content_type;
-
-    #[test]
-    fn parses_charset_parameter_with_optional_whitespace() {
-        assert_eq!(
-            charset_from_content_type("text/html; charset=utf-8").as_deref(),
-            Some("utf-8")
-        );
-        assert_eq!(
-            charset_from_content_type("text/html;charset = UTF-8").as_deref(),
-            Some("UTF-8"),
-            "RFC 9110 BWS around '=' is allowed"
-        );
-        assert_eq!(
-            charset_from_content_type("text/html; charset =\twindows-1252").as_deref(),
-            Some("windows-1252")
-        );
-        assert_eq!(
-            charset_from_content_type("text/html; charset=\"iso-8859-1\"").as_deref(),
-            Some("iso-8859-1")
-        );
-        assert_eq!(
-            charset_from_content_type("text/html; foo=bar; charset=windows-1252; q=1").as_deref(),
-            Some("windows-1252")
-        );
-    }
-
-    #[test]
-    fn ignores_missing_or_lookalike_charset_parameters() {
-        assert_eq!(charset_from_content_type("text/html"), None);
-        assert_eq!(charset_from_content_type("text/html; xcharset=utf-8"), None);
-        assert_eq!(charset_from_content_type("text/html; charset="), None);
-        assert_eq!(charset_from_content_type("text/html; charset = "), None);
-    }
-}
-
-/// Finds `charset` only where it starts an attribute, not inside another attribute's value.
 fn find_charset_attribute(tag: &str) -> Option<usize> {
     let mut from = 0;
     while let Some(pos) = tag[from..].find("charset") {
@@ -284,7 +253,7 @@ const WINDOWS_1252_C1: [u16; 32] = [
 ];
 
 /// Decodes single-byte Windows-1252 (a superset of ISO-8859-1 in practice).
-fn decode_windows_1252(bytes: &[u8]) -> String {
+pub(crate) fn decode_windows_1252(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
     for &byte in bytes {
         let code_point = if (0x80..=0x9F).contains(&byte) {
@@ -297,146 +266,61 @@ fn decode_windows_1252(bytes: &[u8]) -> String {
     out
 }
 
-#[cfg(test)]
-mod unit_tests {
-    use super::*;
-
-    #[test]
-    fn utf8_bom_is_stripped() {
-        let decoded = decode_html(b"\xEF\xBB\xBF<p>hi</p>", "text/html").expect("decode");
-        assert_eq!(decoded.text, "<p>hi</p>");
-        assert_eq!(decoded.charset, "utf-8");
+/// Decodes GB2312 (the common subset of GBK) using the embedded level-1 table.
+/// Bytes outside the table map to U+FFFD rather than aborting the render (#1910).
+pub fn decode_gbk(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < 0x80 {
+            out.push(char::from(b));
+            i += 1;
+            continue;
+        }
+        if (0xB0..=0xD7).contains(&b) && i + 1 < bytes.len() {
+            let trail = bytes[i + 1];
+            if (0xA1..=0xFE).contains(&trail) {
+                let row = charset_gbk::GB2312_LEVEL1[(b - 0xB0) as usize];
+                let glyph = row.chars().nth((trail - 0xA1) as usize);
+                if let Some(ch) = glyph.filter(|c| *c != '\u{FFFD}') {
+                    out.push(ch);
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        out.push('\u{FFFD}');
+        i += 1;
     }
+    out
+}
 
-    #[test]
-    fn unterminated_meta_tag_does_not_panic() {
-        // A truncated `<meta` used to slice one byte past the prescan window (#1212).
-        let decoded = decode_html(b"<!DOCTYPE html><meta charset=utf-8", "text/html")
-            .expect("truncated meta must not panic");
-        assert_eq!(decoded.charset, "utf-8");
+/// Decodes ISO-8859-15 / Latin-9. Identical to Latin-1 for 0x00-0x7F and 0xA0-0xFF
+/// except eight slots (€ Š š Ž ž Œ œ Ÿ); bytes 0x80-0x9F are C1 controls and are
+/// kept as their Unicode code points (WHATWG Encoding: replacement for unmapped).
+fn decode_iso_8859_15(bytes: &[u8]) -> String {
+    const REPLACEMENTS: [(u8, u32); 8] = [
+        (0xA4, 0x20AC), // EURO SIGN
+        (0xA6, 0x0160), // LATIN CAPITAL LETTER S WITH CARON
+        (0xA8, 0x0161), // LATIN SMALL LETTER S WITH CARON
+        (0xB4, 0x017D), // LATIN CAPITAL LETTER Z WITH CARON
+        (0xB8, 0x017E), // LATIN SMALL LETTER Z WITH CARON
+        (0xBC, 0x0152), // LATIN CAPITAL LIGATURE OE
+        (0xBD, 0x0153), // LATIN SMALL LIGATURE OE
+        (0xBE, 0x0178), // LATIN CAPITAL LETTER Y WITH DIAERESIS
+    ];
+    let mut out = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        let code_point = REPLACEMENTS
+            .iter()
+            .find(|(b, _)| *b == byte)
+            .map(|(_, cp)| *cp)
+            .unwrap_or(u32::from(byte));
+        out.push(char::from_u32(code_point).unwrap_or('\u{FFFD}'));
     }
-
-    #[test]
-    fn charset_substring_without_equals_does_not_abort_scan() {
-        let decoded = decode_html(
-            b"<meta name=\"x\" content=\"charset utf-8\"><meta charset=windows-1252>",
-            "text/html",
-        )
-        .expect("scan must continue past a non-declaration");
-        assert_eq!(decoded.charset, "windows-1252");
-    }
-
-    #[test]
-    fn content_type_charset_wins_over_meta() {
-        let decoded = decode_html(
-            b"<meta charset=\"utf-8\"><p>caf\xE9</p>",
-            "text/html; charset=windows-1252",
-        )
-        .expect("decode");
-        assert_eq!(decoded.charset, "windows-1252");
-        assert!(decoded.text.contains("café"));
-    }
-
-    #[test]
-    fn meta_charset_is_used_without_header() {
-        let decoded =
-            decode_html(b"<meta charset=windows-1252><p>caf\xE9</p>", "text/html").expect("decode");
-        assert_eq!(decoded.charset, "windows-1252");
-        assert!(decoded.text.contains("café"));
-    }
-
-    #[test]
-    fn unsupported_encoding_is_a_typed_error() {
-        assert!(matches!(
-            decode_html(b"<html></html>", "text/html; charset=gbk"),
-            Err(RenderError::UnsupportedCharset(label)) if label == "gbk"
-        ));
-        assert!(matches!(
-            decode_html(b"\xFF\xFE<\x00", "text/html"),
-            Err(RenderError::UnsupportedCharset(_))
-        ));
-    }
-
-    #[test]
-    fn latin1_alias_decodes_accented_bytes() {
-        let decoded = decode_html(b"<p>caf\xE9</p>", "text/html; charset=latin1").expect("decode");
-        assert_eq!(decoded.charset, "windows-1252");
-        assert!(decoded.text.contains('é'));
-    }
+    out
 }
 
 #[cfg(test)]
-mod stylesheet_charset_tests {
-    use super::*;
-
-    #[test]
-    fn utf8_bom_is_stripped_and_wins_over_declarations() {
-        let decoded = decode_stylesheet(
-            b"\xEF\xBB\xBF@charset \"windows-1252\";.a{color:red}",
-            "text/css; charset=windows-1252",
-        )
-        .expect("decode");
-        assert_eq!(decoded.text, "@charset \"windows-1252\";.a{color:red}");
-        assert_eq!(decoded.charset, "utf-8", "BOM wins over every declaration");
-    }
-
-    #[test]
-    fn charset_declaration_decodes_legacy_bytes() {
-        let bytes = b"@charset \"windows-1252\";p::after{content:\"caf\xE9\"}";
-        let decoded = decode_stylesheet(bytes, "text/css").expect("decode");
-        assert_eq!(decoded.charset, "windows-1252");
-        assert!(decoded.text.contains("café"));
-    }
-
-    #[test]
-    fn content_type_charset_wins_over_declaration() {
-        // CSS Syntax §3.2: the HTTP charset is the fallback's first choice.
-        let bytes = b"@charset \"windows-1252\";p::after{content:\"caf\xE9\"}";
-        let decoded = decode_stylesheet(bytes, "text/css; charset=utf-8").expect("decode");
-        assert_eq!(decoded.charset, "utf-8");
-    }
-
-    #[test]
-    fn loose_charset_declaration_is_not_recognized() {
-        // Leading whitespace and single quotes are valid CSS but not a valid encoding declaration.
-        let bytes = b" @charset 'windows-1252';p{color:red}";
-        let decoded = decode_stylesheet(bytes, "text/css").expect("decode");
-        assert_eq!(decoded.charset, "utf-8");
-        assert_eq!(decoded.text.as_bytes()[0], b' ');
-    }
-
-    #[test]
-    fn unsupported_encoding_is_a_typed_error() {
-        assert!(matches!(
-            decode_stylesheet(b"@charset \"gbk\";", "text/css"),
-            Err(RenderError::UnsupportedCharset(label)) if label == "gbk"
-        ));
-        assert!(matches!(
-            decode_stylesheet(b"\xFF\xFE\x00", "text/css"),
-            Err(RenderError::UnsupportedCharset(_))
-        ));
-    }
-}
-
-#[cfg(test)]
-mod charset_prescan_tests {
-    use super::*;
-
-    #[test]
-    fn commented_meta_charset_is_ignored() {
-        let bytes = b"<!-- <meta charset=windows-1252> --><meta charset=utf-8>";
-        assert_eq!(charset_from_meta(bytes).as_deref(), Some("utf-8"));
-    }
-
-    #[test]
-    fn charset_inside_another_attribute_is_ignored() {
-        let bytes = b"<meta name=\"charset=utf-8\"><meta charset=windows-1252>";
-        assert_eq!(charset_from_meta(bytes).as_deref(), Some("windows-1252"));
-    }
-
-    #[test]
-    fn metadata_tag_is_not_a_meta_tag() {
-        let bytes = b"<metadata charset=utf-8><meta charset=windows-1252>";
-        assert_eq!(charset_from_meta(bytes).as_deref(), Some("windows-1252"));
-    }
-}
+mod tests;

@@ -238,3 +238,19 @@ fn import_meta_url_available_in_native_modules() {
         outcome.exports
     );
 }
+
+/// A minified Stencil bundle ends with `export{...}` without a trailing semicolon.
+/// Boa 0.22's module parser reports `abrupt end` for that valid ASI form (#1919).
+#[test]
+fn export_list_without_trailing_semicolon_parses() {
+    let mut runtime = runtime_with(&[]);
+    let source = "const n = 1; async function f(){ await 1 } export{ n as C }";
+    let outcome = runtime
+        .eval_module_async(source, "main", "mem://main", &Budget::default())
+        .expect("export list without ';' must parse via ASI (#1919)");
+    assert!(
+        outcome.exports.iter().any(|(name, _)| name == "C"),
+        "{:?}",
+        outcome.exports
+    );
+}

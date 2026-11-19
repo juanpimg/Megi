@@ -431,3 +431,51 @@ fn multiple_export_declarations_on_one_line() {
     assert_eq!(values.get("a").map(String::as_str), Some("1"));
     assert_eq!(values.get("b").map(String::as_str), Some("2"));
 }
+
+/// Minifiers emit `import{...}` / `export{...}` without a space. transform_module
+/// must recognize those forms (#1920 export, #1936 import).
+#[test]
+fn import_export_without_space_after_keyword() {
+    let modules = Modules {
+        resolver: HashMap::from([("./a.js".to_string(), "mem://a".to_string())]),
+        sources: HashMap::from([("mem://a".to_string(), "export const x = 41;".to_string())]),
+    };
+    let mut rt = runtime_with(&modules);
+    let outcome = rt
+        .eval_module(
+            "import{x}from'./a.js'; export const y = x + 1; export{z as Z}; const z = y;",
+            "main",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("import/export without space must parse (#1920/#1936)");
+    assert!(
+        outcome.exports.iter().any(|(n, v)| n == "Z" && v == "42"),
+        "{:?}",
+        outcome.exports
+    );
+}
+
+/// Trailing commas in export lists and object literals are valid ES syntax;
+/// minified bundles (MDN's rspack) rely on it (#1911).
+#[test]
+fn trailing_comma_export_list_parses() {
+    let modules = Modules {
+        resolver: HashMap::new(),
+        sources: HashMap::new(),
+    };
+    let mut rt = runtime_with(&modules);
+    let outcome = rt
+        .eval_module(
+            "const a = 1; export const b = { x: a, }; export{ a as A, b as B, };",
+            "main",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("trailing comma in export list must parse (#1911)");
+    assert!(
+        outcome.exports.iter().any(|(n, v)| n == "A" && v == "1"),
+        "{:?}",
+        outcome.exports
+    );
+}
