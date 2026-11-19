@@ -215,3 +215,19 @@ fn once_listener_keeps_a_listener_added_inside_its_callback() {
         .expect("eval");
     assert_eq!(out, "A,B,");
 }
+
+#[test]
+fn bare_add_event_listener_is_bound_to_window() {
+    // #1894: search.brave.com calls `addEventListener('error', o)` without a qualifier.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "window.__log = ''; \
+             addEventListener('error', function () { __log += 'x'; }); \
+             window.dispatchEvent(new Event('error')); \
+             __log;",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "x");
+}
