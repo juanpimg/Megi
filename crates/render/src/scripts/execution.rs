@@ -110,6 +110,8 @@ pub fn execute_scripts(
             stack_size_limit: limits.budget.stack_size_limit,
         };
         runtime.set_budget(budget);
+        // `document.currentScript` is only non-null while this script is evaluating (#1887).
+        runtime.set_current_script(Some(script.element));
         let result = if script.is_module {
             let base = script
                 .module_url
@@ -162,6 +164,7 @@ pub fn execute_scripts(
                 .eval(&script.text, &script.source_name)
                 .map(|_| None)
         };
+        runtime.set_current_script(None);
         match result {
             Ok(Some(evaluated)) => {
                 execution.executed += 1;

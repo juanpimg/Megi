@@ -80,6 +80,8 @@ pub(crate) struct Host {
     pub observer_index: HashMap<NodeId, Vec<(usize, ObserverTarget)>>,
     /// Currently focused element (best-effort `focus()`/`blur()` bookkeeping).
     pub active_element: Option<NodeId>,
+    /// `<script>` element currently being evaluated (`document.currentScript`, #1887).
+    pub current_script: Option<NodeId>,
     /// Injected layout geometry provider (`getBoundingClientRect`/offset/client metrics).
     pub layout_provider: Option<LayoutProvider>,
     /// Worker script loader injected by the host.

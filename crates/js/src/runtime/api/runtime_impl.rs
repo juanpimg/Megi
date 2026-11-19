@@ -133,6 +133,11 @@ impl JsRuntime {
             .unwrap_or(false)
     }
 
+    /// Sets the `<script>` element being evaluated, exposed as `document.currentScript` (#1887).
+    pub fn set_current_script(&mut self, node: Option<NodeId>) {
+        let _ = with_context_host(&mut self.context, |host| host.current_script = node);
+    }
+
     /// Pushes the runtime's configured budget into the Boa VM.
     pub(crate) fn apply_current_budget(&mut self) {
         let budget = self.budget;

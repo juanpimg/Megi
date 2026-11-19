@@ -44,6 +44,7 @@ impl Host {
             observers: Vec::new(),
             observer_index: HashMap::new(),
             active_element: None,
+            current_script: None,
             layout_provider: None,
             worker_loader: None,
             fetch_provider: None,

@@ -140,6 +140,8 @@ pub struct ScriptCandidate {
 /// A script ready to be evaluated.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LoadedScript {
+    /// `<script>` element this source came from (`document.currentScript`, #1887).
+    pub element: megi_core::NodeId,
     /// JavaScript source text.
     pub text: String,
     /// Source name used in diagnostics (`inline-script-N` or the resolved URL).
