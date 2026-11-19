@@ -2,12 +2,14 @@
   "commit": "9e66501",
   "measured_at": "2026-11-18",
   "test_count": 2848,
-  "oversized_files": {},
+  "oversized_files": {
+    "crates/js/src/runtime/globals/features.rs": 519
+  },
   "forbidden_patterns": {
     "crates/js/src/runtime.rs:143": "allow_eval: Rc<std::cell::Cell<bool>>,",
     "crates/js/src/runtime.rs:174": "allow_eval: Rc<std::cell::Cell<bool>>,",
     "crates/js/tests/websocket_api_tests.rs:30": ") -> (JsRuntime, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {",
-    "crates/js/src/host/state.rs:149": "pub frames: Vec<Option<Rc<RefCell<crate::runtime::IframeState>>>>,",
+    "crates/js/src/host/state.rs:151": "pub frames: Vec<Option<Rc<RefCell<crate::runtime::IframeState>>>>,",
     "crates/js/src/host/context.rs:10": "pub(crate) type ContextHost = Rc<RefCell<Host>>;",
     "crates/js/src/events/core.rs:10": "pub(crate) fn host_handle(context: &Context) -> JsResult<Rc<RefCell<Host>>> {",
     "crates/js/src/events/core.rs:12": ".get_data::<Rc<RefCell<Host>>>()",

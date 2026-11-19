@@ -91,7 +91,17 @@ pub fn run() {
                         run.initial_state.clone(),
                     ));
                 }
-            } else {
+            } else if !is_known_tokenizer_multiset_gap(
+                fname,
+                run.index,
+                &run.initial_state,
+                &run.expected_errors,
+                &run.actual_errors,
+            ) {
+                // #1735: some `<div/>`-style runs legitimately emit one extra trailing-solidus
+                // error (tree-construction stage) that html5lib tokenizer fixtures omit; those
+                // exact runs are documented in KNOWN_TOKENIZER_ERROR_MULTISET_GAPS. Anything else
+                // is a real regression.
                 suite_multiset_mismatches += 1;
             }
         }

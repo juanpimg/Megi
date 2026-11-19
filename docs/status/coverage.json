@@ -2,7 +2,7 @@
   "schema": 1,
   "overall": {
     "implemented": 55,
-    "partial": 2,
+    "partial": 3,
     "known": 70,
     "percent": 79,
     "unverified": [],
@@ -54,7 +54,7 @@
     {
       "id": "F7",
       "implemented": 5,
-      "partial": 0,
+      "partial": 1,
       "known": 9,
       "percent": 56
     },
@@ -192,7 +192,7 @@
       "area": "F7",
       "name": "Accesibilidad y widgets nativos",
       "source": "issue #989",
-      "state": "missing",
+      "state": "partial",
       "evidence": "none",
       "issue": 989,
       "reason": "no requiere evidencia"

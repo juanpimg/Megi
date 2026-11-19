@@ -399,6 +399,6 @@ mod tests {
     #[test]
     fn default_module_fetch_cap_allows_modern_bundles() {
         // #1896: qwant.com's SPA needs more than 256 small ES modules to initialise.
-        assert!(DEFAULT_MAX_MODULE_FETCHES >= 1024);
+        const { assert!(DEFAULT_MAX_MODULE_FETCHES >= 1024) };
     }
 }

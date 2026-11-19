@@ -4,6 +4,67 @@ use super::*;
 // DOM utilities: NodeList, matches/closest, insertAdjacent*
 // ---------------------------------------------------------------------------
 
+/// Deterministic accessibility snapshot (F7-A11Y, partial): a flat list of named
+/// `{role, name}` nodes in document order. Platform/AT integration is out of scope here.
+pub(crate) fn accessibility_tree_snapshot(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    const MAX_NODES: usize = 4096;
+    let entries = with_context_host(context, |host| {
+        let doc = &host.document;
+        let mut entries = Vec::new();
+        for id in doc.descendants(doc.root()) {
+            if entries.len() >= MAX_NODES {
+                break;
+            }
+            let Some(element) = doc.node(id).as_element() else {
+                continue;
+            };
+            if element
+                .get_attribute("aria-hidden")
+                .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+            {
+                continue;
+            }
+            let tag = element.local_name.as_str();
+            let role = match tag {
+                "a" => "link",
+                "button" => "button",
+                "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => "heading",
+                "img" => "img",
+                "input" => match element.get_attribute("type") {
+                    Some("checkbox") => "checkbox",
+                    Some("radio") => "radio",
+                    _ => "textbox",
+                },
+                "li" => "listitem",
+                "nav" => "navigation",
+                "table" => "table",
+                _ => continue,
+            };
+            let name = element
+                .get_attribute("aria-label")
+                .or_else(|| element.get_attribute("alt"))
+                .or_else(|| element.get_attribute("title"))
+                .map(str::to_owned)
+                .unwrap_or_else(|| doc.text_content(id));
+            entries.push((role.to_owned(), name.trim().to_owned()));
+        }
+        entries
+    })
+    .unwrap_or_default();
+    let mut objects = Vec::with_capacity(entries.len());
+    for (role, name) in entries {
+        let mut init = ObjectInitializer::new(context);
+        init.property(js_string!("role"), js_string!(role), Attribute::all());
+        init.property(js_string!("name"), js_string!(name), Attribute::all());
+        objects.push(JsValue::from(init.build()));
+    }
+    Ok(JsValue::from(JsArray::from_iter(objects, context)))
+}
+
 /// Snapshot `NodeList` object (`length`, numeric indices, `item`, `forEach`).
 pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<JsValue> {
     let mut wrappers = Vec::with_capacity(nodes.len());
