@@ -69,6 +69,8 @@ impl Host {
             import_map: None,
             initial_control_values: HashMap::new(),
             initial_control_checked: HashMap::new(),
+            idl_values: HashMap::new(),
+            idl_checked: HashMap::new(),
             opaque_origin: false,
             allow_forms: true,
             allow_popups: true,
