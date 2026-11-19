@@ -160,6 +160,9 @@ pub(crate) fn event_constructor(
             cancelable,
             JsValue::undefined(),
         );
+        // #1740/#1806: `new Event(...)` must use the constructor's prototype
+        // so `instanceof Event` holds.
+        set_event_prototype(context, &object, "Event");
         return Ok(JsValue::from(object));
     }
     Ok(build_event(
