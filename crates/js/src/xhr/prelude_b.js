@@ -83,12 +83,9 @@
     if (arguments.length < 2) {
       throw new TypeError("Failed to execute 'open': 2 arguments required.");
     }
-    if (arguments.length >= 3 && async !== undefined && !async) {
-      throw new DOMException(
-        "Synchronous XMLHttpRequest is not supported",
-        "NotSupportedError"
-      );
-    }
+    // Synchronous XHR: the deterministic engine cannot block on the network,
+    // so complete with an empty response rather than aborting the script (#1904).
+    this._sync = arguments.length >= 3 && async !== undefined && !async;
     var m = String(method).trim().toUpperCase();
     var resolved = resolveUrl(url);
 
@@ -219,6 +216,19 @@
     this._sendFlag = true;
     this._aborted = false;
     this._resetResponse();
+
+    if (this._sync) {
+      this._readyState = 4;
+      this.status = 200;
+      this.statusText = 'OK';
+      this._responseText = '';
+      this._responseBytes = new Uint8Array(0);
+      this._responseBuffer = new ArrayBuffer(0);
+      this._sendFlag = false;
+      dispatchTargetEvent(this, new ProgressEvent('readystatechange'));
+      dispatchTargetEvent(this, new ProgressEvent('load'));
+      return;
+    }
 
     var seq = ++this._requestSeq;
     var method = this._method || "GET";

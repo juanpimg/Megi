@@ -500,3 +500,16 @@ fn text_encoder_stream_exists() {
         "function"
     );
 }
+
+/// Legacy sites use synchronous XHR; aborting open() with NotSupportedError
+/// kills their initialization (#1904). A deterministic empty response keeps
+/// the rest of the script running.
+#[test]
+fn synchronous_xhr_does_not_throw() {
+    let mut rt = runtime();
+    rt.eval(
+        "var x = new XMLHttpRequest(); x.open('GET', '/sync-data', false); x.send(); if (x.readyState !== 4) throw new Error('readyState ' + x.readyState); 'ok'",
+        "t",
+    )
+    .expect("synchronous XHR must complete without throwing (#1904)");
+}
