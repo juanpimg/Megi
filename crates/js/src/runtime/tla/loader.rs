@@ -1,4 +1,20 @@
 use super::*;
+/// Boa 0.22's module parser reports `abrupt end` when a module ends with an
+/// `export{...}` / `import{...}` list without a trailing semicolon — a valid ASI
+/// form used by minified bundles (e.g. Stencil on european-union.europa.eu).
+/// Appending an empty statement `;` is harmless for every other module (#1919).
+pub(crate) fn ensure_trailing_semicolon(source: &str) -> String {
+    if source.trim_end().ends_with(';') {
+        return source.to_owned();
+    }
+    let mut owned = String::with_capacity(source.len() + 2);
+    owned.push_str(source);
+    if !source.ends_with(['\n', '\r']) {
+        owned.push('\n');
+    }
+    owned.push(';');
+    owned
+}
 
 // ---------------------------------------------------------------------------
 // Native Boa modules for real top-level await + live bindings (round 32)
@@ -69,7 +85,8 @@ impl ModuleLoader for MegiModuleLoader {
                     };
                     let mut context = context.borrow_mut();
                     let module = Module::parse(
-                        Source::from_bytes(&source).with_path(Path::new(&target)),
+                        Source::from_bytes(&ensure_trailing_semicolon(&source))
+                            .with_path(Path::new(&target)),
                         None,
                         &mut context,
                     )?;
@@ -103,7 +120,7 @@ impl ModuleLoader for MegiModuleLoader {
         };
         let mut context = context.borrow_mut();
         let module = Module::parse(
-            Source::from_bytes(&source).with_path(Path::new(&url)),
+            Source::from_bytes(&ensure_trailing_semicolon(&source)).with_path(Path::new(&url)),
             None,
             &mut context,
         )?;
@@ -173,7 +190,7 @@ impl JsRuntime {
     ) -> Result<ModuleAsyncOutcome, JsError> {
         apply_budget(&mut self.context, budget);
         let module = Module::parse(
-            Source::from_bytes(source).with_path(Path::new(base_url)),
+            Source::from_bytes(&ensure_trailing_semicolon(source)).with_path(Path::new(base_url)),
             None,
             &mut self.context,
         )

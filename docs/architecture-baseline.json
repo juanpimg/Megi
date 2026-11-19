@@ -14,8 +14,6 @@
     "crates/js/src/events/core.rs:10": "pub(crate) fn host_handle(context: &Context) -> JsResult<Rc<RefCell<Host>>> {",
     "crates/js/src/events/core.rs:12": ".get_data::<Rc<RefCell<Host>>>()",
     "crates/js/src/events/core.rs:52": "host: Rc<RefCell<Host>>,",
-    "crates/js/src/runtime/tla/loader.rs:15": "self: Rc<Self>,",
-    "crates/js/src/runtime/tla/loader.rs:121": "self: Rc<Self>,",
     "crates/js/src/runtime/frames/state.rs:255": ") -> Option<Rc<RefCell<IframeState>>> {",
     "crates/js/src/runtime/frames/bridge.rs:185": ") -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {",
     "crates/js/src/events.rs:64": "Rc::new(RefCell::new(Host::new(",
@@ -29,7 +27,9 @@
     "crates/js/src/runtime/frames/bridge.rs:325": "let state_rc = Rc::new(RefCell::new(IframeState {",
     "crates/js/src/runtime/frames/bridge.rs:341": "host.frames.push(Some(Rc::clone(&state_rc)));",
     "crates/js/src/runtime/frames/runtime_impl.rs:91": ".and_then(|slot| slot.as_ref().map(Rc::clone));",
-    "crates/js/src/runtime/frames/state.rs:259": ".and_then(|slot| slot.as_ref().map(Rc::clone))"
+    "crates/js/src/runtime/frames/state.rs:259": ".and_then(|slot| slot.as_ref().map(Rc::clone))",
+    "crates/js/src/runtime/tla/loader.rs:31": "self: Rc<Self>,",
+    "crates/js/src/runtime/tla/loader.rs:138": "self: Rc<Self>,"
   },
   "edges": {
     "core": [],
