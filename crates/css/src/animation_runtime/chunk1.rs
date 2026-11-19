@@ -67,6 +67,36 @@ pub(crate) fn steps(count: u32, position: StepPosition, x: f32) -> f32 {
     (value / divisor).clamp(0.0, 1.0)
 }
 
+/// Value to fill with at the start (`before = false`) or end of the animation (#1752).
+///
+/// CSS Animations 1 §4.2/§4.4: fill uses the *first* keyframe when the relevant iteration is
+/// reversed and the *last* keyframe otherwise. `alternate` reverses odd iterations, while
+/// `alternate-reverse` reverses even ones.
+fn fill_progress(spec: &AnimationSpec, iterations: f32, before: bool) -> f32 {
+    let reverse = if before {
+        matches!(
+            spec.direction,
+            AnimationDirection::Reverse | AnimationDirection::AlternateReverse
+        )
+    } else {
+        let last_iteration = if iterations.is_finite() && iterations > 0.0 {
+            (iterations.ceil() as u64).saturating_sub(1)
+        } else {
+            0
+        };
+        match spec.direction {
+            AnimationDirection::Reverse => true,
+            AnimationDirection::Alternate => last_iteration % 2 == 1,
+            AnimationDirection::AlternateReverse => last_iteration % 2 == 0,
+            AnimationDirection::Normal => false,
+        }
+    };
+    match (before, reverse) {
+        (true, true) | (false, false) => 1.0,
+        (true, false) | (false, true) => 0.0,
+    }
+}
+
 /// Local progress (`0..=1`) of `spec` at `time_ms`, honoring delay, iterations, direction
 /// and fill mode; `None` when the animation does not affect the element at that time.
 pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
@@ -75,24 +105,24 @@ pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
     }
     let fill_before = matches!(spec.fill_mode, FillMode::Backwards | FillMode::Both);
     let fill_after = matches!(spec.fill_mode, FillMode::Forwards | FillMode::Both);
-    if spec.duration_ms <= 0.0 {
-        // Zero-duration animations apply their end state from the delay onward.
-        return (time_ms >= spec.delay_ms).then_some(1.0);
-    }
-    let local = time_ms - spec.delay_ms;
-    if local < 0.0 {
-        return fill_before.then_some(0.0);
-    }
     let iterations = match spec.iteration_count {
         IterationCount::Number(count) => count.max(0.0),
         IterationCount::Infinite => f32::INFINITY,
     };
+    if spec.duration_ms <= 0.0 {
+        // Zero-duration animations apply their end state from the delay onward.
+        return (time_ms >= spec.delay_ms).then(|| fill_progress(spec, iterations, false));
+    }
+    let local = time_ms - spec.delay_ms;
+    if local < 0.0 {
+        return fill_before.then(|| fill_progress(spec, iterations, true));
+    }
     if iterations == 0.0 {
-        return fill_after.then_some(1.0);
+        return fill_after.then(|| fill_progress(spec, iterations, false));
     }
     let total = iterations * spec.duration_ms;
     if total.is_finite() && local >= total {
-        return fill_after.then_some(1.0);
+        return fill_after.then(|| fill_progress(spec, iterations, false));
     }
     let iteration = (local / spec.duration_ms).floor();
     let mut fraction = (local - iteration * spec.duration_ms) / spec.duration_ms;
@@ -165,7 +195,11 @@ pub(crate) fn apply_keyframes(
             .map(|declaration| (declaration.name.clone(), declaration.raw_value.clone()))
             .collect();
         values.sort_by(|a, b| a.0.cmp(&b.0));
+        // #1753: later declarations win (CSS Cascade 4 §6.1). `dedup_by` keeps the first,
+        // so reverse before deduplicating and restore the sorted order afterwards.
+        values.reverse();
         values.dedup_by(|a, b| a.0 == b.0);
+        values.reverse();
         for offset in offsets {
             frames.push(EvaluatedKeyframe {
                 offset: offset.clamp(0.0, 1.0),

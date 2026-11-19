@@ -245,6 +245,35 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn fill_mode_respects_animation_direction() {
+        // #1752: fill uses the first/last keyframe according to direction.
+        let mut reverse = animation("fade", 1000.0);
+        reverse.direction = AnimationDirection::Reverse;
+        reverse.delay_ms = 500.0;
+        reverse.fill_mode = FillMode::Backwards;
+        assert_eq!(animation_progress(&reverse, 250.0), Some(1.0));
+        reverse.fill_mode = FillMode::Forwards;
+        assert_eq!(animation_progress(&reverse, 2000.0), Some(0.0));
+
+        let mut alternate = animation("fade", 1000.0);
+        alternate.direction = AnimationDirection::Alternate;
+        alternate.iteration_count = IterationCount::Number(2.0);
+        alternate.fill_mode = FillMode::Forwards;
+        assert_eq!(animation_progress(&alternate, 2500.0), Some(0.0));
+    }
+
+    #[test]
+    fn duplicate_keyframe_declarations_use_the_last_value() {
+        // #1753: last declaration in document order wins (CSS Cascade 4 §6.1).
+        let rules =
+            keyframes("@keyframes fade { from { opacity: 0; opacity: 1 } to { opacity: 1 } }");
+        let base = ComputedStyle::initial();
+        let spec = animation("fade", 1000.0);
+        let style = apply_animations(&base, std::slice::from_ref(&spec), &rules, 0.0);
+        assert!((style.opacity - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn keyframes_interpolate_opacity_color_and_lengths() {
         let rules = keyframes(
             "@keyframes fade { from { opacity: 0; color: rgb(0, 0, 0); width: 100px } \
