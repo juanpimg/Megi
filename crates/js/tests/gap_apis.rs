@@ -531,3 +531,19 @@ fn synchronous_xhr_does_not_throw() {
     )
     .expect("synchronous XHR must complete without throwing (#1904)");
 }
+
+/// WHATWG DOM: `document` is a Node, so observer.observe(document) must work
+/// (#1905). Real sites (Clarín) pass the document root to MutationObserver.
+#[test]
+fn document_is_a_valid_node_argument() {
+    let mut rt = runtime();
+    rt.eval(
+        "var o = new MutationObserver(function(){}); o.observe(document, {childList:true, subtree:true}); 'ok'",
+        "t",
+    )
+    .expect("MutationObserver.observe(document) must accept the document (#1905)");
+    assert_eq!(
+        rt.eval("typeof document.__megi_node", "t").unwrap(),
+        "number"
+    );
+}

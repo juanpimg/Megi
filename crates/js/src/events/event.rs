@@ -4,10 +4,14 @@ pub(crate) fn target_key(this: &JsValue, context: &mut Context) -> JsResult<Targ
     let object = this
         .as_object()
         .ok_or_else(|| js_error("receiver is not an event target"))?;
-    if let Ok(handle) = prop(&object, "__megi_node", context)
-        && let Some(handle) = handle.as_number()
+    // `document` carries both markers (it is a Node); its dedicated target key
+    // must win so inline handlers registered on it stay discoverable (#1905).
+    if prop(&object, "__megi_document", context)
+        .ok()
+        .and_then(|value| value.as_boolean())
+        == Some(true)
     {
-        return Ok(TargetKey::Node(handle as u32));
+        return Ok(TargetKey::Document);
     }
     if prop(&object, "__megi_window", context)
         .ok()
@@ -16,12 +20,10 @@ pub(crate) fn target_key(this: &JsValue, context: &mut Context) -> JsResult<Targ
     {
         return Ok(TargetKey::Window);
     }
-    if prop(&object, "__megi_document", context)
-        .ok()
-        .and_then(|value| value.as_boolean())
-        == Some(true)
+    if let Ok(handle) = prop(&object, "__megi_node", context)
+        && let Some(handle) = handle.as_number()
     {
-        return Ok(TargetKey::Document);
+        return Ok(TargetKey::Node(handle as u32));
     }
     Err(js_error("receiver is not an event target"))
 }
