@@ -89,15 +89,27 @@ fn worker_error_does_not_leak_local_paths() {
 
 #[test]
 fn only_one_xmlhttprequest_definition_is_installed() {
-    // #1624: the PRELUDE used to define XMLHttpRequest and xhr.rs overwrote it — two installs
-    // per realm with a divergence risk. Only xhr.rs must define it now.
-    let source = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/runtime.rs"),
-    )
-    .expect("runtime.rs source");
-    assert!(
-        !source.contains("define(\"XMLHttpRequest\""),
-        "runtime PRELUDE must not define XMLHttpRequest (xhr.rs owns it)"
+    // #1770: assert on the runtime, not on the source text. xhr.rs installs the
+    // constructor with the full standard surface; a second PRELUDE install used to
+    // overwrite it with a divergent, incomplete shim (#1624).
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var x = new XMLHttpRequest(); \
+             String([ \
+               typeof XMLHttpRequest, \
+               x instanceof XMLHttpRequest, \
+               typeof x.open, typeof x.send, typeof x.abort, \
+               typeof x.setRequestHeader, typeof x.getAllResponseHeaders, \
+               typeof x.upload, typeof x.responseType, \
+               x.readyState, x.constructor === XMLHttpRequest \
+             ].join(','));",
+            "t",
+        )
+        .expect("XMLHttpRequest runtime shape");
+    assert_eq!(
+        out, "function,true,function,function,function,function,function,object,string,0,true",
+        "unexpected XMLHttpRequest surface: {out}"
     );
 }
 
