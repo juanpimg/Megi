@@ -200,6 +200,18 @@ fn test_color_function_percentage_channels() {
 }
 
 #[test]
+fn modern_alpha_numbers_are_clamped_not_rejected() {
+    // #1841: CSS Color 4 §7.2 clamps <alpha-value> to [0, 1] at parse time,
+    // for the number form just as for the percentage form.
+    let over = Color::parse("hsl(0 0% 0% / 2)").expect("alpha > 1 clamps to opaque");
+    assert_eq!(over.a, 255);
+    let under = Color::parse("color(srgb 0 0 0 / -1)").expect("alpha < 0 clamps to clear");
+    assert_eq!(under.a, 0);
+    let legacy = Color::parse("rgba(0, 0, 0, 2)").expect("legacy rgba alpha clamps");
+    assert_eq!(legacy.a, 255);
+}
+
+#[test]
 fn test_lab_and_oklab_percentage_lightness() {
     let lab_num = Color::parse("lab(50 0 0)").expect("number L");
     let lab_pct = Color::parse("lab(50% 0 0)").expect("percentage L");

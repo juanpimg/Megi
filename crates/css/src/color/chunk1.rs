@@ -71,14 +71,11 @@ pub(crate) fn number_or_percentage(token: &str) -> Option<(f32, bool)> {
 }
 
 pub(crate) fn parse_alpha(token: &str) -> Option<f32> {
-    let (value, is_pct) = number_or_percentage(token)?;
-    if is_pct {
-        Some(value.clamp(0.0, 1.0))
-    } else if value < 0.0 || value > 1.0 {
-        None
-    } else {
-        Some(value)
-    }
+    let (value, _is_pct) = number_or_percentage(token)?;
+    // #1841: CSS Color 4 §7.2 clamps <alpha-value> to [0, 1] at parsed-value
+    // time for both number and percentage forms. The percentage path divides
+    // by 100 already, so a single clamp covers either form.
+    Some(value.clamp(0.0, 1.0))
 }
 
 pub(crate) fn parse_hue(token: &str) -> Option<f32> {
