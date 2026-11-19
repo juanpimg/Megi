@@ -330,3 +330,17 @@ fn url_resolution_follows_the_whatwg_rules() {
         assert_eq!(actual, expected, "{expression}");
     }
 }
+
+/// Annex B String.prototype.substr must exist for legacy scripts (WHATWG specs,
+/// #1923). Boa's default context should already provide it; this test guards
+/// against a regression where the global is missing.
+#[test]
+fn string_substr_annex_b_exists() {
+    let mut rt = runtime();
+    assert_eq!(
+        rt.eval("typeof 'abcdef'.substr", "t").unwrap(),
+        "function",
+        "String.prototype.substr must exist (#1923)"
+    );
+    assert_eq!(rt.eval("'abcdef'.substr(2,3)", "t").unwrap(), "cde");
+}

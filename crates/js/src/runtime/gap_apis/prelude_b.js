@@ -383,3 +383,23 @@
     }
   })();
 })();
+
+// ECMA-262 Annex B.1.3 String.prototype.substr (legacy, used by WHATWG site scripts).
+// Boa 0.22 does not expose Annex B methods by default; #1923.
+if (typeof String.prototype.substr !== 'function') {
+  Object.defineProperty(String.prototype, 'substr', {
+    configurable: true,
+    writable: true,
+    value: function substr(start, length) {
+      var s = String(this);
+      var size = s.length;
+      var intStart = Math.trunc(Number(start));
+      if (!isFinite(intStart)) intStart = 0;
+      var from = intStart < 0 ? Math.max(size + intStart, 0) : Math.min(intStart, size);
+      if (length === undefined) return s.slice(from);
+      var intLen = Math.trunc(Number(length));
+      if (!isFinite(intLen) || intLen < 0) return '';
+      return s.slice(from, from + intLen);
+    }
+  });
+}
