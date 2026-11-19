@@ -330,8 +330,7 @@ mod current_script_tests {
                 .node(body)
                 .as_element()
                 .unwrap()
-                .get_attribute("data-current")
-                .as_deref(),
+                .get_attribute("data-current"),
             Some("ok")
         );
     }
