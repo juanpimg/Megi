@@ -430,3 +430,35 @@ fn standard_browser_globals_are_exposed() {
     assert_eq!(rt.eval("escape('a b')", "t").unwrap(), "a%20b");
     assert_eq!(rt.eval("unescape('a%20b')", "t").unwrap(), "a b");
 }
+
+/// More feature-detected DOM/web APIs from real-site probes (#1944/#1945/#1947/
+/// #1952/#1965/#1970/#1971).
+#[test]
+fn geometry_cookie_intl_and_fetch_members() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof document.getElementById('x')",
+        "typeof Object.getOwnPropertyDescriptor(Element.prototype, 'offsetTop')?.get",
+        "typeof document.forms",
+        "typeof document.images",
+        "typeof document.scripts",
+        "typeof document.documentURI",
+        "typeof document.compatMode",
+        "typeof document.characterSet",
+        "typeof Object.getOwnPropertyDescriptor(document, 'cookie')?.set",
+        "typeof Intl.Collator",
+        "typeof Response.json",
+        "typeof Headers.prototype[Symbol.iterator]",
+        "typeof AbortSignal.timeout",
+        "typeof URL.canParse",
+        "typeof URLSearchParams.prototype[Symbol.iterator]",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+    rt.eval(
+        "var e = new Event('x', {cancelable:true}); e.preventDefault(); if (!e.defaultPrevented) throw new Error('defaultPrevented');",
+        "t",
+    )
+    .expect("defaultPrevented must reflect preventDefault (#1952)");
+}

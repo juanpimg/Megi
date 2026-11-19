@@ -291,6 +291,22 @@ pub(crate) fn event_prevent_default(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     check_event(this, context)?;
+    // DOM Standard: preventDefault() sets the canceled flag on the event itself,
+    // observable through defaultPrevented even outside a dispatch (#1952).
+    if let Some(object) = this.as_object() {
+        let cancelable = object
+            .get(js_string!("cancelable"), context)
+            .ok()
+            .is_some_and(|v| v.as_boolean().unwrap_or(false));
+        if cancelable {
+            let _ = object.set(
+                js_string!("defaultPrevented"),
+                JsValue::from(true),
+                false,
+                context,
+            );
+        }
+    }
     if let Some(dispatch) = &mut host_cell(context)?.dispatch
         && !dispatch.passive
     {

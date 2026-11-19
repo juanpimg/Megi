@@ -565,3 +565,77 @@ if (typeof IntersectionObserver !== 'function') {
     Element.prototype.getAnimations = function () { return []; };
   }
 })();
+
+// Geometry, document collections, cookie access, Intl, fetch members and event
+// cancellation from real-site probes (#1944/#1945/#1947/#1952/#1965/#1970/#1971).
+(function () {
+  if (typeof Element !== 'undefined' && Element.prototype) {
+    ['offsetTop','offsetLeft','scrollTop','scrollLeft'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(Element.prototype, p) === 'undefined') {
+        Object.defineProperty(Element.prototype, p, { get: function () { return 0; }, set: function () {}, configurable: true });
+      }
+    });
+    ['offsetWidth','offsetHeight','scrollWidth','scrollHeight','clientWidth','clientHeight'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(Element.prototype, p) === 'undefined') {
+        Object.defineProperty(Element.prototype, p, {
+          get: function () { var r = this.getBoundingClientRect ? this.getBoundingClientRect() : { width: 0, height: 0 }; return p.indexOf('Width') >= 0 ? r.width : r.height; },
+          configurable: true
+        });
+      }
+    });
+    if (typeof Element.prototype.getAnimations !== 'function') Element.prototype.getAnimations = function () { return []; };
+  }
+  if (typeof document !== 'undefined') {
+    ['forms','links','images','scripts'].forEach(function (p) {
+      if (typeof Object.getOwnPropertyDescriptor(document, p) === 'undefined') {
+        Object.defineProperty(document, p, { get: function () { return this.querySelectorAll(p === 'links' ? 'a[href]' : p); }, configurable: true });
+      }
+    });
+    if (typeof document.documentURI === 'undefined') Object.defineProperty(document, 'documentURI', { get: function () { return this.URL || location.href; }, configurable: true });
+    if (typeof document.compatMode === 'undefined') Object.defineProperty(document, 'compatMode', { value: 'CSS1Compat', configurable: true });
+    if (typeof document.characterSet === 'undefined') Object.defineProperty(document, 'characterSet', { value: 'utf-8', configurable: true });
+    if (typeof Object.getOwnPropertyDescriptor(document, 'cookie') === 'undefined') {
+      var cookieJar = {};
+      Object.defineProperty(document, 'cookie', {
+        get: function () { return Object.keys(cookieJar).map(function (k) { return k + '=' + cookieJar[k]; }).join('; '); },
+        set: function (v) { var pair = String(v).split(';')[0].split('='); cookieJar[pair[0]] = pair[1]; },
+        configurable: true
+      });
+    }
+  }
+  if (typeof Intl !== 'undefined') {
+    if (typeof Intl.Collator !== 'function') {
+      Intl.Collator = function () { return { compare: function (a, b) { return String(a).localeCompare(String(b)); } }; };
+    }
+    try {
+      if (typeof Intl.DateTimeFormat.prototype.formatToParts !== 'function') {
+        Intl.DateTimeFormat.prototype.formatToParts = function (d) { return [{ type: 'literal', value: this.format(d) }]; };
+      }
+    } catch (e) {}
+  }
+  if (typeof Response !== 'undefined') {
+    if (typeof Response.json !== 'function') Response.json = function (data, init) { return new Response(JSON.stringify(data), init); };
+  }
+  if (typeof Headers !== 'undefined' && Headers.prototype && typeof Headers.prototype[Symbol.iterator] !== 'function') {
+    Headers.prototype[Symbol.iterator] = function () {
+      var self = this, names = [];
+      try { names = self.keys ? Array.from(self.keys()) : []; } catch (e) {}
+      var i = 0;
+      return { next: function () { return i < names.length ? { value: [names[i], self.get(names[i++])], done: false } : { done: true }; },
+               [Symbol.iterator]: function () { return this; } };
+    };
+  }
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout !== 'function') {
+    AbortSignal.timeout = function () { return typeof AbortController !== 'undefined' ? new AbortController().signal : {}; };
+  }
+  if (typeof URL !== 'undefined' && typeof URL.canParse !== 'function') {
+    URL.canParse = function (u, base) { try { new URL(u, base); return true; } catch (e) { return false; } };
+  }
+  if (typeof URLSearchParams !== 'undefined' && URLSearchParams.prototype && typeof URLSearchParams.prototype[Symbol.iterator] !== 'function') {
+    URLSearchParams.prototype[Symbol.iterator] = function () {
+      var self = this; var entries = [];
+      self.forEach(function (v, k) { entries.push([k, v]); });
+      return entries[Symbol.iterator]();
+    };
+  }
+})();
