@@ -98,3 +98,31 @@ fn oversized_fill_rect_is_clipped_to_the_surface() {
         surface.operations
     );
 }
+
+#[test]
+fn canvas_rejects_utf8_color_and_overflowing_image_data() {
+    // #1772/#1773: hostile script inputs must not panic the render thread.
+    let mut runtime = runtime();
+    let result = runtime
+        .eval(
+            "var c = document.createElement('canvas'); \
+             c.setAttribute('width','4'); c.setAttribute('height','4'); \
+             document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); \
+             ctx.fillStyle = '#éa'; \
+             ctx.fillRect(0, 0, 1, 1); \
+             var bad = ctx.getImageData(1e30, 0, 1, 1); \
+             String(bad === null || bad === undefined);",
+            "hostile_canvas.js",
+        )
+        .expect("canvas script must not panic");
+    assert_eq!(result, "true");
+    let surfaces = runtime.canvas_surfaces();
+    let surface = surfaces.values().next().expect("surface");
+    // An invalid color keeps the previous (opaque black) fill style — no panic, no change.
+    assert_eq!(
+        &surface.pixels[0..4],
+        &[0, 0, 0, 255],
+        "invalid fill is a no-op"
+    );
+}
