@@ -185,7 +185,7 @@ def count_tests(
 
 def run_gate(root: Path, manifest_gate: dict[str, str]) -> dict[str, str]:
     """Runs `test_harness --summary` and parses the 4 suites + PASS/FAIL."""
-    result = run(root, ["cargo", "run", "-q", "-p", "test_harness", "--", "--summary"], timeout=900)
+    result = run(root, ["cargo", "run", "-q", "-p", "megi-test-harness", "--", "--summary"], timeout=900)
     output = result.stdout + result.stderr
     gate = {"status": "FAIL", "verified_commit": ""}
     # If any suite count cannot be parsed from the fresh output, the gate cannot be trusted:

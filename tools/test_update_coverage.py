@@ -396,5 +396,15 @@ class BadgeOwnershipTest(unittest.TestCase):
         self.assertEqual(report.BADGE_PATH.name, "badge-lcov.svg")
 
 
+class ProgressGateCommandTest(unittest.TestCase):
+    def test_gate_uses_the_renamed_harness_package(self) -> None:
+        # The modular rename made the package `megi-test-harness`; the old
+        # `test_harness` name makes update_progress.py --check report FAIL.
+        root = Path(__file__).resolve().parent.parent
+        source = (root / "tools" / "update_progress.py").read_text(encoding="utf-8")
+        self.assertIn('"megi-test-harness"', source)
+        self.assertNotIn('"-p", "test_harness"', source)
+
+
 if __name__ == "__main__":
     unittest.main()
