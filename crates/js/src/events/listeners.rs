@@ -7,11 +7,17 @@ pub(crate) fn add_listener(
 ) -> JsResult<JsValue> {
     let target = target_key(this, context)?;
     let event_type = arg_string(args, 0, context)?;
-    let callback = args
-        .get(1)
-        .cloned()
-        .filter(|value| value.as_object().is_some())
-        .ok_or_else(|| js_error("listener must be a function"))?;
+    // #1948: Web IDL converts null/undefined for the `EventListener?` argument to
+    // null, and DOM §2.7 says a null listener does nothing. Keep throwing for
+    // non-null primitives, which are not valid EventListener values.
+    let listener = args.get(1).cloned().unwrap_or(JsValue::undefined());
+    if listener.is_null_or_undefined() {
+        return Ok(JsValue::undefined());
+    }
+    if listener.as_object().is_none() {
+        return Err(js_error("listener must be a function"));
+    }
+    let callback = listener;
     let mut capture = false;
     let mut once = false;
     let mut passive = false;

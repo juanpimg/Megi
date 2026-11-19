@@ -233,6 +233,28 @@ fn bare_add_event_listener_is_bound_to_window() {
 }
 
 #[test]
+fn null_and_undefined_listeners_are_noops() {
+    // #1948: Web IDL converts null/undefined for `EventListener?` to null; DOM §2.7
+    // says a null listener does nothing. Non-null primitives must still throw.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var el = document.createElement('div'); \
+             var r = []; \
+             function tryAdd(v) { try { el.addEventListener('x', v); r.push('ok'); } catch (e) { r.push(e.name); } } \
+             tryAdd(null); tryAdd(undefined); tryAdd(0); tryAdd('x'); \
+             try { el.removeEventListener('x', null); r.push('ok'); } catch (e) { r.push(e.name); } \
+             r.join(',');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(
+        out, "ok,ok,TypeError,TypeError,ok",
+        "null listener handling: {out}"
+    );
+}
+
+#[test]
 fn prevent_default_sets_default_prevented_on_cancelable_event() {
     // #1952: DOM §2.9 — preventDefault() sets the canceled flag when cancelable,
     // observable via the defaultPrevented attribute.
