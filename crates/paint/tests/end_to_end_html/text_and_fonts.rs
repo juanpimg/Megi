@@ -153,3 +153,25 @@ fn test_bold_text_uses_bold_face_and_has_baseline() {
         assert!(*baseline > 0.0 && *baseline < rect.height);
     }
 }
+
+/// CJK glyphs selected via the system-font fallback must be resolvable by the
+/// rasterizer (#1977): the shaped run carries a FontRefInfo for e.g. Noto Sans
+/// CJK, but the bundled-only database could not rebuild that face and dropped
+/// every glyph, rendering the text blank.
+#[test]
+fn test_cjk_system_fallback_glyphs_are_painted() {
+    let source = "<!doctype html><html><body style=\"margin:0;padding:0;color:#000;font-family:sans-serif;font-size:24px\"><p style=\"margin:0\">日 本 語</p></body></html>";
+    let (pixmap, _) = render(source, 240, 60);
+    let mut inked = 0u32;
+    for y in 0..pixmap.height {
+        for x in 0..pixmap.width {
+            if pixmap.pixel(x, y) != Color::WHITE {
+                inked += 1;
+            }
+        }
+    }
+    assert!(
+        inked > 50,
+        "CJK glyphs must paint real ink via system fallback, got {inked} (#1977)"
+    );
+}

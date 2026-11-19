@@ -165,10 +165,7 @@ impl FontDatabase {
             return Some(found);
         }
         if !self.system_loaded {
-            static SYSTEM_FALLBACK_DB: std::sync::OnceLock<FontDatabase> =
-                std::sync::OnceLock::new();
-            let sys_db = SYSTEM_FALLBACK_DB.get_or_init(FontDatabase::from_system);
-            return sys_db.scan_faces_for_char(ch, chain, weight, style);
+            return system_fallback_db().scan_faces_for_char(ch, chain, weight, style);
         }
         None
     }

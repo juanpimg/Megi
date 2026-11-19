@@ -192,6 +192,14 @@ fn unmark_family(name: &str) -> &str {
     name.strip_prefix(QUOTED_FAMILY_PREFIX).unwrap_or(name)
 }
 
+/// Lazily-loaded system font database used for per-glyph fallback scripts
+/// (CJK, Arabic, emoji). Shared by the fallback scan and by `font_by_ref`, so a
+/// face selected during shaping can be rebuilt during rasterization (#1977).
+pub(crate) fn system_fallback_db() -> &'static FontDatabase {
+    static SYSTEM_FALLBACK_DB: std::sync::OnceLock<FontDatabase> = std::sync::OnceLock::new();
+    SYSTEM_FALLBACK_DB.get_or_init(FontDatabase::from_system)
+}
+
 /// Parses a CSS `font-family` value into a priority list of family names.
 ///
 /// Splits on commas, trims ASCII whitespace and strips single/double quotes
