@@ -216,11 +216,23 @@ pub(crate) fn worker_onmessage_set(
 }
 
 pub(crate) fn worker_onerror_get(
-    _this: &JsValue,
+    this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    Ok(JsValue::null())
+    // #1746: reflect the handler stored by `worker_onerror_set` (WebIDL §3.7.4).
+    let id = worker_handle(this, context)?;
+    let slot = with_context_host(context, |host| {
+        host.workers
+            .get(id as usize)
+            .and_then(|worker| worker.as_ref())
+            .and_then(|worker| worker.onerror)
+    })
+    .flatten();
+    match slot {
+        Some(slot) => root_get(context, "__megi_worker_callbacks", u64::from(slot)),
+        None => Ok(JsValue::null()),
+    }
 }
 
 pub(crate) fn worker_onerror_set(

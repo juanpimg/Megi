@@ -150,3 +150,18 @@ fn worker_reply_handler_exception_is_reported_to_the_page() {
     );
     let _ = runtime.eval("__reported", "t").unwrap();
 }
+
+#[test]
+fn worker_onerror_getter_reflects_assigned_handler() {
+    // #1746: WebIDL §3.7.4 — an attribute must reflect its assigned value.
+    let mut runtime = runtime_with_worker("");
+    let out = runtime
+        .eval(
+            "var w = new Worker('worker.js'); \
+             var f = function () {}; w.onerror = f; \
+             String(w.onerror === f);",
+            "t",
+        )
+        .expect("script");
+    assert_eq!(out, "true");
+}
