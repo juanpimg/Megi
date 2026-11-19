@@ -30,7 +30,7 @@ pub(crate) fn paint_text_shadow(
         return;
     }
     let blur = blur.clamp(0.0, MAX_SHADOW_BLUR);
-    let pad = blur.ceil() as i64 + 2;
+    let pad = shadow_padding(blur);
     let region = Rect::new(
         rect.x + offset_x - pad as f32,
         rect.y + offset_y - pad as f32,

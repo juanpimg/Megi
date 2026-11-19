@@ -168,7 +168,7 @@ impl Pixmap {
         }
         let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR);
         let spread = shadow.spread;
-        let pad = blur.ceil() as i64 + 2;
+        let pad = shadow_padding(blur);
         // Silhouette rectangle in device space.
         let shape = if shadow.inset {
             rect

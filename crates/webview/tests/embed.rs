@@ -15,6 +15,29 @@ fn webview_renders_a_data_url_without_a_window() {
 }
 
 #[test]
+fn webview_failed_back_keeps_the_current_history_entry() {
+    // #1720: back() moved the index before rendering. A render failure left
+    // current_url() pointing at an entry that was never displayed.
+    let path = std::env::temp_dir().join(format!(
+        "megi-webview-history-1720-{}.html",
+        std::process::id()
+    ));
+    std::fs::write(&path, "<h1>one</h1>").expect("write fixture");
+    let first_url = format!("file://{}", path.display());
+    let mut view = WebView::new(WebViewOptions::new(64, 64).expect("options")).expect("viewport");
+    view.load(&first_url).expect("first page");
+    view.load("data:text/html,two").expect("second page");
+    std::fs::remove_file(&path).expect("remove fixture");
+
+    assert!(view.back().is_none(), "back to a missing file must fail");
+    assert_eq!(
+        view.current_url(),
+        Some("data:text/html,two"),
+        "a failed back() must not move the history cursor"
+    );
+}
+
+#[test]
 fn webview_navigation_history_is_platform_independent() {
     let mut view = WebView::new(WebViewOptions::new(64, 64).expect("options")).expect("viewport");
     assert!(!view.can_back());

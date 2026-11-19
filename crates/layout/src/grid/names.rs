@@ -7,10 +7,11 @@ pub(super) fn line_boundary(line: &GridLine, track_count: usize) -> Option<usize
             // Widen to i64 so i32::MIN inputs cannot overflow (issue #689).
             let value = *value as i64;
             if value > 0 {
-                // Clamp to the available tracks + 1 so a huge line number cannot
-                // allocate an oversized boundary.
-                let clamped = value.min(track_count as i64 + 1).max(1);
-                Some((clamped - 1) as usize)
+                // #1706: a line beyond the explicit grid creates implicit tracks
+                // (CSS Grid §8.3). Do not clamp it to the explicit count; the
+                // global MAX_EXPANDED_TRACKS budget is applied later in
+                // placement_request() when the occupancy grid is sized.
+                usize::try_from(value - 1).ok()
             } else {
                 let index = track_count as i64 + 1 + value;
                 (index >= 0).then_some(index.min(track_count as i64 + 1) as usize)
@@ -149,18 +150,22 @@ pub(super) fn placement_request(
         row_span: span_from(&style.grid_row_start, &style.grid_row_end),
         column_span: span_from(&style.grid_column_start, &style.grid_column_end),
     };
-    // `grid-area: <name>`: place the item over the named rectangle unless an explicit
-    // line on an axis overrides it.
-    if request.row_start.is_none()
-        && request.column_start.is_none()
-        && let Some(name) = style.grid_area.as_ref()
-        && let Some((row_start, row_end)) = names.row_areas.get(name)
-        && let Some((column_start, column_end)) = names.column_areas.get(name)
-    {
-        request.row_start = Some(*row_start);
-        request.row_span = row_end.saturating_sub(*row_start).max(1);
-        request.column_start = Some(*column_start);
-        request.column_span = column_end.saturating_sub(*column_start).max(1);
+    // `grid-area: <name>` is a shorthand for the four placement longhands
+    // (CSS Grid §8.3). Apply it per axis: an explicit line on one axis overrides
+    // only that axis, not the rectangle as a whole (#1709).
+    if let Some(name) = style.grid_area.as_ref() {
+        if request.row_start.is_none()
+            && let Some((row_start, row_end)) = names.row_areas.get(name)
+        {
+            request.row_start = Some(*row_start);
+            request.row_span = row_end.saturating_sub(*row_start).max(1);
+        }
+        if request.column_start.is_none()
+            && let Some((column_start, column_end)) = names.column_areas.get(name)
+        {
+            request.column_start = Some(*column_start);
+            request.column_span = column_end.saturating_sub(*column_start).max(1);
+        }
     }
     // Clamp line indices and spans: they come from CSS integers (u32) and feed the
     // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
