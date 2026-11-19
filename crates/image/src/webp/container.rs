@@ -110,6 +110,36 @@ pub(crate) fn parse_vp8x_header(bytes: &[u8]) -> Result<Option<Vp8xHeader>, Imag
     }))
 }
 
+/// Rebuilds an ALPH plane in place from vertical (2) or gradient (3) residuals.
+///
+/// WebP Container Spec: predictors use *already reconstructed* samples. Row 0 uses horizontal
+/// filtering for both methods, and the gradient predictor is `clip(A + B - C)` (not Paeth).
+fn unfilter_alpha_plane(alpha: &mut [u8], width: usize, height: usize, filtering: u8) {
+    for row in 0..height {
+        for col in 0..width {
+            let index = row * width + col;
+            let predictor = if row == 0 {
+                // HorizontalUnfilter_C: only the left neighbour is available.
+                if col == 0 { 0 } else { alpha[index - 1] }
+            } else if filtering == 2 {
+                // VerticalUnfilter_C: the row above, already reconstructed.
+                alpha[index - width]
+            } else {
+                // GradientPredictor_C: clip(A + B - C).
+                let a = if col == 0 { 0 } else { alpha[index - 1] };
+                let b = alpha[index - width];
+                let c = if col == 0 {
+                    0
+                } else {
+                    alpha[index - width - 1]
+                };
+                (i32::from(a) + i32::from(b) - i32::from(c)).clamp(0, 255) as u8
+            };
+            alpha[index] = alpha[index].wrapping_add(predictor);
+        }
+    }
+}
+
 /// Applies an uncompressed `ALPH` alpha plane to a decoded lossy image.
 pub(crate) fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result<(), ImageError> {
     let (&header, data) = payload.split_first().ok_or(ImageError::Truncated {
@@ -153,46 +183,7 @@ pub(crate) fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result
                     context: "WebP ALPH data",
                 });
             }
-            // Read predictors from the original (still-filtered) plane, write reconstruction
-            // into a separate buffer, then swap — avoids aliasing while iterating.
-            let source = alpha.clone();
-            let at = |row: usize, col: usize| -> u8 {
-                if row < height && col < width {
-                    source[row * width + col]
-                } else {
-                    0
-                }
-            };
-            let mut rebuilt = vec![0u8; width * height];
-            for row in 0..height {
-                for col in 0..width {
-                    let index = row * width + col;
-                    let predictor = if filtering == 2 {
-                        // Vertical: predict from the sample above.
-                        at(row.saturating_sub(1), col)
-                    } else {
-                        // Gradient: (left + above - upper-left), clamped by choosing the
-                        // neighbour closest to the linear prediction (spec §"Gradient filter").
-                        let left = at(row, col.saturating_sub(1));
-                        let above = at(row.saturating_sub(1), col);
-                        let upper_left = at(row.saturating_sub(1), col.saturating_sub(1));
-                        let base = (i32::from(left) + i32::from(above) - i32::from(upper_left))
-                            .clamp(0, 255) as u8;
-                        let dl = (i32::from(base) - i32::from(left)).abs();
-                        let da = (i32::from(base) - i32::from(above)).abs();
-                        let dul = (i32::from(base) - i32::from(upper_left)).abs();
-                        if dl <= da && dl <= dul {
-                            left
-                        } else if da <= dul {
-                            above
-                        } else {
-                            upper_left
-                        }
-                    };
-                    rebuilt[index] = source[index].wrapping_add(predictor);
-                }
-            }
-            alpha = rebuilt;
+            unfilter_alpha_plane(&mut alpha, width, height, filtering);
         }
         _ => {
             return Err(ImageError::UnsupportedFeature {
@@ -283,4 +274,26 @@ pub(crate) fn check_animated_frame_budget(
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unfilter_alpha_plane;
+
+    #[test]
+    fn alpha_vertical_filter_uses_reconstructed_neighbours() {
+        // #1765: true alpha [[10,20],[30,40]] encoded with vertical filtering yields
+        // residuals [10,10,20,20] (row 0 horizontal, row 1 relative to row 0).
+        let mut alpha = [10u8, 10, 20, 20];
+        unfilter_alpha_plane(&mut alpha, 2, 2, 2);
+        assert_eq!(alpha, [10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn alpha_gradient_filter_uses_clip_a_plus_b_minus_c() {
+        // Row 0 is horizontal; row 1 uses A + B - C from reconstructed samples.
+        let mut alpha = [5u8, 5, 5, 0];
+        unfilter_alpha_plane(&mut alpha, 2, 2, 3);
+        assert_eq!(alpha, [5, 10, 10, 15]);
+    }
 }
