@@ -16,6 +16,8 @@
 
 use crate::error::RenderError;
 
+mod charset_gbk;
+
 /// Maximum number of leading bytes scanned for a `<meta charset>` declaration.
 const META_PRESCAN_BYTES: usize = 1024;
 
@@ -50,6 +52,7 @@ pub fn decode_html(bytes: &[u8], content_type: &str) -> Result<DecodedHtml, Rend
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
         "iso-8859-15" => decode_iso_8859_15(bytes),
+        "gbk" => decode_gbk(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedHtml {
@@ -59,7 +62,7 @@ pub fn decode_html(bytes: &[u8], content_type: &str) -> Result<DecodedHtml, Rend
 }
 
 /// Normalizes an encoding label into `utf-8` or `windows-1252`.
-fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
+pub(crate) fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
     let label = label
         .trim()
         .trim_matches('"')
@@ -70,6 +73,7 @@ fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
         "us-ascii" | "ascii" | "iso-8859-1" | "iso8859-1" | "latin1" | "latin-1"
         | "windows-1252" | "cp1252" | "x-cp1252" => Ok("windows-1252".to_owned()),
         "iso-8859-15" | "iso8859-15" | "latin-9" | "latin9" | "l9" => Ok("iso-8859-15".to_owned()),
+        "gbk" | "gb2312" | "gb18030" | "x-gbk" => Ok("gbk".to_owned()),
         other => Err(RenderError::UnsupportedCharset(other.to_owned())),
     }
 }
@@ -138,6 +142,7 @@ pub fn decode_stylesheet(
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
         "iso-8859-15" => decode_iso_8859_15(bytes),
+        "gbk" => decode_gbk(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedStylesheet {
@@ -287,7 +292,7 @@ const WINDOWS_1252_C1: [u16; 32] = [
 ];
 
 /// Decodes single-byte Windows-1252 (a superset of ISO-8859-1 in practice).
-fn decode_windows_1252(bytes: &[u8]) -> String {
+pub(crate) fn decode_windows_1252(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
     for &byte in bytes {
         let code_point = if (0x80..=0x9F).contains(&byte) {
@@ -296,6 +301,36 @@ fn decode_windows_1252(bytes: &[u8]) -> String {
             u32::from(byte)
         };
         out.push(char::from_u32(code_point).unwrap_or('\u{FFFD}'));
+    }
+    out
+}
+
+/// Decodes GB2312 (the common subset of GBK) using the embedded level-1 table.
+/// Bytes outside the table map to U+FFFD rather than aborting the render (#1910).
+pub fn decode_gbk(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < 0x80 {
+            out.push(char::from(b));
+            i += 1;
+            continue;
+        }
+        if (0xB0..=0xD7).contains(&b) && i + 1 < bytes.len() {
+            let trail = bytes[i + 1];
+            if (0xA1..=0xFE).contains(&trail) {
+                let row = charset_gbk::GB2312_LEVEL1[(b - 0xB0) as usize];
+                let glyph = row.chars().nth((trail - 0xA1) as usize);
+                if let Some(ch) = glyph.filter(|c| *c != '\u{FFFD}') {
+                    out.push(ch);
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        out.push('\u{FFFD}');
+        i += 1;
     }
     out
 }
@@ -377,8 +412,8 @@ mod unit_tests {
     #[test]
     fn unsupported_encoding_is_a_typed_error() {
         assert!(matches!(
-            decode_html(b"<html></html>", "text/html; charset=gbk"),
-            Err(RenderError::UnsupportedCharset(label)) if label == "gbk"
+            decode_html(b"<html></html>", "text/html; charset=shift_jis"),
+            Err(RenderError::UnsupportedCharset(label)) if label == "shift_jis"
         ));
         assert!(matches!(
             decode_html(b"\xFF\xFE<\x00", "text/html"),
@@ -406,6 +441,19 @@ mod unit_tests {
             "z caron: {}",
             decoded.text
         );
+    }
+
+    #[test]
+    fn gbk_alias_decodes_chinese_bytes() {
+        // GB2312 bytes for 中文 (D6 D0 CE C4)
+        let decoded = decode_html(
+            b"<html>\xD6\xD0\xCE\xC4</html>",
+            "text/html; charset=gb2312",
+        )
+        .expect("gb2312 must decode (#1910)");
+        assert_eq!(decoded.charset, "gbk");
+        assert!(decoded.text.contains('\u{4e2d}'), "{}", decoded.text);
+        assert!(decoded.text.contains('\u{6587}'), "{}", decoded.text);
     }
 
     #[test]
@@ -459,8 +507,8 @@ mod stylesheet_charset_tests {
     #[test]
     fn unsupported_encoding_is_a_typed_error() {
         assert!(matches!(
-            decode_stylesheet(b"@charset \"gbk\";", "text/css"),
-            Err(RenderError::UnsupportedCharset(label)) if label == "gbk"
+            decode_stylesheet(b"@charset \"shift_jis\";", "text/css"),
+            Err(RenderError::UnsupportedCharset(label)) if label == "shift_jis"
         ));
         assert!(matches!(
             decode_stylesheet(b"\xFF\xFE\x00", "text/css"),

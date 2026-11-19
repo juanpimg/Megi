@@ -135,6 +135,8 @@ pub struct ScriptCandidate {
     pub nonce: Option<String>,
     /// `crossorigin` attribute; classic scripts without it fetch in `no-cors` mode (#1537).
     pub crossorigin: bool,
+    /// `charset` attribute of an external script, used to decode legacy bytes (#1910).
+    pub charset: Option<String>,
 }
 
 /// A script ready to be evaluated.

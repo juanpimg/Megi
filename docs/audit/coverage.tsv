@@ -1013,7 +1013,7 @@ crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/backgrounds/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/browser_host.rs	303	src	F2	fix-1980	2026-11-19	covered	#1980	re-read after CSSOM effect properties
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/charset.rs	493	src	F2	fix-1917	2026-11-19	covered	#1917	re-read after iso-8859-15 support
+crates/render/src/charset.rs	541	src	F2	fix-1910	2026-11-19	covered	#1910	re-read after GBK decoder
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/frames.rs	346	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images.rs	43	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1037,7 +1037,7 @@ crates/render/src/pipeline/styles.rs	270	src	F2	wave-max-mod	2026-11-19	covered	
 crates/render/src/pipeline/svg.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/url.rs	325	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts.rs	108	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/classic.rs	290	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/classic.rs	306	src	F2	fix-1910	2026-11-19	covered	#1910	re-read after GBK decoder
 crates/render/src/scripts/event_loop.rs	209	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/execution.rs	240	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/lifecycle.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1045,7 +1045,7 @@ crates/render/src/scripts/modules.rs	233	src	F2	wave-max-mod	2026-11-19	covered	
 crates/render/src/scripts/network.rs	229	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/providers.rs	284	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/tests.rs	337	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/types.rs	404	src	F2	fix-caps	2026-11-19	covered	#1901,#1889,#1913	re-read after cap increase
+crates/render/src/scripts/types.rs	406	src	F2	fix-1910	2026-11-19	covered	#1910	re-read after GBK decoder
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	169	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/webfonts.rs	278	src	F2	fix-caps	2026-11-19	covered	#1901,#1889,#1913	re-read after cap increase
@@ -1102,14 +1102,14 @@ crates/render/tests/pipeline_tests/http.rs	109	test	F1	wave-max-mod	2026-11-19	c
 crates/render/tests/pipeline_tests/limits.rs	102	test	F1	fix-caps	2026-11-19	covered	#1901,#1889,#1913	re-read after cap increase
 crates/render/tests/pipeline_tests/main.rs	11	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/output.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/pipeline_tests/urls.rs	74	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/pipeline_tests/urls.rs	75	test	F1	fix-1910	2026-11-19	covered	#1910	re-read after GBK decoder
 crates/render/tests/pseudo_elements_tests.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/referrer_policy_tests.rs	355	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/render_cache.rs	48	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/responsive_images_tests.rs	233	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/scripting_tests/common.rs	136	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/scripting_tests/fixtures.rs	186	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/scripting_tests/http.rs	242	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/scripting_tests/http.rs	279	test	F1	fix-1910	2026-11-19	covered	#1910	re-read after GBK decoder
 crates/render/tests/scripting_tests/main.rs	14	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/server_push_tests.rs	243	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/sri_tests.rs	355	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

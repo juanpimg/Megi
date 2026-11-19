@@ -99,6 +99,7 @@ pub fn discover_scripts(
             integrity: data.get_attribute("integrity").map(str::to_owned),
             nonce: data.get_attribute("nonce").map(str::to_owned),
             crossorigin: data.has_attribute("crossorigin"),
+            charset: data.get_attribute("charset").map(str::to_owned),
         });
     }
     candidates
@@ -226,14 +227,29 @@ pub fn load_scripts_with_csp(
             if candidate.is_module {
                 module_url = Some(url.as_str().to_owned());
             }
-            text = match String::from_utf8(resource.bytes.clone()) {
-                Ok(text) => text,
-                Err(error) => {
-                    warnings.push(format!(
-                        "script {url} is not valid UTF-8; decoding lossily ({error})"
-                    ));
-                    String::from_utf8_lossy(&resource.bytes).into_owned()
-                }
+            // WHATWG HTML §4.12.1: an explicit `charset` on the <script> wins
+            // over the resource's Content-Type charset (#1910).
+            let declared = candidate
+                .charset
+                .as_deref()
+                .map(str::to_owned)
+                .or_else(|| crate::charset::charset_from_content_type(&resource.content_type));
+            text = match declared
+                .as_deref()
+                .and_then(|label| crate::charset::normalize_charset_label(label).ok())
+                .as_deref()
+            {
+                Some("gbk") => crate::charset::decode_gbk(&resource.bytes),
+                Some("windows-1252") => crate::charset::decode_windows_1252(&resource.bytes),
+                _ => match String::from_utf8(resource.bytes.clone()) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        warnings.push(format!(
+                            "script {url} is not valid UTF-8; decoding lossily ({error})"
+                        ));
+                        String::from_utf8_lossy(&resource.bytes).into_owned()
+                    }
+                },
             };
         } else {
             let Some(inline) = &candidate.inline_text else {
