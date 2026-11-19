@@ -377,7 +377,7 @@
   Response.prototype.arrayBuffer = function () {
     var body = this._consume();
     if (body === null) { return Promise.reject(new TypeError("body already used")); }
-    return Promise.resolve(new Uint8Array(this._bytes.slice()));
+    return Promise.resolve(new Uint8Array(this._bytes.slice()).buffer);
   };
   Response.prototype.clone = function () {
     return new Response({ status: this.status, statusText: this.statusText, url: this.url, redirected: this.redirected, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
