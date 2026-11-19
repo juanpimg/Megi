@@ -85,6 +85,18 @@ impl FontDatabase {
         self.build_font(id)
     }
 
+    /// Resolves a shaped run's font reference, consulting the system fallback database when
+    /// the face came from per-glyph fallback (#1977). Otherwise the rasterizer cannot rebuild
+    /// the face and silently drops those glyphs.
+    pub fn font_by_ref_or_system(&self, info: &FontRefInfo) -> Result<Font, FontError> {
+        if let Ok(font) = self.font_by_ref(info) {
+            return Ok(font);
+        }
+        static SYSTEM_DB: std::sync::OnceLock<FontDatabase> = std::sync::OnceLock::new();
+        let system = SYSTEM_DB.get_or_init(FontDatabase::from_system);
+        system.font_by_ref(info)
+    }
+
     /// Metrics of the resolved face at `size_px`.
     pub fn metrics(
         &self,
