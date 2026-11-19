@@ -1,5 +1,15 @@
 use super::*;
 
+/// Rejects a JS-supplied `ImageData.data.length` that is not a bounded integer count (#1774).
+/// `1e30` cast to `u32` saturates and would drive billions of native loop iterations.
+fn bounded_data_len(raw: f64, expected: usize) -> Option<usize> {
+    if !raw.is_finite() || raw < 0.0 || raw.fract() != 0.0 || raw > expected as f64 {
+        None
+    } else {
+        Some(raw as usize)
+    }
+}
+
 /// Resolves a canvas 2D context receiver to its `<canvas>` node id.
 pub(crate) fn canvas_context_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
     let object = this
@@ -266,29 +276,48 @@ pub(crate) fn canvas_put_image_data(
         .get(js_string!("data"), context)
         .ok()
         .and_then(|v| v.as_object());
-    let bytes: Vec<u8> = data_obj
+    let expected = (w as usize).saturating_mul(h as usize).saturating_mul(4);
+    let len = data_obj
         .as_ref()
         .and_then(|obj| {
             obj.get(js_string!("length"), context)
                 .ok()
                 .and_then(|v| v.as_number())
         })
-        .map(|len| {
-            let obj = data_obj.as_ref().expect("obj");
-            (0..len as u32)
-                .filter_map(|i| {
-                    obj.get(js_string!(i.to_string()), context)
-                        .ok()
-                        .and_then(|v| v.as_number())
-                })
-                .map(|n| n.clamp(0.0, 255.0) as u8)
-                .collect()
+        .and_then(|raw| bounded_data_len(raw, expected));
+    let Some(len) = len else {
+        return Ok(JsValue::undefined());
+    };
+    let obj = data_obj.as_ref().expect("obj");
+    let bytes: Vec<u8> = (0..len)
+        .filter_map(|i| {
+            obj.get(js_string!(i.to_string()), context)
+                .ok()
+                .and_then(|v| v.as_number())
         })
-        .unwrap_or_default();
+        .map(|n| n.clamp(0.0, 255.0) as u8)
+        .collect();
     with_context_host(context, |host| {
         host.canvas_store.with_surface_mut(node, |s| {
+            s.operations = s.operations.saturating_add(len as u64);
             let _ = s.put_image_data(dx, dy, w, h, &bytes);
         })
     });
     Ok(JsValue::undefined())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bounded_data_len;
+
+    #[test]
+    fn put_image_data_length_is_bounded_by_the_surface() {
+        // #1774: a JS-supplied `length` of 1e30 must not drive billions of native iterations.
+        assert_eq!(bounded_data_len(1e30, 16), None);
+        assert_eq!(bounded_data_len(f64::NAN, 16), None);
+        assert_eq!(bounded_data_len(-1.0, 16), None);
+        assert_eq!(bounded_data_len(1.5, 16), None);
+        assert_eq!(bounded_data_len(17.0, 16), None);
+        assert_eq!(bounded_data_len(16.0, 16), Some(16));
+    }
 }

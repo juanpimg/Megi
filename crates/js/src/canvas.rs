@@ -21,12 +21,30 @@ pub struct Rgba {
     pub a: u8,
 }
 
+/// Bounds check for a canvas rectangle with JS-sourced coordinates (#1773).
+/// `checked_add` prevents the `i64::MAX + 1` overflow that previously wrapped past the guard.
+fn rect_fits(width: u32, height: u32, x: i64, y: i64, w: u32, h: u32) -> bool {
+    w != 0
+        && h != 0
+        && x >= 0
+        && y >= 0
+        && x.checked_add(w as i64)
+            .is_some_and(|end| end <= width as i64)
+        && y.checked_add(h as i64)
+            .is_some_and(|end| end <= height as i64)
+}
+
 impl Rgba {
     /// Parses a CSS color string: `#rgb`, `#rrggbb`, `rgb(r,g,b)`, `rgba(r,g,b,a)`, or a small
     /// set of named colors. Returns `None` for anything else (callers keep the previous style).
     pub fn parse(value: &str) -> Option<Self> {
         let value = value.trim();
         if let Some(hex) = value.strip_prefix('#') {
+            // #1772: byte indexing of a non-ASCII hex string can split a UTF-8 code point
+            // and panic. Keep the byte-based fast path but require 7-bit ASCII hex digits.
+            if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return None;
+            }
             return match hex.len() {
                 3 => {
                     let r = u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?;
@@ -270,13 +288,9 @@ impl CanvasSurface {
 
     /// Returns a copy of a rectangular region as RGBA bytes (CSS `getImageData`).
     pub fn get_image_data(&self, x: i64, y: i64, w: u32, h: u32) -> Option<Vec<u8>> {
-        if w == 0
-            || h == 0
-            || x < 0
-            || y < 0
-            || x + w as i64 > self.width as i64
-            || y + h as i64 > self.height as i64
-        {
+        // #1773: JS number → i64 saturates at i64::MAX; a plain `x + w` overflows in debug
+        // and wraps in release, defeating the bounds check. Checked addition rejects both.
+        if !rect_fits(self.width, self.height, x, y, w, h) {
             return None;
         }
         let mut out = Vec::with_capacity((w as usize) * (h as usize) * 4);
@@ -289,13 +303,8 @@ impl CanvasSurface {
 
     /// Overwrites a rectangular region from RGBA bytes (CSS `putImageData`), source-over.
     pub fn put_image_data(&mut self, x: i64, y: i64, w: u32, h: u32, data: &[u8]) -> bool {
-        if w == 0
-            || h == 0
-            || x < 0
-            || y < 0
-            || x + w as i64 > self.width as i64
-            || y + h as i64 > self.height as i64
-            || data.len() < (w as usize) * (h as usize) * 4
+        if !rect_fits(self.width, self.height, x, y, w, h)
+            || data.len() < (w as usize).saturating_mul(h as usize).saturating_mul(4)
         {
             return false;
         }
@@ -409,6 +418,21 @@ mod tests {
             })
         );
         assert_eq!(Rgba::parse("not-a-color"), None);
+        // #1772: byte indexing must not split a multi-byte UTF-8 character.
+        assert_eq!(Rgba::parse("#éa"), None);
+        assert_eq!(Rgba::parse("#fffé"), None);
+    }
+
+    #[test]
+    fn image_data_rejects_overflowing_coordinates() {
+        // #1773: saturating i64 conversions from JS must not wrap past the guard.
+        let surface = CanvasSurface::new(2, 2).expect("surface");
+        assert_eq!(surface.get_image_data(i64::MAX, 0, 1, 1), None);
+        assert_eq!(surface.get_image_data(0, i64::MAX, 1, 1), None);
+        assert_eq!(surface.get_image_data(1, 1, u32::MAX, 1), None);
+        let mut surface = CanvasSurface::new(2, 2).expect("surface");
+        assert!(!surface.put_image_data(i64::MAX, 0, 1, 1, &[0; 4]));
+        assert!(!surface.put_image_data(0, 0, u32::MAX, u32::MAX, &[0; 4]));
     }
 
     #[test]
