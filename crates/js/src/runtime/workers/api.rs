@@ -155,10 +155,12 @@ pub(crate) fn worker_terminate(
 ) -> JsResult<JsValue> {
     let id = worker_handle(this, context)?;
     with_context_host(context, |host| {
-        // Free the slot so a new worker can reuse it (#1138). Never index directly:
-        // a forged/mismatched handle must be a no-op, not a panic (#1465).
-        if let Some(slot) = host.workers.get_mut(id as usize) {
-            *slot = None;
+        // #1742: keep the slot occupied after termination. `Worker.__megi_worker` is an
+        // immutable id on the JS object, so recycling the slot would give a new Worker the
+        // old object's id and cross-deliver messages. The `terminated` flag disables it.
+        // Never index directly: a forged/mismatched handle must be a no-op, not a panic.
+        if let Some(worker) = host.workers.get_mut(id as usize).and_then(Option::as_mut) {
+            worker.terminated = true;
         }
     });
     Ok(JsValue::undefined())

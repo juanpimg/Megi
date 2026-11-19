@@ -189,3 +189,22 @@ fn worker_remove_event_listener_stops_delivery() {
     runtime.run_worker_tasks(16).expect("tasks");
     assert_eq!(runtime.eval("__n", "t").unwrap(), "1");
 }
+
+#[test]
+fn terminated_worker_id_is_not_reused_by_a_new_worker() {
+    // #1742: a terminated Worker keeps its id so the old JS object cannot address a new one.
+    let mut runtime = runtime_with_worker("onmessage = function (e) { postMessage(e.data); };");
+    runtime
+        .eval(
+            "window.__info = ''; var w = new Worker('worker.js'); \
+             var id0 = w.__megi_worker; w.terminate(); \
+             var w2 = new Worker('worker.js'); var id2 = w2.__megi_worker; \
+             try { w.postMessage(99); } catch (e) {} \
+             w2.postMessage(1); \
+             __info = String(id0) + ':' + String(id2);",
+            "t",
+        )
+        .expect("script");
+    runtime.run_worker_tasks(16).expect("tasks");
+    assert_eq!(runtime.eval("__info", "t").unwrap(), "0:1");
+}
