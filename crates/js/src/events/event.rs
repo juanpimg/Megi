@@ -290,11 +290,25 @@ pub(crate) fn event_prevent_default(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    check_event(this, context)?;
-    if let Some(dispatch) = &mut host_cell(context)?.dispatch
-        && !dispatch.passive
-    {
-        // `{ passive: true }` listeners cannot cancel the default action.
+    let object = check_event(this, context)?;
+    // DOM §2.9: only cancelable events can be canceled, and listeners registered
+    // with `{ passive: true }` cannot cancel the default action (#1952).
+    let cancelable = prop(&object, "cancelable", context)
+        .ok()
+        .and_then(|value| value.as_boolean())
+        == Some(true);
+    let passive = host_cell(context)?
+        .dispatch
+        .as_ref()
+        .is_some_and(|dispatch| dispatch.passive);
+    if !cancelable || passive {
+        return Ok(JsValue::undefined());
+    }
+    // #1952: reflect the canceled flag on the event object itself so callers can
+    // observe it via `defaultPrevented` even outside an active dispatch (the
+    // dispatch path also derives it from `dispatch.prevent_default` on completion).
+    let _ = object.set(js_string!("defaultPrevented"), true, false, context);
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
         dispatch.prevent_default = true;
     }
     Ok(JsValue::undefined())

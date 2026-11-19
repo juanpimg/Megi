@@ -190,7 +190,7 @@ fn document_event_target_remove_and_prevent_default() {
              document.addEventListener('blocked', function (event) {
                  event.preventDefault();
              });
-             globalThis.prevented = document.dispatchEvent(new Event('blocked'));",
+             globalThis.prevented = document.dispatchEvent(new Event('blocked', { cancelable: true }));",
             "document-remove.js",
         )
         .expect("document events");
