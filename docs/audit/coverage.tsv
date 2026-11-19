@@ -1231,7 +1231,7 @@ docs/RELEASE.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documen
 docs/ROADMAP.md	548	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/TOOLING.md	790	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/architecture-baseline.json	110	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/architecture-baseline.json	111	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/FINDINGS.md	254	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/README.md	102	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/coverage.tsv	0	generated	-			exempt		not read line by line: generated
