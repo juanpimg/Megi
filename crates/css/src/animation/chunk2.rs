@@ -74,6 +74,20 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn cubic_bezier_rejects_extra_or_invalid_tokens() {
+        // #1755: CSS Syntax 3 §5.4.2 — one bad component invalidates the declaration.
+        assert_eq!(
+            parse_timing_function("cubic-bezier(0.1, 0.2, 0.9, 1, bogus)"),
+            None
+        );
+        assert_eq!(
+            parse_timing_function("cubic-bezier(0.1, bogus, 0.9, 1)"),
+            None
+        );
+        assert!(parse_timing_function("cubic-bezier(0.1, 0.2, 0.9, 1)").is_some());
+    }
+
+    #[test]
     fn timing_functions_parse() {
         assert_eq!(
             parse_timing_function("linear"),

@@ -158,13 +158,18 @@ pub fn parse_timing_function(value: &str) -> Option<TimingFunction> {
         _ => {}
     }
     if let Some(args) = function_args(value, "cubic-bezier") {
-        let numbers: Vec<f32> = args
+        // #1755: the grammar requires exactly four <number> components; a single invalid
+        // or extra token invalidates the whole declaration instead of being silently dropped.
+        let parts: Vec<&str> = args
             .split([',', ' ', '\t'])
-            .filter(|part| !part.trim().is_empty())
-            .filter_map(|part| part.trim().parse::<f32>().ok())
-            .filter(|number| number.is_finite())
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
             .collect();
-        if numbers.len() == 4
+        let mut numbers = [0.0f32; 4];
+        for (part, slot) in parts.iter().zip(numbers.iter_mut()) {
+            *slot = (*part).parse::<f32>().ok().filter(|n| n.is_finite())?;
+        }
+        if parts.len() == 4
             && (0.0..=1.0).contains(&numbers[0])
             && (0.0..=1.0).contains(&numbers[2])
         {

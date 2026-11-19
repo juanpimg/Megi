@@ -117,6 +117,20 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn preference_media_features_work_without_a_viewport() {
+        // #1756: user preferences do not depend on viewport dimensions.
+        use crate::media::ColorScheme;
+        let ctx = MediaContext {
+            color_scheme: ColorScheme::Dark,
+            reduced_motion: true,
+            ..MediaContext::default()
+        };
+        assert!(evaluate_str("(prefers-color-scheme: dark)", &ctx));
+        assert!(evaluate_str("(prefers-reduced-motion: reduce)", &ctx));
+        assert!(!evaluate_str("(prefers-color-scheme: light)", &ctx));
+    }
+
+    #[test]
     fn deeply_nested_string_media_queries_do_not_overflow() {
         // `<style media>`/`matchMedia` parse raw strings without the parser's nesting cap.
         let nested = "(".repeat(100_000);

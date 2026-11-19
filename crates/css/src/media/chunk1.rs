@@ -98,6 +98,14 @@ pub enum MediaFeature {
 impl MediaFeature {
     /// Evaluates this feature against `context` (viewport in CSS px).
     pub fn evaluate(&self, context: &MediaContext) -> bool {
+        // #1756: user-preference features describe the host environment, not the viewport,
+        // so they must be evaluated even when the viewport is unknown.
+        match self {
+            Self::PrefersColorScheme(scheme) => return *scheme == context.color_scheme,
+            Self::PrefersReducedMotion(value) => return *value == context.reduced_motion,
+            Self::Unsupported => return false,
+            _ => {}
+        }
         let Some((width, height)) = context.viewport else {
             return false;
         };
@@ -110,9 +118,7 @@ impl MediaFeature {
             Self::Height(value) => (height - *value).abs() < 0.5,
             Self::Orientation(Orientation::Portrait) => height >= width,
             Self::Orientation(Orientation::Landscape) => width > height,
-            Self::PrefersColorScheme(scheme) => *scheme == context.color_scheme,
-            Self::PrefersReducedMotion(value) => *value == context.reduced_motion,
-            Self::Unsupported => false,
+            _ => false,
         }
     }
 }
