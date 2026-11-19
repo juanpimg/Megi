@@ -330,3 +330,26 @@ fn url_resolution_follows_the_whatwg_rules() {
         assert_eq!(actual, expected, "{expression}");
     }
 }
+
+#[test]
+fn string_prototype_substr_is_available() {
+    // #1923: `String.prototype.substr` (ECMA-262 §B.1.3) is used by the WHATWG spec
+    // scripts (`location.hash.substr(1)`); without it those pages abort on load.
+    let mut rt = runtime();
+    let cases = [
+        ("'abcdef'.substr(2)", "cdef"),
+        ("'abcdef'.substr(2, 3)", "cde"),
+        ("'abcdef'.substr(-2)", "ef"),
+        ("'abcdef'.substr(-3, 2)", "de"),
+        ("'abcdef'.substr(2, 0)", ""),
+        ("'abcdef'.substr(0, -1)", ""),
+        ("'abcdef'.substr(99)", ""),
+        ("typeof 'x'.substr", "function"),
+    ];
+    for (expression, expected) in cases {
+        let actual = rt
+            .eval(expression, "t")
+            .unwrap_or_else(|error| panic!("{expression}: {error}"));
+        assert_eq!(actual, expected, "{expression}");
+    }
+}
