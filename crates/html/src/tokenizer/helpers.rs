@@ -203,6 +203,17 @@ impl Tokenizer {
                     attributes: Vec::new(),
                 });
             } else {
+                // #1735: WHATWG §13.2.2 — acknowledging a trailing solidus on a non-void
+                // HTML element reports a parse error even though the element stays open.
+                const HTML_VOID_ELEMENTS: &[&str] = &[
+                    "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame", "hr",
+                    "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr",
+                ];
+                if tag.self_closing && !HTML_VOID_ELEMENTS.contains(&tag.name.as_str()) {
+                    self.record_error(
+                        ParseErrorCode::NonVoidHtmlElementStartTagWithTrailingSolidus,
+                    );
+                }
                 self.last_start_tag = Some(tag.name.clone());
                 let attributes = if self.xml_coercion {
                     tag.attributes
