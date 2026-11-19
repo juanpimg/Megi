@@ -1,6 +1,18 @@
 use super::*;
 
 /// Installs History/location, Web Storage and MutationObserver (round 24).
+/// `new Element()` is illegal per Web IDL, but the constructor must exist for
+/// `instanceof Element` and `Element.prototype` (#1877).
+fn element_illegal_constructor(
+    _this: &JsValue,
+    _args: &[JsValue],
+    _context: &mut Context,
+) -> JsResult<JsValue> {
+    Err(boa_engine::JsNativeError::typ()
+        .with_message("Illegal constructor")
+        .into())
+}
+
 pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsError> {
     for name in [
         "__megi_history_state",
@@ -28,6 +40,22 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             .set(js_string!(name), value, false, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
+    // #1877: Web IDL/DOM exposes a global `Element` constructor with a prototype.
+    let element_constructor =
+        FunctionObjectBuilder::new(context.realm(), native(element_illegal_constructor))
+            .name(js_string!("Element"))
+            .length(0)
+            .constructor(true)
+            .build();
+    context
+        .global_object()
+        .set(
+            js_string!("Element"),
+            JsValue::from(element_constructor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     let constructor =
         FunctionObjectBuilder::new(context.realm(), native(mutation_observer_constructor))
             .name(js_string!("MutationObserver"))

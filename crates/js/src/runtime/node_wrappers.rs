@@ -159,6 +159,17 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         init.function(native(function), js_string!(name), length);
     }
     let wrapper = init.build();
+    // #1877: element wrappers inherit from `Element.prototype` so `instanceof Element` works.
+    if let Some(prototype) = context
+        .global_object()
+        .get(js_string!("Element"), context)
+        .ok()
+        .and_then(|value| value.as_object())
+        .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
+        .and_then(|value| value.as_object())
+    {
+        let _ = wrapper.set_prototype(Some(prototype));
+    }
     if let Some(cache) = &cache {
         let _ = cache.set(
             js_string!(handle.to_string()),
