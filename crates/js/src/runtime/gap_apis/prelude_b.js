@@ -403,3 +403,41 @@ if (typeof String.prototype.substr !== 'function') {
     }
   });
 }
+
+// Element.prototype navigation/mutation helpers (#1915/#1876). The low-level
+// wrappers expose children/querySelector/insertAdjacentHTML; derive the rest.
+if (typeof Element !== 'undefined' && Element.prototype) {
+  if (typeof Element.prototype.matches !== 'function') {
+    Element.prototype.matches = function (selector) {
+      var all = (this.ownerDocument || document).querySelectorAll(selector);
+      for (var i = 0; i < all.length; i++) if (all[i] === this) return true;
+      return false;
+    };
+  }
+  if (typeof Element.prototype.closest !== 'function') {
+    Element.prototype.closest = function (selector) {
+      var node = this;
+      while (node && node.nodeType === 1) {
+        if (node.matches && node.matches(selector)) return node;
+        node = node.parentElement;
+      }
+      return null;
+    };
+  }
+  if (typeof Element.prototype.append !== 'function') {
+    Element.prototype.append = function () {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        this.insertAdjacentHTML('beforeend', typeof v === 'string' ? v : (v.outerHTML || ''));
+      }
+    };
+  }
+  if (typeof Element.prototype.prepend !== 'function') {
+    Element.prototype.prepend = function () {
+      for (var i = arguments.length - 1; i >= 0; i--) {
+        var v = arguments[i];
+        this.insertAdjacentHTML('afterbegin', typeof v === 'string' ? v : (v.outerHTML || ''));
+      }
+    };
+  }
+}

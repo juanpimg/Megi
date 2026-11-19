@@ -344,3 +344,27 @@ fn string_substr_annex_b_exists() {
     );
     assert_eq!(rt.eval("'abcdef'.substr(2,3)", "t").unwrap(), "cde");
 }
+
+/// Element.prototype must expose the standard navigation/mutation methods and
+/// HTMLElement must exist as a subclass, so `instanceof` checks work (#1915/#1876).
+#[test]
+fn element_prototype_methods_and_htmlelement() {
+    let mut rt = runtime();
+    for (expr, expected) in [
+        ("typeof HTMLElement", "function"),
+        (
+            "document.createElement('div') instanceof HTMLElement",
+            "true",
+        ),
+        ("typeof Element.prototype.matches", "function"),
+        ("typeof Element.prototype.closest", "function"),
+        ("typeof Element.prototype.append", "function"),
+        ("typeof Element.prototype.prepend", "function"),
+    ] {
+        assert_eq!(
+            rt.eval(expr, "t").unwrap(),
+            expected,
+            "{expr} (#1915/#1876)"
+        );
+    }
+}

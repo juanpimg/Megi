@@ -159,10 +159,11 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         init.function(native(function), js_string!(name), length);
     }
     let wrapper = init.build();
-    // #1877: element wrappers inherit from `Element.prototype` so `instanceof Element` works.
+    // #1915: element wrappers inherit from `HTMLElement.prototype`, which itself
+    // inherits from `Element.prototype`, so both instanceof checks work.
     if let Some(prototype) = context
         .global_object()
-        .get(js_string!("Element"), context)
+        .get(js_string!("HTMLElement"), context)
         .ok()
         .and_then(|value| value.as_object())
         .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
