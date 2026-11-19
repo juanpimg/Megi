@@ -244,6 +244,23 @@ class FuzzCorpusTest(unittest.TestCase):
         )
 
 
+    def test_nightly_matrix_runs_every_fuzz_target(self) -> None:
+        # #1761: a target that is compiled but never scheduled receives zero
+        # libFuzzer cycles. `charset` is the one documented exception (#1647).
+        root = Path(__file__).resolve().parent.parent
+        targets = {p.stem for p in (root / "fuzz" / "fuzz_targets").glob("*.rs")}
+        workflow = (root / ".github" / "workflows" / "fuzz-nightly.yml").read_text(
+            encoding="utf-8"
+        )
+        scheduled = {
+            line.split("target:", 1)[1].strip()
+            for line in workflow.splitlines()
+            if "target:" in line and line.strip().startswith("- target:")
+        }
+        missing = sorted(targets - scheduled - {"charset"})
+        self.assertEqual(missing, [], f"fuzz targets absent from the nightly matrix: {missing}")
+
+
 class CiToolTestsCoverageTest(unittest.TestCase):
     """CI must execute every tools test module, not just the audit-ledger one (#1402)."""
 
