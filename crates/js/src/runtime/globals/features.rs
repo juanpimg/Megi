@@ -59,6 +59,16 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             .set(js_string!(name), value, false, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
+    // F7-A11Y (partial): deterministic accessibility snapshot for embedders/tests.
+    context
+        .global_object()
+        .set(
+            js_string!("__megiAccessibilityTree"),
+            JsValue::from(accessor_fn(context, accessibility_tree_snapshot)),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     // #1882: `self` aliases the global object and feature-detected DOM constructors exist.
     context
         .global_object()

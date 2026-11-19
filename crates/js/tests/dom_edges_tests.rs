@@ -364,3 +364,17 @@ fn standard_dom_globals_are_exposed() {
         .expect("eval");
     assert_eq!(out, "object:function:function:IMG:true");
 }
+
+#[test]
+fn accessibility_snapshot_exposes_named_nodes() {
+    // F7-A11Y (partial): deterministic accessibility snapshot for embedders.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "document.body.innerHTML = '<h1>Hi</h1><img alt=\"Logo\"><button aria-label=\"Go\">x</button>'; \
+             __megiAccessibilityTree().map(function (n) { return n.role + ':' + n.name; }).join(',');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "heading:Hi,img:Logo,button:Go");
+}
