@@ -117,3 +117,31 @@ fn docs_no_longer_list_fetch_xhr_as_gaps() {
         "docs should mention XHR as implemented"
     );
 }
+
+#[test]
+fn event_constructors_have_prototypes_and_instanceof_works() {
+    // #1740: ECMA-262 §7.3.7 requires a `prototype` object on the RHS of instanceof.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new Event('x'); var c = new CustomEvent('y'); var m = new MessageEvent('z'); \
+             String(typeof Event.prototype === 'object') + ':' + (e instanceof Event) + ':' + \
+             (c instanceof CustomEvent) + ':' + (c instanceof Event) + ':' + \
+             (m instanceof MessageEvent);",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "object:true:true:true:true");
+}
+
+#[test]
+fn debug_event_properties() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var k = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', ctrlKey: true, shiftKey: true, bubbles: true }); var i = new InputEvent('input', { data: 'x', inputType: 'insertText' }); var f = new FocusEvent('focus', { relatedTarget: null }); String(k.ctrlKey) + ':' + String(k.shiftKey) + ':' + String(k.code) + ':' + String(i.data) + ':' + String(i.inputType) + ':' + String(f.type) + ':' + String(f.relatedTarget);",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "true:true:KeyA:x:insertText:focus:null");
+}
