@@ -7,10 +7,11 @@ pub(super) fn line_boundary(line: &GridLine, track_count: usize) -> Option<usize
             // Widen to i64 so i32::MIN inputs cannot overflow (issue #689).
             let value = *value as i64;
             if value > 0 {
-                // Clamp to the available tracks + 1 so a huge line number cannot
-                // allocate an oversized boundary.
-                let clamped = value.min(track_count as i64 + 1).max(1);
-                Some((clamped - 1) as usize)
+                // #1706: a line beyond the explicit grid creates implicit tracks
+                // (CSS Grid §8.3). Do not clamp it to the explicit count; the
+                // global MAX_EXPANDED_TRACKS budget is applied later in
+                // placement_request() when the occupancy grid is sized.
+                usize::try_from(value - 1).ok()
             } else {
                 let index = track_count as i64 + 1 + value;
                 (index >= 0).then_some(index.min(track_count as i64 + 1) as usize)
