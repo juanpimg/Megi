@@ -34,12 +34,11 @@ pub use chunk1::apply_transitions;
 #[allow(unused_imports)]
 pub(crate) use chunk1::cubic_bezier;
 pub use chunk1::evaluate_timing_function;
+pub use chunk1::evaluate_timing_function_before;
 #[allow(unused_imports)]
 pub(crate) use chunk1::is_animatable;
 #[allow(unused_imports)]
 pub(crate) use chunk1::parse_animatable;
-#[allow(unused_imports)]
-pub(crate) use chunk1::steps;
 pub use chunk1::transition_progress;
 mod chunk2;
 #[allow(unused_imports)]
