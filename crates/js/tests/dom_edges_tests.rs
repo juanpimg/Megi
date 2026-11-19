@@ -333,3 +333,18 @@ fn element_get_elements_by_tag_name_is_available() {
         .expect("eval");
     assert_eq!(out, "function:1:1");
 }
+
+#[test]
+fn element_constructor_and_instanceof_are_available() {
+    // #1877: `Element is not defined` breaks Wikipedia and python.org scripts.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var d = document.createElement('div'); \
+             String(typeof Element) + ':' + String(d instanceof Element) + ':' + \
+             String(typeof Element.prototype);",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "function:true:object");
+}
