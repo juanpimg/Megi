@@ -507,6 +507,15 @@ fn text_encoder_stream_exists() {
 #[test]
 fn synchronous_xhr_does_not_throw() {
     let mut rt = runtime();
+    rt.set_fetch_provider(std::sync::Arc::new(|_| {
+        Ok(megi_js::host::FetchResult {
+            status: 200,
+            status_text: "OK".into(),
+            url: "https://example.test/sync-data".into(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        })
+    }));
     rt.eval(
         "var x = new XMLHttpRequest(); x.open('GET', '/sync-data', false); x.send(); if (x.readyState !== 4) throw new Error('readyState ' + x.readyState); 'ok'",
         "t",

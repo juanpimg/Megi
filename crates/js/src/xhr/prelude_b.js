@@ -217,19 +217,6 @@
     this._aborted = false;
     this._resetResponse();
 
-    if (this._sync) {
-      this._readyState = 4;
-      this.status = 200;
-      this.statusText = 'OK';
-      this._responseText = '';
-      this._responseBytes = new Uint8Array(0);
-      this._responseBuffer = new ArrayBuffer(0);
-      this._sendFlag = false;
-      dispatchTargetEvent(this, new ProgressEvent('readystatechange'));
-      dispatchTargetEvent(this, new ProgressEvent('load'));
-      return;
-    }
-
     var seq = ++this._requestSeq;
     var method = this._method || "GET";
     var url = this._url;
@@ -249,6 +236,25 @@
     var payload = (method === "GET" || method === "HEAD") ? "" : serializeRequestBody(body);
     var timeoutLimit = this._timeout;
     var hasUploadPayload = payload.length > 0 && method !== "GET" && method !== "HEAD";
+
+    if (this._sync) {
+      // The native fetch bridge is synchronous, so a blocking XHR can use it
+      // directly: real status/body and, crucially, CSP connect-src enforcement
+      // (#1904). A CSP/network error propagates to the caller like the spec's
+      // synchronous NetworkError.
+      var raw = __megi_fetch_native(url, method, headerText, payload);
+      this._readyState = 4;
+      this.status = raw.status;
+      this.statusText = raw.statusText;
+      this._responseText = raw.bodyText;
+      this._responseBytes = raw.bodyBytes;
+      this._responseBuffer = raw.bodyBytes ? raw.bodyBytes.slice().buffer : new ArrayBuffer(0);
+      this._responseHeaders = raw.headers || [];
+      this._sendFlag = false;
+      dispatchTargetEvent(this, new ProgressEvent('readystatechange'));
+      dispatchTargetEvent(this, new ProgressEvent('load'));
+      return;
+    }
 
     var self = this;
     dispatchTargetEvent(self, new ProgressEvent("loadstart", { lengthComputable: false, loaded: 0, total: 0 }));
