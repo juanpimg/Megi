@@ -419,3 +419,19 @@ fn input_idl_value_and_checked_do_not_overwrite_attributes() {
         .expect("eval");
     assert_eq!(out, "abc:XYZ|false:true");
 }
+
+#[test]
+fn html_collections_are_iterable_with_for_of() {
+    // #1937: `for (let e of document.getElementsByTagName('a'))` must work.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "document.body.innerHTML = '<a id=a1>x</a><a id=a2>y</a>'; \
+             var ids = ''; for (var a of document.getElementsByTagName('a')) { ids += a.id + ','; } \
+             var kids = ''; for (var c of document.body.children) { kids += c.tagName + ','; } \
+             typeof document.getElementsByTagName('a')[Symbol.iterator] + '|' + ids + '|' + kids;",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "function|a1,a2,|A,A,");
+}
