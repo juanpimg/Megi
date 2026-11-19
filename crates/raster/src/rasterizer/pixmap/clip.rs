@@ -8,9 +8,10 @@ impl Pixmap {
     /// when the visible area is empty.
     pub(crate) fn clip_rect(&self) -> Option<Rect> {
         // Running intersection is maintained on push (issue #651), so this is O(1).
+        // A `None` entry means "empty clip" (fail closed), never "no clip".
         let running = match self.clip_stack.last() {
             Some(Some((_, running))) => *running,
-            Some(None) => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+            Some(None) => return None,
             None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
         };
         let x0 = running.x;
@@ -47,20 +48,17 @@ impl Pixmap {
         })
     }
 
-    /// Maximum clip-stack depth (issue #651): beyond this, pushes are ignored.
-    const MAX_CLIP_DEPTH: usize = 256;
-
     /// Pushes a clipping boundary onto the stack, maintaining the running
     /// intersection incrementally (O(1) per push).
+    ///
+    /// #1712: there is deliberately no depth cap that changes the meaning of a
+    /// push. Every push narrows (or at worst preserves) the current clip, so the
+    /// stack cannot make content escape an `overflow:hidden` ancestor. Layout
+    /// already bounds nesting depth, so the stack cannot grow without limit.
     pub fn push_clip(&mut self, rect: Rect) {
-        if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
-            // Push a sentinel so pop_clip stays balanced (#1180).
-            self.clip_stack.push(None);
-            return;
-        }
         let current = match self.clip_stack.last() {
             Some(Some((_, running))) => *running,
-            Some(None) => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
+            Some(None) => return, // already empty: pushing cannot widen it
             None => Rect::new(0.0, 0.0, self.width as f32, self.height as f32),
         };
         let x0 = current.x.max(rect.x);
@@ -135,5 +133,25 @@ impl Pixmap {
     /// callers can state the assumed pixel format.
     pub fn to_png_rgba(&self) -> Vec<u8> {
         self.to_png()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MAX_CLIP_DEPTH: usize = 256;
+
+    #[test]
+    fn clip_survives_depth_limit() {
+        // #1712: the sentinel pushed at the old depth cap used to mean "no clip",
+        // letting content paint outside every overflow:hidden ancestor.
+        let mut pixmap = Pixmap::new(4, 4);
+        for _ in 0..=MAX_CLIP_DEPTH {
+            pixmap.push_clip(Rect::new(0.0, 0.0, 1.0, 1.0));
+        }
+        let clip = pixmap.clip_rect().expect("the clip must not be disabled");
+        assert_eq!(clip, Rect::new(0.0, 0.0, 1.0, 1.0));
+        assert!(pixmap.is_clipped(3, 3));
     }
 }
