@@ -249,6 +249,7 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
                 &candidates,
             );
             merge_container_rules_for(doc, node_id, None, collection, &mut best);
+            apply_revert_for(doc, node_id, None, collection, &candidates, &mut best);
             apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
             let cascaded = owned_declarations(best);
 

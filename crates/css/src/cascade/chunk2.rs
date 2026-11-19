@@ -357,6 +357,7 @@ pub fn resolve_cascaded_properties<'a>(
         &candidates,
     );
     merge_container_rules_for(doc, node_id, None, collection, &mut best);
+    apply_revert_for(doc, node_id, None, collection, &candidates, &mut best);
     apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
     owned_declarations(best)
 }

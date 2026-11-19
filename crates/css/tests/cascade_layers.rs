@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use megi_core::{Attribute, Document, Namespace, NodeId};
-use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
+use megi_css::{ComputedStyle, Display, Length, Origin, StyleCollection};
 
 fn page(css: &str) -> (Document, HashMap<NodeId, ComputedStyle>, NodeId) {
     let mut doc = Document::new();
@@ -239,4 +239,13 @@ fn container_rules_inside_a_layer_keep_the_layer_order() {
         600.0,
     );
     assert_eq!(styles[&target].width, Length::Px(20.0));
+}
+
+#[test]
+fn revert_rolls_back_to_the_user_agent_style() {
+    // CSS Cascade 4 §7.3.4: `revert` in author origin rolls back to the UA value.
+    let computed = style(".x { display: none; } .x { display: revert; }");
+    assert_eq!(computed.display, Display::Block, "div UA display");
+    let initial = style(".x { width: 42px; } .x { width: revert; }");
+    assert_eq!(initial.width, Length::Auto, "no UA width -> initial");
 }

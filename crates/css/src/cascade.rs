@@ -89,6 +89,7 @@ pub use chunk2::resolve_pseudo_cascaded_properties;
 pub(crate) use chunk2::selector_matches;
 mod chunk3;
 #[allow(unused_imports)]
+pub(crate) use chunk3::apply_revert_for;
 pub(crate) use chunk3::apply_revert_layer_for;
 #[allow(unused_imports)]
 pub(crate) use chunk3::is_important;
