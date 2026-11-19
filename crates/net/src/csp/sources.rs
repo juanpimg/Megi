@@ -189,7 +189,12 @@ pub(super) fn ws_allowed_by_sources(
 }
 
 pub(super) fn authority_matches(rest: &str, url: &Url) -> bool {
-    let authority = rest.split('/').next().unwrap_or(rest);
+    // #1748: keep the path-part after the authority — CSP3 §6.7.2.12 requires it to be
+    // a prefix of the request path rather than silently ignoring it.
+    let (authority, path_part) = match rest.find('/') {
+        Some(index) => (&rest[..index], Some(&rest[index..])),
+        None => (rest, None),
+    };
     if authority.is_empty() {
         return false;
     }
@@ -219,7 +224,7 @@ pub(super) fn authority_matches(rest: &str, url: &Url) -> bool {
         return false;
     }
 
-    match expected_port {
+    let port_ok = match expected_port {
         // #1750: CSP3 §6.7.2.11 — an omitted port matches only the scheme's default port.
         // `Url::port()` is `None` both when no port is written and when the default is elided.
         None => url.port().is_none(),
@@ -228,7 +233,22 @@ pub(super) fn authority_matches(rest: &str, url: &Url) -> bool {
             .parse::<u16>()
             .ok()
             .is_some_and(|port| url.port_or_default() == Some(port)),
-    }
+    };
+    port_ok
+        && match path_part {
+            None => true,
+            Some(expected_path) => path_part_matches(expected_path, url.path()),
+        }
+}
+
+/// CSP3 §6.7.2.12: a path-part matches when it is empty, equal to the request path, or a
+/// prefix ending in `/`. Both sides are percent-decoded before comparison.
+fn path_part_matches(expected: &str, actual: &str) -> bool {
+    let expected = crate::url::percent_decode(expected);
+    let actual = crate::url::percent_decode(actual);
+    expected.is_empty()
+        || expected == actual
+        || (expected.ends_with('/') && actual.starts_with(&expected))
 }
 
 /// Minimal attribute extractor for `<meta ...>` tags (single-quoted, double-quoted, or unquoted).

@@ -247,6 +247,16 @@ mod tests {
     }
 
     #[test]
+    fn host_source_path_part_is_enforced() {
+        // #1748: CSP3 §6.7.2.12 — a host-source path is a prefix of the request path.
+        let policy = ContentSecurityPolicy::parse("script-src https://cdn.test/scripts/");
+        let allowed = Url::parse("https://cdn.test/scripts/app.js").expect("url");
+        let denied = Url::parse("https://cdn.test/evil.js").expect("url");
+        assert!(policy.allows_external(&allowed, &doc()));
+        assert!(!policy.allows_external(&denied, &doc()));
+    }
+
+    #[test]
     fn self_allows_same_origin_only() {
         let policy = ContentSecurityPolicy::parse("script-src 'self'");
         assert!(policy.allows_external(&doc(), &doc()));
