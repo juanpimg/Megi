@@ -20,7 +20,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/release.yml	193	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .gitignore	46	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-AGENTS.md	84	docs	F3			pending		
+AGENTS.md	84	docs	F3	jp	2026-11-19	covered	#1759	
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 CONTRIBUTING.md	346	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
@@ -2010,7 +2010,7 @@ tools/audit_coverage.py	405	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	writte
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	197	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/check_arch.py	174	tool	F3			pending		
+tools/check_arch.py	174	tool	F3	jp	2026-11-19	covered	#1759	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/coverage_report.py	127	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2021,7 +2021,7 @@ tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	121	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	287	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
-tools/test_check_arch.py	65	tool	F3			pending		
+tools/test_check_arch.py	65	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	105	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
