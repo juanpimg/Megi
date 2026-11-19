@@ -1,4 +1,5 @@
 use super::*;
+use boa_engine::Source;
 
 // ---------------------------------------------------------------------------
 // Global installation
@@ -114,6 +115,25 @@ pub(crate) fn install_globals(context: &mut Context) -> Result<(), JsError> {
             false,
             context,
         )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    // #1972: browsers expose native constructors' `prototype` as non-writable and
+    // non-configurable; instrumentation scripts branch on that descriptor.
+    context
+        .eval(Source::from_bytes(
+            r#"["Event", "CustomEvent", "MessageEvent", "Element", "EventTarget",
+                "HTMLLinkElement", "XMLHttpRequest"].forEach(function (name) {
+              var fn = globalThis[name];
+              if (typeof fn === "function" && Object.prototype.hasOwnProperty.call(fn, "prototype")) {
+                var d = Object.getOwnPropertyDescriptor(fn, "prototype");
+                if (d && d.writable) {
+                  Object.defineProperty(fn, "prototype", {
+                    value: d.value, writable: false, enumerable: false, configurable: false
+                  });
+                }
+              }
+            });"#,
+        ))
+        .map(|_| ())
         .map_err(|error| JsError::Internal(error.to_string()))?;
     Ok(())
 }
