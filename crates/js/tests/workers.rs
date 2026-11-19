@@ -165,3 +165,27 @@ fn worker_onerror_getter_reflects_assigned_handler() {
         .expect("script");
     assert_eq!(out, "true");
 }
+
+#[test]
+fn worker_remove_event_listener_stops_delivery() {
+    // #1745: removeEventListener must unregister by callback identity.
+    let mut runtime = runtime_with_worker("onmessage = function (e) { postMessage(e.data); };");
+    runtime
+        .eval(
+            "window.__n = 0; var w = new Worker('worker.js'); \
+             var f = function () { __n += 1; }; \
+             w.addEventListener('message', f); w.postMessage(1);",
+            "t",
+        )
+        .expect("script");
+    runtime.run_worker_tasks(16).expect("tasks");
+    assert_eq!(runtime.eval("__n", "t").unwrap(), "1");
+    runtime
+        .eval(
+            "w.removeEventListener('message', f); w.postMessage(2);",
+            "t",
+        )
+        .expect("script");
+    runtime.run_worker_tasks(16).expect("tasks");
+    assert_eq!(runtime.eval("__n", "t").unwrap(), "1");
+}
