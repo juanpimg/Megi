@@ -316,3 +316,20 @@ fn webidl_coercions_and_storage_key_order() {
         "true|false|true|false|true|false|b,a,c,null|null||null"
     );
 }
+
+#[test]
+fn element_get_elements_by_tag_name_is_available() {
+    // #1875: jQuery calls `element.getElementsByTagName("*")` during capability detection.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var d = document.createElement('div'); \
+             var a = document.createElement('span'); d.appendChild(a); \
+             String(typeof d.getElementsByTagName) + ':' + \
+             d.getElementsByTagName('span').length + ':' + \
+             d.getElementsByTagName('*').length;",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "function:1:1");
+}
