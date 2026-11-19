@@ -1,3 +1,5 @@
+#![cfg(feature = "js")]
+
 use std::sync::Arc;
 
 use megi_js::{JsRuntime, SandboxFlags};

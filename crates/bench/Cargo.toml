@@ -14,7 +14,7 @@ megi-html.workspace = true
 megi-css.workspace = true
 megi-layout.workspace = true
 megi-paint.workspace = true
-megi-render.workspace = true
+megi-render = { workspace = true, features = ["js"] }
 megi-image.workspace = true
 megi-fonts = { workspace = true, optional = true }
 

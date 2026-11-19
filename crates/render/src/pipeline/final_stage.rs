@@ -3,17 +3,27 @@
 //! The stage bodies are moved verbatim from `lib.rs`; only signatures and state (un)packing
 //! were added to keep the file within size caps.
 
+#[cfg(feature = "js")]
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+#[cfg(feature = "js")]
+use std::time::Duration;
+use std::time::Instant;
 
+#[cfg(feature = "js")]
 use megi_core::Document;
+#[cfg(feature = "js")]
 use megi_net::{ResourceLoader, Scheme, Url};
 
 use super::state::{ParsedDocumentInput, ResourceStageOutput, ScriptStats};
+#[cfg(feature = "js")]
 use super::url::FrameRenderContext;
+#[cfg(feature = "js")]
+use crate::RenderOptions;
+#[cfg(feature = "js")]
 use crate::frames;
-use crate::{RenderError, RenderOptions, RenderOutput, RenderStats, RenderTimings};
+use crate::{RenderError, RenderOutput, RenderStats, RenderTimings};
 
+#[cfg(feature = "js")]
 pub(crate) fn render_pre_scripted_document(
     document: Document,
     document_url: Url,
