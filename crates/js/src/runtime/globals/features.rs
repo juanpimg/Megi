@@ -233,6 +233,11 @@ pub(crate) fn build_location(context: &mut Context) -> Result<JsObject, JsError>
     init.function(native(location_assign), js_string!("assign"), 1);
     init.function(native(location_replace), js_string!("replace"), 1);
     init.function(native(location_reload), js_string!("reload"), 0);
+    // #1935: WebIDL stringifier — `String(location)` and the `URL` constructor's
+    // base coercion must yield the document URL (SvelteKit boots with
+    // `new URL(".", location)`).
+    init.function(native(location_href_get), js_string!("toString"), 0);
+    init.function(native(location_href_get), js_string!("valueOf"), 0);
     let location = init.build();
     for (name, getter, setter) in [
         (
@@ -501,6 +506,10 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
             2,
             document_compare_document_position,
         ),
+        // #1935: `String(document)` / `new URL('.', document)` coerce to the
+        // document URL (same stringifier shape as Location).
+        ("toString", 0, document_url),
+        ("valueOf", 0, document_url),
     ] {
         init.function(native(function), js_string!(name), length);
     }

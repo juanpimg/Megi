@@ -547,3 +547,30 @@ fn document_is_a_valid_node_argument() {
         "number"
     );
 }
+
+/// #1935: SvelteKit boots with `new URL(".", location)`, which relies on the
+/// WebIDL stringifier of `Location` (and `Document`) returning the page URL.
+#[test]
+fn location_and_document_stringify_to_the_document_url() {
+    let mut rt = JsRuntime::with_document(
+        megi_core::Document::new(),
+        "https://example.com/a/b".to_owned(),
+    )
+    .expect("runtime");
+    assert_eq!(
+        rt.eval("location.toString()", "t").unwrap(),
+        "https://example.com/a/b"
+    );
+    assert_eq!(
+        rt.eval("String(location)", "t").unwrap(),
+        "https://example.com/a/b"
+    );
+    assert_eq!(
+        rt.eval("new URL('.', location).href", "t").unwrap(),
+        "https://example.com/a/"
+    );
+    assert_eq!(
+        rt.eval("new URL('.', document).href", "t").unwrap(),
+        "https://example.com/a/"
+    );
+}
