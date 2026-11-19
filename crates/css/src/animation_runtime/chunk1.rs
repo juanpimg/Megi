@@ -6,12 +6,38 @@ use super::*;
 pub(crate) const MAX_KEYFRAME_STEPS: usize = 4096;
 
 /// Evaluates a timing function at progress `x` in `0..=1`.
+///
+/// This is the before-flag-free form: step functions evaluate at the top of a
+/// step even when the animation has not yet started. Use
+/// [`evaluate_timing_function_before`] when the before flag is known.
 pub fn evaluate_timing_function(timing: &TimingFunction, x: f32) -> f32 {
+    evaluate_timing_function_before(timing, x, false)
+}
+
+/// Evaluates a timing function with the optional `before` flag (#1757).
+///
+/// CSS Easing 1 §2.3.1: when the before flag is set and `x * steps` is an
+/// integer, step easing functions return the *bottom* of the step rather than
+/// the top. During an animation's delay phase with backwards fill, the input
+/// progress is 0 and the before flag is set, so `steps(5, start)` must return
+/// 0 (not 0.2).
+pub fn evaluate_timing_function_before(timing: &TimingFunction, x: f32, before: bool) -> f32 {
     let x = if x.is_finite() {
         x.clamp(0.0, 1.0)
     } else {
         0.0
     };
+    match timing {
+        TimingFunction::Steps(count, position) => steps_before(*count, *position, x, before),
+        // Linear and cubic-bezier easings have a single output per input, so
+        // the before flag has no effect on them.
+        _ => evaluate_timing_function_no_steps(timing, x),
+    }
+}
+
+/// Non-step timing functions, separated so the before-aware entry point can
+/// delegate to them without recursing back into itself.
+fn evaluate_timing_function_no_steps(timing: &TimingFunction, x: f32) -> f32 {
     match timing {
         TimingFunction::Linear => x,
         TimingFunction::Ease => cubic_bezier(0.25, 0.1, 0.25, 1.0, x),
@@ -19,7 +45,7 @@ pub fn evaluate_timing_function(timing: &TimingFunction, x: f32) -> f32 {
         TimingFunction::EaseOut => cubic_bezier(0.0, 0.0, 0.58, 1.0, x),
         TimingFunction::EaseInOut => cubic_bezier(0.42, 0.0, 0.58, 1.0, x),
         TimingFunction::CubicBezier(x1, y1, x2, y2) => cubic_bezier(*x1, *y1, *x2, *y2, x),
-        TimingFunction::Steps(count, position) => steps(*count, *position, x),
+        TimingFunction::Steps(_, _) => 0.0,
     }
 }
 
@@ -42,29 +68,34 @@ pub(crate) fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     bezier((low + high) * 0.5, y1, y2)
 }
 
-/// Evaluates a `steps()` function.
-pub(crate) fn steps(count: u32, position: StepPosition, x: f32) -> f32 {
+/// Evaluates a `steps()` function with the CSS Easing 1 §2.3.1 before flag.
+fn steps_before(count: u32, position: StepPosition, x: f32, before: bool) -> f32 {
     let count = count.max(1) as f32;
     let scaled = x * count;
-    let step = scaled.floor();
-    let value = match position {
-        StepPosition::Start => step + 1.0,
-        StepPosition::End => step,
-        StepPosition::JumpNone => {
-            if count <= 1.0 {
-                0.0
-            } else {
-                step.min(count - 1.0)
-            }
-        }
-        StepPosition::JumpBoth => step + 1.0,
-    };
+    let mut step = scaled.floor();
+    // `Start` models both `jump-start` and its `start` alias.
+    let jumps_at_start = matches!(position, StepPosition::Start);
+    let jumps_at_both = matches!(position, StepPosition::JumpBoth);
+    if jumps_at_start || jumps_at_both {
+        step += 1.0;
+    }
+    // Before flag: at an integral `x * steps`, use the bottom of the step.
+    if before && (scaled - scaled.floor()).abs() <= f32::EPSILON {
+        step -= 1.0;
+    }
+    // Clamp to the output range as required by the spec's steps 4 and 6.
+    if x >= 0.0 && step < 0.0 {
+        step = 0.0;
+    }
     let divisor = match position {
         StepPosition::JumpNone => (count - 1.0).max(1.0),
         StepPosition::JumpBoth => count + 1.0,
         _ => count,
     };
-    (value / divisor).clamp(0.0, 1.0)
+    if x <= 1.0 && step > divisor {
+        step = divisor;
+    }
+    (step / divisor).clamp(0.0, 1.0)
 }
 
 /// Value to fill with at the start (`before = false`) or end of the animation (#1752).
@@ -100,6 +131,14 @@ fn fill_progress(spec: &AnimationSpec, iterations: f32, before: bool) -> f32 {
 /// Local progress (`0..=1`) of `spec` at `time_ms`, honoring delay, iterations, direction
 /// and fill mode; `None` when the animation does not affect the element at that time.
 pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
+    animation_progress_with_before(spec, time_ms).map(|(progress, _)| progress)
+}
+
+/// Same as [`animation_progress`], but also reports whether the timing
+/// function's before flag is set (#1757). The flag is true during the delay
+/// phase (the animation interval has not started) and when filling past the
+/// end in a direction whose fill value is the start of the interval.
+pub fn animation_progress_with_before(spec: &AnimationSpec, time_ms: f32) -> Option<(f32, bool)> {
     if !time_ms.is_finite() {
         return None;
     }
@@ -111,18 +150,19 @@ pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
     };
     if spec.duration_ms <= 0.0 {
         // Zero-duration animations apply their end state from the delay onward.
-        return (time_ms >= spec.delay_ms).then(|| fill_progress(spec, iterations, false));
+        return (time_ms >= spec.delay_ms).then(|| (fill_progress(spec, iterations, false), false));
     }
     let local = time_ms - spec.delay_ms;
     if local < 0.0 {
-        return fill_before.then(|| fill_progress(spec, iterations, true));
+        return fill_before.then(|| (fill_progress(spec, iterations, true), true));
     }
     if iterations == 0.0 {
-        return fill_after.then(|| fill_progress(spec, iterations, false));
+        return fill_after.then(|| (fill_progress(spec, iterations, false), false));
     }
     let total = iterations * spec.duration_ms;
     if total.is_finite() && local >= total {
-        return fill_after.then(|| fill_progress(spec, iterations, false));
+        let value = fill_progress(spec, iterations, false);
+        return fill_after.then_some((value, value == 0.0));
     }
     let iteration = (local / spec.duration_ms).floor();
     let mut fraction = (local - iteration * spec.duration_ms) / spec.duration_ms;
@@ -135,7 +175,7 @@ pub fn animation_progress(spec: &AnimationSpec, time_ms: f32) -> Option<f32> {
     if reverse {
         fraction = 1.0 - fraction;
     }
-    Some(fraction)
+    Some((fraction, false))
 }
 
 /// Applies every animation in `specs` to a clone of `base` at `time_ms`.
@@ -154,13 +194,13 @@ pub fn apply_animations(
         if spec.play_state == crate::animation::PlayState::Paused {
             continue;
         }
-        let Some(progress) = animation_progress(spec, time_ms) else {
+        let Some((progress, before)) = animation_progress_with_before(spec, time_ms) else {
             continue;
         };
         let Some(rule) = rules.iter().find(|rule| rule.name == spec.name) else {
             continue;
         };
-        apply_keyframes(&mut style, base, rule, &spec.timing, progress);
+        apply_keyframes(&mut style, base, rule, &spec.timing, progress, before);
     }
     // CSS animations mutate the computed style after the cascade's fingerprint pass; layout
     // interning must see the final animated value (#941).
@@ -175,12 +215,16 @@ pub(crate) struct EvaluatedKeyframe {
 }
 
 /// Interpolates `rule` into `style` at `progress` using `timing` easing.
+///
+/// `before` is the easing function's before flag (#1757): during backwards
+/// fill it makes `steps()` return the bottom of the current step.
 pub(crate) fn apply_keyframes(
     style: &mut ComputedStyle,
     base: &ComputedStyle,
     rule: &KeyframesRule,
     timing: &TimingFunction,
     progress: f32,
+    before: bool,
 ) {
     let mut frames: Vec<EvaluatedKeyframe> = Vec::new();
     for Keyframe {
@@ -223,7 +267,7 @@ pub(crate) fn apply_keyframes(
         (Some(previous), Some(next)) => {
             let span = (next.offset - previous.offset).max(f32::EPSILON);
             let local = ((progress - previous.offset) / span).clamp(0.0, 1.0);
-            let eased = evaluate_timing_function(timing, local);
+            let eased = evaluate_timing_function_before(timing, local, before);
             for (property, previous_value) in &previous.values {
                 let next_value = next
                     .values
@@ -251,7 +295,7 @@ pub(crate) fn apply_keyframes(
             // After the last keyframe: blend towards the underlying value at 100 %.
             let span = (1.0 - previous.offset).max(f32::EPSILON);
             let local = ((progress - previous.offset) / span).clamp(0.0, 1.0);
-            let eased = evaluate_timing_function(timing, local);
+            let eased = evaluate_timing_function_before(timing, local, before);
             for (property, value) in &previous.values {
                 interpolate_property(style, base, property, Some(value), None, eased, local);
             }
@@ -260,7 +304,7 @@ pub(crate) fn apply_keyframes(
             // Before the first keyframe: blend from the underlying value towards it.
             let span = next.offset.max(f32::EPSILON);
             let local = (progress / span).clamp(0.0, 1.0);
-            let eased = evaluate_timing_function(timing, local);
+            let eased = evaluate_timing_function_before(timing, local, before);
             for (property, value) in &next.values {
                 interpolate_property(style, base, property, None, Some(value), eased, local);
             }
