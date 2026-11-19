@@ -304,3 +304,15 @@ fn modern_hsl_accepts_number_saturation_and_lightness() {
     let clamped = Color::parse("hsl(0 2 -1)").expect("clamped hsl");
     assert_eq!((clamped.r, clamped.g, clamped.b, clamped.a), (0, 0, 0, 255));
 }
+
+/// CSS Color 5 light-dark() picks the light value unless the UA prefers dark.
+/// The renderer's default is light (#1962).
+#[test]
+fn test_light_dark_picks_light_value() {
+    assert_color(
+        Color::parse("light-dark(red, blue)"),
+        (255, 0, 0),
+        0,
+        "light-dark light value",
+    );
+}
