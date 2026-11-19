@@ -34,7 +34,7 @@ pub(crate) fn accessibility_tree_snapshot(
                 "button" => "button",
                 "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => "heading",
                 "img" => "img",
-                "input" => match element.get_attribute("type").as_deref() {
+                "input" => match element.get_attribute("type") {
                     Some("checkbox") => "checkbox",
                     Some("radio") => "radio",
                     _ => "textbox",

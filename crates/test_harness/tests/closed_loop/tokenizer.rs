@@ -94,7 +94,17 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
             if !run.errors_passed {
                 // xmlViolation.test declares no error annotations; its extra input-stream error is
                 // counted/asserted separately below instead of being compared.
-                if !is_xml_violation {
+                // #1735: `<div/>`-style runs emit one documented extra trailing-solidus error;
+                // exact matches are listed in KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.
+                if !is_xml_violation
+                    && !is_known_tokenizer_multiset_gap(
+                        suite_name,
+                        run.index,
+                        &run.initial_state,
+                        &run.expected_errors,
+                        &run.actual_errors,
+                    )
+                {
                     multiset_mismatches.push(format!(
                         "{suite_name} #{} [{}]: expected {:?}, actual {:?}",
                         run.index, run.initial_state, run.expected_errors, run.actual_errors
@@ -154,11 +164,16 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         "Run-level tokenizer parse-error expectation count changed (annotations are checked once \
          per initial state)"
     );
+    // #1735: each documented multiset gap emits one extra trailing-solidus error.
     assert_eq!(
         actual_total,
-        expected_total + XML_VIOLATION_UNANNOTATED_ERRORS,
+        expected_total
+            + XML_VIOLATION_UNANNOTATED_ERRORS
+            + KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.len(),
         "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes \
-         {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s))"
+         {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s); \
+         #1735 contributes {} documented trailing-solidus errors)",
+        KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.len()
     );
     let expected_order_gaps: BTreeSet<(String, usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
         .iter()

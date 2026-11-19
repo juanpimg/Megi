@@ -104,18 +104,18 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             context,
         )
         .map_err(|error| JsError::Internal(error.to_string()))?;
-    // #1877: Web IDL/DOM exposes a global `Element` constructor with a prototype.
-    let element_constructor =
-        FunctionObjectBuilder::new(context.realm(), native(element_illegal_constructor))
-            .name(js_string!("Element"))
-            .length(0)
-            .constructor(true)
-            .build();
+    // #1877/#1882: a global `Element` constructor with a real `.prototype` object.
+    // `FunctionObjectBuilder::constructor(true)` does NOT create `prototype` in Boa 0.22;
+    // `ConstructorBuilder` does, so `instanceof Element` works.
+    let mut element_builder =
+        boa_engine::object::ConstructorBuilder::new(context, native(element_illegal_constructor));
+    element_builder.name("Element").length(0).constructor(true);
+    let element_constructor = element_builder.build();
     context
         .global_object()
         .set(
             js_string!("Element"),
-            JsValue::from(element_constructor),
+            JsValue::from(element_constructor.constructor()),
             false,
             context,
         )

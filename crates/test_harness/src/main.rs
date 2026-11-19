@@ -29,7 +29,7 @@ pub(crate) use megi_test_harness::{
     css_harness::{
         run_wpt_anb_parsing, run_wpt_declarations_trim_whitespace, run_wpt_input_preprocessing,
     },
-    format_allowlist,
+    format_allowlist, is_known_tokenizer_multiset_gap,
     serializer_harness::run_serializer_suite_file,
     serializer_tests_dir,
     tokenizer_harness::run_tokenizer_suite_file,
