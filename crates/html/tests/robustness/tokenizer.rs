@@ -153,7 +153,12 @@ fn token_values_are_capped_to_the_per_token_budget() {
             _ => None,
         })
         .expect("a processing instruction token must be emitted");
-    assert_eq!(target_len, MAX_TOKEN_BYTES, "PI target must be capped");
+    // #1736: temp_buffer stores u32 code points, so the byte cap allows MAX/4 characters.
+    assert_eq!(
+        target_len,
+        MAX_TOKEN_BYTES / std::mem::size_of::<u32>(),
+        "PI target must be capped by bytes"
+    );
     assert!(
         tok.token_bytes_dropped > 0,
         "the truncation must be counted"

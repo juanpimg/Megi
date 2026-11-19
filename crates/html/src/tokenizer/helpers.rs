@@ -149,7 +149,13 @@ impl Tokenizer {
 
     /// Appends to `temp_buffer` while enforcing [`Tokenizer::max_token_bytes`] (#636).
     pub(super) fn push_temp(&mut self, cp: u32) {
-        if self.temp_buffer.len() < self.max_token_bytes {
+        // #1736: `temp_buffer` holds u32 code points (4 bytes each) while `max_token_bytes`
+        // is measured in bytes, like `truncate_token_value` on `String`.
+        let bytes = self
+            .temp_buffer
+            .len()
+            .saturating_mul(std::mem::size_of::<u32>());
+        if bytes < self.max_token_bytes {
             self.temp_buffer.push(cp);
         } else {
             self.token_bytes_dropped = self.token_bytes_dropped.saturating_add(1);
@@ -296,5 +302,22 @@ impl Tokenizer {
                 self.emit_char(cp);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_temp_enforces_a_byte_cap_on_u32_buffers() {
+        // #1736: temp_buffer stores u32 code points (4 bytes each); the cap is in bytes.
+        let mut tokenizer = Tokenizer::from_str_input("", TokenizerConfig::default());
+        tokenizer.max_token_bytes = 8;
+        tokenizer.push_temp('a' as u32);
+        tokenizer.push_temp('b' as u32);
+        tokenizer.push_temp('c' as u32);
+        assert_eq!(tokenizer.temp_buffer, vec![b'a' as u32, b'b' as u32]);
+        assert_eq!(tokenizer.token_bytes_dropped, 1);
     }
 }
