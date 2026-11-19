@@ -235,6 +235,18 @@ mod tests {
     }
 
     #[test]
+    fn host_source_without_port_rejects_non_default_ports() {
+        // #1750: CSP3 §6.7.2.11 — an omitted port matches only the scheme default.
+        let policy = ContentSecurityPolicy::parse("script-src cdn.test");
+        let default_port = Url::parse("https://cdn.test/x.js").expect("url");
+        let other_port = Url::parse("https://cdn.test:8443/x.js").expect("url");
+        assert!(policy.allows_external(&default_port, &doc()));
+        assert!(!policy.allows_external(&other_port, &doc()));
+        let wildcard = ContentSecurityPolicy::parse("script-src cdn.test:*");
+        assert!(wildcard.allows_external(&other_port, &doc()));
+    }
+
+    #[test]
     fn self_allows_same_origin_only() {
         let policy = ContentSecurityPolicy::parse("script-src 'self'");
         assert!(policy.allows_external(&doc(), &doc()));
