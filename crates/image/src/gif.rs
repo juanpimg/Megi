@@ -186,7 +186,9 @@ pub(crate) fn decode_gif(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage, 
                 for (source_row, target_row) in row_order.iter().enumerate() {
                     let y = *target_row;
                     if y >= screen_height as usize {
-                        break;
+                        // #1766: interlaced row order is not monotonic; later rows may still
+                        // fall inside the logical screen, so skip this row, do not stop.
+                        continue;
                     }
                     for x in 0..frame_width as usize {
                         let source = source_row * frame_width as usize + x;
@@ -464,4 +466,16 @@ fn emit_code(
         output.push(*value);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::interlaced_rows;
+
+    #[test]
+    fn interlaced_row_order_is_not_monotonic() {
+        // #1766: passes are 0,4,2,6,1,3,5,7 — a `break` on the first out-of-canvas row
+        // would skip later in-canvas rows, so the decode loop must `continue` instead.
+        assert_eq!(interlaced_rows(8), vec![0, 4, 2, 6, 1, 3, 5, 7]);
+    }
 }
