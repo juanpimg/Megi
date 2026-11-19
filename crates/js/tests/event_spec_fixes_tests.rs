@@ -184,3 +184,22 @@ fn detached_node_events_do_not_reach_document_or_window() {
         .expect("eval");
     assert_eq!(out, "d,");
 }
+
+#[test]
+fn once_listener_keeps_a_listener_added_inside_its_callback() {
+    // #1741: DOM §2.7 — remove the `once` listener before invoking it.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "window.__log = ''; var t = document.createElement('div'); \
+             function a() { __log += 'A,'; t.removeEventListener('click', a); \
+               t.addEventListener('click', function () { __log += 'B,'; }); } \
+             t.addEventListener('click', a, { once: true }); \
+             t.dispatchEvent(new Event('click')); \
+             t.dispatchEvent(new Event('click')); \
+             __log;",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "A,B,");
+}

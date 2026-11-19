@@ -123,11 +123,8 @@ pub(crate) fn call_listener(
     if let Some(dispatch) = &mut host_cell(context)?.dispatch {
         dispatch.passive = passive;
     }
-    // No host borrow may survive this call: the callback can re-enter any binding.
-    let result = callback.call(current_target, &[JsValue::from(event.clone())], context);
-    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
-        dispatch.passive = false;
-    }
+    // #1741: DOM §2.7 — a `once` listener is removed *before* invoking its callback, so a
+    // slot reused by a listener added inside the callback cannot be removed with it.
     if once {
         let removed = {
             let mut host = host_cell(context)?;
@@ -148,6 +145,11 @@ pub(crate) fn call_listener(
                 JsValue::undefined(),
             );
         }
+    }
+    // No host borrow may survive this call: the callback can re-enter any binding.
+    let result = callback.call(current_target, &[JsValue::from(event.clone())], context);
+    if let Some(dispatch) = &mut host_cell(context)?.dispatch {
+        dispatch.passive = false;
     }
     match result {
         Ok(_) => Ok(()),
