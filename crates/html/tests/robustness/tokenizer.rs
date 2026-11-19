@@ -193,3 +193,21 @@ fn active_formatting_list_is_bounded() {
         outcome.limit_violations
     );
 }
+
+#[test]
+fn pi_data_byte_cap_holds_with_multibyte_characters() {
+    // #1738: a 4-byte code point must not push `pending_pi_data` past the byte cap.
+    let cap = 1usize << 20;
+    let source = format!("<?target {}?>", "é".repeat(cap));
+    let mut tok = Tokenizer::from_str_input(&source, TokenizerConfig::default());
+    tok.run();
+    let data_len = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::ProcessingInstruction { data, .. } => Some(data.len()),
+            _ => None,
+        })
+        .expect("a PI token must be emitted");
+    assert!(data_len <= cap, "PI data exceeded the byte cap: {data_len}");
+}
