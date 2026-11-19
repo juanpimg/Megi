@@ -39,6 +39,61 @@ pub(crate) fn document_create_element(
     Ok(wrapper)
 }
 
+/// DOM §4.5: `document.createElementNS(namespace, qualifiedName)` (#1939).
+pub(crate) fn document_create_element_ns(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let namespace_uri = args
+        .first()
+        .filter(|value| !value.is_null_or_undefined())
+        .map(|value| arg_string(std::slice::from_ref(value), 0, context))
+        .transpose()?;
+    let qualified_name = arg_string(args, 1, context)?;
+    if !is_valid_element_name(&qualified_name) {
+        return Err(js_error(format!(
+            "InvalidCharacterError: `{qualified_name}` is not a valid qualified name"
+        )));
+    }
+    let (prefix, local_name) = match qualified_name.split_once(':') {
+        Some((prefix, local)) => {
+            if prefix.is_empty() || local.is_empty() || local.contains(':') {
+                return Err(js_error(format!(
+                    "InvalidCharacterError: `{qualified_name}` is not a valid qualified name"
+                )));
+            }
+            (Some(prefix.to_owned()), local.to_owned())
+        }
+        None => (None, qualified_name.clone()),
+    };
+    let namespace = match namespace_uri.as_deref() {
+        Some("http://www.w3.org/2000/svg") => Namespace::Svg,
+        Some("http://www.w3.org/1998/Math/MathML") => Namespace::MathMl,
+        Some("http://www.w3.org/1999/xlink") => Namespace::XLink,
+        Some("http://www.w3.org/XML/1998/namespace") => Namespace::Xml,
+        Some("http://www.w3.org/2000/xmlns/") => Namespace::Xmlns,
+        Some("http://www.w3.org/1999/xhtml") => Namespace::Html,
+        Some(_) => Namespace::None,
+        None => Namespace::None,
+    };
+    let node = with_context_host(context, |host| {
+        let document = &mut host.document;
+        let node_id = document.create_element(namespace, local_name, Vec::new());
+        if let Some(element) = document
+            .try_node_mut(node_id)
+            .and_then(|node| node.as_element_mut())
+        {
+            element.prefix = prefix;
+        }
+        node_id
+    });
+    match node {
+        Some(node_id) => wrap_node(context, node_id),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
 pub(crate) fn document_create_text_node(
     _this: &JsValue,
     args: &[JsValue],

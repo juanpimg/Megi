@@ -21,6 +21,64 @@ pub(crate) fn node_tag_name(
     Ok(JsValue::from(js_string!(name)))
 }
 
+/// DOM §4.5: `Element.namespaceURI`, `localName` and `prefix` (#1939).
+pub(crate) fn node_namespace_uri(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let uri = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.namespace.uri())
+            .map(str::to_owned)
+    })
+    .flatten();
+    wrap_optional_string(context, uri)
+}
+
+pub(crate) fn node_local_name(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let name = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .map(|element| element.local_name.clone())
+    })
+    .flatten()
+    .unwrap_or_default();
+    Ok(JsValue::from(js_string!(name)))
+}
+
+pub(crate) fn node_prefix(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let prefix = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.prefix.clone())
+    })
+    .flatten();
+    wrap_optional_string(context, prefix)
+}
+
+fn wrap_optional_string(_context: &mut Context, value: Option<String>) -> JsResult<JsValue> {
+    match value {
+        Some(value) => Ok(JsValue::from(js_string!(value))),
+        None => Ok(JsValue::null()),
+    }
+}
+
 pub(crate) fn node_id_get(
     this: &JsValue,
     _args: &[JsValue],
