@@ -15,7 +15,19 @@
     "crates/js/src/runtime/tla/loader.rs:15": "self: Rc<Self>,",
     "crates/js/src/runtime/tla/loader.rs:121": "self: Rc<Self>,",
     "crates/js/src/runtime/frames/state.rs:255": ") -> Option<Rc<RefCell<IframeState>>> {",
-    "crates/js/src/runtime/frames/bridge.rs:185": ") -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {"
+    "crates/js/src/runtime/frames/bridge.rs:185": ") -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {",
+    "crates/js/src/events.rs:64": "Rc::new(RefCell::new(Host::new(",
+    "crates/js/src/host.rs:56": "Rc::new(RefCell::new(Host::new(",
+    "crates/js/src/runtime/api/core.rs:27": "let module_loader = Rc::new(MegiModuleLoader {",
+    "crates/js/src/runtime/api/core.rs:32": "let allow_eval = Rc::new(std::cell::Cell::new(true));",
+    "crates/js/src/runtime/api/core.rs:35": ".host_hooks(Rc::new(CspEvalHooks {",
+    "crates/js/src/runtime/api/core.rs:36": "allow_eval: Rc::clone(&allow_eval),",
+    "crates/js/src/runtime/api/core.rs:43": "Rc::new(RefCell::new(Host::new(document, url))),",
+    "crates/js/src/runtime/frames/bridge.rs:190": "return Some((idx, Rc::clone(rc)));",
+    "crates/js/src/runtime/frames/bridge.rs:325": "let state_rc = Rc::new(RefCell::new(IframeState {",
+    "crates/js/src/runtime/frames/bridge.rs:341": "host.frames.push(Some(Rc::clone(&state_rc)));",
+    "crates/js/src/runtime/frames/runtime_impl.rs:91": ".and_then(|slot| slot.as_ref().map(Rc::clone));",
+    "crates/js/src/runtime/frames/state.rs:259": ".and_then(|slot| slot.as_ref().map(Rc::clone))"
   },
   "edges": {
     "core": [],

@@ -36,6 +36,27 @@ class TestCheckArchPredicates(unittest.TestCase):
             "a file recorded in the baseline is legacy, not a new violation",
         )
 
+    def test_forbidden_pattern_catches_rc_static_constructors(self):
+        # #1763: the old regex only matched `Rc<`/`Weak<`, so `Rc::new(...)`
+        # and friends slipped through the architecture gate.
+        pattern = check_arch.FORBIDDEN_RE
+        for line in (
+            "let host = Rc::new(Host::default());",
+            "let weak = Weak::new();",
+            "let cloned = Rc::clone(&host);",
+            "unsafe { do_thing() }",
+        ):
+            with self.subTest(line=line):
+                self.assertIsNotNone(pattern.search(line), line)
+
+    def test_qualified_paths_are_counted_as_edges(self):
+        # #1763: a fully qualified call in an expression is an import edge
+        # even though it does not start with `use`.
+        edges = check_arch.qualified_edges(
+            "let out = megi_render::render_url(url, &opts);", {"render"}
+        )
+        self.assertEqual(edges, {"render"})
+
     def test_agents_md_has_hard_rules(self):
         from pathlib import Path
 
