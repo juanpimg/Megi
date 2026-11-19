@@ -144,8 +144,9 @@ impl SelectorList {
 /// invalid, so the whole list is dropped instead of silently over-matching with its valid
 /// parts (F13).
 ///
-/// Pending and not implemented in this milestone: `@media`/at-rules in the cascade, and
-/// `:is()`, `:where()`, `:not()`, `:has()`, which currently invalidate the selector list.
+/// Pending and not implemented in this milestone: `@media`/at-rules in the cascade.
+/// Functional `:is()`, `:where()`, `:not()` and `:has()` are parsed and matched when their
+/// arguments are supported; an unknown nested pseudo-class still invalidates the list (F13).
 pub fn parse_selectors(input: &str) -> SelectorList {
     if input.trim().is_empty() {
         return SelectorList::default();
