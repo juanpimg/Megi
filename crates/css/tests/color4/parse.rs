@@ -284,3 +284,23 @@ fn modern_rgb_and_hsl_space_slash_and_case_insensitive() {
 
     assert!(Color::parse("hsl(0, 100%, 50%, 0.5, 1)").is_none());
 }
+
+#[test]
+fn modern_hsl_accepts_number_saturation_and_lightness() {
+    // #1844: CSS Color 4 allows <number> | <percentage> for S/L in the modern
+    // (space-separated) syntax: 0.5 == 50%. The legacy comma form only takes %.
+    let numeric = Color::parse("hsl(120 1 0.5)").expect("modern hsl with numbers");
+    assert_eq!(
+        (numeric.r, numeric.g, numeric.b, numeric.a),
+        (0, 255, 0, 255)
+    );
+
+    // Mixed number/percentage components and an alpha slash are valid too.
+    let mixed = Color::parse("hsl(240 100% 0.5 / 0.5)").expect("mixed hsl");
+    assert_eq!((mixed.r, mixed.g, mixed.b, mixed.a), (0, 0, 255, 128));
+
+    // Out-of-range numbers are clamped, not rejected: S 2 -> 1, L -1 -> 0,
+    // and 0% lightness is black.
+    let clamped = Color::parse("hsl(0 2 -1)").expect("clamped hsl");
+    assert_eq!((clamped.r, clamped.g, clamped.b, clamped.a), (0, 0, 0, 255));
+}

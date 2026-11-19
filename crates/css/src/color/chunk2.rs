@@ -48,7 +48,8 @@ pub(crate) fn parse_hwb(inner: &str) -> Option<Color> {
 }
 
 pub(crate) fn parse_hsl(inner: &str) -> Option<Color> {
-    let (tokens, alpha): (Vec<String>, f32) = if inner.contains(',') {
+    let legacy = inner.contains(',');
+    let (tokens, alpha): (Vec<String>, f32) = if legacy {
         if inner.contains('/') {
             return None;
         }
@@ -77,7 +78,9 @@ pub(crate) fn parse_hsl(inner: &str) -> Option<Color> {
     let hue = parse_hue(&tokens[0])?.rem_euclid(360.0);
     let (s_val, s_pct) = number_or_percentage(&tokens[1])?;
     let (l_val, l_pct) = number_or_percentage(&tokens[2])?;
-    if !s_pct || !l_pct {
+    // #1844: the legacy comma form requires percentages for S/L, but the modern
+    // space-separated form also accepts <number> (0.5 == 50%) per CSS Color 4.
+    if legacy && (!s_pct || !l_pct) {
         return None;
     }
     let sat = s_val.clamp(0.0, 1.0);
