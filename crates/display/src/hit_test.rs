@@ -97,17 +97,13 @@ pub struct RegionCollector {
 }
 
 impl RegionCollector {
-    const MAX_CLIP_DEPTH: usize = 256;
-
+    /// #1712: every push narrows the clip; a depth cap that pushed a sentinel
+    /// used to turn into "no clip" and made hidden regions clickable again.
     pub fn push_clip(&mut self, rect: Rect) {
-        if self.clip_stack.len() >= Self::MAX_CLIP_DEPTH {
-            self.clip_stack.push(None);
-            return;
-        }
         let current = match self.clip_stack.last() {
             Some(Some((_, running))) => *running,
-            Some(None) => rect,
-            None => rect, // viewport bounds enforced by region rects themselves
+            Some(None) => return, // already empty
+            None => rect,         // viewport bounds enforced by region rects themselves
         };
         let x0 = current.x.max(rect.x);
         let y0 = current.y.max(rect.y);
@@ -124,9 +120,11 @@ impl RegionCollector {
     /// Intersection of the whole clip stack (viewport bounds are enforced by the
     /// region rectangles themselves, which the painter already keeps in view).
     fn current_clip(&self) -> Option<Rect> {
-        self.clip_stack
-            .last()
-            .and_then(|e| e.map(|(_, running)| running))
+        match self.clip_stack.last() {
+            Some(Some((_, running))) => Some(*running),
+            Some(None) => Some(Rect::new(0.0, 0.0, 0.0, 0.0)), // fail closed
+            None => None,
+        }
     }
 
     /// Records `rect` clipped by the current clip stack.
@@ -233,6 +231,8 @@ pub fn find_link_at(doc: &Document, regions: &[HitRegion], x: f32, y: f32) -> Op
 mod tests {
     use super::*;
 
+    const MAX_CLIP_DEPTH: usize = 256;
+
     fn region(rect: Rect, node_id: NodeId, kind: HitKind) -> HitRegion {
         HitRegion {
             rect,
@@ -300,5 +300,27 @@ mod tests {
         assert_eq!(regions[1].rect, Rect::new(5.0, 0.0, 5.0, 10.0));
         assert_eq!(hit_test(&regions, 2.0, 2.0), Some(node(1)));
         assert_eq!(hit_test(&regions, 7.0, 2.0), Some(node(2)));
+    }
+
+    #[test]
+    fn test_region_collector_clip_survives_depth_limit() {
+        // #1712: a sentinel pushed at MAX_CLIP_DEPTH must not disable the clip.
+        let mut collector = RegionCollector::default();
+        for _ in 0..=MAX_CLIP_DEPTH {
+            collector.push_clip(Rect::new(0.0, 0.0, 1.0, 1.0));
+        }
+        collector.record(
+            Rect::new(0.0, 0.0, 10.0, 10.0),
+            Some(node(7)),
+            HitKind::Background,
+        );
+        let regions = collector.take_regions();
+        assert_eq!(regions.len(), 1);
+        assert_eq!(
+            regions[0].rect,
+            Rect::new(0.0, 0.0, 1.0, 1.0),
+            "the clip must still apply past the depth limit"
+        );
+        assert_eq!(hit_test(&regions, 5.0, 5.0), None);
     }
 }
