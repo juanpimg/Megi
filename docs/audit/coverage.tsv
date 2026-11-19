@@ -616,8 +616,8 @@ crates/js/src/runtime/globals/install.rs	119	src	F2	wave-max-mod	2026-11-19	cove
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/location_storage.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	280	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/module_parse.rs	123	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/modules.rs	360	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/module_parse.rs	133	src	F2	fix-1920	2026-11-19	covered	#1920,#1936	re-read after import/export whitespace fix
+crates/js/src/runtime/modules.rs	385	src	F2	fix-1920	2026-11-19	covered	#1920,#1936	re-read after import/export whitespace fix
 crates/js/src/runtime/network.rs	213	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_accessors.rs	352	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods.rs	16	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -653,7 +653,7 @@ crates/js/tests/custom_elements_tests.rs	54	test	F1	wave-max-mod	2026-11-19	cove
 crates/js/tests/dialog_tests.rs	60	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dom_edges_tests.rs	380	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/es_modules.rs	433	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/es_modules.rs	457	test	F1	fix-1920	2026-11-19	covered	#1920,#1936	re-read after import/export whitespace fix
 crates/js/tests/es_modules_stub.rs	19	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/event_advanced_tests/animations.rs	113	test	F1	jp	2026-11-19	covered	#941,#942	
 crates/js/tests/event_advanced_tests/dispatch.rs	317	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

@@ -57,12 +57,23 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
         for raw_line in split_top_level_statements(raw_line) {
             let line = raw_line.replace("import.meta.url", &quoted_url);
             let trimmed = line.trim();
-            if trimmed.starts_with("import ") {
-                let rest = trimmed
-                    .trim_start_matches("import ")
-                    .trim()
-                    .trim_end_matches(';')
-                    .trim();
+            // CSS-style minifiers drop the space after the keyword: `import{...}`,
+            // `import"spec"`, `export{...}`. ES grammar allows no whitespace here,
+            // but only when the next token is not an identifier (#1920/#1936).
+            let import_rest = if let Some(rest) = trimmed.strip_prefix("import ") {
+                Some(rest)
+            } else if let Some(rest) = trimmed.strip_prefix("import") {
+                let next = rest.chars().next();
+                if matches!(next, Some('{' | '"' | '\'' | '*')) {
+                    Some(rest)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(import_rest) = import_rest {
+                let rest = import_rest.trim().trim_end_matches(';').trim();
                 if rest.starts_with('"') || rest.starts_with('\'') {
                     let specifier = rest.trim_matches(['"', '\'']).to_string();
                     imports.push(ImportSpec {
@@ -98,7 +109,21 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
                 imports.push(ImportSpec { specifier, binding });
                 continue;
             }
-            if let Some(rest) = trimmed.strip_prefix("export ") {
+            let export_rest = if let Some(rest) = trimmed.strip_prefix("export ") {
+                Some(rest)
+            } else if let Some(rest) = trimmed.strip_prefix("export") {
+                let next = rest.chars().next();
+                if matches!(next, Some('{' | '*' | '"' | '\''))
+                    || next.is_some_and(|c| c.is_ascii_alphabetic())
+                {
+                    Some(rest)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            if let Some(rest) = export_rest {
                 let rest = rest.trim();
                 if let Some(default) = rest.strip_prefix("default ") {
                     let default = default.trim().trim_end_matches(';').trim();
@@ -107,7 +132,7 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
                     continue;
                 }
                 if rest.starts_with('{') {
-                    let mapping = parse_named_list(rest);
+                    let mapping = parse_named_list(rest.trim_end_matches(';'));
                     for (local, exported) in mapping {
                         exports.push((exported, local));
                     }
