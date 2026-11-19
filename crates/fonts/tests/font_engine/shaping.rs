@@ -184,3 +184,26 @@ fn unknown_explicit_family_renders_with_bundled_default() {
         .expect("unknown family falls back to the bundled face");
     assert_eq!(run.glyphs.len(), 7, "all ASCII glyphs must be rendered");
 }
+
+#[test]
+fn every_shaped_run_face_is_resolvable_for_rasterization() {
+    // #1977: a per-glyph fallback face from the system DB must still be rebuildable by
+    // the rasterizer's face cache, otherwise those glyphs are silently dropped.
+    let db = FontDatabase::new_with_bundled_fonts();
+    let run = db
+        .shape(
+            &["sans-serif"],
+            400,
+            FontStyle::Normal,
+            16.0,
+            "日本 中文 한국어",
+        )
+        .expect("shape CJK text");
+    for info in &run.fonts {
+        assert!(
+            db.font_by_ref_or_system(info).is_ok(),
+            "shaped face {} must be resolvable",
+            info.family
+        );
+    }
+}
