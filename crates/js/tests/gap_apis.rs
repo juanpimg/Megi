@@ -390,3 +390,43 @@ fn resize_and_intersection_observers_exist() {
     )
     .expect("IntersectionObserver stub must not throw (#1892)");
 }
+
+/// A batch of standard DOM/browser globals that scripts feature-detect. Missing
+/// constructors cause ReferenceError and abort initialization on real sites.
+#[test]
+fn standard_browser_globals_are_exposed() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof Blob",
+        "typeof FileReader",
+        "typeof CSS",
+        "typeof screen",
+        "typeof NodeList",
+        "typeof HTMLCollection",
+        "typeof DocumentFragment",
+        "typeof Text",
+        "typeof Comment",
+        "typeof SVGElement",
+        "typeof HTMLInputElement",
+        "typeof HTMLScriptElement",
+        "typeof escape",
+        "typeof unescape",
+        "typeof close",
+        "typeof scroll",
+        "typeof getSelection",
+        "typeof frames",
+        "typeof console.trace",
+        "typeof console.group",
+        "typeof document.open",
+        "typeof document.baseURI",
+        "typeof document.referrer",
+        "typeof history.scrollRestoration",
+        "typeof navigator.cookieEnabled",
+        "typeof Element.prototype.getAnimations",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+    assert_eq!(rt.eval("escape('a b')", "t").unwrap(), "a%20b");
+    assert_eq!(rt.eval("unescape('a%20b')", "t").unwrap(), "a b");
+}

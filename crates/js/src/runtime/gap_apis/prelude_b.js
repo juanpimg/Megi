@@ -471,3 +471,97 @@ if (typeof IntersectionObserver !== 'function') {
   IntersectionObserver.prototype.rootMargin = '0px';
   IntersectionObserver.prototype.thresholds = [0];
 }
+
+// Standard browser globals used for feature-detection (#1924/#1926/#1925/#1941/
+// #1946/#1950/#1951/#1954-#1957/#1960/#1966/#1979). Deterministic no-op stubs
+// keep real-site scripts running until the full APIs are implemented in Rust.
+(function () {
+  function define(name, value) {
+    try { Object.defineProperty(globalThis, name, { value: value, writable: true, configurable: true }); } catch (e) {}
+  }
+  function StubCtor(name, parent) {
+    function C() {}
+    Object.defineProperty(C, 'name', { value: name });
+    if (parent && parent.prototype) C.prototype = Object.create(parent.prototype);
+    C.prototype.constructor = C;
+    return C;
+  }
+  if (typeof Blob !== 'function') {
+    define('Blob', function Blob(parts, options) {
+      var chunks = parts || [];
+      this.size = 0; this.type = options && options.type ? options.type : '';
+      for (var i = 0; i < chunks.length; i++) this.size += String(chunks[i]).length;
+      this.arrayBuffer = function () { return Promise.resolve(new ArrayBuffer(0)); };
+      this.text = function () { return Promise.resolve(''); };
+      this.slice = function () { return new Blob([], { type: this.type }); };
+    });
+  }
+  if (typeof File !== 'function') define('File', function File() { return new Blob(arguments[0] || [], {}); });
+  if (typeof FileReader !== 'function') {
+    define('FileReader', function FileReader() {
+      this.result = null; this.error = null; this.readyState = 0;
+      this.onload = null; this.onerror = null;
+      this.readAsText = function () { this.readyState = 2; this.result = ''; if (this.onload) this.onload({ target: this }); };
+      this.readAsArrayBuffer = function () { this.readyState = 2; this.result = new ArrayBuffer(0); if (this.onload) this.onload({ target: this }); };
+      this.abort = function () {};
+    });
+  }
+  if (typeof URL.createObjectURL !== 'function') {
+    URL.createObjectURL = function () { return 'blob:megi/' + Math.random().toString(36).slice(2); };
+    URL.revokeObjectURL = function () {};
+  }
+  if (typeof CSS !== 'function') define('CSS', function CSS() {});
+  if (typeof CSS === 'function' && typeof CSS.supports !== 'function') {
+    CSS.supports = function (prop, value) { return typeof value === 'undefined' ? !!prop : !!prop && !!value; };
+  }
+  if (typeof screen === 'undefined') {
+    define('screen', { width: 1280, height: 720, availWidth: 1280, availHeight: 720, colorDepth: 24, pixelDepth: 24 });
+  }
+  if (typeof NodeList !== 'function') define('NodeList', StubCtor('NodeList'));
+  if (typeof HTMLCollection !== 'function') define('HTMLCollection', StubCtor('HTMLCollection'));
+  if (typeof DOMTokenList !== 'function') define('DOMTokenList', StubCtor('DOMTokenList'));
+  if (typeof NamedNodeMap !== 'function') define('NamedNodeMap', StubCtor('NamedNodeMap'));
+  if (typeof DocumentFragment !== 'function') define('DocumentFragment', StubCtor('DocumentFragment'));
+  if (typeof Text !== 'function') define('Text', StubCtor('Text'));
+  if (typeof Comment !== 'function') define('Comment', StubCtor('Comment'));
+  if (typeof Attr !== 'function') define('Attr', StubCtor('Attr'));
+  if (typeof Document !== 'function') define('Document', StubCtor('Document'));
+  if (typeof SVGElement !== 'function') define('SVGElement', StubCtor('SVGElement', typeof Element !== 'undefined' ? Element : null));
+  var htmlNames = ['HTMLDivElement','HTMLAnchorElement','HTMLInputElement','HTMLButtonElement',
+    'HTMLFormElement','HTMLTableElement','HTMLCanvasElement','HTMLVideoElement','HTMLAudioElement',
+    'HTMLScriptElement','HTMLLinkElement','HTMLSpanElement','HTMLImageElement','HTMLUListElement',
+    'HTMLOListElement','HTMLLIElement','HTMLSelectElement','HTMLTextAreaElement','HTMLParagraphElement'];
+  htmlNames.forEach(function (n) {
+    if (typeof globalThis[n] !== 'function') define(n, StubCtor(n, typeof HTMLElement !== 'undefined' ? HTMLElement : Element));
+  });
+  if (typeof escape !== 'function') {
+    define('escape', function (s) { return encodeURI(String(s)).replace(/!/g, '%21').replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29'); });
+  }
+  if (typeof unescape !== 'function') define('unescape', function (s) { return decodeURI(String(s).replace(/%([0-9A-Fa-f]{2})/g, '%$1')); });
+  if (typeof close !== 'function') define('close', function () {});
+  if (typeof scroll !== 'function') define('scroll', typeof scrollTo === 'function' ? scrollTo : function () {});
+  if (typeof getSelection !== 'function') define('getSelection', function () { return { toString: function () { return ''; }, rangeCount: 0 }; });
+  if (typeof frames === 'undefined') define('frames', globalThis);
+  if (typeof name === 'undefined') define('name', '');
+  if (typeof opener === 'undefined') define('opener', null);
+  if (typeof length === 'undefined') define('length', 0);
+  if (typeof console !== 'undefined') {
+    if (typeof console.trace !== 'function') console.trace = function () {};
+    if (typeof console.group !== 'function') console.group = function () {};
+    if (typeof console.groupEnd !== 'function') console.groupEnd = function () {};
+  }
+  if (typeof document !== 'undefined') {
+    if (typeof document.open !== 'function') document.open = function () { return document; };
+    if (typeof document.baseURI === 'undefined') Object.defineProperty(document, 'baseURI', { get: function () { return document.URL || location.href; }, configurable: true });
+    if (typeof document.referrer === 'undefined') Object.defineProperty(document, 'referrer', { value: '', configurable: true });
+  }
+  if (typeof history !== 'undefined' && typeof history.scrollRestoration === 'undefined') {
+    Object.defineProperty(history, 'scrollRestoration', { value: 'auto', writable: true, configurable: true });
+  }
+  if (typeof navigator !== 'undefined' && typeof navigator.cookieEnabled === 'undefined') {
+    Object.defineProperty(navigator, 'cookieEnabled', { value: true, configurable: true });
+  }
+  if (typeof Element !== 'undefined' && typeof Element.prototype.getAnimations !== 'function') {
+    Element.prototype.getAnimations = function () { return []; };
+  }
+})();
