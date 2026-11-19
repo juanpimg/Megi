@@ -120,6 +120,7 @@ fn table_with_calc_width_uses_specified_width() {
     doc.append_child(container, table);
     let mut table_style = ComputedStyle::initial();
     table_style.display = Display::Table;
+    table_style.border_spacing = (2.0, 2.0);
     // calc(50% + 20px) = 220px
     table_style.calc_lengths.width = Some(megi_css::calc::CalcValue {
         percent: 50.0,
