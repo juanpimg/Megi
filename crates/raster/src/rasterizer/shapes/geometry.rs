@@ -107,12 +107,35 @@ pub(crate) fn bilinear_sample(image: &megi_display::RgbaImage, u: f32, v: f32) -
     let p10 = image.pixel(x1, y0)?;
     let p01 = image.pixel(x0, y1)?;
     let p11 = image.pixel(x1, y1)?;
-    let mut out = [0u8; 4];
+    // #1718: interpolate premultiplied samples. Interpolating straight RGBA
+    // darkens a colour towards the RGB of a fully transparent neighbour,
+    // leaving a halo once the result is composited.
+    let premultiply = |pixel: [u8; 4]| -> [f32; 4] {
+        let alpha = f32::from(pixel[3]) / 255.0;
+        [
+            f32::from(pixel[0]) * alpha,
+            f32::from(pixel[1]) * alpha,
+            f32::from(pixel[2]) * alpha,
+            f32::from(pixel[3]),
+        ]
+    };
+    let p00 = premultiply(p00);
+    let p10 = premultiply(p10);
+    let p01 = premultiply(p01);
+    let p11 = premultiply(p11);
+    let mut blended = [0.0f32; 4];
     for channel in 0..4 {
-        let top = f32::from(p00[channel]) * (1.0 - fx) + f32::from(p10[channel]) * fx;
-        let bottom = f32::from(p01[channel]) * (1.0 - fx) + f32::from(p11[channel]) * fx;
-        let value = top * (1.0 - fy) + bottom * fy;
-        out[channel] = value.round().clamp(0.0, 255.0) as u8;
+        let top = p00[channel] * (1.0 - fx) + p10[channel] * fx;
+        let bottom = p01[channel] * (1.0 - fx) + p11[channel] * fx;
+        blended[channel] = top * (1.0 - fy) + bottom * fy;
+    }
+    let alpha = blended[3];
+    let mut out = [0u8; 4];
+    out[3] = alpha.round().clamp(0.0, 255.0) as u8;
+    if alpha > 0.5 {
+        for channel in 0..3 {
+            out[channel] = (blended[channel] * 255.0 / alpha).round().clamp(0.0, 255.0) as u8;
+        }
     }
     Some(out)
 }
@@ -273,4 +296,22 @@ pub(crate) fn shrink_radius(
         megi_display::Length::Auto => 0.0,
     };
     megi_display::Length::Px((px - width).max(0.0))
+}
+
+#[cfg(test)]
+mod bilinear_tests {
+    use super::*;
+
+    #[test]
+    fn bilinear_interpolates_in_premultiplied_alpha() {
+        // #1718: interpolating straight RGBA between opaque red and fully
+        // transparent black produces dark red at 50% alpha (a halo).
+        let image = megi_display::RgbaImage::new(2, 1, vec![255, 0, 0, 255, 0, 0, 0, 0])
+            .expect("2x1 image");
+        let sample = bilinear_sample(&image, 0.5, 0.0).expect("sample");
+        assert!(
+            sample[0] >= 250 && sample[3] > 0,
+            "the colour must survive interpolation with a transparent neighbour: {sample:?}"
+        );
+    }
 }

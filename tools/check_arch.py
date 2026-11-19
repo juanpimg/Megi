@@ -20,6 +20,17 @@ ROOT = Path(__file__).resolve().parent.parent
 BASELINE_PATH = ROOT / "docs" / "architecture-baseline.json"
 MAX_LINES = 500
 
+# #1763: match both angle-bracket types and static constructors (`Rc::new`,
+# `Weak::upgrade`, ...). `unsafe` matches the keyword followed by a word boundary.
+FORBIDDEN_RE = re.compile(r"\b(?:Rc::|Weak::|Rc<|Weak<|unsafe(?=\s|\{))")
+QUALIFIED_RE = re.compile(r"\b(?:::)?(megi_[a-z0-9_]+)::")
+
+
+def qualified_edges(line: str, known: set[str], local_modules: set[str] | None = None) -> set[str]:
+    """Crates referenced through a fully qualified path in an expression."""
+    local = local_modules or set()
+    return {normalize(match.group(1)) for match in QUALIFIED_RE.finditer(line)} & known - local
+
 
 def normalize(name: str) -> str:
     """Crate names may be `megi-core`, `megi_core` or plain `core`."""
@@ -106,7 +117,6 @@ def scan() -> tuple[list[str], int]:
     legacy_count = 0
 
     use_re = re.compile(r"^\s*(?:pub\s+)?use\s+(?:megi_)?([a-z0-9_]+)(?:::|;)")
-    pattern_re = re.compile(r"\b(?:Rc<|Weak<|unsafe )")
 
     for member, name in packages.items():
         manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text())
@@ -141,7 +151,7 @@ def scan() -> tuple[list[str], int]:
                 if "forbid(unsafe_code)" in line or not _comment_free(line):
                     continue
                 key = f"{rel}:{lineno}"
-                if pattern_re.search(line):
+                if FORBIDDEN_RE.search(line):
                     if key in baseline.get("forbidden_patterns", {}):
                         legacy_count += 1
                     else:
@@ -152,6 +162,12 @@ def scan() -> tuple[list[str], int]:
                 if m and m.group(1) in known:
                     msgs = violations_for_edge(name, m.group(1), allowed)
                     if msgs and m.group(1) not in legacy_edges.get(name, set()):
+                        violations.append(f"{key}: {msgs[0]}")
+                    elif msgs:
+                        legacy_count += 1
+                for dst in qualified_edges(line, known, local_modules):
+                    msgs = violations_for_edge(name, dst, allowed)
+                    if msgs and dst not in legacy_edges.get(name, set()):
                         violations.append(f"{key}: {msgs[0]}")
                     elif msgs:
                         legacy_count += 1

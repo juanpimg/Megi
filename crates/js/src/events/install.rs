@@ -37,9 +37,55 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         ("CustomEvent", 2, custom_event_constructor),
         ("MessageEvent", 2, message_event_constructor),
     ] {
+        // #1740: a real constructor (with a `prototype` object) is required by ECMA-262
+        // §7.3.7 `instanceof`; `register_global_callable` has no prototype property.
+        let constructor = FunctionObjectBuilder::new(context.realm(), native(function))
+            .name(js_string!(name))
+            .length(length)
+            .constructor(true)
+            .build();
+        // Boa's builder does not guarantee a `prototype` property in every configuration;
+        // `instanceof` requires it to be an object (ECMA-262 §7.3.7).
+        if constructor
+            .get(js_string!("prototype"), context)
+            .ok()
+            .and_then(|value| value.as_object())
+            .is_none()
+        {
+            let proto = ObjectInitializer::new(context).build();
+            let _ = constructor.set(
+                js_string!("prototype"),
+                JsValue::from(proto),
+                false,
+                context,
+            );
+        }
         context
-            .register_global_callable(js_string!(name), length, native(function))
+            .global_object()
+            .set(js_string!(name), JsValue::from(constructor), false, context)
             .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+    }
+    // Event subclasses inherit from Event.prototype, so `instanceof Event` is true for them.
+    let event_proto = context
+        .global_object()
+        .get(js_string!("Event"), context)
+        .ok()
+        .and_then(|value| value.as_object())
+        .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
+        .and_then(|value| value.as_object());
+    if let Some(event_proto) = event_proto {
+        for name in ["CustomEvent", "MessageEvent"] {
+            if let Some(proto) = context
+                .global_object()
+                .get(js_string!(name), context)
+                .ok()
+                .and_then(|value| value.as_object())
+                .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
+                .and_then(|value| value.as_object())
+            {
+                let _ = proto.set_prototype(Some(event_proto.clone()));
+            }
+        }
     }
     for (name, length, function) in timer_globals() {
         context
