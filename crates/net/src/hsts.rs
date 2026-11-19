@@ -92,7 +92,8 @@ pub fn parse_hsts_header(value: &str) -> Option<HstsPolicy> {
             }
             include_subdomains = true;
         } else if name.eq_ignore_ascii_case("preload") {
-            if param.is_some() {
+            // #1751: RFC 6797 §6.1 — a second `preload` invalidates the whole header.
+            if param.is_some() || preload {
                 return None;
             }
             preload = true;
@@ -268,6 +269,14 @@ mod tests {
         assert!(parse_hsts_header("max-age=1; max-age=2").is_none());
         assert!(parse_hsts_header("max-age=1; includeSubDomains=1").is_none());
         assert!(parse_hsts_header("max-age=\"\"").is_none());
+    }
+
+    #[test]
+    fn rejects_duplicate_directives() {
+        // #1751: RFC 6797 §6.1 — every directive must appear at most once.
+        assert!(parse_hsts_header("max-age=31536000; preload").is_some());
+        assert!(parse_hsts_header("max-age=31536000; preload; preload").is_none());
+        assert!(parse_hsts_header("max-age=1; includeSubDomains; includeSubDomains").is_none());
     }
 
     #[test]
