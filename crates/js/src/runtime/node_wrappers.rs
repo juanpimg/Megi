@@ -24,11 +24,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-<<<<<<< HEAD
-    let accessors: [(&str, AccessorKind); 48] = [
-=======
-    let accessors: [(&str, AccessorKind); 52] = [
->>>>>>> 2d106a7c (feat(js): implement HTML table DOM API (#1974))
+    let accessors: [(&str, AccessorKind); 54] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),

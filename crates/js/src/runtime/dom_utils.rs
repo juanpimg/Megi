@@ -71,26 +71,29 @@ pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<J
     for node in nodes {
         wrappers.push(wrap_node(context, node)?);
     }
-    let item = accessor_fn(context, node_list_item);
-    let for_each = accessor_fn(context, node_list_for_each);
-    let mut init = ObjectInitializer::new(context);
-    init.property(js_string!("__megi_node_list"), true, Attribute::all());
-    for (index, wrapper) in wrappers.iter().enumerate() {
-        init.property(
-            js_string!(index.to_string()),
-            wrapper.clone(),
-            Attribute::all(),
-        );
-    }
-    init.property(
-        js_string!("length"),
-        f64::from(wrappers.len() as u32),
-        Attribute::all(),
-    )
-    .function(native(node_list_item), js_string!("item"), 1)
-    .function(native(node_list_for_each), js_string!("forEach"), 1);
-    let _ = (item, for_each);
-    Ok(JsValue::from(init.build()))
+    // #1937: an Array is natively iterable (`Symbol.iterator`), so `for...of` works on
+    // HTMLCollections just like on NodeLists. Keep the DOM collection helpers as properties.
+    let array = JsValue::from(JsArray::from_iter(wrappers, context));
+    let object = array.as_object().expect("array object");
+    let _ = object.set(
+        js_string!("__megi_node_list"),
+        JsValue::from(true),
+        false,
+        context,
+    );
+    let _ = object.set(
+        js_string!("item"),
+        JsValue::from(accessor_fn(context, node_list_item)),
+        false,
+        context,
+    );
+    let _ = object.set(
+        js_string!("forEach"),
+        JsValue::from(accessor_fn(context, node_list_for_each)),
+        false,
+        context,
+    );
+    Ok(JsValue::from(object.clone()))
 }
 
 pub(crate) fn node_list_item(
