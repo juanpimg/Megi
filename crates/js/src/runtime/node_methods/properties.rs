@@ -65,6 +65,12 @@ pub(crate) fn node_checked_get(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    if let Some(idl) =
+        with_context_host(context, |host| host.idl_checked.get(&node_id).copied()).flatten()
+    {
+        return Ok(JsValue::from(idl));
+    }
     boolean_attribute_get(this, "checked", context)
 }
 
@@ -74,7 +80,9 @@ pub(crate) fn node_checked_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
+    let checked = args.first().is_some_and(|value| value.to_boolean());
     with_context_host(context, |host| {
+        host.idl_checked.insert(node_id, checked);
         if !host.initial_control_checked.contains_key(&node_id) {
             let initial = host
                 .document
@@ -84,7 +92,7 @@ pub(crate) fn node_checked_set(
             host.initial_control_checked.insert(node_id, initial);
         }
     });
-    boolean_attribute_set(this, "checked", args, context)
+    Ok(JsValue::undefined())
 }
 
 pub(crate) fn node_disabled_get(
