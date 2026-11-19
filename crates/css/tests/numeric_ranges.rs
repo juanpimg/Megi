@@ -112,3 +112,16 @@ fn background_repeat_invalid_list_component_rejects_declaration() {
     let valid = computed("p { background-repeat: no-repeat, repeat }");
     assert_ne!(valid.background_repeat, megi_css::BackgroundRepeat::REPEAT);
 }
+
+/// CSS Values 3 §5.1.2: `rem` always resolves against the root element's
+/// font-size, even inside `line-height` (#1884: Wikipedia's `3.3rem`).
+#[test]
+fn line_height_rem_uses_root_font_size() {
+    let style = computed("html { font-size: 16px } p { font-size: 48px; line-height: 3.3rem }");
+    assert_eq!(
+        style.line_height,
+        Some(52.8),
+        "3.3rem must be 3.3*16=52.8px, not 3.3*48: {:?}",
+        style.line_height
+    );
+}

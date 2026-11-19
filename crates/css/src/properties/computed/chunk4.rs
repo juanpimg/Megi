@@ -82,7 +82,7 @@ impl ComputedStyle {
             .filter(|factor| factor.is_finite() && *factor >= 0.0)
     }
 
-    pub(crate) fn parse_line_height(val: &str, font_size: f32) -> Option<f32> {
+    pub(crate) fn parse_line_height(val: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
         let val = val.trim().to_ascii_lowercase();
         if val == "normal" {
             return Some(font_size * 1.2);
@@ -95,7 +95,9 @@ impl ComputedStyle {
         {
             return Some(factor * font_size);
         }
-        match Length::parse(&val, font_size, font_size) {
+        // CSS Values 3 §5.1.2: `rem` is always the root element's font-size,
+        // not the current element's (#1884: Wikipedia's `line-height: 3.3rem`).
+        match Length::parse(&val, font_size, root_font_size) {
             Some(Length::Px(px)) => Some(px),
             // CSS 2.2 §10.8.1: percentage line-height computes against the element font-size.
             Some(Length::Percent(pct)) => Some(font_size * pct / 100.0),

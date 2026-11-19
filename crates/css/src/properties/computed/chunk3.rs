@@ -120,7 +120,10 @@ impl ComputedStyle {
             if let Some(decl) = find_declaration(&entries, "line-height") {
                 match Self::parse_line_height_factor(&decl.raw_value) {
                     Some(factor) => (Some(factor * font_size), Some(factor)),
-                    None => (Self::parse_line_height(&decl.raw_value, font_size), None),
+                    None => (
+                        Self::parse_line_height(&decl.raw_value, font_size, root_font_size),
+                        None,
+                    ),
                 }
             } else {
                 // Inherited: the px value is kept as before and the numeric factor (if any) is
