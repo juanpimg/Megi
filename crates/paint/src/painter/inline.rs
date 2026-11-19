@@ -57,7 +57,7 @@ pub(super) fn paint_inline_content(
                         .style
                         .as_ref()
                         .map_or(TextDecoration::NONE, |style| style.text_decoration);
-                let hidden = inherited_hidden || is_hidden(child);
+                let hidden = effective_hidden(child, inherited_hidden);
                 // #1713: the box's own background/border is not clipped by its
                 // own overflow; emit it before the clip that restricts descendants.
                 if !hidden
@@ -233,7 +233,7 @@ fn push_inline_children<'a>(
         } else {
             0
         };
-        let hidden = inherited_hidden || is_hidden(child);
+        let hidden = effective_hidden(child, inherited_hidden);
         let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
         stack.push(InlineTask::Visit {
             layout_box: child,

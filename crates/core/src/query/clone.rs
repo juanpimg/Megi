@@ -18,6 +18,11 @@ impl Document {
         if source.slot_of(node_id).is_none() {
             return Err(DomError::UnknownNode(node_id));
         }
+        // #1726: a cross-arena import must not exhaust the destination arena and panic.
+        let available = self.free_slots() + MAX_SLOTS.saturating_sub(self.allocated());
+        if source.subtree_size(node_id) > available {
+            return Err(DomError::NodeLimitExceeded);
+        }
         let root = self.import_shallow(source, node_id);
         let mut stack: Vec<(NodeId, NodeId, bool)> = Vec::new();
         if let Some((src_contents, cloned_contents)) =
@@ -35,7 +40,7 @@ impl Document {
             }
             let mut child = source.node(source_id).first_child;
             while let Some(child_id) = child {
-                if cloned_count >= MAX_CLONE_NODES {
+                if cloned_count >= MAX_CLONE_NODES.min(available) {
                     return Err(DomError::NodeLimitExceeded);
                 }
                 let next = source.try_node(child_id).and_then(|node| node.next_sibling);

@@ -40,7 +40,7 @@ pub(super) fn paint_block_backgrounds(
                 inherited_hidden,
                 alpha_scale,
             } => {
-                let hidden = inherited_hidden || is_hidden(child);
+                let hidden = effective_hidden(child, inherited_hidden);
                 let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
                 // #1713: paint the box's own background/border before pushing the
                 // clip it inherits/generates; CSS 2.2 §11.1.1 excludes it from clipping.
@@ -133,7 +133,7 @@ fn paint_float(
     alpha_scale: f32,
     depth: usize,
 ) {
-    let hidden = inherited_hidden || is_hidden(layout_box);
+    let hidden = effective_hidden(layout_box, inherited_hidden);
     let alpha = alpha_scale * layout_box.opacity.clamp(0.0, 1.0);
     // #1713: own background before the clip (see Visit above).
     if !hidden {

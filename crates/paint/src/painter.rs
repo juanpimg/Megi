@@ -299,6 +299,17 @@ fn is_hidden(layout_box: &LayoutBox) -> bool {
         .is_some_and(|style| matches!(style.visibility, Visibility::Hidden | Visibility::Collapse))
 }
 
+/// Effective visibility for painting (CSS 2.2 §11.2): `visibility` is inherited
+/// but overridable, so an explicit `visible` on a descendant resets the state
+/// handed down by hidden ancestors (#1715).
+#[inline]
+pub(super) fn effective_hidden(layout_box: &LayoutBox, inherited_hidden: bool) -> bool {
+    match layout_box.style.as_ref().map(|style| style.visibility) {
+        Some(Visibility::Visible) => false,
+        _ => inherited_hidden || is_hidden(layout_box),
+    }
+}
+
 /// Union of the painted bounds of `items` (clip items ignored).
 fn items_bounds(items: &[DisplayItem]) -> Option<Rect> {
     let mut bounds: Option<Rect> = None;

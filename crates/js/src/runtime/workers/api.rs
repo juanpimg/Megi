@@ -98,6 +98,11 @@ pub(crate) fn worker_constructor(
         js_string!("addEventListener"),
         2,
     );
+    init.function(
+        native(worker_remove_listener),
+        js_string!("removeEventListener"),
+        2,
+    );
     let worker_object = init.build();
     define_accessor(
         context,
@@ -174,6 +179,42 @@ pub(crate) fn worker_add_listener(
     with_context_host(context, |host| {
         if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
             worker.onmessage.push(slot);
+        }
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn worker_remove_listener(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    // #1745: EventTarget.removeEventListener must stop delivery by callback identity.
+    let id = worker_handle(this, context)?;
+    let event_type = arg_string(args, 0, context)?;
+    if event_type != "message" {
+        return Ok(JsValue::undefined());
+    }
+    let callback = args.get(1).cloned().unwrap_or_else(JsValue::undefined);
+    let slots: Vec<u32> = with_context_host(context, |host| {
+        host.workers
+            .get(id as usize)
+            .and_then(|worker| worker.as_ref())
+            .map(|worker| worker.onmessage.clone())
+    })
+    .flatten()
+    .unwrap_or_default();
+    let retained: Vec<u32> = slots
+        .into_iter()
+        .filter(|slot| {
+            root_get(context, "__megi_worker_callbacks", u64::from(*slot))
+                .map(|stored| !stored.strict_equals(&callback))
+                .unwrap_or(true)
+        })
+        .collect();
+    with_context_host(context, |host| {
+        if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
+            worker.onmessage = retained;
         }
     });
     Ok(JsValue::undefined())
