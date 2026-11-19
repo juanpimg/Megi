@@ -138,11 +138,12 @@ pub(crate) fn layout_grid_children(
     if columns.is_empty() {
         columns.push(TrackSize::Auto);
     }
-    let (mut row_tracks, row_auto_fit) = expand_template(
-        &style.grid_template_rows,
-        definite_height.unwrap_or(container_width),
-        row_gap,
-    );
+    // #1705: an indefinite axis cannot satisfy auto-fill/auto-fit; CSS Grid
+    // §7.2.3.1 requires exactly one repetition. Passing the container width
+    // here invented a definite height and created dozens of empty rows.
+    let row_available = definite_height.unwrap_or(0.0);
+    let (mut row_tracks, row_auto_fit) =
+        expand_template(&style.grid_template_rows, row_available, row_gap);
 
     // 1. Collect in-flow children and sort them by `order` (stable: document
     //    order is the tiebreak).

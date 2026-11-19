@@ -40,14 +40,23 @@ pub(super) fn paint_block_backgrounds(
                 inherited_hidden,
                 alpha_scale,
             } => {
-                let hidden = inherited_hidden || is_hidden(child);
+                let hidden = effective_hidden(child, inherited_hidden);
                 let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
+                // #1713: paint the box's own background/border before pushing the
+                // clip it inherits/generates; CSS 2.2 §11.1.1 excludes it from clipping.
+                if child.is_block() && !hidden {
+                    let bg_clip = own_background_clip(child);
+                    if let Some(rect) = bg_clip {
+                        push_clip_item(list, resources, rect);
+                    }
+                    paint_background_border(child, list, skip, resources, false, alpha);
+                    if bg_clip.is_some() {
+                        pop_clip_item(list, resources);
+                    }
+                }
                 if let Some(rect) = child.clip {
                     push_clip_item(list, resources, rect);
                     stack.push(BlockTask::PopClip);
-                }
-                if child.is_block() && !hidden {
-                    paint_background_border(child, list, skip, resources, false, alpha);
                 }
                 // `overflow: hidden` + radius clips the descendant subtree.
                 if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
@@ -124,14 +133,22 @@ fn paint_float(
     alpha_scale: f32,
     depth: usize,
 ) {
-    let hidden = inherited_hidden || is_hidden(layout_box);
+    let hidden = effective_hidden(layout_box, inherited_hidden);
     let alpha = alpha_scale * layout_box.opacity.clamp(0.0, 1.0);
+    // #1713: own background before the clip (see Visit above).
+    if !hidden {
+        let bg_clip = own_background_clip(layout_box);
+        if let Some(rect) = bg_clip {
+            push_clip_item(list, resources, rect);
+        }
+        paint_background_border(layout_box, list, skip, resources, false, alpha);
+        if bg_clip.is_some() {
+            pop_clip_item(list, resources);
+        }
+    }
     let clipped = layout_box.clip;
     if let Some(rect) = clipped {
         push_clip_item(list, resources, rect);
-    }
-    if !hidden {
-        paint_background_border(layout_box, list, skip, resources, false, alpha);
     }
     let overflow_clip = if hidden {
         None
