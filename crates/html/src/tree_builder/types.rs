@@ -223,6 +223,8 @@ pub struct TreeBuilder {
     pub fragment_context: Option<(Namespace, String)>,
     pub fragment_context_node: Option<NodeId>,
     pub pending_table_characters: Vec<char>,
+    /// Encoded byte length of `pending_table_characters` (#1737).
+    pub pending_table_char_bytes: usize,
     /// Hard safety limits for this parse (anti-DoS).
     pub parse_options: ParseOptions,
     /// Limits that have been exceeded so far.

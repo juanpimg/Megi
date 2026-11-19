@@ -153,7 +153,12 @@ fn token_values_are_capped_to_the_per_token_budget() {
             _ => None,
         })
         .expect("a processing instruction token must be emitted");
-    assert_eq!(target_len, MAX_TOKEN_BYTES, "PI target must be capped");
+    // #1736: temp_buffer stores u32 code points, so the byte cap allows MAX/4 characters.
+    assert_eq!(
+        target_len,
+        MAX_TOKEN_BYTES / std::mem::size_of::<u32>(),
+        "PI target must be capped by bytes"
+    );
     assert!(
         tok.token_bytes_dropped > 0,
         "the truncation must be counted"
@@ -187,4 +192,22 @@ fn active_formatting_list_is_bounded() {
         "the overflow must be counted, got {:?}",
         outcome.limit_violations
     );
+}
+
+#[test]
+fn pi_data_byte_cap_holds_with_multibyte_characters() {
+    // #1738: a 4-byte code point must not push `pending_pi_data` past the byte cap.
+    let cap = 1usize << 20;
+    let source = format!("<?target {}?>", "é".repeat(cap));
+    let mut tok = Tokenizer::from_str_input(&source, TokenizerConfig::default());
+    tok.run();
+    let data_len = tok
+        .tokens
+        .iter()
+        .find_map(|token| match token {
+            Token::ProcessingInstruction { data, .. } => Some(data.len()),
+            _ => None,
+        })
+        .expect("a PI token must be emitted");
+    assert!(data_len <= cap, "PI data exceeded the byte cap: {data_len}");
 }

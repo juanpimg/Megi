@@ -30,10 +30,13 @@ impl TreeBuilder {
                 // Buffering them as U+FFFD would re-insert them on replay, producing a
                 // different tree for the same input solely because of the insertion mode.
                 let character = char::from_u32(ch)?;
-                if self.pending_table_characters.len() >= self.parse_options.max_text_bytes {
-                    self.limit_violations.text_bytes_dropped += 1;
+                // #1737: the budget is measured in encoded bytes, not `char` count.
+                let width = character.len_utf8();
+                if self.pending_table_char_bytes + width > self.parse_options.max_text_bytes {
+                    self.limit_violations.text_bytes_dropped += width as u64;
                     return None;
                 }
+                self.pending_table_char_bytes += width;
                 self.pending_table_characters.push(character);
                 None
             }
@@ -44,6 +47,7 @@ impl TreeBuilder {
                     .any(|&c| !matches!(c, '\t' | '\n' | '\x0C' | '\r' | ' '));
 
                 let chars = std::mem::take(&mut self.pending_table_characters);
+                self.pending_table_char_bytes = 0;
                 if has_non_whitespace {
                     let prev_fp = self.foster_parenting;
                     self.foster_parenting = true;
@@ -66,6 +70,7 @@ impl TreeBuilder {
         match token {
             Token::Character(_) if self.is_table_text_current_node() => {
                 self.pending_table_characters.clear();
+                self.pending_table_char_bytes = 0;
                 self.original_mode = self.mode;
                 self.mode = InsertionMode::InTableText;
                 self.process_in_table_text(token)

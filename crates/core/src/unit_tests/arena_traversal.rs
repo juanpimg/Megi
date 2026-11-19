@@ -264,7 +264,7 @@ fn create_element_enforces_attribute_limits() {
     let attrs = &doc.node(element).as_element().unwrap().attributes;
     assert_eq!(attrs.len(), MAX_ATTRIBUTES_PER_ELEMENT);
 
-    let mut values = vec![Attribute::new(
+    let values = vec![Attribute::new(
         "long",
         "é".repeat(MAX_ATTRIBUTE_VALUE_BYTES),
     )];
