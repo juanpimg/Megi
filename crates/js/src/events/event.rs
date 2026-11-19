@@ -74,11 +74,55 @@ pub(crate) fn build_event(
             0,
         );
     let _ = (prevent, stop, stop_immediate);
-    JsValue::from(init.build())
+    let object = init.build();
+    set_event_prototype(context, &object, "Event");
+    JsValue::from(object)
+}
+
+/// Initializes an event object in place, used by the native `Event` constructor when called
+/// via `new` (including from the JS subclass prelude, e.g. `KeyboardEvent`).
+pub(crate) fn init_event_object(
+    context: &mut Context,
+    object: &JsObject,
+    event_type: &str,
+    bubbles: bool,
+    cancelable: bool,
+    detail: JsValue,
+) {
+    let prevent = accessor_fn(context, event_prevent_default);
+    let stop = accessor_fn(context, event_stop_propagation);
+    let stop_immediate = accessor_fn(context, event_stop_immediate);
+    let _ = object.set(js_string!("__megi_event"), true, false, context);
+    let _ = object.set(js_string!("type"), js_string!(event_type), false, context);
+    let _ = object.set(js_string!("bubbles"), bubbles, false, context);
+    let _ = object.set(js_string!("cancelable"), cancelable, false, context);
+    let _ = object.set(js_string!("detail"), detail, false, context);
+    let _ = object.set(js_string!("target"), JsValue::null(), false, context);
+    let _ = object.set(js_string!("currentTarget"), JsValue::null(), false, context);
+    let _ = object.set(js_string!("defaultPrevented"), false, false, context);
+    let _ = object.set(js_string!("eventPhase"), 0.0, false, context);
+    let _ = object.set(
+        js_string!("preventDefault"),
+        JsValue::from(prevent),
+        false,
+        context,
+    );
+    let _ = object.set(
+        js_string!("stopPropagation"),
+        JsValue::from(stop),
+        false,
+        context,
+    );
+    let _ = object.set(
+        js_string!("stopImmediatePropagation"),
+        JsValue::from(stop_immediate),
+        false,
+        context,
+    );
 }
 
 pub(crate) fn event_constructor(
-    _this: &JsValue,
+    this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
@@ -107,6 +151,20 @@ pub(crate) fn event_constructor(
                 .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
+    if let Some(object) = this.as_object() {
+        init_event_object(
+            context,
+            &object,
+            &event_type,
+            bubbles,
+            cancelable,
+            JsValue::undefined(),
+        );
+        // #1740/#1806: `new Event(...)` must use the constructor's prototype
+        // so `instanceof Event` holds.
+        set_event_prototype(context, &object, "Event");
+        return Ok(JsValue::from(object));
+    }
     Ok(build_event(
         context,
         &event_type,
@@ -144,13 +202,11 @@ pub(crate) fn custom_event_constructor(
                 .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
-    Ok(build_event(
-        context,
-        &event_type,
-        bubbles,
-        cancelable,
-        detail,
-    ))
+    let event = build_event(context, &event_type, bubbles, cancelable, detail);
+    if let Some(object) = event.as_object() {
+        set_event_prototype(context, &object, "CustomEvent");
+    }
+    Ok(event)
 }
 
 pub(crate) fn build_message_event(
@@ -166,6 +222,7 @@ pub(crate) fn build_message_event(
         let _ = obj.set(js_string!("origin"), js_string!(origin), false, context);
         let _ = obj.set(js_string!("source"), source, false, context);
         let _ = obj.set(js_string!("lastEventId"), js_string!(""), false, context);
+        set_event_prototype(context, &obj, "MessageEvent");
     }
     ev_val
 }

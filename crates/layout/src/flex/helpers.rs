@@ -201,21 +201,52 @@ pub(super) fn resolve_flexible_lengths(
             }
         }
     } else if free < 0.0 {
-        let weight: f32 = line
-            .iter()
-            .map(|index| {
-                let item = &items[*index];
-                item.flex_shrink * item.base_main
-            })
-            .sum();
-        if weight > 0.0 {
-            let deficit = -free;
-            for index in line {
-                let item = &mut items[*index];
-                let share = deficit * (item.flex_shrink * item.base_main) / weight;
-                item.used_main = (item.used_main - share).max(0.0);
-                item.used_main = clamp_main(&item.style, item.used_main, row, reference);
+        // CSS Flexbox §9.7(c): freeze items that reach their minimum main size,
+        // remove them from the flexible set and redistribute the remaining
+        // deficit until no more items freeze (#1704).
+        let original_deficit = -free;
+        let original_used: Vec<f32> = line.iter().map(|&index| items[index].used_main).collect();
+        let mut active: Vec<usize> = (0..line.len()).collect();
+        let mut frozen: Vec<usize> = Vec::new();
+        loop {
+            let weight: f32 = active
+                .iter()
+                .map(|&pos| {
+                    let item = &items[line[pos]];
+                    item.flex_shrink * item.base_main
+                })
+                .sum();
+            let deficit = original_deficit
+                - frozen
+                    .iter()
+                    .map(|&pos| original_used[pos] - items[line[pos]].used_main)
+                    .sum::<f32>();
+            if weight <= 0.0 || deficit <= 0.0 {
+                break;
             }
+            let mut newly_frozen = Vec::new();
+            for &pos in &active {
+                let index = line[pos];
+                let factor = items[index].flex_shrink * items[index].base_main;
+                let target = original_used[pos] - deficit * factor / weight;
+                let clamped = clamp_main(&items[index].style, target, row, reference);
+                if clamped > target + 1e-4 {
+                    items[index].used_main = clamped;
+                    newly_frozen.push(pos);
+                }
+            }
+            if newly_frozen.is_empty() {
+                for &pos in &active {
+                    let index = line[pos];
+                    let factor = items[index].flex_shrink * items[index].base_main;
+                    let target = original_used[pos] - deficit * factor / weight;
+                    items[index].used_main =
+                        clamp_main(&items[index].style, target, row, reference);
+                }
+                break;
+            }
+            active.retain(|pos| !newly_frozen.contains(pos));
+            frozen.extend(newly_frozen);
         }
     }
 }

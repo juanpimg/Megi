@@ -210,6 +210,7 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
             None => padding_box,
         });
     }
+    node.inherited_clip = base_clip;
     node.clip = effective_clip;
 
     node.establishes_stacking_context = is_root

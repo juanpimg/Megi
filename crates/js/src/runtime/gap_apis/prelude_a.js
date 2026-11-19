@@ -238,12 +238,26 @@
   function makeEvent(ctorName, Base, initFields) {
     function EventCtor(type, init) {
       init = init || {};
-      if (Base) { Base.call(this, type, init); }
-      else { this.__megi_event = true; this.type = String(type); this.bubbles = !!init.bubbles; this.cancelable = !!init.cancelable; this.defaultPrevented = false; }
+      // The native Event constructor returns a *new* object when invoked via
+      // `Base.call(this, ...)`; discarding it left `this` without the internal
+      // marker and type (regression after #1806). Initialise `this` directly
+      // and keep the prototype chain so `instanceof Event` still works.
+      this.__megi_event = true;
+      this.type = String(type);
+      this.bubbles = !!init.bubbles;
+      this.cancelable = !!init.cancelable;
+      this.defaultPrevented = false;
+      this.target = null;
+      this.currentTarget = null;
+      this.eventPhase = 0;
       for (var key in initFields) { if (Object.prototype.hasOwnProperty.call(initFields, key)) { this[key] = init[key] === undefined ? initFields[key] : init[key]; } }
     }
     if (Base && Base.prototype) { EventCtor.prototype = Object.create(Base.prototype); }
-    else { EventCtor.prototype = { preventDefault: function () { this.defaultPrevented = true; }, stopPropagation: function () {}, stopImmediatePropagation: function () {} }; }
+    else { EventCtor.prototype = {}; }
+    // #1806: the native constructor's prototype has no Event methods.
+    EventCtor.prototype.preventDefault = function () { this.defaultPrevented = true; };
+    EventCtor.prototype.stopPropagation = function () {};
+    EventCtor.prototype.stopImmediatePropagation = function () {};
     EventCtor.prototype.constructor = EventCtor;
     return EventCtor;
   }
@@ -377,7 +391,7 @@
   Response.prototype.arrayBuffer = function () {
     var body = this._consume();
     if (body === null) { return Promise.reject(new TypeError("body already used")); }
-    return Promise.resolve(new Uint8Array(this._bytes.slice()));
+    return Promise.resolve(new Uint8Array(this._bytes.slice()).buffer);
   };
   Response.prototype.clone = function () {
     return new Response({ status: this.status, statusText: this.statusText, url: this.url, redirected: this.redirected, headers: this.headers.entries(), bodyText: this._body, bodyBytes: this._bytes.slice() });
