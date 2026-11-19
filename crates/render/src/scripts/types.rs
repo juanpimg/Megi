@@ -16,7 +16,7 @@ pub const DEFAULT_MAX_SCRIPTS: usize = 64;
 /// Maximum script fetch attempts (successful or not) per page.
 const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
 /// Maximum module-graph fetches (including nested imports) per page.
-const DEFAULT_MAX_MODULE_FETCHES: usize = 256;
+const DEFAULT_MAX_MODULE_FETCHES: usize = 1024;
 /// Maximum number of `fetch()` calls a page's scripts may make (successful or not).
 const DEFAULT_MAX_FETCH_CALLS: usize = 64;
 /// Maximum total bytes a page's scripts may pull through `fetch()` (#660).
@@ -390,4 +390,15 @@ pub struct ScriptExecution {
     pub events_dispatched: usize,
     /// Wall-clock duration of the event-loop stage (microtasks + events + timers).
     pub event_loop: std::time::Duration,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_MAX_MODULE_FETCHES;
+
+    #[test]
+    fn default_module_fetch_cap_allows_modern_bundles() {
+        // #1896: qwant.com's SPA needs more than 256 small ES modules to initialise.
+        assert!(DEFAULT_MAX_MODULE_FETCHES >= 1024);
+    }
 }
