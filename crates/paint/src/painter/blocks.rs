@@ -40,7 +40,7 @@ pub(super) fn paint_block_backgrounds(
                 inherited_hidden,
                 alpha_scale,
             } => {
-                let hidden = inherited_hidden || is_hidden(child);
+                let hidden = effective_hidden(child, inherited_hidden);
                 let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
                 if let Some(rect) = child.clip {
                     push_clip_item(list, resources, rect);
@@ -124,7 +124,7 @@ fn paint_float(
     alpha_scale: f32,
     depth: usize,
 ) {
-    let hidden = inherited_hidden || is_hidden(layout_box);
+    let hidden = effective_hidden(layout_box, inherited_hidden);
     let alpha = alpha_scale * layout_box.opacity.clamp(0.0, 1.0);
     let clipped = layout_box.clip;
     if let Some(rect) = clipped {
