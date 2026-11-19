@@ -52,6 +52,19 @@ pub(crate) fn document_create_text_node(
     }
 }
 
+pub(crate) fn document_create_comment(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let text = arg_string(args, 0, context)?;
+    let node = with_context_host(context, |host| host.document.create_comment(&text));
+    match node {
+        Some(node_id) => wrap_node(context, node_id),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
 pub(crate) fn document_current_script(
     _this: &JsValue,
     _args: &[JsValue],
