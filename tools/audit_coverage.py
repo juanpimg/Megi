@@ -320,10 +320,11 @@ def cmd_check(args: argparse.Namespace) -> int:
             problems.append(f"{path}: unknown status {row['status']!r}")
         elif row["status"] == "covered" and (not row["auditor"] or not row["date"]):
             problems.append(f"{path}: covered without auditor/date")
-        elif row["status"] == "pending" and (row["auditor"] or row["date"]):
-            problems.append(f"{path}: pending row carries auditor/date")
-        elif row["status"] == "pending" and category in NOT_READ_CATEGORIES:
-            problems.append(f"{path}: {category} row must not be pending")
+        elif row["status"] == "pending":
+            # #1759: a file nobody has read is work for the audit. The ledger
+            # must reach zero pending rows before the gate can pass, regardless
+            # of category or whether an auditor/date was accidentally recorded.
+            problems.append(f"{path}: pending row must be re-read and marked covered")
 
     tracked = {path for path in tracked_files()}
     for row in rows:

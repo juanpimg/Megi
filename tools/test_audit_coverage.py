@@ -204,6 +204,14 @@ class CheckTests(unittest.TestCase):
         rows = [row("tests/fixtures/x.png", lines=0, category="binary", phase="-", status="pending")]
         self.assertEqual(self._check(rows), 1)
 
+    def test_rejects_pending_rows_even_without_auditor_or_strict(self) -> None:
+        # #1759: AGENTS.md requires a ledger with zero pending rows; a file that
+        # was never read must fail the gate, in both normal and strict modes.
+        rows = [row("crates/a/src/lib.rs", status="pending", auditor="", date="")]
+        self.assertEqual(self._check(rows), 1)
+        audit_coverage.write_ledger(rows)
+        self.assertEqual(audit_coverage.cmd_check(argparse.Namespace(strict=True)), 1)
+
     def test_reports_rows_for_untracked_files_as_unknown(self) -> None:
         # A deleted file leaves a stale row behind; that is cleanup work for the
         # audit, and blocking every other pull request on it would get the gate
