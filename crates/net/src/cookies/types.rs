@@ -125,7 +125,7 @@ impl Cookie {
 }
 
 /// Errors produced while parsing a `Set-Cookie` header (invalid cookies are ignored by
-/// [`CookieJar::store_from_response`], matching browser behaviour).
+/// `CookieJar::store_from_response`, matching browser behaviour).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetCookieError {
     /// The header was empty or had no `name=value` pair.

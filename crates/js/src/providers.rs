@@ -1,11 +1,11 @@
 //! Immutable host providers stored in the Boa [`boa_engine::Context`].
 //!
-//! The bridge keeps the mutable [`crate::host::Host`] state and the *providers* in two
+//! The bridge keeps the mutable `crate::host::Host` state and the *providers* in two
 //! separate slots. Providers are `Arc<dyn Fn…>` closures injected by the embedding host
 //! (navigation, storage persistence, module loading, layout, …). They are:
 //!
-//! - **Immutable**: installed once with [`install_providers`] and only ever read through
-//!   [`providers`]; the closures may be shared (`Arc`) because they are never mutated.
+//! - **Immutable**: installed once with `install_providers` and only ever read through
+//!   `providers`; the closures may be shared (`Arc`) because they are never mutated.
 //! - **Called outside any host borrow**: a provider may re-enter JavaScript (for example a
 //!   storage `save` callback that dispatches an event). Invoking it while a `Ref`/`RefMut` of
 //!   the host is alive would risk a double borrow, so bindings must drop their host borrow
@@ -84,7 +84,7 @@ pub type CookieSetFn = Arc<dyn Fn(&str, &str) + Send + Sync>;
 ///
 /// Every field is optional: a missing provider leaves the corresponding web API at its
 /// documented fallback/no-op behaviour. All callbacks are immutable `Arc` closures so they
-/// can be read from a shared [`providers`] borrow and safely re-entered outside a host borrow.
+/// can be read from a shared `providers` borrow and safely re-entered outside a host borrow.
 // NOTE: the provider slot becomes live once `runtime.rs` routes its setters through
 // `install_providers`/`providers_mut`; keep these warning-free until that migration lands.
 #[allow(dead_code)]

@@ -21,9 +21,9 @@
 //! (search terms are treated as URLs). The tab strip shows a compact title per tab with
 //! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
 //!
-//! The implementation is split into cohesive submodules declared below: [`drawing`]
-//! (shared primitives), [`address_bar`], [`tab_strip`] (incl. the hidden-tab overflow),
-//! [`dropdown`], [`menus`], [`history_menu`], [`status_bar`] and [`navigation`]. This file
+//! The implementation is split into cohesive submodules declared below: `drawing`
+//! (shared primitives), `address_bar`, `tab_strip` (incl. the hidden-tab overflow),
+//! `dropdown`, `menus`, `history_menu`, `status_bar` and `navigation`. This file
 //! keeps the shared palette/geometry constants, the [`ChromeView`] data contract and the
 //! two top-level entry points, and re-exports the public API so `crate::chrome::*` paths
 //! are unchanged for the shell.

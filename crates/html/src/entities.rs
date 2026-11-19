@@ -1,7 +1,7 @@
 //! Auto-generated from official WHATWG HTML §13.5 entities.json (2,231 entries).
 //!
 //! The generated table is split across the `part_*` submodules below to keep
-//! this file within the repository size limit (ARCH §4). [`assemble`] stitches
+//! this file within the repository size limit (ARCH §4). `assemble` stitches
 //! the chunks back together in the exact original entities.json order; the
 //! bytes and ordering of every entry are unchanged.
 

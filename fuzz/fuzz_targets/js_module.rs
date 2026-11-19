@@ -62,7 +62,7 @@ fuzz_target!(|data: &[u8]| {
     // Resolver: every specifier maps into the synthetic "fuzz://module/…" origin. Specifiers
     // are truncated on a char boundary (the old `&specifier[..256]` panicked on a
     // multi-byte code point straddling the cut).
-    runtime.set_module_resolver(Box::new(|specifier: &str, _importer: &str| {
+    runtime.set_module_resolver(Arc::new(|specifier: &str, _importer: &str| {
         Ok(Some(format!(
             "fuzz://module/{}",
             megi_fuzz::lossy_prefix(specifier.as_bytes(), 256)
@@ -73,7 +73,7 @@ fuzz_target!(|data: &[u8]| {
     let modules = Arc::new(modules);
     let calls = Arc::new(AtomicUsize::new(0));
     let loads = Arc::clone(&calls);
-    runtime.set_module_loader(Box::new(move |url: &str| {
+    runtime.set_module_loader(Arc::new(move |url: &str| {
         let call = loads.fetch_add(1, Ordering::Relaxed);
         if call >= MAX_LOADER_CALLS {
             return Err(megi_js::JsError::Budget("module loader call cap".to_string()));

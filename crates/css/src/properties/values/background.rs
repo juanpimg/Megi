@@ -329,7 +329,7 @@ impl BackgroundAttachment {
 /// One computed `background-image` layer (CSS Backgrounds 3 §3.1).
 ///
 /// Multi-layer backgrounds are stored bottom-to-top in
-/// [`ComputedStyle::background_layers`]; because CSS lists the top layer first,
+/// `ComputedStyle::background_layers`; because CSS lists the top layer first,
 /// the painter iterates the list in reverse order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BackgroundLayer {

@@ -70,8 +70,8 @@ pub(crate) struct AdjustedInsertionLocation {
     pub(crate) insert_before_sibling: Option<NodeId>,
 }
 
-/// Hard parsing limits applied by [`parse_document_with_options`] /
-/// [`parse_fragment_with_options`].
+/// Hard parsing limits applied by `parse_document_with_options` /
+/// `parse_fragment_with_options`.
 ///
 /// These are **anti-DoS defenses**, not conformance knobs: real-world pages and the
 /// complete `html5lib-tests` corpus stay far below every default, so enabling the
