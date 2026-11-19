@@ -211,3 +211,15 @@ fn pi_data_byte_cap_holds_with_multibyte_characters() {
         .expect("a PI token must be emitted");
     assert!(data_len <= cap, "PI data exceeded the byte cap: {data_len}");
 }
+
+#[test]
+fn non_void_self_closing_tag_reports_a_parse_error() {
+    // #1735: `<div/>` must report the trailing-solidus parse error.
+    let mut tok = Tokenizer::from_str_input("<div/><span></span>", TokenizerConfig::default());
+    tok.run();
+    assert!(
+        tok.errors
+            .iter()
+            .any(|e| { e.code == ParseErrorCode::NonVoidHtmlElementStartTagWithTrailingSolidus })
+    );
+}
