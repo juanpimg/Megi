@@ -460,6 +460,14 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
     let active_element = pick(context, document_active_element);
     let cookie_get = pick(context, document_cookie_get);
     let cookie_set = pick(context, document_cookie_set);
+    // WHATWG DOM: `document` is itself a Node. Expose the root's handle so
+    // MutationObserver.observe(document) and other node APIs accept it (#1905).
+    let root_handle = with_context_host(context, |host| {
+        let root = host.document.root();
+        host.handle_for(root).ok()
+    })
+    .flatten();
+
     let mut init = ObjectInitializer::new(context);
     // Methods.
     for (name, length, function) in [
@@ -546,6 +554,13 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         Attribute::all(),
     );
     init.property(js_string!("__megi_document"), true, Attribute::all());
+    if let Some(handle) = root_handle {
+        init.property(
+            js_string!("__megi_node"),
+            JsValue::from(f64::from(handle)),
+            Attribute::all(),
+        );
+    }
     for (name, length, function) in crate::events::node_methods() {
         init.function(native(function), js_string!(name), length);
     }
