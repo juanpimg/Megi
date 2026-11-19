@@ -29,6 +29,8 @@ TARGETS=(
   css_parse
   selectors
   net_url
+  http_head
+  compression
   svg_parse
   image_decode
   hpack_decode
