@@ -113,9 +113,36 @@ fn top_layer_dialog_and_backdrop_paint_above_high_z_index_and_block_hits() {
         .find(|r| r.node_id == Some(dialog))
         .expect("dialog backdrop region");
     assert_eq!(top_region.kind, HitKind::Background);
-    let _ = list
+
+    // Issue #1650: the dialog must paint above the high z-index overlay in the display
+    // list, not just in the sampled pixels. The green overlay (z-index: 99999) is drawn
+    // in the normal stacking context; the top-layer dialog/backdrop are appended after it.
+    let overlay_index = list
         .items
         .iter()
-        .filter(|i| matches!(i, DisplayItem::SolidColor { .. }))
-        .count();
+        .position(|item| {
+            matches!(
+                item,
+                DisplayItem::SolidColor { rect, color }
+                    if *color == Color::new(0, 255, 0, 255)
+                        && *rect == Rect::new(25.0, 25.0, 50.0, 50.0)
+            )
+        })
+        .expect("green overlay solid color in display list");
+    let dialog_index = list
+        .items
+        .iter()
+        .position(|item| {
+            matches!(
+                item,
+                DisplayItem::SolidColor { rect, color }
+                    if *color == Color::new(255, 0, 0, 255)
+                        && *rect == Rect::new(30.0, 30.0, 40.0, 40.0)
+            )
+        })
+        .expect("dialog solid color in display list");
+    assert!(
+        dialog_index > overlay_index,
+        "top-layer dialog item ({dialog_index}) must paint after overlay item ({overlay_index})"
+    );
 }
