@@ -12,6 +12,7 @@ fn runtime() -> JsRuntime {
     runtime
 }
 
+mod animations;
 mod dispatch;
 mod inline;
 mod ui_events;

@@ -129,7 +129,24 @@ pub(crate) fn resolve_styles_with_state(
     // `calc(50vw)` resolves against the render viewport, not a 1280x720 default (#1469).
     megi_css::with_calc_viewport(viewport.0, viewport.1, || {
         megi_css::state::with_state(state, || {
-            resolve_styles_with_collection(doc, collection, time_ms)
+            resolve_styles_with_collection(doc, collection, time_ms, None)
+        })
+    })
+}
+
+/// Resolves styles with an optional previous-frame style snapshot used as the baseline for
+/// CSS transitions at `time_ms` (#941).
+pub(crate) fn resolve_styles_with_state_and_transitions(
+    doc: &Document,
+    collection: &megi_css::StyleCollection,
+    state: megi_css::StateContext,
+    time_ms: f64,
+    viewport: (f32, f32),
+    transition_from: Option<&HashMap<NodeId, ComputedStyle>>,
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
+    megi_css::with_calc_viewport(viewport.0, viewport.1, || {
+        megi_css::state::with_state(state, || {
+            resolve_styles_with_collection(doc, collection, time_ms, transition_from)
         })
     })
 }
@@ -138,6 +155,7 @@ fn resolve_styles_with_collection(
     doc: &Document,
     collection: &megi_css::StyleCollection,
     time_ms: f64,
+    transition_from: Option<&HashMap<NodeId, ComputedStyle>>,
 ) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
     // One shared selector-matching budget for the whole document: a per-element budget would
     // grow the total cost with the element count (#1413).
@@ -176,6 +194,14 @@ fn resolve_styles_with_collection(
         if let Some(computed) = styles.get_mut(&node_id) {
             computed.set_backdrop_color(color);
         }
+    }
+    if let Some(from_styles) = transition_from {
+        megi_css::cascade::apply_transitions_to_styles(
+            doc,
+            from_styles,
+            &mut styles,
+            time_ms as f32,
+        );
     }
     megi_css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
     megi_css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);

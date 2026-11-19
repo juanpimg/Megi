@@ -51,6 +51,8 @@ pub(crate) struct ScriptContext {
         u64,
     )>,
     pub(crate) pre_warnings: Vec<String>,
+    /// Baseline styles for CSS transitions (caller snapshot, else the pre-script cascade).
+    pub(crate) transition_from_styles: Option<Arc<HashMap<NodeId, megi_css::ComputedStyle>>>,
     pub(crate) pre_scripted_frames: frames::PreScriptedFrameMap,
     pub(crate) scripts_executed: usize,
     #[cfg(feature = "js")]

@@ -375,3 +375,75 @@ pub fn parse_inline_declarations(style: &str) -> Vec<Declaration> {
 pub fn parse_inline_style(style: &str) -> Vec<Declaration> {
     expand_declarations(&parse_inline_declarations(style))
 }
+
+/// Builds a slot-index fallback map when `from_styles` comes from an earlier frame's
+/// [`Document`] arena. Returns `None` when `from_styles` belongs to `doc` itself
+/// (preserving strict generation safety).
+pub fn previous_style_slot_lookup<'a>(
+    doc: &Document,
+    from_styles: &'a HashMap<NodeId, crate::properties::ComputedStyle>,
+) -> Option<HashMap<usize, &'a crate::properties::ComputedStyle>> {
+    if from_styles.is_empty() || from_styles.keys().any(|id| doc.owns(*id)) {
+        None
+    } else {
+        Some(
+            from_styles
+                .iter()
+                .map(|(id, style)| (id.slot(), style))
+                .collect(),
+        )
+    }
+}
+
+/// Applies CSS transitions between `from_styles` and `styles` at `elapsed_ms`.
+pub fn apply_transitions_to_styles(
+    doc: &Document,
+    from_styles: &HashMap<NodeId, crate::properties::ComputedStyle>,
+    styles: &mut HashMap<NodeId, crate::properties::ComputedStyle>,
+    elapsed_ms: f32,
+) {
+    if from_styles.is_empty() || !elapsed_ms.is_finite() {
+        return;
+    }
+    let slot_lookup = previous_style_slot_lookup(doc, from_styles);
+    let mut transitioned: Vec<(NodeId, crate::properties::ComputedStyle)> = Vec::new();
+    for node_id in doc.descendants(doc.root()) {
+        let from = match &slot_lookup {
+            Some(by_slot) => by_slot.get(&node_id.slot()).copied(),
+            None => from_styles.get(&node_id),
+        };
+        let (Some(from), Some(to)) = (from, styles.get(&node_id)) else {
+            continue;
+        };
+        if to.transitions.is_empty() {
+            continue;
+        }
+        let style = crate::animation_runtime::apply_transitions(from, to, elapsed_ms);
+        if &style != to {
+            transitioned.push((node_id, style));
+        }
+    }
+    for (node_id, style) in transitioned {
+        styles.insert(node_id, style);
+    }
+}
+
+/// Applies CSS transitions between `from_pseudos` and `pseudo_styles` at `elapsed_ms`.
+pub fn apply_transitions_to_pseudo_styles(
+    from_pseudos: &PseudoStyles,
+    pseudo_styles: &mut PseudoStyles,
+    elapsed_ms: f32,
+) {
+    if from_pseudos.is_empty() || pseudo_styles.is_empty() || !elapsed_ms.is_finite() {
+        return;
+    }
+    for (key, to) in pseudo_styles.iter_mut() {
+        if to.transitions.is_empty() {
+            continue;
+        }
+        let Some(from) = from_pseudos.get(key) else {
+            continue;
+        };
+        *to = crate::animation_runtime::apply_transitions(from, to, elapsed_ms);
+    }
+}

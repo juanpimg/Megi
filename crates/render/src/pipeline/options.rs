@@ -256,6 +256,11 @@ pub struct RenderOptions {
     pub encode_png: bool,
     /// Device pixel ratio used for responsive image selection (`srcset` / `<picture>`), default `1.0`.
     pub device_pixel_ratio: f32,
+    /// Optional previous-frame computed style snapshot used as the baseline for CSS
+    /// transitions at [`Self::time_ms`]. When `None` (default), script-driven style
+    /// changes within a single render still transition from pre-script styles.
+    pub transition_from_styles:
+        Option<Arc<std::collections::HashMap<megi_core::NodeId, megi_css::ComputedStyle>>>,
 }
 
 /// Target selector for a structured host-dispatched DOM/UI event (#1504).
@@ -359,6 +364,7 @@ impl Default for RenderOptions {
             storage: None,
             host_events: Vec::new(),
             device_pixel_ratio: 1.0,
+            transition_from_styles: None,
             host_dom_events: Vec::new(),
         }
     }

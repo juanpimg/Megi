@@ -47,7 +47,8 @@ pub use calc::{
 };
 pub use cascade::{
     CascadeOriginImportance, CompiledRule, MAX_INLINE_STYLE_BYTES, MatchedDeclaration, Origin,
-    PseudoStyles, StyleCollection, apply_animations_to_pseudo_styles, parse_inline_declarations,
+    PseudoStyles, StyleCollection, apply_animations_to_pseudo_styles, apply_animations_to_styles,
+    apply_transitions_to_pseudo_styles, apply_transitions_to_styles, parse_inline_declarations,
     parse_inline_style, resolve_backdrop_color, resolve_cascaded_properties,
     resolve_document_styles, resolve_document_styles_from_collection,
     resolve_document_styles_with_media, resolve_document_styles_with_media_and_state,

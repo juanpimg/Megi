@@ -326,6 +326,46 @@ pub(crate) fn build_ui_event(
                 set_event_prototype(context, &object, "FocusEvent");
                 let _ = object.set(js_string!("relatedTarget"), JsValue::null(), false, context);
             }
+            JsUiEventKind::Animation {
+                animation_name,
+                elapsed_time,
+                pseudo_element,
+            } => {
+                set_event_prototype(context, &object, "AnimationEvent");
+                let _ = object.set(
+                    js_string!("animationName"),
+                    js_string!(animation_name.clone()),
+                    false,
+                    context,
+                );
+                let _ = object.set(js_string!("elapsedTime"), *elapsed_time, false, context);
+                let _ = object.set(
+                    js_string!("pseudoElement"),
+                    js_string!(pseudo_element.clone()),
+                    false,
+                    context,
+                );
+            }
+            JsUiEventKind::Transition {
+                property_name,
+                elapsed_time,
+                pseudo_element,
+            } => {
+                set_event_prototype(context, &object, "TransitionEvent");
+                let _ = object.set(
+                    js_string!("propertyName"),
+                    js_string!(property_name.clone()),
+                    false,
+                    context,
+                );
+                let _ = object.set(js_string!("elapsedTime"), *elapsed_time, false, context);
+                let _ = object.set(
+                    js_string!("pseudoElement"),
+                    js_string!(pseudo_element.clone()),
+                    false,
+                    context,
+                );
+            }
         }
     }
     event

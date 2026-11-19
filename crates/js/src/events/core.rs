@@ -83,7 +83,7 @@ pub enum JsEventTarget {
 }
 
 /// Kind and initialization data for a structured UI event dispatched from Rust (#1504).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum JsUiEventKind {
     /// Plain DOM `Event` (`change`, `submit`, etc.).
     Simple,
@@ -113,6 +113,24 @@ pub enum JsUiEventKind {
     },
     /// `FocusEvent` (`focus`, `blur`).
     Focus,
+    /// `AnimationEvent` (`animationstart`, `animationiteration`, `animationend`).
+    Animation {
+        /// Name of the `@keyframes` rule (`AnimationEvent.animationName`).
+        animation_name: String,
+        /// Elapsed time in seconds (`AnimationEvent.elapsedTime`).
+        elapsed_time: f64,
+        /// Pseudo-element selector or `""` (`AnimationEvent.pseudoElement`).
+        pseudo_element: String,
+    },
+    /// `TransitionEvent` (`transitionrun`, `transitionstart`, `transitionend`).
+    Transition {
+        /// CSS property name (`TransitionEvent.propertyName`).
+        property_name: String,
+        /// Elapsed time in seconds (`TransitionEvent.elapsedTime`).
+        elapsed_time: f64,
+        /// Pseudo-element selector or `""` (`TransitionEvent.pseudoElement`).
+        pseudo_element: String,
+    },
 }
 
 pub(crate) fn js_error(message: impl Into<String>) -> boa_engine::JsError {

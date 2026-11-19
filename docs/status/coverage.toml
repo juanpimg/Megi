@@ -134,8 +134,8 @@ id = "F2-ANIM-RUNTIME"
 area = "F2"
 name = "Animaciones CSS @keyframes/transition en runtime"
 source = "issue #941 / #942"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/tests/animations.rs::two_frame_host_transition_and_animation_events_end_to_end"
 issue = 941
 
 [[capability]]
