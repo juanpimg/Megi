@@ -204,3 +204,20 @@ fn table_text_buffer_is_bounded_by_the_text_budget() {
         "the buffered table text must be bounded"
     );
 }
+
+#[test]
+fn table_text_budget_counts_encoded_bytes_not_chars() {
+    // #1737: a 4-byte character must consume 4 bytes of max_text_bytes.
+    let input = format!("<table>{}</table>", "😀".repeat(5_000));
+    let options = ParseOptions {
+        max_text_bytes: 2_048,
+        ..ParseOptions::default()
+    };
+    let outcome = parse_document_with_options(&input, false, &options);
+    let mut total = 0usize;
+    collect_text_bytes(&outcome.document, outcome.document.root(), &mut total, 0);
+    assert!(
+        total <= 2_048,
+        "stored table text exceeded the byte budget: {total}"
+    );
+}

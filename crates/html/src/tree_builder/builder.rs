@@ -45,6 +45,7 @@ impl TreeBuilder {
             fragment_context: None,
             fragment_context_node: None,
             pending_table_characters: Vec::new(),
+            pending_table_char_bytes: 0,
             parse_options,
             limit_violations: LimitViolations::default(),
             text_bytes: 0,
