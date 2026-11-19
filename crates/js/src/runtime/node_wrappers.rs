@@ -24,7 +24,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 54] = [
+    let accessors: [(&str, AccessorKind); 57] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -80,6 +80,9 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("tHead", AccessorKind::TableHead),
         ("tFoot", AccessorKind::TableFoot),
         ("caption", AccessorKind::TableCaption),
+        ("namespaceURI", AccessorKind::NamespaceUri),
+        ("localName", AccessorKind::LocalName),
+        ("prefix", AccessorKind::Prefix),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -250,6 +253,9 @@ pub(crate) enum AccessorKind {
     TableHead,
     TableFoot,
     TableCaption,
+    NamespaceUri,
+    LocalName,
+    Prefix,
 }
 
 pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -307,6 +313,9 @@ pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::TableHead => (node_table_t_head, None),
         AccessorKind::TableFoot => (node_table_t_foot, None),
         AccessorKind::TableCaption => (node_table_caption, None),
+        AccessorKind::NamespaceUri => (node_namespace_uri, None),
+        AccessorKind::LocalName => (node_local_name, None),
+        AccessorKind::Prefix => (node_prefix, None),
     }
 }
 
