@@ -165,3 +165,22 @@ fn new_event_subclasses_keep_the_internal_event_marker() {
         "subclass lost Event state: {out}"
     );
 }
+
+#[test]
+fn detached_node_events_do_not_reach_document_or_window() {
+    // #1743: DOM §2.9 — the event path of a detached node ends at the node itself.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "window.__log = ''; \
+             var d = document.createElement('div'); \
+             d.addEventListener('click', function () { __log += 'd,'; }); \
+             document.addEventListener('click', function () { __log += 'doc,'; }); \
+             window.addEventListener('click', function () { __log += 'win,'; }); \
+             d.dispatchEvent(new Event('click', { bubbles: true })); \
+             __log;",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "d,");
+}
