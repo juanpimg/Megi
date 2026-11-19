@@ -9,6 +9,7 @@ fn region(x: f32, y: f32, width: f32, height: f32, href: &str) -> LinkRegion {
         rect: CssRect::new(x, y, width, height),
         href: href.to_owned(),
         node: None,
+        is_blocker: href.is_empty(),
     }
 }
 
@@ -40,6 +41,24 @@ fn find_link_at_returns_topmost_region() {
         Some("https://example.com/background")
     );
     assert!(find_link_at(&regions, 500.0, 500.0).is_none());
+}
+
+#[test]
+fn find_link_at_stops_at_an_opaque_non_link_region() {
+    // #1723: a painted non-link overlay above an anchor must swallow the
+    // click; returning the anchor underneath is intra-page clickjacking.
+    let regions = vec![
+        region(0.0, 0.0, 100.0, 100.0, "https://example.com/underneath"),
+        region(10.0, 10.0, 50.0, 50.0, ""),
+    ];
+    assert!(
+        find_link_at(&regions, 20.0, 20.0).is_none(),
+        "the topmost painted region is not a link"
+    );
+    assert_eq!(
+        find_link_at(&regions, 80.0, 80.0).map(|link| link.href.as_str()),
+        Some("https://example.com/underneath")
+    );
 }
 
 #[test]
@@ -185,12 +204,15 @@ fn collect_link_regions_finds_anchors_in_a_rendered_page() {
     )
     .expect("data URL renders");
     let regions = collect_link_regions(&output);
-    assert_eq!(regions.len(), 1, "regions: {regions:?}");
-    assert_eq!(regions[0].href, "next.html");
-    assert!(regions[0].rect.width > 0.0);
-    assert!(regions[0].rect.height > 0.0);
-    let center_x = regions[0].rect.x + regions[0].rect.width / 2.0;
-    let center_y = regions[0].rect.y + regions[0].rect.height / 2.0;
+    // #1723: regions now also contain opaque non-link blockers; the links are
+    // the ones with a non-empty href.
+    let links: Vec<&LinkRegion> = regions.iter().filter(|r| !r.is_blocker).collect();
+    assert_eq!(links.len(), 1, "regions: {regions:?}");
+    assert_eq!(links[0].href, "next.html");
+    assert!(links[0].rect.width > 0.0);
+    assert!(links[0].rect.height > 0.0);
+    let center_x = links[0].rect.x + links[0].rect.width / 2.0;
+    let center_y = links[0].rect.y + links[0].rect.height / 2.0;
     let page =
         megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
     let resolved = link_url_at(Some(&page), &regions, center_x, center_y)
@@ -208,6 +230,7 @@ fn collect_link_regions_skips_anchors_without_href() {
     )
     .expect("data URL renders");
     let regions = collect_link_regions(&output);
-    assert_eq!(regions.len(), 1);
-    assert_eq!(regions[0].href, "#frag");
+    let links: Vec<&LinkRegion> = regions.iter().filter(|r| !r.is_blocker).collect();
+    assert_eq!(links.len(), 1, "regions: {regions:?}");
+    assert_eq!(links[0].href, "#frag");
 }

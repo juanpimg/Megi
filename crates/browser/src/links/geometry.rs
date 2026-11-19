@@ -49,6 +49,9 @@ pub struct LinkRegion {
     /// Keyboard focus and the focus ring key off this node so that one anchor is one focus
     /// target even when several painted primitives cover it.
     pub node: Option<megi_webview::core::NodeId>,
+    /// True for an opaque painted primitive that is not a link: it stops the
+    /// click instead of letting it reach an anchor painted underneath (#1723).
+    pub is_blocker: bool,
 }
 
 /// Errors produced by [`resolve_href`].
@@ -117,8 +120,11 @@ pub fn resolve_href(
 
 /// Returns the topmost region containing `(x, y)` (reverse paint order).
 pub fn find_link_at(regions: &[LinkRegion], x: f32, y: f32) -> Option<&LinkRegion> {
+    // #1723: the topmost painted region wins even when it is not a link.
+    // A region with an empty href is an opaque blocker, not a click-through.
     regions
         .iter()
         .rev()
         .find(|region| region.rect.contains(x, y))
+        .filter(|region| !region.is_blocker)
 }
