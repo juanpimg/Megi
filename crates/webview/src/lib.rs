@@ -197,9 +197,12 @@ impl WebView {
         if !self.can_back() {
             return None;
         }
-        self.index -= 1;
-        let url = self.history[self.index].clone();
+        let target = self.index - 1;
+        let url = self.history[target].clone();
+        // #1720: render before moving the cursor so a failed navigation cannot
+        // leave current_url()/can_back() describing a page that is not displayed.
         let frame = self.render(&url).ok()?;
+        self.index = target;
         self.frame = Some(frame);
         self.frame.as_ref()
     }
@@ -209,9 +212,10 @@ impl WebView {
         if !self.can_forward() {
             return None;
         }
-        self.index += 1;
-        let url = self.history[self.index].clone();
+        let target = self.index + 1;
+        let url = self.history[target].clone();
         let frame = self.render(&url).ok()?;
+        self.index = target;
         self.frame = Some(frame);
         self.frame.as_ref()
     }

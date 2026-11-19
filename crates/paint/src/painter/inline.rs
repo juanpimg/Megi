@@ -57,7 +57,24 @@ pub(super) fn paint_inline_content(
                         .style
                         .as_ref()
                         .map_or(TextDecoration::NONE, |style| style.text_decoration);
-                let hidden = inherited_hidden || is_hidden(child);
+                let hidden = effective_hidden(child, inherited_hidden);
+                // #1713: the box's own background/border is not clipped by its
+                // own overflow; emit it before the clip that restricts descendants.
+                if !hidden
+                    && matches!(
+                        child.box_type,
+                        BoxType::Replaced(_) | BoxType::InlineNode(_)
+                    )
+                {
+                    let bg_clip = own_background_clip(child);
+                    if let Some(rect) = bg_clip {
+                        push_clip_item(list, resources, rect);
+                    }
+                    paint_background_border(child, list, skip, resources, false, alpha);
+                    if bg_clip.is_some() {
+                        pop_clip_item(list, resources);
+                    }
+                }
                 let clipped = child.clip;
                 if let Some(rect) = clipped {
                     push_clip_item(list, resources, rect);
@@ -85,7 +102,6 @@ pub(super) fn paint_inline_content(
                     BoxType::TextNode(_) | BoxType::LineBreak => {}
                     BoxType::Replaced(node_id) => {
                         if !hidden {
-                            paint_background_border(child, list, skip, resources, false, alpha);
                             let replaced_radius = child
                                 .style
                                 .as_ref()
@@ -108,9 +124,6 @@ pub(super) fn paint_inline_content(
                         }
                     }
                     BoxType::InlineNode(_) => {
-                        if !hidden {
-                            paint_background_border(child, list, skip, resources, false, alpha);
-                        }
                         if !hidden && let Some((rect, radii)) = overflow_rounded_clip(child) {
                             push_rounded_group(list, resources, rect, radii);
                             stack.push(InlineTask::PopRoundedGroup);
@@ -220,7 +233,7 @@ fn push_inline_children<'a>(
         } else {
             0
         };
-        let hidden = inherited_hidden || is_hidden(child);
+        let hidden = effective_hidden(child, inherited_hidden);
         let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
         stack.push(InlineTask::Visit {
             layout_box: child,
