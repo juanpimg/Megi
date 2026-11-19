@@ -53,14 +53,16 @@ fn worker_render_document_exposes_links_title_and_final_url() {
         "{}",
         frame.document_url
     );
-    assert_eq!(frame.links.len(), 1, "links: {:?}", frame.links);
-    assert_eq!(frame.links[0].href, "next.html");
-    assert!(frame.links[0].rect.width > 0.0);
+    let links: Vec<&megi_browser::LinkRegion> =
+        frame.links.iter().filter(|l| !l.is_blocker).collect();
+    assert_eq!(links.len(), 1, "links: {:?}", frame.links);
+    assert_eq!(links[0].href, "next.html");
+    assert!(links[0].rect.width > 0.0);
     // The stored hit map answers the same question the window asks on click.
     let page =
         megi_webview::net::Url::parse("https://example.com/docs/page.html").expect("page URL");
-    let center_x = frame.links[0].rect.x + frame.links[0].rect.width / 2.0;
-    let center_y = frame.links[0].rect.y + frame.links[0].rect.height / 2.0;
+    let center_x = links[0].rect.x + links[0].rect.width / 2.0;
+    let center_y = links[0].rect.y + links[0].rect.height / 2.0;
     let url = megi_browser::link_url_at(Some(&page), &frame.links, center_x, center_y)
         .expect("resolution")
         .expect("navigable link");
@@ -76,6 +78,7 @@ fn click_navigation_sequence_pushes_and_back_returns() {
         rect: megi_browser::CssRect::new(10.0, 10.0, 100.0, 20.0),
         href: "other.html".to_string(),
         node: None,
+        is_blocker: false,
     }];
     let clicked = megi_browser::link_url_at(Some(&page), &regions, 50.0, 15.0)
         .expect("resolution")
@@ -151,26 +154,27 @@ fn file_fixture_links_are_hittable_and_navigable() {
         "{}",
         frame.document_url
     );
+    let links: Vec<&megi_browser::LinkRegion> =
+        frame.links.iter().filter(|l| !l.is_blocker).collect();
     assert!(
-        frame.links.len() >= 2,
+        links.len() >= 2,
         "expected two href links: {:?}",
         frame.links
     );
     assert!(
-        frame.links.iter().any(|link| link.href == "next.html"),
+        links.iter().any(|link| link.href == "next.html"),
         "relative href missing: {:?}",
         frame.links
     );
     assert!(
-        frame
-            .links
+        links
             .iter()
             .any(|link| link.href == "https://example.com/absolute"),
         "absolute href missing: {:?}",
         frame.links
     );
     assert!(
-        frame.links.iter().all(|link| !link.href.is_empty()),
+        links.iter().all(|link| !link.href.is_empty()),
         "href-less anchors must not become link regions"
     );
 

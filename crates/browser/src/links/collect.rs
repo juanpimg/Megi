@@ -81,6 +81,7 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
                 rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
                 href: link.href,
                 node: Some(link.node_id),
+                is_blocker: false,
             };
             // Several painted primitives can cover the same anchor (e.g. a text run plus
             // its underline); keep one region per exact (node, rect) pair.
@@ -89,6 +90,21 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
                 .any(|existing| existing.node == region.node && existing.rect == region.rect)
             {
                 regions.push(region);
+            }
+        } else if rect.width > 0.0 && rect.height > 0.0 {
+            // #1723: keep opaque non-link primitives so they block clicks on
+            // anchors painted underneath instead of being skipped entirely.
+            let blocker = LinkRegion {
+                rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
+                href: String::new(),
+                node: hit_region.node_id,
+                is_blocker: true,
+            };
+            if !regions
+                .iter()
+                .any(|existing| existing.node == blocker.node && existing.rect == blocker.rect)
+            {
+                regions.push(blocker);
             }
         }
     }
@@ -121,6 +137,7 @@ pub(crate) fn collect_link_regions_from_layout(
                     rect: CssRect::new(rect.x, rect.y, rect.width, rect.height),
                     href: href.to_owned(),
                     node: Some(node_id),
+                    is_blocker: false,
                 });
             }
         }
