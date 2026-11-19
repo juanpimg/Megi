@@ -233,6 +233,37 @@ fn bare_add_event_listener_is_bound_to_window() {
 }
 
 #[test]
+fn prevent_default_sets_default_prevented_on_cancelable_event() {
+    // #1952: DOM §2.9 — preventDefault() sets the canceled flag when cancelable,
+    // observable via the defaultPrevented attribute.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new Event('x', { cancelable: true }); \
+             e.preventDefault(); \
+             String(e.defaultPrevented);",
+            "t",
+        )
+        .expect("preventDefault");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn prevent_default_ignored_on_non_cancelable_event() {
+    // #1952: DOM §2.9 — cancelable defaults to false; preventDefault() is a no-op.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new Event('x'); \
+             e.preventDefault(); \
+             String(e.defaultPrevented);",
+            "t",
+        )
+        .expect("preventDefault");
+    assert_eq!(out, "false");
+}
+
+#[test]
 fn native_constructor_prototypes_are_sealed() {
     // #1972: scripts feature-detect `writable`/`configurable` on `prototype`.
     let mut runtime = JsRuntime::new().expect("runtime");
