@@ -2,13 +2,13 @@
 
 use std::collections::HashSet;
 
-use crate::{Document, MAX_CLONE_NODES, Namespace, NodeId, NodeKind};
+use crate::{Document, MAX_CLONE_NODES, MAX_SLOTS, Namespace, NodeId, NodeKind};
 
 impl Document {
     /// Counts the nodes in the subtree rooted at `node_id` (including itself and any
     /// `<template>` inert contents), bounded by `MAX_CLONE_NODES + 1` and guarded against
     /// cyclic links in a corrupted arena.
-    fn subtree_size(&self, node_id: NodeId) -> usize {
+    pub(crate) fn subtree_size(&self, node_id: NodeId) -> usize {
         let mut count = 0usize;
         let mut stack = vec![node_id];
         let mut seen = HashSet::new();
@@ -53,12 +53,24 @@ impl Document {
     /// The traversal uses an explicit heap stack, so deep trees cannot overflow the
     /// call stack.
     pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Option<NodeId> {
+        // #1726: MAX_CLONE_NODES bounds the subtree, but the destination arena may still be
+        // too full to allocate that many slots; `alloc_slot` would panic at MAX_SLOTS.
+        let budget = self.free_slots() + MAX_SLOTS.saturating_sub(self.allocated());
+        self.clone_node_with_budget(node_id, deep, budget)
+    }
+
+    fn clone_node_with_budget(
+        &mut self,
+        node_id: NodeId,
+        deep: bool,
+        budget: usize,
+    ) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
         self.try_node(node_id)?;
         // Bound clone amplification (issue #678 / #1111): if the subtree (including any
         // `<template>` contents) is too large to safely clone, fall back to a shallow
         // clone instead of risking arena exhaustion / panic.
-        let deep = deep && self.subtree_size(node_id) <= MAX_CLONE_NODES;
+        let deep = deep && self.subtree_size(node_id) <= MAX_CLONE_NODES.min(budget);
         let cloned_root = self.clone_node_shallow(node_id);
         if !deep {
             return Some(cloned_root);
@@ -258,5 +270,27 @@ impl Document {
             freed += 1;
         }
         freed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clone_falls_back_to_shallow_when_the_arena_budget_is_too_small() {
+        // #1726: a subtree within MAX_CLONE_NODES can still exceed the destination's
+        // free slots; cloning must degrade to shallow instead of panicking in alloc_slot.
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", Vec::new());
+        doc.append_child(doc.root(), div);
+        for _ in 0..5 {
+            let child = doc.create_element(Namespace::Html, "span", Vec::new());
+            doc.append_child(div, child);
+        }
+        let shallow = doc.clone_node_with_budget(div, true, 2).expect("clone");
+        assert!(doc.node(shallow).first_child.is_none());
+        let deep = doc.clone_node_with_budget(div, true, 64).expect("clone");
+        assert!(doc.node(deep).first_child.is_some());
     }
 }
