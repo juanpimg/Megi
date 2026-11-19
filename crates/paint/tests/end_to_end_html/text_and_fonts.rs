@@ -175,3 +175,55 @@ fn test_cjk_system_fallback_glyphs_are_painted() {
         "CJK glyphs must paint real ink via system fallback, got {inked} (#1977)"
     );
 }
+
+/// A block inside an inline-block must honor its vertical margin. Wikipedia's
+/// `.central-textlogo-wrapper` (inline-block) contains `.central-textlogo`
+/// (`margin: 4rem auto`), and Megi was placing the logo at y=0 (#1884).
+#[test]
+fn test_block_margin_inside_inline_block_is_applied() {
+    let source = "<!doctype html><html><body style=\"margin:0\">\
+        <div style=\"display:inline-block\">\
+        <div style=\"margin-top:64px;width:100px;height:20px;background:#f00\"></div>\
+        </div></body></html>";
+    let (pixmap, display_list) = render(source, 400, 120);
+    let rect = display_list
+        .iter()
+        .find_map(|item| match item {
+            DisplayItem::SolidColor { rect, color } if *color == Color::RED => Some(*rect),
+            _ => None,
+        })
+        .expect("red block");
+    assert!(
+        rect.y >= 60.0,
+        "margin-top inside inline-block ignored: y={} (#1884)",
+        rect.y
+    );
+    // And it must actually paint there.
+    let inked = (0..pixmap.height)
+        .filter(|&y| pixmap.pixel(10, y) != Color::WHITE)
+        .count();
+    assert!(inked > 5, "block not painted at expected offset: {inked}");
+}
+
+/// Absolutely positioned <img> must paint its bitmap (#1884: Wikipedia's logo).
+#[test]
+fn test_absolutely_positioned_image_paints() {
+    let source = "<!doctype html><html><body style=\"margin:0\">\
+        <div style=\"position:relative;height:120px\">\
+        <img src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\" \
+             style=\"position:absolute;top:20px;left:30px;width:60px;height:40px;background:#f00\">\
+        </div></body></html>";
+    let (pixmap, _dl) = render(source, 200, 120);
+    let mut inked = 0u32;
+    for y in 0..pixmap.height {
+        for x in 0..pixmap.width {
+            if pixmap.pixel(x, y) != Color::WHITE {
+                inked += 1;
+            }
+        }
+    }
+    assert!(
+        inked > 100,
+        "absolute <img> painted only {inked} px (#1884)"
+    );
+}

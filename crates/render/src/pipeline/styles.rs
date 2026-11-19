@@ -195,6 +195,50 @@ fn resolve_styles_with_collection(
             computed.set_backdrop_color(color);
         }
     }
+    // WHATWG HTML §15.2.6: the `width`/`height` attributes of <img> are
+    // presentational hints with lower priority than any CSS rule. The generic
+    // cascade only knows CSS, so apply them here when no CSS declaration won
+    // (#1884: Wikipedia's absolutely positioned logo had 0x0 without them).
+    let img_hints: Vec<(megi_core::NodeId, Option<f32>, Option<f32>)> = styles
+        .keys()
+        .filter_map(|node_id| {
+            let element = doc.node(*node_id).as_element()?;
+            if element.namespace != megi_core::Namespace::Html
+                || !element.local_name.eq_ignore_ascii_case("img")
+            {
+                return None;
+            }
+            let parse_dimension = |name: &str| -> Option<f32> {
+                element.get_attribute(name).and_then(|value| {
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        return None;
+                    }
+                    let end = trimmed
+                        .find(|c: char| !c.is_ascii_digit())
+                        .unwrap_or(trimmed.len());
+                    let px = trimmed[..end].parse::<f32>().ok()?;
+                    (px.is_finite() && px >= 0.0).then_some(px)
+                })
+            };
+            Some((
+                *node_id,
+                parse_dimension("width"),
+                parse_dimension("height"),
+            ))
+        })
+        .collect();
+    for (node_id, width, height) in img_hints {
+        if let Some(computed) = styles.get_mut(&node_id) {
+            if width.is_some() && matches!(computed.width, megi_css::Length::Auto) {
+                computed.width = megi_css::Length::Px(width.unwrap_or(0.0));
+            }
+            if height.is_some() && matches!(computed.height, megi_css::Length::Auto) {
+                computed.height = megi_css::Length::Px(height.unwrap_or(0.0));
+            }
+        }
+    }
+
     if let Some(from_styles) = transition_from {
         megi_css::cascade::apply_transitions_to_styles(
             doc,
