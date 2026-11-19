@@ -208,13 +208,17 @@ fn layout_captions(
         }
         resolve_vertical_edges(child, width);
         resolve_horizontal_edges(child, width);
+        // #1708: shrink-to-fit caption centered over the table (CSS 2.1 §17.4).
+        crate::block::calculate_shrink_to_fit_width(child, width, width, measurer);
         let edges_h = child.dimensions.padding.left
             + child.dimensions.padding.right
             + child.dimensions.border.left
             + child.dimensions.border.right;
-        child.dimensions.content.width = (width - edges_h).max(0.0);
-        child.dimensions.content.x =
-            x + child.dimensions.border.left + child.dimensions.padding.left;
+        let caption_outer = child.dimensions.content.width + edges_h;
+        child.dimensions.content.x = x
+            + (width - caption_outer).max(0.0) / 2.0
+            + child.dimensions.border.left
+            + child.dimensions.padding.left;
         child.dimensions.content.y =
             current_y + child.dimensions.border.top + child.dimensions.padding.top;
         layout_box_contents(child, None, false, measurer, pos);

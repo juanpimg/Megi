@@ -146,6 +146,34 @@ fn test_repeat_auto_fill_minmax_creates_fitting_tracks() {
 }
 
 #[test]
+fn test_auto_fill_rows_with_indefinite_height_uses_one_repetition() {
+    // #1705: CSS Grid §7.2.3.1 — on an indefinite axis, auto-fill/auto-fit
+    // produces a single repetition. The container width must not be used as
+    // the available height.
+    let mut container = grid_container_style(Length::Px(600.0), Length::Auto);
+    container.grid_template_rows = GridTemplate {
+        tracks: Vec::new(),
+        auto_repeat: Some(megi_css::AutoRepeat {
+            kind: megi_css::AutoRepeatKind::Fill,
+            tracks: vec![px(20.0)],
+        }),
+        line_names: Vec::new(),
+    };
+    let case = layout_case(
+        container,
+        vec![item_style(Length::Px(50.0), Length::Px(10.0))],
+    );
+    let height = find_box(&case.root, case.container)
+        .dimensions
+        .content
+        .height;
+    assert!(
+        height <= 25.0,
+        "indefinite height must produce one 20px row, got {height}"
+    );
+}
+
+#[test]
 fn test_repeat_auto_fill_fixed_tracks_wrap_items() {
     let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
     container.grid_template_columns = GridTemplate {
