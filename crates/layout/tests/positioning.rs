@@ -148,6 +148,40 @@ fn test_absolute_uses_positioned_ancestor_containing_block() {
 }
 
 #[test]
+fn test_absolute_descendant_is_not_clipped_by_overflow_between_it_and_its_cb() {
+    // #1707: CSS 2.2 §11.1.1 — an absolutely positioned box is not clipped by
+    // an ancestor's overflow when its containing block is outside that ancestor.
+    let (mut doc, mut styles, _html, body) = setup_document();
+    let outer = make_div(&mut doc, body);
+    let clipper = make_div(&mut doc, outer);
+    let absolute = make_div(&mut doc, clipper);
+
+    let mut outer_style = make_block_style(Length::Px(300.0), Length::Px(200.0));
+    outer_style.position = Position::Relative;
+    styles.insert(outer, outer_style);
+
+    let mut clip_style = make_block_style(Length::Px(50.0), Length::Px(50.0));
+    clip_style.overflow = megi_css::Overflow::Hidden;
+    styles.insert(clipper, clip_style);
+
+    let mut abs_style = make_block_style(Length::Px(200.0), Length::Px(20.0));
+    abs_style.position = Position::Absolute;
+    abs_style.left = Length::Px(0.0);
+    abs_style.top = Length::Px(0.0);
+    styles.insert(absolute, abs_style);
+
+    let tree = layout_doc(&doc, &styles);
+    let outer_box = &tree.children[0].children[0];
+    let clipper_box = &outer_box.children[0];
+    let abs_box = &clipper_box.children[0];
+    assert!(
+        abs_box.clip.is_none(),
+        "absolute child whose containing block is the outer relative box must not inherit the 50px clip: {:?}",
+        abs_box.clip
+    );
+}
+
+#[test]
 fn test_absolute_without_positioned_ancestor_uses_icb() {
     let (mut doc, mut styles, _html, body) = setup_document();
     let absolute = make_div(&mut doc, body);

@@ -173,7 +173,7 @@ fn layout_document_with_measurer_and_pseudos_inner(
 
     layout_block_with_viewport(&mut root_box, &initial_containing_block, measurer, viewport);
     if has_overflow_clip {
-        finalize_layout_metadata(&mut root_box, None, true);
+        finalize_layout_metadata(&mut root_box, None, None, true);
     } else {
         // No box clips: the only missing metadata is the root stacking context.
         root_box.establishes_stacking_context = true;
@@ -188,7 +188,12 @@ fn layout_document_with_measurer_and_pseudos_inner(
 /// * `clip`: absolute-coordinate clip rectangle inherited from ancestors and narrowed
 ///   by every box whose `overflow` is not `visible` (CSS 2.2 §11.1). The clipping box
 ///   itself carries its own padding box.
-fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, is_root: bool) {
+fn finalize_layout_metadata(
+    node: &mut LayoutBox,
+    inherited_clip: Option<Rect>,
+    containing_block_clip: Option<Rect>,
+    is_root: bool,
+) {
     // Top-layer elements escape ancestor overflow/clipping (#1546).
     let base_clip = if node.is_top_layer {
         None
@@ -222,8 +227,30 @@ fn finalize_layout_metadata(node: &mut LayoutBox, inherited_clip: Option<Rect>, 
                 || (style.position != Position::Static && style.z_index.is_some())
         });
 
+    // A positioned box becomes the containing block of its absolute/fixed
+    // descendants: they inherit the clip in effect at this box, not the clip
+    // accumulated by any static intermediary that CSS 2.2 §11.1.1 skips (#1707).
+    let positioned = node
+        .style
+        .as_ref()
+        .is_some_and(|style| !matches!(style.position, Position::Static));
+    let cb_clip_for_children = if is_root || positioned {
+        effective_clip
+    } else {
+        containing_block_clip
+    };
+
     for child in &mut node.children {
-        finalize_layout_metadata(child, effective_clip, false);
+        let out_of_flow = child
+            .style
+            .as_ref()
+            .is_some_and(|style| matches!(style.position, Position::Absolute | Position::Fixed));
+        let child_clip = if out_of_flow {
+            cb_clip_for_children
+        } else {
+            effective_clip
+        };
+        finalize_layout_metadata(child, child_clip, cb_clip_for_children, false);
     }
 }
 
