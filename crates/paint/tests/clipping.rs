@@ -130,6 +130,45 @@ fn test_overflow_hidden_radius_clips_child_background() {
 }
 
 #[test]
+fn test_own_background_is_not_clipped_by_own_overflow() {
+    // #1713: CSS 2.2 §11.1.1 — a clipping box's own background/border are not
+    // clipped by its own overflow. Layout gives the box its padding-box clip;
+    // the painter must emit it *after* the box's background.
+    let (_document, nodes) = document_with_nodes(1);
+    let mut style = overflow_style(0.0);
+    style.background_color = Color::RED;
+    let mut container = sized_box(
+        BoxType::BlockNode(nodes[0]),
+        style,
+        Rect::new(10.0, 10.0, 20.0, 20.0),
+    );
+    container.dimensions.border = EdgeSizes {
+        left: 6.0,
+        top: 6.0,
+        right: 6.0,
+        bottom: 6.0,
+    };
+    container.clip = Some(container.dimensions.padding_box());
+    let mut root_style = block_style();
+    root_style.background_color = Color::WHITE;
+    let mut root = LayoutBox::new(BoxType::BlockNode(nodes[0]), Some(root_style));
+    root.dimensions.content = VIEWPORT;
+    root.children.push(container);
+    let list = build_display_list_with_images_and_backgrounds(
+        &root,
+        VIEWPORT,
+        &ImageStore::new(),
+        &BackgroundImages::new(),
+    );
+    let pixmap = rasterize_display_list(&list, 100, 80);
+    assert_eq!(
+        pixmap.pixel(5, 5),
+        Color::RED,
+        "the box's own background must cover its border box"
+    );
+}
+
+#[test]
 fn test_overflow_visible_does_not_clip() {
     let (_document, nodes) = document_with_nodes(1);
     let child = sized_box(
