@@ -214,6 +214,33 @@ fn url_to_string_and_params_iteration() {
 }
 
 #[test]
+fn location_and_document_to_string_return_href() {
+    // #1935: SvelteKit boots with `new URL(".", location)`. The Location/Document
+    // wrappers must stringify to the document URL instead of "[object Object]".
+    let mut rt = JsRuntime::with_document(
+        megi_core::Document::new(),
+        "https://example.com/a/b".to_string(),
+    )
+    .expect("runtime");
+    assert_eq!(
+        rt.eval("location.toString()", "t").unwrap(),
+        "https://example.com/a/b"
+    );
+    assert_eq!(
+        rt.eval("String(location)", "t").unwrap(),
+        "https://example.com/a/b"
+    );
+    assert_eq!(
+        rt.eval("document.toString()", "t").unwrap(),
+        "https://example.com/a/b"
+    );
+    assert_eq!(
+        rt.eval("new URL('.', location).pathname", "t").unwrap(),
+        "/a/"
+    );
+}
+
+#[test]
 fn document_normalize_and_disconnected_bits() {
     let mut rt = runtime();
     rt.eval("var p = document.createElement('p'); p.appendChild(document.createTextNode('x')); p.appendChild(document.createTextNode('y')); document.body.appendChild(p); document.body.normalize()", "t").unwrap();

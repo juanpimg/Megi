@@ -233,6 +233,10 @@ pub(crate) fn build_location(context: &mut Context) -> Result<JsObject, JsError>
     init.function(native(location_assign), js_string!("assign"), 1);
     init.function(native(location_replace), js_string!("replace"), 1);
     init.function(native(location_reload), js_string!("reload"), 0);
+    // #1935: SvelteKit boots with `new URL(".", location)`. Location must
+    // stringify to the document URL, not "[object Object]".
+    init.function(native(location_href_get), js_string!("toString"), 0);
+    init.function(native(location_href_get), js_string!("valueOf"), 0);
     let location = init.build();
     for (name, getter, setter) in [
         (
@@ -569,5 +573,8 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         init.accessor(js_string!(name), Some(get), Some(set), Attribute::all());
     }
     init.function(native(document_close), js_string!("close"), 0);
+    // #1935: Document must stringify to its URL, not "[object Object]".
+    init.function(native(document_url), js_string!("toString"), 0);
+    init.function(native(document_url), js_string!("valueOf"), 0);
     init.build()
 }
