@@ -150,18 +150,22 @@ pub(super) fn placement_request(
         row_span: span_from(&style.grid_row_start, &style.grid_row_end),
         column_span: span_from(&style.grid_column_start, &style.grid_column_end),
     };
-    // `grid-area: <name>`: place the item over the named rectangle unless an explicit
-    // line on an axis overrides it.
-    if request.row_start.is_none()
-        && request.column_start.is_none()
-        && let Some(name) = style.grid_area.as_ref()
-        && let Some((row_start, row_end)) = names.row_areas.get(name)
-        && let Some((column_start, column_end)) = names.column_areas.get(name)
-    {
-        request.row_start = Some(*row_start);
-        request.row_span = row_end.saturating_sub(*row_start).max(1);
-        request.column_start = Some(*column_start);
-        request.column_span = column_end.saturating_sub(*column_start).max(1);
+    // `grid-area: <name>` is a shorthand for the four placement longhands
+    // (CSS Grid §8.3). Apply it per axis: an explicit line on one axis overrides
+    // only that axis, not the rectangle as a whole (#1709).
+    if let Some(name) = style.grid_area.as_ref() {
+        if request.row_start.is_none()
+            && let Some((row_start, row_end)) = names.row_areas.get(name)
+        {
+            request.row_start = Some(*row_start);
+            request.row_span = row_end.saturating_sub(*row_start).max(1);
+        }
+        if request.column_start.is_none()
+            && let Some((column_start, column_end)) = names.column_areas.get(name)
+        {
+            request.column_start = Some(*column_start);
+            request.column_span = column_end.saturating_sub(*column_start).max(1);
+        }
     }
     // Clamp line indices and spans: they come from CSS integers (u32) and feed the
     // occupancy matrix and the implicit track list. `grid-column: span 4000000000` used to
