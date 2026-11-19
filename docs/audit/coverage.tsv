@@ -442,7 +442,7 @@ crates/image/src/vp8_tables.rs	500	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/image/src/webp/animation.rs	288	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/webp/bitreader.rs	224	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/webp/constants.rs	16	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/webp/container.rs	299	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/image/src/webp/container.rs	322	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/webp/groups.rs	181	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/webp/mod.rs	56	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/webp/pixels.rs	164	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2027,7 +2027,7 @@ tools/test_check_arch.py	86	tool	F3	jp	2026-11-19	covered	#1759
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	105	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_update_coverage.py	400	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	410	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_coverage.py	555	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
