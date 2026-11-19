@@ -272,6 +272,11 @@ impl Font {
         }
         let face = self.rb_face()?;
         let mut buffer = rustybuzz::UnicodeBuffer::new();
+        // Layout already applied UAX #9 and hands us a segment in visual order.
+        // Forcing LTR prevents rustybuzz from guessing RTL from an Arabic/Hebrew
+        // character and reversing the Latin words in the same display item
+        // (#1978). Shaping only substitutes/positions glyphs; bidi is done.
+        buffer.set_direction(rustybuzz::Direction::LeftToRight);
         buffer.push_str(segment);
         let shaped = rustybuzz::shape(&face, &[], buffer);
         let scale = size_px / f32::from(self.units_per_em.max(1));

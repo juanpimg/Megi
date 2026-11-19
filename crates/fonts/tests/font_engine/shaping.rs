@@ -174,3 +174,28 @@ fn repeated_fallback_queries_are_consistent() {
         .expect("cached measure");
     assert!((w1 - w2).abs() < f32::EPSILON);
 }
+
+/// Layout hands shaping a segment already in visual order. Forcing rustybuzz to
+/// LTR keeps a Latin word intact even when an Arabic word precedes it in the
+/// same display item (#1978). Regression: shaping "RTL AR:" must yield glyph
+/// clusters in increasing order (not reversed as ":RA LTR").
+#[test]
+fn latin_after_arabic_is_shaped_ltr() {
+    let db = fixture_db();
+    let font = db
+        .font(
+            &["DejaVu Sans"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
+        .expect("DejaVu Sans loaded");
+    let run = font.shape(20.0, "RTL AR:").expect("shape Latin");
+    let clusters: Vec<u32> = run.glyphs.iter().map(|g| g.cluster).collect();
+    let mut sorted = clusters.clone();
+    sorted.sort_unstable();
+    assert_eq!(
+        clusters, sorted,
+        "Latin glyphs must stay in logical order (#1978): {clusters:?}"
+    );
+}
