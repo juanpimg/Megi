@@ -60,7 +60,9 @@ softbuffer = { version = "0.4", default-features = false, features = ["x11", "wa
 
 # Phase 6 JavaScript dependency authorized by docs/JAVASCRIPT-STRATEGY.md (ADR-001):
 # embedded ECMAScript engine (component, not core parser/layout engine).
-boa_engine = "0.22"
+# `annex-b` enables legacy web-compatible String methods such as `substr` (#1923),
+# used by the WHATWG spec scripts; Boa gates them behind this feature.
+boa_engine = { version = "0.22", features = ["annex-b"] }
 
 # Low-level font dependencies authorized by docs/ARCHITECTURE.md §3.1.
 ab_glyph = "0.2"
