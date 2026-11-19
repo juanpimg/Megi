@@ -639,3 +639,94 @@ if (typeof IntersectionObserver !== 'function') {
     };
   }
 })();
+
+// SVG geometry and HTML table/semantic element APIs (#1973/#1974/#1975).
+(function () {
+  function define(name, value) {
+    try { Object.defineProperty(globalThis, name, { value: value, writable: true, configurable: true }); } catch (e) {}
+  }
+  if (typeof SVGElement === 'function') {
+    if (typeof SVGElement.prototype.getBBox !== 'function') {
+      SVGElement.prototype.getBBox = function () {
+        var r = this.getBoundingClientRect ? this.getBoundingClientRect() : { x: 0, y: 0, width: 0, height: 0 };
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      };
+    }
+    if (typeof SVGElement.prototype.getCTM !== 'function') {
+      SVGElement.prototype.getCTM = function () { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; };
+    }
+    if (typeof SVGElement.prototype.getScreenCTM !== 'function') {
+      SVGElement.prototype.getScreenCTM = function () { return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }; };
+    }
+  }
+  if (typeof SVGSVGElement !== 'function') define('SVGSVGElement', function SVGSVGElement() {});
+  if (typeof HTMLTableElement !== 'function') define('HTMLTableElement', function HTMLTableElement() {});
+  if (typeof HTMLTableRowElement !== 'function') define('HTMLTableRowElement', function HTMLTableRowElement() {});
+  if (typeof HTMLTableCellElement !== 'function') define('HTMLTableCellElement', function HTMLTableCellElement() {});
+  if (typeof HTMLTemplateElement !== 'function') define('HTMLTemplateElement', function HTMLTemplateElement() {});
+  var tableProto = HTMLTableElement.prototype;
+  if (typeof tableProto.rows === 'undefined') {
+    Object.defineProperty(tableProto, 'rows', { get: function () { return this.querySelectorAll('tr'); }, configurable: true });
+  }
+  ['tHead', 'tFoot'].forEach(function (n) {
+    if (typeof Object.getOwnPropertyDescriptor(tableProto, n) === 'undefined') {
+      Object.defineProperty(tableProto, n, { get: function () { return this.querySelector(n.toLowerCase()); }, configurable: true });
+    }
+  });
+  if (typeof tableProto.tBodies === 'undefined') {
+    Object.defineProperty(tableProto, 'tBodies', { get: function () { return this.querySelectorAll('tbody'); }, configurable: true });
+  }
+  if (typeof tableProto.insertRow !== 'function') {
+    tableProto.insertRow = function (index) {
+      var row = document.createElement('tr');
+      var body = this.querySelector('tbody') || this;
+      var rows = body.querySelectorAll('tr');
+      var at = typeof index === 'number' && index >= 0 ? index : rows.length;
+      if (at < rows.length) body.insertBefore(row, rows[at]); else body.appendChild(row);
+      return row;
+    };
+  }
+  if (typeof tableProto.deleteRow !== 'function') {
+    tableProto.deleteRow = function (index) {
+      var rows = this.querySelectorAll('tr');
+      var row = rows[index < 0 ? rows.length + index : index];
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+    };
+  }
+  var rowProto = HTMLTableRowElement.prototype;
+  if (typeof Object.getOwnPropertyDescriptor(rowProto, 'cells') === 'undefined') {
+    Object.defineProperty(rowProto, 'cells', { get: function () { return this.querySelectorAll('td,th'); }, configurable: true });
+  }
+  if (typeof rowProto.insertCell !== 'function') {
+    rowProto.insertCell = function (index) {
+      var cell = document.createElement('td');
+      var cells = this.querySelectorAll('td,th');
+      var at = typeof index === 'number' && index >= 0 ? index : cells.length;
+      if (at < cells.length) this.insertBefore(cell, cells[at]); else this.appendChild(cell);
+      return cell;
+    };
+  }
+  if (typeof Object.getOwnPropertyDescriptor(HTMLTemplateElement.prototype, 'content') === 'undefined') {
+    Object.defineProperty(HTMLTemplateElement.prototype, 'content', {
+      get: function () { return this; }, configurable: true
+    });
+  }
+  if (typeof HTMLElement !== 'undefined') {
+    if (typeof Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidden') === 'undefined') {
+      Object.defineProperty(HTMLElement.prototype, 'hidden', {
+        get: function () { return this.hasAttribute('hidden'); },
+        set: function (v) { if (v) this.setAttribute('hidden', ''); else this.removeAttribute('hidden'); },
+        configurable: true
+      });
+    }
+  }
+  if (typeof HTMLOListElement !== 'function') define('HTMLOListElement', function HTMLOListElement() {});
+  if (typeof Object.getOwnPropertyDescriptor(HTMLOListElement.prototype, 'start') === 'undefined') {
+    Object.defineProperty(HTMLOListElement.prototype, 'start', {
+      get: function () { return parseInt(this.getAttribute('start') || '1', 10); }, configurable: true
+    });
+    Object.defineProperty(HTMLOListElement.prototype, 'reversed', {
+      get: function () { return this.hasAttribute('reversed'); }, configurable: true
+    });
+  }
+})();

@@ -462,3 +462,27 @@ fn geometry_cookie_intl_and_fetch_members() {
     )
     .expect("defaultPrevented must reflect preventDefault (#1952)");
 }
+
+/// SVG geometry methods and HTML table/element APIs used by data-grid and
+/// vector libraries (#1973/#1974/#1975).
+#[test]
+fn svg_geometry_and_table_apis() {
+    let mut rt = runtime();
+    for expr in [
+        "typeof SVGSVGElement",
+        "typeof SVGElement.prototype.getBBox",
+        "typeof SVGElement.prototype.getCTM",
+        "typeof SVGElement.prototype.getScreenCTM",
+        "typeof HTMLTableElement.prototype.insertRow",
+        "typeof HTMLTableElement.prototype.deleteRow",
+        "typeof HTMLTableRowElement",
+        "typeof HTMLTableRowElement.prototype.insertCell",
+        "typeof HTMLTemplateElement",
+        "typeof HTMLTemplateElement.prototype.content",
+        "typeof Object.getOwnPropertyDescriptor(HTMLElement.prototype,'hidden')?.get",
+        "typeof Object.getOwnPropertyDescriptor(HTMLOListElement.prototype,'start')?.get",
+    ] {
+        let got = rt.eval(expr, "t").unwrap();
+        assert_ne!(got, "undefined", "{expr} must exist");
+    }
+}
