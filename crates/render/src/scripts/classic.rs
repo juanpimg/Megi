@@ -109,7 +109,6 @@ pub fn discover_scripts(
 /// `loader` must be the shared [`megi_net::ResourceLoader`] so script fetches share the HTTP
 /// cache with stylesheets/images/backgrounds. `no_network` blocks `http(s)` script sources
 /// with a warning (offline rendering). All failures are non-fatal.
-
 /// Boa 0.22 rejects `function using(...)` / `function let(...)` (contextual reserved words)
 /// even though ECMA-262 allows them as function-expression names in sloppy code (#1969).
 /// Rename only the binding name of such function expressions; jQuery UI relies on this.
