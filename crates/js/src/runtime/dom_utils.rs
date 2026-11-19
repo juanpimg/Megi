@@ -123,6 +123,28 @@ pub(crate) fn node_closest(
     Ok(JsValue::null())
 }
 
+pub(crate) fn node_get_elements_by_tag_name(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    // #1875: Element.getElementsByTagName scopes the collection to descendants of `this`.
+    let node = this_node(this, context)?;
+    let name = arg_string(args, 0, context)?;
+    let nodes = with_context_host(context, |host| {
+        let doc = &host.document;
+        doc.descendants(node)
+            .filter(|id| {
+                doc.node(*id).as_element().is_some_and(|element| {
+                    name == "*" || element.local_name.eq_ignore_ascii_case(&name)
+                })
+            })
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+    wrap_list(context, nodes)
+}
+
 pub(crate) fn node_query_selector(
     this: &JsValue,
     args: &[JsValue],

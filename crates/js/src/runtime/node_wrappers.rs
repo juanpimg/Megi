@@ -126,6 +126,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("replaceChild", 2, node_replace_child),
         ("matches", 1, node_matches),
         ("closest", 1, node_closest),
+        ("getElementsByTagName", 1, node_get_elements_by_tag_name),
         ("querySelector", 1, node_query_selector),
         ("querySelectorAll", 1, node_query_selector_all),
         ("insertAdjacentHTML", 2, node_insert_adjacent_html),
