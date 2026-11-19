@@ -18,23 +18,25 @@ fn eval(runtime: &mut JsRuntime, script: &str) -> String {
 
 #[test]
 fn documented_gap_live_html_collections() {
-    // The realm keeps NodeLists/childNodes as snapshots (documented in crates/js/src/lib.rs)
-    // and exposes no `Element.getElementsByTagName`/`getElementsByClassName`; the static
-    // `querySelectorAll` snapshot is covered by the round-35 conformance file.
+    // The realm keeps NodeLists/HTMLCollections as snapshots (documented in
+    // crates/js/src/lib.rs): even though `Element.getElementsByTagName` now exists
+    // (#1875/#1900), the collections it returns are static, not live. The real DOM
+    // would grow `byTag` to length 2 here; the snapshot stays at 1.
     let mut rt = runtime();
     let value = eval(
         &mut rt,
         r#"
       var host = document.createElement('div'); document.body.appendChild(host);
       host.appendChild(document.createElement('a'));
+      var byTag = host.getElementsByTagName('a');
       var snapshot = document.querySelectorAll('a');
       host.appendChild(document.createElement('a'));
-      (typeof host.getElementsByTagName) + ':' + (typeof host.querySelectorAll) + ':' + snapshot.length + ':' + host.children.length
+      (typeof host.getElementsByTagName) + ':' + byTag.length + ':' + snapshot.length + ':' + host.children.length
     "#,
     );
     assert_eq!(
-        value, "undefined:function:1:2",
-        "documented gap: no live element collections (querySelectorAll is a static snapshot)"
+        value, "function:1:1:2",
+        "documented gap: element collections are snapshots, not live (the appended <a> does not grow byTag)"
     );
 }
 
