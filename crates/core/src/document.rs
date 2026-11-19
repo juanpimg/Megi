@@ -1,8 +1,9 @@
 //! Document construction, accessors and arena slot bookkeeping.
 
 use crate::{
-    Attribute, Document, ElementData, GENERATION_MASK, MAX_SLOTS, Namespace, Node, NodeId,
-    NodeKind, QuirksMode, next_arena_id, node_payload_bytes, tombstone_node,
+    Attribute, Document, ElementData, GENERATION_MASK, MAX_ATTRIBUTE_VALUE_BYTES,
+    MAX_ATTRIBUTES_PER_ELEMENT, MAX_SLOTS, Namespace, Node, NodeId, NodeKind, QuirksMode,
+    next_arena_id, node_payload_bytes, tombstone_node,
 };
 
 impl Document {
@@ -222,6 +223,19 @@ impl Document {
         let mut local_name = local_name.into();
         if namespace == Namespace::Html {
             local_name = local_name.to_ascii_lowercase();
+        }
+        // #1733: `set_attribute` enforces anti-DoS caps, but embedders may bypass it by
+        // passing a huge `Vec<Attribute>` here. Apply the same bounds on construction.
+        let mut attributes = attributes;
+        attributes.truncate(MAX_ATTRIBUTES_PER_ELEMENT);
+        for attribute in &mut attributes {
+            if attribute.value.len() > MAX_ATTRIBUTE_VALUE_BYTES {
+                let mut end = MAX_ATTRIBUTE_VALUE_BYTES;
+                while !attribute.value.is_char_boundary(end) {
+                    end -= 1;
+                }
+                attribute.value.truncate(end);
+            }
         }
         let template_contents = if namespace == Namespace::Html && local_name == "template" {
             Some(self.create_node(NodeKind::DocumentFragment))

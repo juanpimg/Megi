@@ -254,6 +254,27 @@ fn set_attribute_overwrite_respects_value_byte_cap() {
 }
 
 #[test]
+fn create_element_enforces_attribute_limits() {
+    // #1733: embedders must not bypass the caps enforced by `set_attribute`.
+    let mut doc = Document::new();
+    let oversized: Vec<Attribute> = (0..MAX_ATTRIBUTES_PER_ELEMENT + 10)
+        .map(|_| Attribute::new("a", "x"))
+        .collect();
+    let element = doc.create_element(Namespace::Html, "div", oversized);
+    let attrs = &doc.node(element).as_element().unwrap().attributes;
+    assert_eq!(attrs.len(), MAX_ATTRIBUTES_PER_ELEMENT);
+
+    let mut values = vec![Attribute::new(
+        "long",
+        "é".repeat(MAX_ATTRIBUTE_VALUE_BYTES),
+    )];
+    let element = doc.create_element(Namespace::Html, "span", values);
+    let value = &doc.node(element).as_element().unwrap().attributes[0].value;
+    assert!(value.len() <= MAX_ATTRIBUTE_VALUE_BYTES);
+    assert!(value.is_char_boundary(value.len()));
+}
+
+#[test]
 fn test_attribute_helpers_and_tag_name() {
     let mut doc = Document::new();
     let div = doc.create_element(
