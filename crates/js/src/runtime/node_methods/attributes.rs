@@ -41,6 +41,10 @@ pub(crate) fn node_value_get(
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
     let value = with_context_host(context, |host| {
+        // WHATWG HTML §4.10.5: a dirty IDL value shadows the `value` content attribute.
+        if let Some(idl) = host.idl_values.get(&node_id) {
+            return Some(idl.clone());
+        }
         let document = &host.document;
         let element = document
             .try_node(node_id)
@@ -49,27 +53,27 @@ pub(crate) fn node_value_get(
             return Some(document.text_content(node_id));
         }
         if element.local_name == "select" {
-            let selected = document
-                .descendants(node_id)
-                .filter_map(|child| document.try_node(child).and_then(|node| node.as_element()))
-                .find(|option| {
-                    option.local_name == "option" && option.get_attribute("selected").is_some()
-                });
-            if let Some(option) = selected {
-                if let Some(value) = option.get_attribute("value") {
+            let selected_id = document.descendants(node_id).find(|child| {
+                document
+                    .try_node(*child)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|candidate| {
+                        candidate.local_name == "option"
+                            && candidate.get_attribute("selected").is_some()
+                    })
+            });
+            if let Some(option_id) = selected_id {
+                // #1953: an option's dirty IDL value shadows its content attribute/text.
+                if let Some(idl) = host.idl_values.get(&option_id) {
+                    return Some(idl.clone());
+                }
+                let option = document
+                    .try_node(option_id)
+                    .and_then(|node| node.as_element());
+                if let Some(value) = option.and_then(|el| el.get_attribute("value")) {
                     return Some(value.to_string());
                 }
-                if let Some(option_id) = document.descendants(node_id).find(|child| {
-                    document
-                        .try_node(*child)
-                        .and_then(|node| node.as_element())
-                        .is_some_and(|candidate| {
-                            candidate.local_name == "option"
-                                && candidate.get_attribute("selected").is_some()
-                        })
-                }) {
-                    return Some(document.text_content(option_id));
-                }
+                return Some(document.text_content(option_id));
             }
             return Some(String::new());
         }

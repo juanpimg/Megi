@@ -33,15 +33,15 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 2962
-tests_commit = "7155015"
+tests_commit = "3051a6c"
 tests_date = "2026-11-19"
 crates = 17
-rust_lines = 222051
+rust_lines = 222956
 unsafe_forbidden_crates = 17
 
 [gate]
 status = "PASS"
-verified_commit = "7155015"
+verified_commit = "db67273"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
