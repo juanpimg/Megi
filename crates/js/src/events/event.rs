@@ -160,6 +160,7 @@ pub(crate) fn event_constructor(
             cancelable,
             JsValue::undefined(),
         );
+        set_event_prototype(context, &object, "Event");
         return Ok(JsValue::from(object));
     }
     Ok(build_event(

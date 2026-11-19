@@ -74,6 +74,19 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
         .and_then(|value| value.as_object());
     if let Some(event_proto) = event_proto {
+        // Event methods live on the prototype so every event (including JS-defined
+        // subclasses such as KeyboardEvent) inherits them.
+        for (name, function, length) in [
+            ("preventDefault", event_prevent_default as NativeFn, 0usize),
+            ("stopPropagation", event_stop_propagation, 0),
+            ("stopImmediatePropagation", event_stop_immediate, 0),
+        ] {
+            let method = FunctionObjectBuilder::new(context.realm(), native(function))
+                .name(js_string!(name))
+                .length(length)
+                .build();
+            let _ = event_proto.set(js_string!(name), JsValue::from(method), false, context);
+        }
         for name in ["CustomEvent", "MessageEvent"] {
             if let Some(proto) = context
                 .global_object()

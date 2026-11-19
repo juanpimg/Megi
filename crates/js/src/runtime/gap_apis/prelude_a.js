@@ -239,7 +239,7 @@
     function EventCtor(type, init) {
       init = init || {};
       if (Base) { Base.call(this, type, init); }
-      else { this.__megi_event = true; this.type = String(type); this.bubbles = !!init.bubbles; this.cancelable = !!init.cancelable; this.defaultPrevented = false; }
+      if (!this.__megi_event) { this.__megi_event = true; this.type = String(type); this.bubbles = !!init.bubbles; this.cancelable = !!init.cancelable; this.defaultPrevented = false; }
       for (var key in initFields) { if (Object.prototype.hasOwnProperty.call(initFields, key)) { this[key] = init[key] === undefined ? initFields[key] : init[key]; } }
     }
     if (Base && Base.prototype) { EventCtor.prototype = Object.create(Base.prototype); }

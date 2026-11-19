@@ -2,7 +2,7 @@
 
 #![cfg(feature = "js")]
 
-use megi_js::runtime::JsRuntime;
+use megi_js::{Budget, JsRuntime};
 
 #[test]
 fn custom_event_is_not_cancelable_by_default() {
@@ -131,12 +131,13 @@ fn event_constructors_have_prototypes_and_instanceof_works() {
             "t",
         )
         .expect("eval");
-    assert_eq!(out, "object:true:true:true:true");
+    assert_eq!(out, "true:true:true:true:true");
 }
 
 #[test]
-fn debug_event_properties() {
+fn subclass_init_fields_survive_small_budget() {
     let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_budget(Budget::SMALL);
     let out = runtime
         .eval(
             "var k = new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', ctrlKey: true, shiftKey: true, bubbles: true }); var i = new InputEvent('input', { data: 'x', inputType: 'insertText' }); var f = new FocusEvent('focus', { relatedTarget: null }); String(k.ctrlKey) + ':' + String(k.shiftKey) + ':' + String(k.code) + ':' + String(i.data) + ':' + String(i.inputType) + ':' + String(f.type) + ':' + String(f.relatedTarget);",
