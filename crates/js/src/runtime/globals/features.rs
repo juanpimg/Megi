@@ -1,5 +1,24 @@
 use super::*;
 
+/// `new Image()` creates a detached HTML `<img>` element (DOM HTMLImageElement).
+fn image_constructor(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node =
+        host_cell(context)?
+            .document
+            .create_element(Namespace::Html, "img".to_owned(), Vec::new());
+    let wrapper = wrap_node(context, node)?;
+    if let Some(src) = args.first().and_then(|value| value.as_string())
+        && let Some(object) = wrapper.as_object()
+    {
+        let _ = object.set(js_string!("src"), js_string!(src), false, context);
+    }
+    Ok(wrapper)
+}
+
 /// Installs History/location, Web Storage and MutationObserver (round 24).
 /// `new Element()` is illegal per Web IDL, but the constructor must exist for
 /// `instanceof Element` and `Element.prototype` (#1877).
@@ -40,6 +59,41 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             .set(js_string!(name), value, false, context)
             .map_err(|error| JsError::Internal(error.to_string()))?;
     }
+    // #1882: `self` aliases the global object and feature-detected DOM constructors exist.
+    context
+        .global_object()
+        .set(
+            js_string!("self"),
+            JsValue::from(context.global_object()),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
+    for name in ["EventTarget", "HTMLLinkElement"] {
+        let ctor = FunctionObjectBuilder::new(context.realm(), native(element_illegal_constructor))
+            .name(js_string!(name))
+            .length(0)
+            .constructor(true)
+            .build();
+        context
+            .global_object()
+            .set(js_string!(name), JsValue::from(ctor), false, context)
+            .map_err(|error| JsError::Internal(error.to_string()))?;
+    }
+    let image_ctor = FunctionObjectBuilder::new(context.realm(), native(image_constructor))
+        .name(js_string!("Image"))
+        .length(0)
+        .constructor(true)
+        .build();
+    context
+        .global_object()
+        .set(
+            js_string!("Image"),
+            JsValue::from(image_ctor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     // #1877: Web IDL/DOM exposes a global `Element` constructor with a prototype.
     let element_constructor =
         FunctionObjectBuilder::new(context.realm(), native(element_illegal_constructor))
