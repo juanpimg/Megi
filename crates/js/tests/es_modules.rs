@@ -411,3 +411,23 @@ fn async_evaluator_accepts_the_cycle_rejected_above() {
         outcome.exports
     );
 }
+
+#[test]
+fn multiple_export_declarations_on_one_line() {
+    // #1879: rspack/webpack bundles emit `export const a=1;export const b=2;`.
+    let mut runtime = runtime_with(&Modules {
+        resolver: HashMap::new(),
+        sources: HashMap::new(),
+    });
+    let outcome = runtime
+        .eval_module(
+            "export const a=1;export const b=2;",
+            "main",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("module");
+    let values: HashMap<_, _> = outcome.exports.into_iter().collect();
+    assert_eq!(values.get("a").map(String::as_str), Some("1"));
+    assert_eq!(values.get("b").map(String::as_str), Some("2"));
+}

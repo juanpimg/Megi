@@ -1,81 +1,132 @@
 use super::*;
 
+/// Splits a source line on `;` at top level (outside strings and brackets), keeping the
+/// delimiter. Bundlers emit several module statements per line (#1879).
+fn split_top_level_statements(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut depth = 0usize;
+    let mut chars = line.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if let Some(q) = quote {
+            current.push(ch);
+            if ch == '\\' {
+                if let Some(next) = chars.next() {
+                    current.push(next);
+                }
+            } else if ch == q {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '\'' | '"' | '`' => {
+                quote = Some(ch);
+                current.push(ch);
+            }
+            '(' | '[' | '{' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' | ']' | '}' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ';' if depth == 0 => {
+                current.push(ch);
+                out.push(std::mem::take(&mut current));
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        out.push(current);
+    }
+    out
+}
+
 pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, JsError> {
     let quoted_url = module_quote(url);
     let mut imports = Vec::new();
     let mut exports = Vec::new();
     let mut body_lines: Vec<String> = Vec::new();
     for raw_line in source.lines() {
-        let line = raw_line.replace("import.meta.url", &quoted_url);
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") {
-            let rest = trimmed
-                .trim_start_matches("import ")
-                .trim()
-                .trim_end_matches(';')
-                .trim();
-            if rest.starts_with('"') || rest.starts_with('\'') {
-                let specifier = rest.trim_matches(['"', '\'']).to_string();
-                imports.push(ImportSpec {
-                    specifier,
-                    binding: ImportBinding::SideEffect,
-                });
-                continue;
-            }
-            let Some((head, specifier)) = import_specifier(rest) else {
-                return Err(JsError::ModuleSyntax(format!(
-                    "unsupported import statement in {url}: {trimmed}"
-                )));
-            };
-            let binding = if head.is_empty() {
-                ImportBinding::SideEffect
-            } else if head.starts_with("* as ") {
-                ImportBinding::Namespace(
-                    head.strip_prefix("* as ")
-                        .map(str::trim)
-                        .unwrap_or_else(|| head.trim())
-                        .to_string(),
-                )
-            } else if head.starts_with('{') {
-                ImportBinding::Named(parse_import_named_list(&head))
-            } else if let Some((default_name, named)) = head.split_once(',') {
-                let mut bindings = vec![(default_name.trim().to_string(), "default".to_string())];
-                bindings.extend(parse_import_named_list(named));
-                ImportBinding::Named(bindings)
-            } else {
-                ImportBinding::Default(head.to_string())
-            };
-            imports.push(ImportSpec { specifier, binding });
-            continue;
-        }
-        if let Some(rest) = trimmed.strip_prefix("export ") {
-            let rest = rest.trim();
-            if let Some(default) = rest.strip_prefix("default ") {
-                let default = default.trim().trim_end_matches(';').trim();
-                body_lines.push(format!("const __megi_default = ({default});"));
-                exports.push(("default".to_string(), "__megi_default".to_string()));
-                continue;
-            }
-            if rest.starts_with('{') {
-                let mapping = parse_named_list(rest);
-                for (local, exported) in mapping {
-                    exports.push((exported, local));
+        // #1879: bundled modules often put several statements on one line
+        // (`export const a=1;export const b=2;`). Process each top-level statement.
+        for raw_line in split_top_level_statements(raw_line) {
+            let line = raw_line.replace("import.meta.url", &quoted_url);
+            let trimmed = line.trim();
+            if trimmed.starts_with("import ") {
+                let rest = trimmed
+                    .trim_start_matches("import ")
+                    .trim()
+                    .trim_end_matches(';')
+                    .trim();
+                if rest.starts_with('"') || rest.starts_with('\'') {
+                    let specifier = rest.trim_matches(['"', '\'']).to_string();
+                    imports.push(ImportSpec {
+                        specifier,
+                        binding: ImportBinding::SideEffect,
+                    });
+                    continue;
                 }
+                let Some((head, specifier)) = import_specifier(rest) else {
+                    return Err(JsError::ModuleSyntax(format!(
+                        "unsupported import statement in {url}: {trimmed}"
+                    )));
+                };
+                let binding = if head.is_empty() {
+                    ImportBinding::SideEffect
+                } else if head.starts_with("* as ") {
+                    ImportBinding::Namespace(
+                        head.strip_prefix("* as ")
+                            .map(str::trim)
+                            .unwrap_or_else(|| head.trim())
+                            .to_string(),
+                    )
+                } else if head.starts_with('{') {
+                    ImportBinding::Named(parse_import_named_list(&head))
+                } else if let Some((default_name, named)) = head.split_once(',') {
+                    let mut bindings =
+                        vec![(default_name.trim().to_string(), "default".to_string())];
+                    bindings.extend(parse_import_named_list(named));
+                    ImportBinding::Named(bindings)
+                } else {
+                    ImportBinding::Default(head.to_string())
+                };
+                imports.push(ImportSpec { specifier, binding });
                 continue;
             }
-            let names = export_declared_names(rest);
-            if names.is_empty() {
-                return Err(JsError::ModuleSyntax(format!(
-                    "unsupported export statement in {url}: {trimmed}"
-                )));
+            if let Some(rest) = trimmed.strip_prefix("export ") {
+                let rest = rest.trim();
+                if let Some(default) = rest.strip_prefix("default ") {
+                    let default = default.trim().trim_end_matches(';').trim();
+                    body_lines.push(format!("const __megi_default = ({default});"));
+                    exports.push(("default".to_string(), "__megi_default".to_string()));
+                    continue;
+                }
+                if rest.starts_with('{') {
+                    let mapping = parse_named_list(rest);
+                    for (local, exported) in mapping {
+                        exports.push((exported, local));
+                    }
+                    continue;
+                }
+                let names = export_declared_names(rest);
+                if names.is_empty() {
+                    return Err(JsError::ModuleSyntax(format!(
+                        "unsupported export statement in {url}: {trimmed}"
+                    )));
+                }
+                for name in names {
+                    exports.push((name.clone(), name));
+                }
+                body_lines.push(rest.to_string());
+                continue;
             }
-            for name in names {
-                exports.push((name.clone(), name));
-            }
-            body_lines.push(rest.to_string());
-            continue;
+            body_lines.push(line);
         }
-        body_lines.push(line);
     }
     let mut body = body_lines.join("\n");
     let dynamic_imports = rewrite_dynamic_imports(&mut body)?;
