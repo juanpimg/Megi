@@ -128,11 +128,41 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
     Ok(())
 }
 
+/// Bare calls like `addEventListener("error", fn)` use `globalThis` as the receiver in
+/// strict mode, which is not an EventTarget wrapper. Bind these three window methods to the
+/// realm global object (#1894).
+fn global_add_listener(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let window = JsValue::from(context.global_object());
+    add_listener(&window, args, context)
+}
+
+fn global_remove_listener(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let window = JsValue::from(context.global_object());
+    remove_listener(&window, args, context)
+}
+
+fn global_dispatch_event(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let window = JsValue::from(context.global_object());
+    dispatch_event(&window, args, context)
+}
+
 pub(crate) fn window_methods() -> [(&'static str, usize, NativeFn); 7] {
     [
-        ("addEventListener", 2, add_listener),
-        ("removeEventListener", 2, remove_listener),
-        ("dispatchEvent", 1, dispatch_event),
+        ("addEventListener", 2, global_add_listener),
+        ("removeEventListener", 2, global_remove_listener),
+        ("dispatchEvent", 1, global_dispatch_event),
         ("getComputedStyle", 1, get_computed_style),
         ("matchMedia", 1, match_media),
         ("scrollTo", 2, scroll_to),
