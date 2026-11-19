@@ -1,5 +1,7 @@
 use super::*;
 
+use std::collections::HashMap;
+
 pub(crate) fn is_control_disabled(document: &megi_core::Document, node_id: NodeId) -> bool {
     let Some(element) = document.try_node(node_id).and_then(|n| n.as_element()) else {
         return false;
@@ -118,11 +120,15 @@ pub(crate) fn control_text_value(
     document: &megi_core::Document,
     node_id: NodeId,
     element: &megi_core::ElementData,
+    idl_value: Option<&str>,
 ) -> String {
     if element.local_name == "textarea" {
         document.text_content(node_id)
     } else {
-        element.get_attribute("value").unwrap_or("").to_string()
+        // #1953: a dirty IDL value shadows the `value` content attribute.
+        idl_value
+            .map(str::to_owned)
+            .unwrap_or_else(|| element.get_attribute("value").unwrap_or("").to_string())
     }
 }
 
@@ -172,6 +178,8 @@ pub(crate) fn validity_flags_element(
     document: &megi_core::Document,
     node_id: NodeId,
     element: &megi_core::ElementData,
+    idl_value: Option<&str>,
+    idl_checked: &HashMap<NodeId, bool>,
 ) -> (ValidityFlags, Option<(String, String)>) {
     if is_control_disabled(document, node_id) {
         return (ValidityFlags::default(), None);
@@ -210,7 +218,7 @@ pub(crate) fn validity_flags_element(
     }
 
     if tag == "textarea" {
-        let value = control_text_value(document, node_id, element);
+        let value = control_text_value(document, node_id, element, idl_value);
         flags.value_missing = required && value.trim().is_empty();
         if !value.is_empty() && !element.has_attribute("readonly") {
             let len = value.encode_utf16().count();
@@ -248,7 +256,11 @@ pub(crate) fn validity_flags_element(
     }
 
     if input_type == "checkbox" {
-        flags.value_missing = required && !element.has_attribute("checked");
+        flags.value_missing = required
+            && !idl_checked
+                .get(&node_id)
+                .copied()
+                .unwrap_or_else(|| element.has_attribute("checked"));
         return (flags, None);
     }
 
@@ -256,7 +268,10 @@ pub(crate) fn validity_flags_element(
         if required {
             let name = element.get_attribute("name").unwrap_or("");
             let any_checked = if name.is_empty() {
-                element.has_attribute("checked")
+                idl_checked
+                    .get(&node_id)
+                    .copied()
+                    .unwrap_or_else(|| element.has_attribute("checked"))
             } else {
                 let scope = enclosing_form(document, node_id).unwrap_or_else(|| document.root());
                 document.descendants(scope).any(|cand| {
@@ -269,7 +284,10 @@ pub(crate) fn validity_flags_element(
                                     .get_attribute("type")
                                     .is_some_and(|t| t.eq_ignore_ascii_case("radio"))
                                 && el.get_attribute("name") == Some(name)
-                                && el.has_attribute("checked")
+                                && idl_checked
+                                    .get(&cand)
+                                    .copied()
+                                    .unwrap_or_else(|| el.has_attribute("checked"))
                         })
                 })
             };
@@ -278,7 +296,7 @@ pub(crate) fn validity_flags_element(
         return (flags, None);
     }
 
-    let value = control_text_value(document, node_id, element);
+    let value = control_text_value(document, node_id, element, idl_value);
     flags.value_missing = required && value.is_empty();
 
     if value.is_empty() || element.has_attribute("readonly") {

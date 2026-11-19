@@ -179,12 +179,8 @@ pub(crate) fn node_value_set(
                 .and_then(|el| el.get_attribute("value").map(str::to_owned));
             host.initial_control_values.insert(node_id, initial);
         }
-        let element = host
-            .document
-            .try_node_mut(node_id)
-            .and_then(|node| node.as_element_mut())
-            .ok_or_else(|| "node is not an element".to_string())?;
-        element.set_attribute(DomAttribute::new("value", value.clone()), true);
+        // Keep the content attribute untouched: `defaultValue` and form.reset() rely on it.
+        host.idl_values.insert(node_id, value);
         Ok(())
     });
     match result {
