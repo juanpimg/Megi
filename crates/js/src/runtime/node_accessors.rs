@@ -105,9 +105,81 @@ pub(crate) fn node_text_content_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
-    let text =
-        with_context_host(context, |host| host.document.text_content(node_id)).unwrap_or_default();
+    let text = with_context_host(context, |host| {
+        // #1943: for CharacterData nodes (Text/Comment), textContent is the data.
+        // The core `text_content` helper only special-cases Text; mirror DOM §4.4
+        // here so Comment nodes expose their data without changing core semantics
+        // for element subtree traversal.
+        host.document
+            .try_node(node_id)
+            .and_then(|node| match &node.kind {
+                megi_core::NodeKind::Text(data) | megi_core::NodeKind::Comment(data) => {
+                    Some(data.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| host.document.text_content(node_id))
+    })
+    .unwrap_or_default();
     Ok(JsValue::from(js_string!(text)))
+}
+
+/// Returns the `data` of a CharacterData node (Text/Comment), or `None` for other node
+/// kinds. Used by both `nodeValue` and `data` accessors (#1943, DOM §4.4).
+fn character_data(node: &megi_core::Node) -> Option<&str> {
+    match &node.kind {
+        megi_core::NodeKind::Text(data) | megi_core::NodeKind::Comment(data) => Some(data),
+        _ => None,
+    }
+}
+
+pub(crate) fn node_value_data_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(character_data)
+            .map(str::to_owned)
+    })
+    .flatten();
+    // DOM §4.4: nodeValue is null for nodes that are not CharacterData (except Attr).
+    Ok(match value {
+        Some(data) => JsValue::from(js_string!(data)),
+        None => JsValue::null(),
+    })
+}
+
+pub(crate) fn node_value_data_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = arg_string(args, 0, context)?;
+    let is_character_data = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .is_some_and(|node| character_data(node).is_some())
+    })
+    .unwrap_or(false);
+    if is_character_data {
+        let result = with_context_host(context, |host| {
+            host.document.set_text_content(node_id, &value)
+        });
+        match result {
+            Some(Ok(())) => {
+                note_mutation(MutationKind::CharacterData, node_id, None, None, context);
+            }
+            Some(Err(error)) => return Err(js_error(error.to_string())),
+            None => return Err(js_error("no active JavaScript host")),
+        }
+    }
+    // Setting nodeValue on a non-CharacterData node is a no-op (DOM §4.4).
+    Ok(JsValue::undefined())
 }
 
 pub(crate) fn node_text_content_set(

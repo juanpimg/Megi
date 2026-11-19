@@ -56,7 +56,7 @@ impl TextCache {
                 .insert(info.post_script_name.clone(), u32::MAX);
             return None;
         }
-        let resolved = match database.font_by_ref(info) {
+        let resolved = match database.font_by_ref_or_system(info) {
             Ok(font) => {
                 let index = self.faces.len() as u32;
                 self.faces.push(font);

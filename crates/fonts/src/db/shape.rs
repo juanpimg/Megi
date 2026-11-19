@@ -3,6 +3,28 @@
 use super::*;
 
 impl FontDatabase {
+    /// Rendering-facing font resolution: an unknown explicit family must fall back to the
+    /// bundled default face instead of failing the whole text run (issue #1976). The strict
+    /// [`FontDatabase::font`] contract is unchanged for API callers that ask for a named face.
+    fn font_for_rendering(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: fontdb::Stretch,
+    ) -> Result<Font, FontError> {
+        match self.font(families, weight, style, stretch) {
+            Ok(font) => Ok(font),
+            Err(FontError::FontNotFound { .. }) => {
+                let id = self
+                    .last_resort_face(weight, style, stretch)
+                    .ok_or(FontError::NoFontAvailable)?;
+                self.build_font(id)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Resolves a CSS family list + weight/style to a concrete font face.
     ///
     /// Unknown explicit families produce [`FontError::FontNotFound`]; generic
@@ -77,6 +99,18 @@ impl FontDatabase {
         found.0.build_font(found.1)
     }
 
+    /// Resolves a shaped run's font reference, consulting the system fallback database when
+    /// the face came from per-glyph fallback (#1977). Otherwise the rasterizer cannot rebuild
+    /// the face and silently drops those glyphs.
+    pub fn font_by_ref_or_system(&self, info: &FontRefInfo) -> Result<Font, FontError> {
+        if let Ok(font) = self.font_by_ref(info) {
+            return Ok(font);
+        }
+        static SYSTEM_DB: std::sync::OnceLock<FontDatabase> = std::sync::OnceLock::new();
+        let system = SYSTEM_DB.get_or_init(FontDatabase::from_system);
+        system.font_by_ref(info)
+    }
+
     /// Metrics of the resolved face at `size_px`.
     pub fn metrics(
         &self,
@@ -147,7 +181,7 @@ impl FontDatabase {
         text: &str,
     ) -> Result<ShapedRun, FontError> {
         Font::validate_size(size_px)?;
-        let primary = self.font(families, weight, style, Stretch::Normal)?;
+        let primary = self.font_for_rendering(families, weight, style, Stretch::Normal)?;
         let metrics = primary.metrics(size_px)?;
         let mut chain = self.fallback_chain(families, weight, style, primary);
         let mut fonts: Vec<FontRefInfo> = chain.iter().map(|font| font.info().clone()).collect();

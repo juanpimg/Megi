@@ -105,8 +105,14 @@ pub(crate) fn install_style_providers(
     // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),
     // and innerWidth/innerHeight/devicePixelRatio come from the real viewport (DPR 1.0).
     if let Some(styles) = host.styles.clone() {
+        let layout = host.layout.clone();
         runtime.set_computed_style_provider(Arc::new(move |document, node_id| {
-            crate::browser_host::computed_style_for(&styles, document, node_id)
+            crate::browser_host::computed_style_for(
+                &styles,
+                document,
+                node_id,
+                layout.as_ref().map(std::sync::Arc::as_ref),
+            )
         }));
     }
     let media = host.media.clone();

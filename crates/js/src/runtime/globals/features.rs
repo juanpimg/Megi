@@ -480,6 +480,7 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         ("querySelectorAll", 1, document_query_selector_all),
         ("createElement", 1, document_create_element),
         ("createTextNode", 1, document_create_text_node),
+        ("createComment", 1, document_create_comment),
         (
             "createDocumentFragment",
             0,

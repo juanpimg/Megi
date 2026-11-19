@@ -378,3 +378,44 @@ fn accessibility_snapshot_exposes_named_nodes() {
         .expect("eval");
     assert_eq!(out, "heading:Hi,img:Logo,button:Go");
 }
+
+#[test]
+fn text_and_comment_node_value_is_data() {
+    // #1943: CharacterData.nodeValue reflects the node's data for Text and Comment nodes.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var t = document.createTextNode('hi'); \
+             var parts = [t.nodeType, t.nodeValue, t.textContent]; \
+             t.nodeValue = 'bye'; \
+             parts.push(t.nodeValue, t.textContent); \
+             var c = document.createComment('note'); \
+             parts.push(c.nodeType, c.nodeValue, c.textContent); \
+             c.nodeValue = 'changed'; \
+             parts.push(c.nodeValue); \
+             parts.join('|');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(
+        out, "3|hi|hi|bye|bye|8|note|note|changed",
+        "nodeValue: {out}"
+    );
+}
+
+#[test]
+fn input_idl_value_and_checked_do_not_overwrite_attributes() {
+    // #1953: WHATWG HTML §4.10.5 dirty value/checked flags.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var i = document.createElement('input'); i.setAttribute('value', 'abc'); \
+             i.value = 'XYZ'; var a = i.getAttribute('value') + ':' + i.value; \
+             var c = document.createElement('input'); c.type = 'checkbox'; \
+             c.setAttribute('checked', ''); c.checked = false; \
+             a + '|' + String(c.checked) + ':' + String(c.hasAttribute('checked'));",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "abc:XYZ|false:true");
+}

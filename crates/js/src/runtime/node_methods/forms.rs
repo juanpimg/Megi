@@ -6,7 +6,15 @@ pub(crate) fn validity_flags(node_id: NodeId, context: &mut Context) -> Validity
         let element = document
             .try_node(node_id)
             .and_then(|node| node.as_element())?;
-        Some(validity_flags_element(document, node_id, element))
+        let idl_value = host.idl_values.get(&node_id).map(String::as_str);
+        let idl_checked = &host.idl_checked;
+        Some(validity_flags_element(
+            document,
+            node_id,
+            element,
+            idl_value,
+            idl_checked,
+        ))
     })
     .flatten();
     let Some((mut flags, pattern_check)) = computed else {
@@ -243,6 +251,8 @@ pub(crate) fn node_reset(
             let Some(tag) = tag else { continue };
             match tag.as_str() {
                 "input" => {
+                    host.idl_values.remove(&child_id);
+                    host.idl_checked.remove(&child_id);
                     if let Some(orig) = host.initial_control_values.remove(&child_id)
                         && let Some(el) = host
                             .document

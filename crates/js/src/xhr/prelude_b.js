@@ -86,7 +86,17 @@
     // Synchronous XHR: the deterministic engine cannot block on the network,
     // so complete with an empty response rather than aborting the script (#1904).
     this._sync = arguments.length >= 3 && async !== undefined && !async;
-    var m = String(method).trim().toUpperCase();
+    // #1854: WHATWG XHR §3.5.1 steps 2-3. The method must be an HTTP token
+    // (RFC 9110 §5.6.2) with no surrounding whitespace, and CONNECT/TRACE/TRACK
+    // are forbidden. Fail here rather than surfacing a generic error in send().
+    var m = String(method);
+    if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(m)) {
+      throw new DOMException("Invalid method: " + m, "SyntaxError");
+    }
+    if (/^(CONNECT|TRACE|TRACK)$/i.test(m)) {
+      throw new DOMException("Forbidden method: " + m, "SecurityError");
+    }
+    m = m.toUpperCase();
     var resolved = resolveUrl(url);
 
     this._requestSeq++;

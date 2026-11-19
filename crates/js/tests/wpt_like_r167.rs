@@ -105,10 +105,11 @@ fn reflected_value_checked_disabled_properties() {
         input.checked = true;
         input.disabled = true;
         var ok = input.value === 'typed' && input.checked === true && input.disabled === true;
-        ok = ok && input.getAttribute('value') === 'typed';
-        ok = ok && input.hasAttribute('checked') && input.hasAttribute('disabled');
+        // #1953: IDL value/checked are dirty flags; they do NOT overwrite content attributes.
+        ok = ok && input.getAttribute('value') === null;
+        ok = ok && !input.hasAttribute('checked') && input.hasAttribute('disabled');
         input.checked = false;
-        ok = ok && !input.hasAttribute('checked');
+        ok = ok && input.checked === false;
         var textarea = document.createElement('textarea');
         textarea.value = 'multi';
         ok = ok && textarea.value === 'multi' && textarea.textContent === 'multi';

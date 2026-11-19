@@ -110,6 +110,15 @@ pub fn discover_scripts(
 /// `loader` must be the shared [`megi_net::ResourceLoader`] so script fetches share the HTTP
 /// cache with stylesheets/images/backgrounds. `no_network` blocks `http(s)` script sources
 /// with a warning (offline rendering). All failures are non-fatal.
+/// Boa 0.22 rejects `function using(...)` / `function let(...)` (contextual reserved words)
+/// even though ECMA-262 allows them as function-expression names in sloppy code (#1969).
+/// Rename only the binding name of such function expressions; jQuery UI relies on this.
+fn sanitize_reserved_function_names(source: &str) -> String {
+    source
+        .replace("function using(", "function __megi_using(")
+        .replace("function let(", "function __megi_let(")
+}
+
 pub fn load_scripts(
     candidates: &[ScriptCandidate],
     base_url: &Url,
@@ -292,6 +301,7 @@ pub fn load_scripts_with_csp(
             ));
             continue;
         }
+        let text = sanitize_reserved_function_names(&text);
         report.script_bytes += text.len();
         report.scripts.push(LoadedScript {
             element: candidate.element,
@@ -303,4 +313,19 @@ pub fn load_scripts_with_csp(
         });
     }
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_reserved_function_names;
+
+    #[test]
+    fn reserved_contextual_function_names_are_renamed() {
+        // #1969: jQuery UI 1.13.2 uses `{using: function using(t){...}}`.
+        let source = "var o = {using: function using(t){return t}, x: function let(t){return t}};";
+        let fixed = sanitize_reserved_function_names(source);
+        assert!(fixed.contains("function __megi_using(t)"));
+        assert!(fixed.contains("function __megi_let(t)"));
+        assert!(fixed.contains("using: function"));
+    }
 }

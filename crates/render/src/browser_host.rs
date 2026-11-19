@@ -120,11 +120,41 @@ pub(crate) fn computed_style_for(
     styles: &HashMap<NodeId, ComputedStyle>,
     document: &Document,
     node_id: NodeId,
+    layout: Option<&HashMap<NodeId, megi_js::host::LayoutRect>>,
 ) -> Vec<(String, String)> {
-    if let Some(style) = styles.get(&node_id) {
-        return computed_style_pairs(style);
+    let mut pairs = if let Some(style) = styles.get(&node_id) {
+        computed_style_pairs(style)
+    } else {
+        return fallback_style_pairs(document, node_id, layout);
+    };
+    // CSSOM §6.4: getComputedStyle returns *used* values for width/height. The pre-script
+    // layout snapshot has them even though the style snapshot only has specified values (#1963).
+    if let Some(rect) = layout.and_then(|rects| rects.get(&node_id)) {
+        let (width, height) = (rect.content_box.2, rect.content_box.3);
+        if width.is_finite() && width >= 0.0 {
+            replace_pair(&mut pairs, "width", px_css(width));
+        }
+        if height.is_finite() && height >= 0.0 {
+            replace_pair(&mut pairs, "height", px_css(height));
+        }
     }
-    document
+    pairs
+}
+
+fn replace_pair(pairs: &mut Vec<(String, String)>, name: &str, value: String) {
+    if let Some(pair) = pairs.iter_mut().find(|pair| pair.0 == name) {
+        pair.1 = value;
+    } else {
+        pairs.push((name.to_owned(), value));
+    }
+}
+
+fn fallback_style_pairs(
+    document: &Document,
+    node_id: NodeId,
+    layout: Option<&HashMap<NodeId, megi_js::host::LayoutRect>>,
+) -> Vec<(String, String)> {
+    let mut pairs = document
         .try_node(node_id)
         .and_then(|node| node.as_element())
         .and_then(|element| element.get_attribute("style"))
@@ -134,7 +164,12 @@ pub(crate) fn computed_style_for(
                 .map(|declaration| (declaration.name, declaration.raw_value))
                 .collect()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Some(rect) = layout.and_then(|rects| rects.get(&node_id)) {
+        replace_pair(&mut pairs, "width", px_css(rect.content_box.2));
+        replace_pair(&mut pairs, "height", px_css(rect.content_box.3));
+    }
+    pairs
 }
 
 /// Evaluates a `matchMedia` query string against the render's media context.
@@ -297,7 +332,38 @@ mod tests {
         let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("style", style)]);
         doc.append_child(doc.root(), div);
 
-        let pairs = computed_style_for(&HashMap::new(), &doc, div);
+        let pairs = computed_style_for(&HashMap::new(), &doc, div, None);
         assert_eq!(pairs, vec![("color".to_owned(), "rgb(1, 2, 3)".to_owned())]);
+    }
+}
+
+#[cfg(test)]
+mod used_value_tests {
+    use super::*;
+    use megi_js::host::LayoutRect;
+
+    #[test]
+    fn computed_style_uses_layout_dimensions_for_width_and_height() {
+        // #1963: getComputedStyle must report used px sizes, not `auto`.
+        let mut doc = Document::new();
+        let div = doc.create_element(megi_core::Namespace::Html, "div", Vec::new());
+        doc.append_child(doc.root(), div);
+        let mut rects = HashMap::new();
+        rects.insert(
+            div,
+            LayoutRect {
+                border_box: (0.0, 0.0, 100.0, 20.0),
+                content_box: (0.0, 0.0, 96.0, 16.0),
+            },
+        );
+        let pairs = computed_style_for(&HashMap::new(), &doc, div, Some(&rects));
+        let get = |name: &str| {
+            pairs
+                .iter()
+                .find(|pair| pair.0 == name)
+                .map(|pair| pair.1.clone())
+        };
+        assert_eq!(get("width").as_deref(), Some("96px"));
+        assert_eq!(get("height").as_deref(), Some("16px"));
     }
 }

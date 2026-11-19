@@ -231,3 +231,71 @@ fn bare_add_event_listener_is_bound_to_window() {
         .expect("eval");
     assert_eq!(out, "x");
 }
+
+#[test]
+fn null_and_undefined_listeners_are_noops() {
+    // #1948: Web IDL converts null/undefined for `EventListener?` to null; DOM §2.7
+    // says a null listener does nothing. Non-null primitives must still throw.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var el = document.createElement('div'); \
+             var r = []; \
+             function tryAdd(v) { try { el.addEventListener('x', v); r.push('ok'); } catch (e) { r.push(e.name); } } \
+             tryAdd(null); tryAdd(undefined); tryAdd(0); tryAdd('x'); \
+             try { el.removeEventListener('x', null); r.push('ok'); } catch (e) { r.push(e.name); } \
+             r.join(',');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(
+        out, "ok,ok,TypeError,TypeError,ok",
+        "null listener handling: {out}"
+    );
+}
+
+#[test]
+fn prevent_default_sets_default_prevented_on_cancelable_event() {
+    // #1952: DOM §2.9 — preventDefault() sets the canceled flag when cancelable,
+    // observable via the defaultPrevented attribute.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new Event('x', { cancelable: true }); \
+             e.preventDefault(); \
+             String(e.defaultPrevented);",
+            "t",
+        )
+        .expect("preventDefault");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn prevent_default_ignored_on_non_cancelable_event() {
+    // #1952: DOM §2.9 — cancelable defaults to false; preventDefault() is a no-op.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var e = new Event('x'); \
+             e.preventDefault(); \
+             String(e.defaultPrevented);",
+            "t",
+        )
+        .expect("preventDefault");
+    assert_eq!(out, "false");
+}
+
+#[test]
+fn native_constructor_prototypes_are_sealed() {
+    // #1972: scripts feature-detect `writable`/`configurable` on `prototype`.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "function info(name) { var d = Object.getOwnPropertyDescriptor(globalThis[name], 'prototype'); \
+               return d.writable + ':' + d.configurable; } \
+             info('Event') + '|' + info('XMLHttpRequest');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "false:false|false:false");
+}

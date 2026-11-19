@@ -331,18 +331,27 @@ fn url_resolution_follows_the_whatwg_rules() {
     }
 }
 
-/// Annex B String.prototype.substr must exist for legacy scripts (WHATWG specs,
-/// #1923). Boa's default context should already provide it; this test guards
-/// against a regression where the global is missing.
 #[test]
-fn string_substr_annex_b_exists() {
+fn string_prototype_substr_is_available() {
+    // #1923: `String.prototype.substr` (ECMA-262 §B.1.3) is used by the WHATWG spec
+    // scripts (`location.hash.substr(1)`); without it those pages abort on load.
     let mut rt = runtime();
-    assert_eq!(
-        rt.eval("typeof 'abcdef'.substr", "t").unwrap(),
-        "function",
-        "String.prototype.substr must exist (#1923)"
-    );
-    assert_eq!(rt.eval("'abcdef'.substr(2,3)", "t").unwrap(), "cde");
+    let cases = [
+        ("'abcdef'.substr(2)", "cdef"),
+        ("'abcdef'.substr(2, 3)", "cde"),
+        ("'abcdef'.substr(-2)", "ef"),
+        ("'abcdef'.substr(-3, 2)", "de"),
+        ("'abcdef'.substr(2, 0)", ""),
+        ("'abcdef'.substr(0, -1)", ""),
+        ("'abcdef'.substr(99)", ""),
+        ("typeof 'x'.substr", "function"),
+    ];
+    for (expression, expected) in cases {
+        let actual = rt
+            .eval(expression, "t")
+            .unwrap_or_else(|error| panic!("{expression}: {error}"));
+        assert_eq!(actual, expected, "{expression}");
+    }
 }
 
 /// Element.prototype must expose the standard navigation/mutation methods and
