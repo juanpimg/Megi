@@ -6,6 +6,24 @@ mod quoted_family_tests {
     use super::*;
 
     #[test]
+    fn generic_fallback_is_appended_only_when_needed() {
+        let mut explicit = parse_font_families("Arial");
+        ensure_generic_fallback(&mut explicit);
+        assert_eq!(explicit.last().map(String::as_str), Some("sans-serif"));
+
+        let mut with_generic = parse_font_families("Arial, serif");
+        ensure_generic_fallback(&mut with_generic);
+        assert_eq!(with_generic.len(), 2);
+        assert_eq!(with_generic.last().map(String::as_str), Some("serif"));
+
+        // A quoted generic is a literal family name, so the fallback is still needed.
+        let mut quoted = parse_font_families("\"serif\"");
+        ensure_generic_fallback(&mut quoted);
+        assert_eq!(quoted.len(), 2);
+        assert_eq!(quoted.last().map(String::as_str), Some("sans-serif"));
+    }
+
+    #[test]
     fn quoted_generic_name_stays_a_literal_family() {
         let unquoted = parse_font_families("serif");
         let quoted = parse_font_families("\"serif\"");

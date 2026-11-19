@@ -197,6 +197,25 @@ fn unmark_family(name: &str) -> &str {
 /// Splits on commas, trims ASCII whitespace and strips single/double quotes
 /// around family names (CSS Fonts 3 §3.1). Returns `["sans-serif"]` when the
 /// value contains no usable family (CSS initial `font-family` is UA-defined).
+/// Appends the default generic family when the list has no generic entry.
+///
+/// CSS Fonts 3 §5.2 requires the UA to fall back to its default font when none
+/// of the requested families is available. The low-level
+/// [`crate::FontDatabase::font`] keeps returning `FontNotFound` for callers that
+/// need a controlled error, but browser layers (layout measurement and text
+/// rasterization) must always resolve to a real face: otherwise an unavailable
+/// explicit family such as `Arial` degrades to the historical 8×8 bitmap stub,
+/// which has uppercase-only glyphs and no digits (#1976).
+pub fn ensure_generic_fallback(families: &mut Vec<String>) {
+    let has_generic = families.iter().any(|name| {
+        !name.starts_with(QUOTED_FAMILY_PREFIX)
+            && GENERIC_FAMILIES.contains(&unmark_family(name).to_ascii_lowercase().as_str())
+    });
+    if !has_generic {
+        families.push("sans-serif".to_owned());
+    }
+}
+
 pub fn parse_font_families(font_family: &str) -> Vec<String> {
     const MAX_FAMILIES: usize = 256;
     const MAX_ENTRY_LEN: usize = 256;
