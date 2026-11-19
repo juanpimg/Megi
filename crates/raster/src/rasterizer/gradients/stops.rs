@@ -275,7 +275,18 @@ pub(crate) fn radial_gradient_geometry(
                 }
                 let dx = (chosen.0 - center_x).abs();
                 let dy = (chosen.1 - center_y).abs();
-                (dx.max(left.min(right)), dy.max(top.min(bottom)))
+                let (rx0, ry0) = match extent {
+                    megi_display::RadialExtent::ClosestCorner => (left.min(right), top.min(bottom)),
+                    _ => (left.max(right), top.max(bottom)),
+                };
+                if rx0 <= 0.0 || ry0 <= 0.0 || !rx0.is_finite() || !ry0.is_finite() {
+                    (dx.max(rx0), dy.max(ry0))
+                } else {
+                    // CSS Images 3 §3.4.3: scale the side radii by the factor
+                    // that makes the ellipse pass exactly through the corner (#1717).
+                    let scale = ((dx / rx0).powi(2) + (dy / ry0).powi(2)).sqrt();
+                    (rx0 * scale, ry0 * scale)
+                }
             }
             megi_display::RadialExtent::Explicit(rx, ry) => (rx, ry),
         },
@@ -284,4 +295,28 @@ pub(crate) fn radial_gradient_geometry(
         return None;
     }
     Some((center_x, center_y, rx, ry))
+}
+
+#[cfg(test)]
+mod radial_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn farthest_corner_ellipse_passes_through_the_corner() {
+        let mut radial = megi_display::RadialGradient {
+            shape: Some(megi_display::RadialShape::Ellipse),
+            extent: Some(megi_display::RadialExtent::FarthestCorner),
+            position: Default::default(),
+        };
+        radial.position.x = megi_display::Length::Percent(50.0);
+        radial.position.y = megi_display::Length::Percent(50.0);
+        let (_, _, rx, ry) =
+            radial_gradient_geometry(Rect::new(0.0, 0.0, 100.0, 100.0), &radial).expect("geometry");
+        // CSS Images 3 §3.4.3: scale closest-side radii so the ellipse passes
+        // exactly through the corner: sqrt(50² + 50²) ~= 70.71.
+        assert!(
+            (rx - 70.7107).abs() < 0.01 && (ry - 70.7107).abs() < 0.01,
+            "radii must reach the corner, got ({rx}, {ry})"
+        );
+    }
 }

@@ -117,6 +117,13 @@ jobs:
           - target: net_surface
             seconds: 300
             extra: ""
+          # #1761: these two surfaces consume untrusted input but had no campaign.
+          - target: http_head
+            seconds: 300
+            extra: ""
+          - target: compression
+            seconds: 300
+            extra: ""
           - target: font_decode
             seconds: 300
             extra: ""

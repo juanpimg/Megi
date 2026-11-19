@@ -100,7 +100,7 @@ pub(super) fn paint_text_run(
             .take(megi_display::MAX_TEXT_RUN_CHARS)
             .collect(),
         rect: layout_box.dimensions.content,
-        color: scaled(color, alpha_scale),
+        color,
         font_size,
         font_family,
         font_weight,
@@ -282,5 +282,43 @@ pub(super) fn paint_marker(
             };
             list.push(DisplayItem::Marker { rect, color, kind });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_alpha_is_scaled_once() {
+        // #1714: `color` is already scaled before the hit test; scaling it again
+        // in the DisplayItem made text twice as transparent as the surrounding box.
+        let mut style = megi_css::ComputedStyle::initial();
+        style.color = Color::new(200, 100, 50, 200);
+        let mut layout_box = megi_layout::LayoutBox::new(
+            megi_layout::BoxType::BlockNode(megi_core::NodeId::from_index(1)),
+            Some(style),
+        );
+        layout_box.dimensions.content = Rect::new(0.0, 0.0, 80.0, 16.0);
+        let images = megi_display::ImageStore::new();
+        let backgrounds = megi_display::BackgroundImages::new();
+        let resources = PaintResources {
+            images: &images,
+            backgrounds: &backgrounds,
+            regions: None,
+            viewport: Rect::new(0.0, 0.0, 100.0, 100.0),
+            effects_present: false,
+        };
+        let mut list = DisplayList::new();
+        paint_text_run(&layout_box, "Hi", &mut list, &resources, None, 0.5);
+        let color = list
+            .items
+            .iter()
+            .find_map(|item| match item {
+                DisplayItem::Text { color, .. } => Some(*color),
+                _ => None,
+            })
+            .expect("a text item must be emitted");
+        assert_eq!(color.a, 100, "alpha must be scaled once, not twice");
     }
 }

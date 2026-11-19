@@ -8,11 +8,10 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **25 harnesses** in the ASan matrix plus **9** in the
+> scheduled/dispatch run executes **27 harnesses** in the ASan matrix plus **9** in the
 > UBSan smoke matrix (34 scheduled entries over **28** `[[bin]]` targets in
-> `fuzz/Cargo.toml`; `charset`, `compression`, and `http_head` are compiled but not
-> currently in the ASan matrix) under the default libFuzzer **AddressSanitizer** build
-> (10 minutes for 10 critical parsers/decoders and 5 minutes for the remaining 15), and a
+> `fuzz/Cargo.toml`; `charset` is compiled but not currently in the ASan matrix (#1647)) under the default libFuzzer **AddressSanitizer** build
+> (10 minutes for 10 critical parsers/decoders and 5 minutes for the remaining 17), and a
 > short **UndefinedBehaviorSanitizer (UBSan)** smoke pass on representative targets. Pull
 > requests and pushes to `main` run a build-only job that compiles every `[[bin]]` fuzz
 > target in `fuzz/Cargo.toml` on the pinned nightly (no libFuzzer run), so a manifest or
@@ -246,7 +245,7 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 
 Notes:
 - 28 harnesses exist in `fuzz/fuzz_targets/` (28 `[[bin]]` targets) and 170 seed corpus files
-  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 25 ASan matrix
+  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 27 ASan matrix
   entries (10 at 600 s, 15 at 300 s) plus 9 UBSan smoke entries (120 s each); `charset`,
   `compression`, and `http_head` are built by the PR/build job but are not currently in the
   ASan/UBSan matrices.

@@ -117,6 +117,38 @@ fn test_flex_grow_and_shrink_with_basis() {
 }
 
 #[test]
+fn test_flex_shrink_freezes_items_at_min_size_and_redistributes() {
+    // #1704: CSS Flexbox §9.7(c) — an item that reaches its minimum main size
+    // is frozen, and the remaining deficit is redistributed among the others.
+    let case = layout_case(
+        flex_container_style(Length::Px(200.0), Length::Px(40.0)),
+        vec![
+            {
+                let mut style = item_style(Length::Auto, Length::Px(20.0));
+                style.flex_basis = Length::Px(200.0);
+                style.flex_shrink = 1.0;
+                style.min_width = Length::Px(150.0);
+                style
+            },
+            {
+                let mut style = item_style(Length::Auto, Length::Px(20.0));
+                style.flex_basis = Length::Px(200.0);
+                style.flex_shrink = 1.0;
+                style
+            },
+        ],
+    );
+    assert!(
+        (case.item(0).dimensions.content.width - 150.0).abs() < 0.01,
+        "item at min-width must be frozen"
+    );
+    assert!(
+        (case.item(1).dimensions.content.width - 50.0).abs() < 0.01,
+        "the remaining deficit must go to the unfrozen item"
+    );
+}
+
+#[test]
 fn test_column_direction_and_stretch() {
     let case = layout_case(
         {
