@@ -69,7 +69,10 @@ pub fn decode_data_payload(payload: &str) -> Result<DataUrl, FetchError> {
     };
     let mut base64 = false;
     let mut parameters: Vec<String> = Vec::new();
-    if (first.is_empty() || !first.contains('/')) && !first.is_empty() {
+    // #1861: the first segment can itself be the `base64` flag (RFC 2397 §3).
+    if !first.is_empty() && !first.contains('/') && first.eq_ignore_ascii_case("base64") {
+        base64 = true;
+    } else if (first.is_empty() || !first.contains('/')) && !first.is_empty() {
         parameters.push(first.to_owned());
     }
     for segment in segments {
@@ -230,6 +233,15 @@ mod unit_tests {
         let decoded = decode_data_payload("text/html,<h1>Hi</h1>").expect("decode");
         assert_eq!(decoded.mime_type, "text/html");
         assert_eq!(decoded.bytes, b"<h1>Hi</h1>");
+    }
+
+    #[test]
+    fn leading_base64_flag_without_mediatype_is_decoded() {
+        // #1861: per RFC 2397 the first metadata segment may be the `base64`
+        // flag itself, with no mediatype before it.
+        let decoded = decode_data_payload("base64,SGVsbG8=").expect("decode");
+        assert_eq!(decoded.bytes, b"Hello");
+        assert_eq!(decoded.mime_type, "text/plain;charset=US-ASCII");
     }
 
     #[test]
