@@ -98,6 +98,17 @@ pub(super) fn paint_stacking_context(
         1.0,
     );
 
+    // A positioned/floated replaced element is painted in its own stacking
+    // context step (Appendix E step 8); the inline walker skips non-in-flow
+    // children, so its bitmap would otherwise never be emitted (#1884).
+    if !hidden
+        && !matches!(phase(layout_box, resources.effects_present), Phase::InFlow)
+        && let Some(node_id) = layout_box.node_id()
+        && resources.images.get(&node_id).is_some()
+    {
+        paint_replaced_element(layout_box, node_id, list, resources, opacity);
+    }
+
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
     for &context in &buckets.zero {
         paint_stacking_context(

@@ -93,6 +93,10 @@ pub(crate) fn establishes_independent_formatting_context(layout_box: &LayoutBox)
     layout_box.style.as_ref().is_some_and(|style| {
         (style.display == Display::Flex || style.is_inline_flex)
             || (style.display == Display::Grid || style.is_inline_grid)
+            // CSS 2.2 §9.4.1: inline-blocks establish a new block formatting
+            // context, so their children's margins must not collapse outward
+            // (Wikipedia's .central-textlogo-wrapper / .central-textlogo, #1884).
+            || style.display == Display::InlineBlock
             || matches!(
                 style.display,
                 Display::Table | Display::TableRow | Display::TableCell
