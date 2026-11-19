@@ -151,4 +151,8 @@ pub(crate) struct Host {
     pub frames: Vec<Option<Rc<RefCell<crate::runtime::IframeState>>>>,
     /// Map from `<iframe>` element `NodeId` to index in `frames`.
     pub frame_by_node: HashMap<NodeId, u32>,
+    /// IDL (dirty) `value` of an input, distinct from its `value` content attribute (#1953).
+    pub idl_values: HashMap<NodeId, String>,
+    /// IDL (dirty) `checked` state of a control, distinct from its attribute (#1953).
+    pub idl_checked: HashMap<NodeId, bool>,
 }
