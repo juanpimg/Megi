@@ -140,6 +140,28 @@ fn unfilter_alpha_plane(alpha: &mut [u8], width: usize, height: usize, filtering
     }
 }
 
+/// HorizontalUnfilter_C (WebP ALPH filtering 1): the left edge of row `y > 0` is predicted
+/// from the *reconstructed* pixel `(0, y-1)`, not from zero (#1764).
+pub(crate) fn unfilter_alpha_horizontal(alpha: &mut [u8], width: usize) {
+    if width == 0 {
+        return;
+    }
+    let height = alpha.len() / width;
+    for row in 0..height {
+        let mut previous = if row == 0 {
+            0
+        } else {
+            alpha[(row - 1) * width]
+        };
+        for col in 0..width {
+            let index = row * width + col;
+            let reconstructed = alpha[index].wrapping_add(previous);
+            alpha[index] = reconstructed;
+            previous = reconstructed;
+        }
+    }
+}
+
 /// Applies an uncompressed `ALPH` alpha plane to a decoded lossy image.
 pub(crate) fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result<(), ImageError> {
     let (&header, data) = payload.split_first().ok_or(ImageError::Truncated {
@@ -163,14 +185,7 @@ pub(crate) fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result
         0 => {}
         1 => {
             let width = image.width as usize;
-            for row in alpha.chunks_mut(width.max(1)) {
-                let mut previous = 0u8;
-                for value in row {
-                    let reconstructed = value.wrapping_add(previous);
-                    *value = reconstructed;
-                    previous = reconstructed;
-                }
-            }
+            unfilter_alpha_horizontal(&mut alpha, width);
         }
         // WebP Container Spec, ALPH chunk byte 0 bits 3:2 — filtering method 2 (vertical) and
         // 3 (gradient) are valid and emitted by encoders (#1660). Each sample is reconstructed
@@ -278,7 +293,7 @@ pub(crate) fn check_animated_frame_budget(
 
 #[cfg(test)]
 mod tests {
-    use super::unfilter_alpha_plane;
+    use super::{unfilter_alpha_horizontal, unfilter_alpha_plane};
 
     #[test]
     fn alpha_vertical_filter_uses_reconstructed_neighbours() {
@@ -286,6 +301,14 @@ mod tests {
         // residuals [10,10,20,20] (row 0 horizontal, row 1 relative to row 0).
         let mut alpha = [10u8, 10, 20, 20];
         unfilter_alpha_plane(&mut alpha, 2, 2, 2);
+        assert_eq!(alpha, [10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn alpha_horizontal_filter_seeds_each_row_from_the_row_above() {
+        // #1764: true alpha [[10,20],[30,40]] with filtering 1 yields residuals [10,10,20,10].
+        let mut alpha = [10u8, 10, 20, 10];
+        unfilter_alpha_horizontal(&mut alpha, 2);
         assert_eq!(alpha, [10, 20, 30, 40]);
     }
 
