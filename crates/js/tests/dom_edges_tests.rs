@@ -435,3 +435,17 @@ fn html_collections_are_iterable_with_for_of() {
         .expect("eval");
     assert_eq!(out, "function|a1,a2,|A,A,");
 }
+
+#[test]
+fn location_and_document_stringify_to_their_url() {
+    // #1935: SvelteKit's `new URL('.', location)` needs a string representation.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "String(location) + '|' + location.toString() + '|' + \
+             String(document) + '|' + document.toString();",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "about:blank|about:blank|about:blank|about:blank");
+}
