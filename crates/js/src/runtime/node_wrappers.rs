@@ -24,12 +24,15 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 46] = [
+    let accessors: [(&str, AccessorKind); 48] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
         ("textContent", AccessorKind::TextContent),
+        // #1943: nodeValue/data are the CharacterData payload (Text/Comment).
+        ("nodeValue", AccessorKind::NodeValue),
+        ("data", AccessorKind::NodeValue),
         ("innerHTML", AccessorKind::InnerHtml),
         ("outerHTML", AccessorKind::OuterHtml),
         ("children", AccessorKind::Children),
@@ -188,6 +191,7 @@ pub(crate) enum AccessorKind {
     Id,
     ClassName,
     TextContent,
+    NodeValue,
     InnerHtml,
     OuterHtml,
     Children,
@@ -238,6 +242,7 @@ pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Id => (node_id_get, Some(node_id_set)),
         AccessorKind::ClassName => (node_class_get, Some(node_class_set)),
         AccessorKind::TextContent => (node_text_content_get, Some(node_text_content_set)),
+        AccessorKind::NodeValue => (node_value_data_get, Some(node_value_data_set)),
         AccessorKind::InnerHtml => (node_inner_html_get, Some(node_inner_html_set)),
         AccessorKind::OuterHtml => (node_outer_html_get, Some(node_outer_html_set)),
         AccessorKind::Children => (node_children, None),
