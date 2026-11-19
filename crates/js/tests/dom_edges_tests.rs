@@ -348,3 +348,19 @@ fn element_constructor_and_instanceof_are_available() {
         .expect("eval");
     assert_eq!(out, "function:true:object");
 }
+
+#[test]
+fn standard_dom_globals_are_exposed() {
+    // #1882: `self`, `EventTarget`, `Image` and `HTMLLinkElement` are used by real sites.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var img = new Image('x.png'); \
+             String(typeof self) + ':' + String(typeof EventTarget) + ':' + \
+             String(typeof HTMLLinkElement) + ':' + String(img.tagName) + ':' + \
+             String(img instanceof Element);",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "object:function:function:IMG:true");
+}
