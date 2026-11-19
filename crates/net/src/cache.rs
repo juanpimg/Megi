@@ -45,6 +45,9 @@ pub struct CachePolicy {
     pub age: Option<u64>,
     /// Absolute expiry from `Expires`, if valid and in the future at parse time.
     pub expires_at: Option<SystemTime>,
+    /// An `Expires` header was present but malformed/pre-epoch: RFC 9111 §4.2.1 requires
+    /// treating it as a date in the past instead of falling back to heuristic freshness (#1749).
+    pub expires_invalid: bool,
     /// `ETag` validator (quoted string preserved).
     pub etag: Option<String>,
     /// `Last-Modified` validator (raw header value).
@@ -79,6 +82,9 @@ impl CachePolicy {
         // `s-maxage` applies only to shared caches (RFC 9111 §5.2.2.1). This is a
         // private cache, so a response carrying only `s-maxage` must not be treated
         // as fresh here (#1343); the field is kept for a future shared-cache mode.
+        if self.expires_invalid {
+            return Some(Duration::ZERO);
+        }
         self.expires_at
             .map(|expires| expires.duration_since(now).unwrap_or(Duration::ZERO))
     }
@@ -123,8 +129,11 @@ pub fn parse_cache_policy(headers: &[(String, String)], now: SystemTime) -> Cach
         if name.eq_ignore_ascii_case("cache-control") {
             parse_cache_control(value, now, &mut policy);
         } else if name.eq_ignore_ascii_case("expires") {
-            if policy.expires_at.is_none() {
-                policy.expires_at = parse_http_date(value);
+            if policy.expires_at.is_none() && !policy.expires_invalid {
+                match parse_http_date(value) {
+                    Some(date) => policy.expires_at = Some(date),
+                    None => policy.expires_invalid = true,
+                }
             }
         } else if name.eq_ignore_ascii_case("etag") {
             let trimmed = value.trim();
@@ -340,6 +349,20 @@ mod unit_tests {
         assert!(!policy.no_cache);
         assert_eq!(policy.etag.as_deref(), Some("\"abc\""));
         assert!(policy.vary.accept_encoding && policy.vary.user_agent);
+    }
+
+    #[test]
+    fn invalid_expires_is_already_expired() {
+        // #1749: RFC 9111 §4.2.1 — invalid or pre-epoch Expires is in the past, not absent.
+        let now = UNIX_EPOCH + Duration::from_secs(1_000_000);
+        for value in ["0", "Sun, 06 Nov 1000 08:49:37 GMT", "not-a-date"] {
+            let policy = parse_cache_policy(&headers(&[("Expires", value)]), now);
+            assert_eq!(
+                policy.explicit_lifetime(now),
+                Some(Duration::ZERO),
+                "Expires: {value}"
+            );
+        }
     }
 
     #[test]
