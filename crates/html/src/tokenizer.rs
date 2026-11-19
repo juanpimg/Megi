@@ -110,6 +110,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pi_data_byte_cap_respects_utf8_boundaries() {
+        // #1738: the old cap was checked before pushing, so a 4-byte code point appended
+        // at MAX_PI_DATA_BYTES - 1 grew the buffer to MAX + 3 bytes before the emit-time
+        // truncate. The cap must be enforced per code point, in bytes.
+        const CAP: usize = MAX_PI_DATA_BYTES;
+        let mut tok = Tokenizer::from_str_input(
+            &format!("<?pi {}\u{1F600}more", "a".repeat(CAP - 1)),
+            TokenizerConfig::default(),
+        );
+        tok.run();
+        // Leave the PI unterminated so the pending buffer is still observable.
+        assert!(
+            tok.pending_pi_data.len() <= CAP,
+            "PI data buffer exceeded cap: {}",
+            tok.pending_pi_data.len()
+        );
+        assert!(
+            tok.pending_pi_data
+                .is_char_boundary(tok.pending_pi_data.len())
+        );
+    }
+
+    #[test]
     fn line_starts_stay_correct_after_insert_input() {
         // #1680: line_starts is a compact Vec<u32>; after document.write merges inserted line
         // starts, line/column lookups must still be correct.

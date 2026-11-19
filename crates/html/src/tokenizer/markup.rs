@@ -131,8 +131,12 @@ impl Tokenizer {
                     self.tokens.push(Token::Eof);
                 }
                 Some(cp) => {
-                    if self.pending_pi_data.len() < MAX_PI_DATA_BYTES {
-                        Self::push_cp_to_string(&mut self.pending_pi_data, cp);
+                    // #1738: enforce the byte cap per code point. Checking `len() < CAP`
+                    // before pushing let a 4-byte code point cross the boundary and grow the
+                    // String to CAP+3 bytes before emit-time truncation.
+                    let ch = char::from_u32(cp).unwrap_or('\u{FFFD}');
+                    if self.pending_pi_data.len() + ch.len_utf8() <= MAX_PI_DATA_BYTES {
+                        self.pending_pi_data.push(ch);
                     }
                 }
             },
@@ -148,7 +152,9 @@ impl Tokenizer {
                     self.tokens.push(Token::Eof);
                 }
                 _ => {
-                    self.pending_pi_data.push('?');
+                    if self.pending_pi_data.len() < MAX_PI_DATA_BYTES {
+                        self.pending_pi_data.push('?');
+                    }
                     self.reconsume = true;
                     self.state = TokenizerState::ProcessingInstructionData;
                 }
