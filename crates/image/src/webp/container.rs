@@ -163,11 +163,24 @@ pub(crate) fn apply_alpha_plane(image: &mut RgbaImage, payload: &[u8]) -> Result
         0 => {}
         1 => {
             let width = image.width as usize;
-            for row in alpha.chunks_mut(width.max(1)) {
-                let mut previous = 0u8;
-                for value in row {
-                    let reconstructed = value.wrapping_add(previous);
-                    *value = reconstructed;
+            if width == 0 || image.height == 0 || alpha.len() < width * image.height as usize {
+                return Err(ImageError::Truncated {
+                    context: "WebP ALPH data",
+                });
+            }
+            // HorizontalUnfilter_C: each row starts from the reconstructed pixel at
+            // (0, y-1); only the first row predicts from nothing (#1764). Resetting to
+            // 0 for every row shifted all rows below the first by the same amount.
+            for row in 0..image.height as usize {
+                let mut previous = if row == 0 {
+                    0
+                } else {
+                    alpha[(row - 1) * width]
+                };
+                for col in 0..width {
+                    let index = row * width + col;
+                    let reconstructed = alpha[index].wrapping_add(previous);
+                    alpha[index] = reconstructed;
                     previous = reconstructed;
                 }
             }
@@ -278,7 +291,31 @@ pub(crate) fn check_animated_frame_budget(
 
 #[cfg(test)]
 mod tests {
-    use super::unfilter_alpha_plane;
+    use super::{apply_alpha_plane, unfilter_alpha_plane};
+    use crate::RgbaImage;
+
+    #[test]
+    fn alpha_horizontal_filter_predicts_first_pixel_from_row_above() {
+        // #1764: libwebp `HorizontalUnfilter_C` starts every row with
+        // `pred = prev[0]` — the already reconstructed pixel at (0, y-1) — and only
+        // uses 0 for the first row. True alpha [[10, 20], [30, 40]] is stored as
+        // residuals [10, 10, 20, 10].
+        let mut image = RgbaImage {
+            width: 2,
+            height: 2,
+            data: vec![0; 16],
+        };
+        // ALPH byte 0: compression method 0 (none), filtering method 1 (horizontal).
+        apply_alpha_plane(&mut image, &[0b0000_0100, 10, 10, 20, 10]).expect("ALPH plane");
+        let alphas: Vec<u8> = image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| pixel[3])
+            .collect();
+        assert_eq!(alphas, [10, 20, 30, 40]);
+    }
 
     #[test]
     fn alpha_vertical_filter_uses_reconstructed_neighbours() {
