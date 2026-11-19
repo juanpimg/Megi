@@ -220,7 +220,10 @@ pub(super) fn authority_matches(rest: &str, url: &Url) -> bool {
     }
 
     match expected_port {
-        None | Some("*") => true,
+        // #1750: CSP3 §6.7.2.11 — an omitted port matches only the scheme's default port.
+        // `Url::port()` is `None` both when no port is written and when the default is elided.
+        None => url.port().is_none(),
+        Some("*") => true,
         Some(port_str) => port_str
             .parse::<u16>()
             .ok()
