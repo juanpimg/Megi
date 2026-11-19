@@ -145,7 +145,12 @@ pub(super) fn paint_text_decorations(
     if rect.width <= 0.0 {
         return;
     }
-    let font_size = style.font_size;
+    // #1865: match `paint_text_run`'s clamp so decoration geometry aligns with the
+    // rasterised glyphs, and skip non-finite/zero sizes instead of emitting NaN coords.
+    let font_size = clamp_font_size(style.font_size);
+    if font_size == 0.0 {
+        return;
+    }
     let color = scaled(style.color, alpha_scale);
     let baseline = rect.y + layout_box.baseline;
     let thickness = (font_size / 14.0).max(1.0);

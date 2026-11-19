@@ -238,3 +238,26 @@ fn test_list_style_none_paints_no_marker() {
         "list-style-type: none must not paint a marker"
     );
 }
+
+#[test]
+fn text_decoration_thickness_uses_the_clamped_font_size() {
+    // #1865: glyphs are rasterised at the clamped size (1024 px), so the decoration
+    // thickness must use the same clamped font size instead of the raw 2000 px.
+    let (_, list) = render(
+        "<!doctype html><html><body style=\"margin:0;font-family:sans-serif;\
+         font-size:2000px;text-decoration:underline\">HH</body></html>",
+        200,
+        120,
+    );
+    let thickness = list
+        .iter()
+        .find_map(|item| match item {
+            DisplayItem::TextDecoration { rect, .. } => Some(rect.height),
+            _ => None,
+        })
+        .expect("underline decoration");
+    assert!(
+        thickness <= 1024.0 / 14.0 + 0.01,
+        "decoration must use clamped font size: {thickness}"
+    );
+}
