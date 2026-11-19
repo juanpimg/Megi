@@ -486,3 +486,17 @@ fn svg_geometry_and_table_apis() {
         assert_ne!(got, "undefined", "{expr} must exist");
     }
 }
+
+/// Streaming text globals used by modern fetch pipelines (#1902).
+#[test]
+fn text_encoder_stream_exists() {
+    let mut rt = runtime();
+    assert_eq!(
+        rt.eval("typeof TextEncoderStream", "t").unwrap(),
+        "function"
+    );
+    assert_eq!(
+        rt.eval("typeof TextDecoderStream", "t").unwrap(),
+        "function"
+    );
+}

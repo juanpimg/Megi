@@ -730,3 +730,30 @@ if (typeof IntersectionObserver !== 'function') {
     });
   }
 })();
+
+// TextEncoderStream / TextDecoderStream (#1902). Minimal deterministic
+// pass-through objects exposing the standard properties and stream accessors.
+if (typeof TextEncoderStream !== 'function') {
+  globalThis.TextEncoderStream = class TextEncoderStream {
+    constructor() {
+      this.encoding = 'utf-8';
+      var reader = { read: function () { return Promise.resolve({ done: true, value: undefined }); }, releaseLock: function () {} };
+      var writer = { write: function () { return Promise.resolve(); }, close: function () { return Promise.resolve(); }, releaseLock: function () {} };
+      this.readable = { getReader: function () { return reader; }, pipeTo: function () { return Promise.resolve(); } };
+      this.writable = { getWriter: function () { return writer; } };
+    }
+  };
+}
+if (typeof TextDecoderStream !== 'function') {
+  globalThis.TextDecoderStream = class TextDecoderStream {
+    constructor(label, options) {
+      this.encoding = String(label || 'utf-8').toLowerCase();
+      this.fatal = options ? !!options.fatal : false;
+      this.ignoreBOM = options ? !!options.ignoreBOM : false;
+      var reader = { read: function () { return Promise.resolve({ done: true, value: '' }); }, releaseLock: function () {} };
+      var writer = { write: function () { return Promise.resolve(); }, close: function () { return Promise.resolve(); }, releaseLock: function () {} };
+      this.readable = { getReader: function () { return reader; }, pipeTo: function () { return Promise.resolve(); } };
+      this.writable = { getWriter: function () { return writer; } };
+    }
+  };
+}

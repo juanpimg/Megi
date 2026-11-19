@@ -455,3 +455,27 @@ fn import_export_without_space_after_keyword() {
         outcome.exports
     );
 }
+
+/// Trailing commas in export lists and object literals are valid ES syntax;
+/// minified bundles (MDN's rspack) rely on it (#1911).
+#[test]
+fn trailing_comma_export_list_parses() {
+    let modules = Modules {
+        resolver: HashMap::new(),
+        sources: HashMap::new(),
+    };
+    let mut rt = runtime_with(&modules);
+    let outcome = rt
+        .eval_module(
+            "const a = 1; export const b = { x: a, }; export{ a as A, b as B, };",
+            "main",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("trailing comma in export list must parse (#1911)");
+    assert!(
+        outcome.exports.iter().any(|(n, v)| n == "A" && v == "1"),
+        "{:?}",
+        outcome.exports
+    );
+}
