@@ -107,6 +107,7 @@ mod focus_target_tests {
             rect: CssRect::new(0.0, 0.0, 10.0, 10.0),
             href: "/next".to_string(),
             node: Some(link_node),
+            is_blocker: false,
         }];
         let targets = build_focus_targets(&document, &[], &links);
         assert!(
