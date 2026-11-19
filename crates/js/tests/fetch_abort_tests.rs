@@ -137,7 +137,7 @@ fn response_body_cancel_marks_done() {
 #[test]
 fn head_response_has_empty_body() {
     let (mut runtime, _calls) = mock_runtime(ok_result());
-    runtime.eval("window.__len = -1; fetch('/x', {method: 'HEAD'}).then(function (r) { return r.arrayBuffer(); }).then(function (b) { __len = b.length; });", "t").expect("fetch");
+    runtime.eval("window.__len = -1; fetch('/x', {method: 'HEAD'}).then(function (r) { return r.arrayBuffer(); }).then(function (b) { __len = (b instanceof ArrayBuffer ? b.byteLength : -2); });", "t").expect("fetch");
     runtime.run_microtasks().expect("microtasks");
     assert_eq!(runtime.eval("__len", "t").unwrap(), "0");
 }
@@ -148,12 +148,15 @@ fn array_buffer_exposes_raw_bytes() {
     result.body = vec![0, 1, 127, 128, 255];
     let (mut runtime, _calls) = mock_runtime(result);
     runtime.eval(
-        "window.__info = ''; fetch('/x').then(function (r) { return r.arrayBuffer(); }).then(function (b) { var u = new Uint8Array(b); __info = u.length + ':' + Array.from(u).join(','); });",
+        "window.__info = ''; fetch('/x').then(function (r) { return r.arrayBuffer(); }).then(function (b) { var u = new Uint8Array(b); __info = (b instanceof ArrayBuffer) + ':' + u.length + ':' + Array.from(u).join(','); });",
         "t",
     )
     .expect("fetch");
     runtime.run_microtasks().expect("microtasks");
-    assert_eq!(runtime.eval("__info", "t").unwrap(), "5:0,1,127,128,255");
+    assert_eq!(
+        runtime.eval("__info", "t").unwrap(),
+        "true:5:0,1,127,128,255"
+    );
 }
 
 #[test]

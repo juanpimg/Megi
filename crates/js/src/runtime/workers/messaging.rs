@@ -43,7 +43,7 @@ impl JsRuntime {
         let prelude = r#"
 var __megi_worker_listeners = [];
 function addEventListener(type, callback) { if (type === "message" && typeof callback === "function" && __megi_worker_listeners.length < 64) { __megi_worker_listeners.push(callback); } }
-function removeEventListener() {}
+function removeEventListener(type, callback) { if (type === "message") { var i = __megi_worker_listeners.indexOf(callback); if (i !== -1) { __megi_worker_listeners.splice(i, 1); } } }
 "#;
         self.context
             .eval(Source::from_bytes(prelude))

@@ -215,6 +215,7 @@ fn finalize_layout_metadata(
             None => padding_box,
         });
     }
+    node.inherited_clip = base_clip;
     node.clip = effective_clip;
 
     node.establishes_stacking_context = is_root
