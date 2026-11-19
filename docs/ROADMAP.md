@@ -1,5 +1,8 @@
 # Hoja de Ruta Maestra y Micro-Paquetes Atómicos (`docs/ROADMAP.md`)
 
+> **DOCUMENTO HISTÓRICO**: refleja un estado anterior del proyecto (cuando tenía 14 crates). El estado vigente está en `README.md`, `docs/ARCHITECTURE.md` (bloque "ESTADO ACTUAL") y `AGENTS.md` (17 crates, todos los archivos <= 500 líneas, DAG y puente JS sin TLS).
+
+
 Este documento desglosa la planificación y el estado de ejecución del motor web **Megi** en **micro-paquetes de trabajo atómicos** (`WP-*`) de **máximo 1 a 2 días de duración cada uno**.
 
 Cada paquete de trabajo está vinculado de forma explícita y trazable a:

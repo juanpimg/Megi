@@ -1,5 +1,8 @@
 # Documentación de Tooling, Skills y Automatización (FASES 2–4)
 
+> **DOCUMENTO HISTÓRICO**: refleja un estado anterior del proyecto (cuando tenía 14 crates). El estado vigente está en `README.md`, `docs/ARCHITECTURE.md` (bloque "ESTADO ACTUAL") y `AGENTS.md` (17 crates, todos los archivos <= 500 líneas, DAG y puente JS sin TLS).
+
+
 Este documento registra la investigación, evaluación, instalación y configuración de herramientas CLI, scripts de extracción de especificaciones y skills locales realizadas durante las **FASES 2–6** para optimizar el desarrollo autónomo guiado por especificaciones (WHATWG / W3C), el auto-testeo continuo (`html5lib-tests` y Web Platform Tests), el pipeline de renderizado a PNG, el navegador real (render + red + imágenes + JavaScript embebido) y el fuzzing continuo en **Megi**.
 
 ---

@@ -60,20 +60,27 @@ El espacio de trabajo se organiza como un **Grafo Acíclico Dirigido (DAG)** de 
 
 ```text
 crates/
-├── dom/           # Núcleo: Arena DOM, NodeId(NonZeroU32), mutaciones O(1) y robustez de API. [0 dependencias]
-├── html/          # HTML5: Tokenizador de 84 estados, TreeBuilder de 21 modos (3.904/3.904), hook ScriptExecutor (WP-6.4), ParseOptions anti-DoS. [Depende solo de dom]
-├── css/           # CSS: Sintaxis L3, Selectores L4, Cascada L4, ComputedStyle, Hoja UA §15. [Depende solo de dom]
-├── layout/        # Layout: Box Tree, BFC/IFC, posicionamiento/floats, tablas §17, inline-block y reemplazados. [Depende de dom y css]
-├── fonts/         # Tipografía (Fase 4): fontdb + ttf-parser + rustybuzz + ab_glyph + woff2-patched (WOFF2, §3.1); fuentes web @font-face E2E, integrado en layout/paint.
-├── paint/         # Paint (Fase 4): Display Lists, raster con AA/culling, bordes por lado, canvas §14.2, PNG propio y hit-testing aditivo. [Depende de dom, css, layout y fonts]
-├── net/           # Red (Fase 5): URL, HTTP/1.1+TLS (rustls/webpki-roots), caché, data:, file://, MIME y loader.
-├── image/         # Decoder PNG + inflate zlib/DEFLATE propios (std puro, sin deps).
-├── svg/           # SVG desde cero (Fase 4): parser XML subset + modelo SVG + path/arcos + rasterizador AA, **CSS interno, gradientes, `<pattern>` y `<text>`** (rondas 16-17); `std` + `image` + `fonts`; cableado E2E en render; 73 tests.
-├── render/        # Pipeline de navegador (Fase 5/6): URL → net → HTML → CSS externo → layout → PNG (+ <img>, backgrounds geometry/SVG inline, scripts, event loop determinista por reloj virtual, hit_regions, cookies/CORS/gzip y webfonts).
-├── js/            # JS (Fase 6, WP-A/B/6.4 + eventos avanzados): Boa 0.22.x + bindings DOM + EventTarget/timers con currentTarget/eventPhase/once/passive/onclick + CSSOM/NodeList/identidad; consumido por render y por el harness (recuento actual en `docs/status/badge-tests.svg`).
-├── shell/         # Ventana (Fase 7): winit+softbuffer, scroll/entrada/HiDPI, worker, navegación/historial/título con hit_regions/find_link_at, zoom, auto-refresh opt-in, formularios editables, find-in-page, pestañas y chrome (address bar/tab strip/select); screenshot headless. [Depende de render/paint/net] (recuento actual en `docs/status/badge-tests.svg`).
-├── bench/         # Benchmarks reproducibles (parseo, estilos, layout, paint, PNG). [Solo crates internos]
-└── test_harness/  # Gate de conformidad: tokenizer, árbol 3.904/3.904 (sin allowlist), serializer y CSS Syntax; ejecuta los scripts del corpus vía js (WP-6.4).
+├── core/          # Núcleo: arena DOM, NodeId(NonZeroU32), mutaciones O(1). [0 dependencias]
+├── html/          # HTML5: tokenizer 84 estados, tree builder 21 modos, serializer, scripting.
+├── css/           # CSS Syntax L3, Selectors L4, Cascade L4, ComputedStyle, hoja UA.
+├── layout/        # Box Tree, BFC/IFC, flex, grid, tablas, bidi.
+├── fonts/         # Tipografía: fontdb, ttf-parser, rustybuzz, ab_glyph, WOFF2.
+├── display/       # Contrato puro de DisplayList compartido por paint y raster.
+├── paint/         # Construcción de DisplayList y orden de pintado CSS 2.2.
+├── raster/        # Rasterizado 2D AA y codificación PNG determinista.
+├── image/         # Decodificadores PNG/JPEG/GIF/WebP e inflate propios.
+├── svg/           # Parser SVG, modelo, path y rasterizador vectorial AA.
+├── net/           # URL, HTTP/1.1+HTTP/2, TLS, caché, cookies, CORS, loader, WebSocket.
+├── js/            # Boa 0.22 + bindings DOM, providers Arc y event loop; estado en Context (sin TLS).
+├── render/        # Pipeline URL → PNG con scripts, event loop, imágenes y fuentes.
+├── webview/       # API embebible sin ventana (load/frame/eventos/hit-test). Depende de render.
+├── browser/       # Shell nativo: winit+softbuffer, chrome, pestañas, sesión. Solo depende de webview.
+├── bench/         # Benchmarks reproducibles.
+└── test_harness/  # Gate de conformidad html5lib-tests/WPT.
+
+Reglas: DAG unidireccional verificado por tools/check_arch.py; .rs <= 500 líneas
+(objetivo 400); #![forbid(unsafe_code)] en los 17 crates; sin Rc<RefCell> salvo el
+ContextHost de Boa; TDD y gates antes de cada commit (ver AGENTS.md).
 ```
 
 ---
@@ -115,7 +122,7 @@ La hoja de ruta maestra del proyecto se encuentra en [**`docs/ROADMAP.md`**](doc
   - Ya hecho (ronda 13): **`@font-face`+WOFF2 E2E** (dep autorizada `woff2-patched` 0.4, DB por render en layout+paint, caps 8/8 MiB/32 MiB, stats/timing y warnings no fatales).
   - Mejoras de shaping para más scripts, fallback entre familias y métricas de fuentes variables.
 - **SVG (`crates/svg` + `render`, rondas 13-17)**: crate propio completo (parser XML+modelo+rasterizador AA, **73 tests**) con **CSS interno y gradientes lineales/radiales** (ronda 16) y **cableado E2E**: `<img src=*.svg>`, `background-image` **e inline `<svg>`** (caps 256/1 MiB/8 MiB, `svgs_rendered`/`inline_svgs`; 11+10 tests). **Ronda 17**: **`<pattern>`** (cap 10k tiles) y **`<text>` básico** con `crates/fonts` (caps 1.000 texts/10.000 chars). Siguientes: shaping avanzado (kerning/italic/bidi), patterns rotados y cache por URL.
-- **Rendimiento y features (`crates/html`, `crates/core`, `layout`, `paint`, `css`, `svg`, `shell`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
+- **Rendimiento y features (`crates/html`, `crates/core`, `layout`, `paint`, `css`, `svg`, `browser`) — los presupuestos son gates que NO se suben**: ronda 21 recuperó pipeline ≤140 ms y layout ≤43 ms (html −18/−20 %, css resolve 33,91 ms, layout 36,4 ms, build-display −9,1 %).
   - DOM identidad/memoria (auditoría F8), recursión de layout/paint en documentos profundos (F6), presupuestos de tiempo y API `Result`.
   - Benchmarks reproducibles (`./tools/bench.sh`) y regresiones de complejidad.
 - **Fuzzing (`fuzz/`)**:
@@ -156,7 +163,7 @@ sudo apt-get install -y --no-install-recommends \
   libxcb-shm0-dev libxcb-randr0-dev
 ```
 
-Sin ellas `cargo check --workspace` falla al compilar `wayland-sys`/`x11` y `cargo test --workspace` no llega a ejecutar los tests. Si no quieres instalarlas, añade `--exclude shell` a `check`/`clippy`/`test`/`doc` y verifica el crate de ventana solo en CI.
+Sin ellas `cargo check --workspace` falla al compilar `wayland-sys`/`x11` y `cargo test --workspace` no llega a ejecutar los tests. Si no quieres instalarlas, añade `--exclude megi-browser` a `check`/`clippy`/`test`/`doc` y verifica el crate de ventana solo en CI.
 
 ### 4.2 Utilizar las Herramientas de Inspección
 
