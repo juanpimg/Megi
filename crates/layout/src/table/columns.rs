@@ -1,9 +1,13 @@
 use super::*;
 
 /// Resolves the used `border-spacing` of a table box.
+///
+/// CSS 2.1 §17.6.1: the initial value is `0`. The HTML UA stylesheet provides `2px` for
+/// `<table>` elements, and author declarations (including `border-spacing: 0`) override it.
+/// A value of `(0.0, 0.0)` is therefore a valid explicit spacing, not "unspecified".
 pub(super) fn border_spacing(style: &megi_css::ComputedStyle) -> (f32, f32) {
     let (mut horizontal, mut vertical) = style.border_spacing;
-    if horizontal.is_nan() || vertical.is_nan() || style.border_spacing == (0.0, 0.0) {
+    if horizontal.is_nan() || vertical.is_nan() {
         horizontal = DEFAULT_BORDER_SPACING;
         vertical = DEFAULT_BORDER_SPACING;
     }

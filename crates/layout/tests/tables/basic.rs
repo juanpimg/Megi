@@ -175,3 +175,59 @@ fn test_table_cell_vertical_align_middle() {
     assert!((row_box.dimensions.content.height - 60.0).abs() < 0.001);
     assert!((text.dimensions.content.y - (row_box.dimensions.content.y + 20.0)).abs() < 0.001);
 }
+
+#[test]
+fn table_border_spacing_zero_is_not_replaced_by_default() {
+    let (mut doc, mut styles, body) = setup();
+    let table = mk(&mut doc, body, "table");
+    let mut style = table_style(Length::Px(200.0));
+    style.border_spacing = (0.0, 0.0);
+    styles.insert(table, style);
+    let row0 = mk(&mut doc, table, "tr");
+    styles.insert(row0, row_style());
+    let cell00 = mk(&mut doc, row0, "td");
+    styles.insert(cell00, cell_style());
+    doc.append_text(cell00, "aa");
+    let cell01 = mk(&mut doc, row0, "td");
+    styles.insert(cell01, cell_style());
+    doc.append_text(cell01, "bb");
+    let row1 = mk(&mut doc, table, "tr");
+    styles.insert(row1, row_style());
+    let cell10 = mk(&mut doc, row1, "td");
+    styles.insert(cell10, cell_style());
+    doc.append_text(cell10, "cc");
+    let cell11 = mk(&mut doc, row1, "td");
+    styles.insert(cell11, cell_style());
+    doc.append_text(cell11, "dd");
+
+    let tree = layout_tree(&doc, &styles);
+    let table_box = &tree.children[0].children[0];
+    let row0 = &table_box.children[0];
+    let row1 = &table_box.children[1];
+    // No spacing at edges or between cells/rows.
+    assert!(
+        (row0.dimensions.content.y - 0.0).abs() < 0.001,
+        "row0 y={}",
+        row0.dimensions.content.y
+    );
+    assert!(
+        (row1.dimensions.content.y - 20.0).abs() < 0.001,
+        "row1 y={}",
+        row1.dimensions.content.y
+    );
+    assert!(
+        (row0.children[0].dimensions.content.x - 0.0).abs() < 0.001,
+        "cell00 x={}",
+        row0.children[0].dimensions.content.x
+    );
+    assert!(
+        (row0.children[1].dimensions.content.x - 100.0).abs() < 0.001,
+        "cell01 x={}",
+        row0.children[1].dimensions.content.x
+    );
+    assert!(
+        (table_box.dimensions.content.height - 40.0).abs() < 0.001,
+        "table h={}",
+        table_box.dimensions.content.height
+    );
+}

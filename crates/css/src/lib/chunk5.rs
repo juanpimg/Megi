@@ -174,6 +174,16 @@ pub(crate) mod tests_part4 {
             style_with_inline("table", "border-spacing: 0.5em 1em;").border_spacing,
             (8.0, 16.0)
         );
+        // Explicit `0` is a valid specified value (CSS 2.1 §17.6.1), not "absent"; it must
+        // override the UA table default of 2px (regression #1703).
+        assert_eq!(
+            style_with_inline("table", "border-spacing: 0;").border_spacing,
+            (0.0, 0.0)
+        );
+        assert_eq!(
+            style_with_inline("table", "border-spacing: 0px 0px;").border_spacing,
+            (0.0, 0.0)
+        );
 
         // `div` has no UA `border-spacing`, so invalid values fall back to the initial value.
         for invalid in [
