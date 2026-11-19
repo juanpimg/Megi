@@ -58,8 +58,10 @@ pub(crate) fn parse_feature(parser: &mut MediaParser<'_>) -> Option<MediaConditi
         "prefers-color-scheme" => {
             let value = single_ident(&value_tokens)?.to_ascii_lowercase();
             MediaFeature::PrefersColorScheme(match value.as_str() {
+                "light" => ColorScheme::Light,
                 "dark" => ColorScheme::Dark,
-                _ => ColorScheme::Light,
+                // #1842: an invalid value makes the feature evaluate to false.
+                _ => return None,
             })
         }
         "prefers-reduced-motion" => {
@@ -114,6 +116,30 @@ pub(crate) mod tests {
 
     fn screen(width: f32, height: f32) -> MediaContext {
         MediaContext::with_viewport(width, height)
+    }
+
+    #[test]
+    fn invalid_prefers_color_scheme_value_is_never_true() {
+        // #1842: an invalid value makes the media feature evaluate to false,
+        // regardless of the user's color scheme (Media Queries 4 §5.10).
+        use crate::media::ColorScheme;
+        for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+            let ctx = MediaContext {
+                color_scheme: scheme,
+                ..MediaContext::default()
+            };
+            assert!(!evaluate_str("(prefers-color-scheme: bogus)", &ctx));
+            assert!(!evaluate_str("(prefers-color-scheme: )", &ctx));
+            // Valid values keep working under either scheme.
+            assert_eq!(
+                evaluate_str("(prefers-color-scheme: light)", &ctx),
+                scheme == ColorScheme::Light
+            );
+            assert_eq!(
+                evaluate_str("(prefers-color-scheme: dark)", &ctx),
+                scheme == ColorScheme::Dark
+            );
+        }
     }
 
     #[test]
