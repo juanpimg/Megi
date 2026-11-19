@@ -29,7 +29,7 @@ pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 /// Default maximum number of external stylesheets per page.
 pub const DEFAULT_MAX_STYLESHEETS: usize = 32;
 /// Default maximum size of one external stylesheet (1 MiB).
-pub const DEFAULT_MAX_CSS_BYTES_PER_SHEET: usize = 1024 * 1024;
+pub const DEFAULT_MAX_CSS_BYTES_PER_SHEET: usize = 8 * 1024 * 1024;
 /// Default total author-CSS budget (4 MiB, inline + external + imports).
 pub const DEFAULT_MAX_TOTAL_CSS_BYTES: usize = 4 * 1024 * 1024;
 /// Default maximum `@import` nesting depth.

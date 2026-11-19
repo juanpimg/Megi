@@ -12,7 +12,7 @@ pub const DEFAULT_MAX_SCRIPT_BYTES: usize = 8 * 1024 * 1024;
 /// Default total script byte budget per page (32 MiB).
 pub const DEFAULT_MAX_TOTAL_SCRIPT_BYTES: usize = 32 * 1024 * 1024;
 /// Default maximum number of scripts executed per page.
-pub const DEFAULT_MAX_SCRIPTS: usize = 64;
+pub const DEFAULT_MAX_SCRIPTS: usize = 256;
 /// Maximum script fetch attempts (successful or not) per page.
 const DEFAULT_MAX_SCRIPT_ATTEMPTS: usize = 256;
 /// Maximum module-graph fetches (including nested imports) per page.
