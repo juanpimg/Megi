@@ -441,3 +441,33 @@ if (typeof Element !== 'undefined' && Element.prototype) {
     };
   }
 }
+
+// ResizeObserver / IntersectionObserver stubs (#1921/#1892). The deterministic
+// pipeline has no async layout notifications yet; feature-detection and the
+// observer API surface must still work so analytics/lazy-load scripts run.
+if (typeof ResizeObserver !== 'function') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    constructor(callback) { this._callback = callback; }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
+}
+if (typeof IntersectionObserver !== 'function') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    constructor(callback, options) {
+      this._callback = callback;
+      this.root = options && options.root ? options.root : null;
+      this.rootMargin = options && options.rootMargin ? options.rootMargin : '0px';
+      this.thresholds = options && options.threshold ? [].concat(options.threshold) : [0];
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
+  IntersectionObserver.prototype.root = null;
+  IntersectionObserver.prototype.rootMargin = '0px';
+  IntersectionObserver.prototype.thresholds = [0];
+}

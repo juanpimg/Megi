@@ -368,3 +368,25 @@ fn element_prototype_methods_and_htmlelement() {
         );
     }
 }
+
+/// Analytics (Plausible) and lazy-loading libraries feature-detect these
+/// observers; a missing global aborts their initialization (#1921, #1892).
+#[test]
+fn resize_and_intersection_observers_exist() {
+    let mut rt = runtime();
+    assert_eq!(rt.eval("typeof ResizeObserver", "t").unwrap(), "function");
+    assert_eq!(
+        rt.eval("typeof IntersectionObserver", "t").unwrap(),
+        "function"
+    );
+    rt.eval(
+        "var ro = new ResizeObserver(function(){}); ro.observe(document.body); ro.unobserve(document.body); ro.disconnect(); 'ok'",
+        "t",
+    )
+    .expect("ResizeObserver stub must not throw (#1921)");
+    rt.eval(
+        "var io = new IntersectionObserver(function(){}); io.observe(document.body); io.unobserve(document.body); io.disconnect(); 'ok'",
+        "t",
+    )
+    .expect("IntersectionObserver stub must not throw (#1892)");
+}
