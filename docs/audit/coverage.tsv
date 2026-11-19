@@ -1012,7 +1012,7 @@ crates/render/src/backgrounds/collect.rs	74	src	F2	wave-max-mod	2026-11-19	cover
 crates/render/src/backgrounds/load.rs	236	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/browser_host.rs	260	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/browser_host.rs	326	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read getComputedStyle used values
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset.rs	442	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1044,7 +1044,7 @@ crates/render/src/scripts/execution.rs	240	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/scripts/lifecycle.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/modules.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/network.rs	229	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/providers.rs	284	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/providers.rs	290	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
 crates/render/src/scripts/tests.rs	337	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/types.rs	404	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
