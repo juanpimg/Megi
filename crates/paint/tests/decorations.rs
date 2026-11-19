@@ -107,6 +107,26 @@ fn test_text_decoration_lines_are_painted_at_expected_offsets() {
 }
 
 #[test]
+fn test_visibility_visible_child_of_hidden_parent_is_painted() {
+    // #1715: visibility is inherited but overridable; a descendant that explicitly
+    // sets `visible` must be painted even when an ancestor is `hidden`.
+    let (_pixmap, display_list) = render(
+        "<!doctype html><html><body style=\"margin:0;background:#ffffff\">\
+         <div style=\"visibility:hidden;background-color:#ff0000\">\
+         <p style=\"visibility:visible\">visible child</p></div></body></html>",
+        300,
+        120,
+    );
+
+    assert!(
+        text_items(&display_list)
+            .iter()
+            .any(|(text, ..)| *text == "visible child"),
+        "a visibility:visible descendant of a hidden box must be painted"
+    );
+}
+
+#[test]
 fn test_visibility_hidden_boxes_and_text_are_not_painted() {
     let (pixmap, display_list) = render(
         "<!doctype html><html><body style=\"margin:0;background:#ffffff\">\
