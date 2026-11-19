@@ -49,6 +49,7 @@ pub fn decode_html(bytes: &[u8], content_type: &str) -> Result<DecodedHtml, Rend
     let text = match normalized.as_str() {
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
+        "iso-8859-15" => decode_iso_8859_15(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedHtml {
@@ -68,6 +69,7 @@ fn normalize_charset_label(label: &str) -> Result<String, RenderError> {
         "utf-8" | "utf8" | "unicode-1-1-utf-8" => Ok("utf-8".to_owned()),
         "us-ascii" | "ascii" | "iso-8859-1" | "iso8859-1" | "latin1" | "latin-1"
         | "windows-1252" | "cp1252" | "x-cp1252" => Ok("windows-1252".to_owned()),
+        "iso-8859-15" | "iso8859-15" | "latin-9" | "latin9" | "l9" => Ok("iso-8859-15".to_owned()),
         other => Err(RenderError::UnsupportedCharset(other.to_owned())),
     }
 }
@@ -135,6 +137,7 @@ pub fn decode_stylesheet(
     let text = match normalized.as_str() {
         "utf-8" => String::from_utf8_lossy(bytes).into_owned(),
         "windows-1252" => decode_windows_1252(bytes),
+        "iso-8859-15" => decode_iso_8859_15(bytes),
         other => return Err(RenderError::UnsupportedCharset(other.to_owned())),
     };
     Ok(DecodedStylesheet {
@@ -297,6 +300,32 @@ fn decode_windows_1252(bytes: &[u8]) -> String {
     out
 }
 
+/// Decodes ISO-8859-15 / Latin-9. Identical to Latin-1 for 0x00-0x7F and 0xA0-0xFF
+/// except eight slots (€ Š š Ž ž Œ œ Ÿ); bytes 0x80-0x9F are C1 controls and are
+/// kept as their Unicode code points (WHATWG Encoding: replacement for unmapped).
+fn decode_iso_8859_15(bytes: &[u8]) -> String {
+    const REPLACEMENTS: [(u8, u32); 8] = [
+        (0xA4, 0x20AC), // EURO SIGN
+        (0xA6, 0x0160), // LATIN CAPITAL LETTER S WITH CARON
+        (0xA8, 0x0161), // LATIN SMALL LETTER S WITH CARON
+        (0xB4, 0x017D), // LATIN CAPITAL LETTER Z WITH CARON
+        (0xB8, 0x017E), // LATIN SMALL LETTER Z WITH CARON
+        (0xBC, 0x0152), // LATIN CAPITAL LIGATURE OE
+        (0xBD, 0x0153), // LATIN SMALL LIGATURE OE
+        (0xBE, 0x0178), // LATIN CAPITAL LETTER Y WITH DIAERESIS
+    ];
+    let mut out = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        let code_point = REPLACEMENTS
+            .iter()
+            .find(|(b, _)| *b == byte)
+            .map(|(_, cp)| *cp)
+            .unwrap_or(u32::from(byte));
+        out.push(char::from_u32(code_point).unwrap_or('\u{FFFD}'));
+    }
+    out
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;
@@ -355,6 +384,28 @@ mod unit_tests {
             decode_html(b"\xFF\xFE<\x00", "text/html"),
             Err(RenderError::UnsupportedCharset(_))
         ));
+    }
+
+    #[test]
+    fn iso_8859_15_decodes_euro_and_accented_bytes() {
+        // ISO-8859-15 (Latin-9) differs from Windows-1252 in a few slots (#1917).
+        let decoded = decode_html(
+            b"<p>caf\xE9 \xA4 \xB8</p>",
+            "text/html; charset=iso-8859-15",
+        )
+        .expect("iso-8859-15 must decode, not abort the render");
+        assert_eq!(decoded.charset, "iso-8859-15");
+        assert!(decoded.text.contains("caf\u{e9}"), "{}", decoded.text);
+        assert!(
+            decoded.text.contains('\u{20ac}'),
+            "euro sign: {}",
+            decoded.text
+        );
+        assert!(
+            decoded.text.contains('\u{17e}'),
+            "z caron: {}",
+            decoded.text
+        );
     }
 
     #[test]

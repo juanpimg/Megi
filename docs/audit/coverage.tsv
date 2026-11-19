@@ -1013,7 +1013,7 @@ crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/backgrounds/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/browser_host.rs	260	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/charset.rs	442	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/charset.rs	493	src	F2	fix-1917	2026-11-19	covered	#1917	re-read after iso-8859-15 support
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/frames.rs	346	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images.rs	43	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
