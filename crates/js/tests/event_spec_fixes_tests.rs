@@ -231,3 +231,18 @@ fn bare_add_event_listener_is_bound_to_window() {
         .expect("eval");
     assert_eq!(out, "x");
 }
+
+#[test]
+fn native_constructor_prototypes_are_sealed() {
+    // #1972: scripts feature-detect `writable`/`configurable` on `prototype`.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "function info(name) { var d = Object.getOwnPropertyDescriptor(globalThis[name], 'prototype'); \
+               return d.writable + ':' + d.configurable; } \
+             info('Event') + '|' + info('XMLHttpRequest');",
+            "t",
+        )
+        .expect("eval");
+    assert_eq!(out, "false:false|false:false");
+}
