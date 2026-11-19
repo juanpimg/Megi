@@ -24,7 +24,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 46] = [
+    let accessors: [(&str, AccessorKind); 52] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -71,6 +71,12 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("contentDocument", AccessorKind::ContentDocument),
         ("srcdoc", AccessorKind::Srcdoc),
         ("sandbox", AccessorKind::Sandbox),
+        ("rows", AccessorKind::TableRows),
+        ("cells", AccessorKind::TableCells),
+        ("tBodies", AccessorKind::TableBodies),
+        ("tHead", AccessorKind::TableHead),
+        ("tFoot", AccessorKind::TableFoot),
+        ("caption", AccessorKind::TableCaption),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -152,6 +158,10 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         ("show", 0, node_dialog_show),
         ("showModal", 0, node_dialog_show_modal),
         ("close", 1, node_dialog_close),
+        ("insertRow", 1, node_table_insert_row),
+        ("deleteRow", 1, node_table_delete_row),
+        ("createTBody", 0, node_table_create_t_body),
+        ("insertCell", 1, node_row_insert_cell),
     ] {
         init.function(native(function), js_string!(name), length);
     }
@@ -229,6 +239,12 @@ pub(crate) enum AccessorKind {
     ContentDocument,
     Srcdoc,
     Sandbox,
+    TableRows,
+    TableCells,
+    TableBodies,
+    TableHead,
+    TableFoot,
+    TableCaption,
 }
 
 pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -279,6 +295,12 @@ pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::ContentDocument => (node_content_document_get, None),
         AccessorKind::Srcdoc => (node_srcdoc_get, Some(node_srcdoc_set)),
         AccessorKind::Sandbox => (node_sandbox_get, Some(node_sandbox_set)),
+        AccessorKind::TableRows => (node_table_rows, None),
+        AccessorKind::TableCells => (node_row_cells, None),
+        AccessorKind::TableBodies => (node_table_t_bodies, None),
+        AccessorKind::TableHead => (node_table_t_head, None),
+        AccessorKind::TableFoot => (node_table_t_foot, None),
+        AccessorKind::TableCaption => (node_table_caption, None),
     }
 }
 
