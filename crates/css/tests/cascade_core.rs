@@ -108,9 +108,17 @@ fn animation_and_transition_longhands_are_computed() {
 fn style_collection_records_rules_for_each_group() {
     let mut collection = StyleCollection::new();
     collection.add_css("div { width: 1px; } span { width: 2px; }", Origin::Author);
+    assert_eq!(collection.rules.len(), 2);
+    assert_eq!(collection.rules[0].declarations.len(), 1);
+    assert_eq!(collection.rules[0].declarations[0].name, "width");
+    assert_eq!(collection.rules[0].declarations[0].raw_value, "1px");
+    assert_eq!(collection.rules[1].declarations.len(), 1);
+    assert_eq!(collection.rules[1].declarations[0].name, "width");
+    assert_eq!(collection.rules[1].declarations[0].raw_value, "2px");
+
+    // Parsing a stylesheet is independent from recording rules into a collection.
     let stylesheet = megi_css::parse_stylesheet("div { color: red; }");
     assert_eq!(stylesheet.rules.len(), 1);
-    let _ = &collection;
 }
 
 #[test]
