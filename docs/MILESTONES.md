@@ -1,5 +1,8 @@
 # 🏆 Registro Histórico de Hitos y Optimizaciones (Megi)
 
+> **DOCUMENTO HISTÓRICO**: refleja un estado anterior del proyecto (cuando tenía 14 crates). El estado vigente está en `README.md`, `docs/ARCHITECTURE.md` (bloque "ESTADO ACTUAL") y `AGENTS.md` (17 crates, todos los archivos <= 500 líneas, DAG y puente JS sin TLS).
+
+
 ## 🏆 Hitos Principales Logrados
 
 - [x] **🎉 HITO: conformidad HTML5 completa — árbol 3.904/3.904 (100 %)**: el corpus `html5lib-tests/tree-construction` pasa al 100 %, incluidas las 4 suites `scripted_*` (adoption01 1/1, ark 1/1, foster01 2/2, webkit01 2/2), y el gate queda **sin allowlist de tree** (`KNOWN_TREE_FAILURES=[]`, `TREE_EXPECTED_PASSED=3904`). Tokenizador **7.050/7.050**, **serializador HTML 230/230** (5 suites upstream) y CSS Syntax WPT **30/30**; `cargo run -p megi-test-harness -- --summary` → **PASS, exit 0**; `--strict` → exit 1 solo por las diferencias de parse-error documentadas (order-only y `xmlViolation`).

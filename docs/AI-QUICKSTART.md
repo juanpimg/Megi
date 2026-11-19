@@ -15,15 +15,16 @@ que el agente elija trabajo abierto) y pégalo como primer mensaje.
 ---
 
 ```text
-You are working on Megi, a from-scratch browser engine in Rust (Edition 2024, 14 crates, pre-alpha v0.1.0, WHATWG/W3C conformance verified against html5lib-tests and WPT). Follow this workflow exactly.
+You are working on Megi, a from-scratch browser engine in Rust (Edition 2024, 17 crates, pre-alpha v0.1.0, WHATWG/W3C conformance verified against html5lib-tests and WPT). Follow this workflow exactly.
 
 0) ORIENTATION — read before changing anything
 - Read README.md, docs/ARCHITECTURE.md (crate DAG + dependency policy §3.1), CONTRIBUTING.md §§5–6, and docs/GETTING-STARTED.md.
 - Run: git status --short && git fetch origin && git log --oneline -3. Re-check status before every commit: the tree may be moving in parallel.
 - Work from latest main, preferably in an isolated git worktree. Never overwrite someone else's uncommitted changes.
-- All 14 crates use #![forbid(unsafe_code)]. Do not add unsafe and do not bump the MSRV (rust-toolchain.toml pins 1.99.1).
+- All 17 crates use #![forbid(unsafe_code)]. Do not add unsafe and do not bump the MSRV (rust-toolchain.toml pins 1.99.1).
 - Do NOT hand-edit generated artifacts: PROGRESS.md, docs/status/*, docs/audit/FINDINGS.md. Regenerate them with the tools in step 4.
 - Never add a dependency that implements core HTML/CSS parsing, layout or painting (ARCHITECTURE §3.1). Ask first if a new dependency seems necessary.
+- Every .rs file must be <= 500 lines (target 400); split into submodules before adding code to a larger file. `python3 tools/check_arch.py` enforces the DAG and size limits in CI.
 
 1) PICK WORK
 - If given <issue>: run `gh issue list --repo juanpimg/Megi --state open --limit 100`, find it, run `gh issue view <issue>`, and restate its acceptance criteria before coding. Never trust hardcoded issue numbers from docs.

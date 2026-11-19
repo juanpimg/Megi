@@ -25,7 +25,7 @@
 
 [![Capability coverage](docs/status/coverage.svg)](docs/status/coverage.html) · [Progress map (checklist histórico)](docs/status/progress.svg)
 
-**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · tests y líneas de Rust **actualizados en [`PROGRESS.md`](PROGRESS.md)** (badges superiores) · gate de conformidad **PASS** (4 suites) · **14 crates** · **14/14** crates con `#![forbid(unsafe_code)]`.
+**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · tests y líneas de Rust **actualizados en [`PROGRESS.md`](PROGRESS.md)** (badges superiores) · gate de conformidad **PASS** (4 suites) · **17 crates** · **17/17** crates con `#![forbid(unsafe_code)]`.
 
 > **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Aún en fase Pre-Alpha: animaciones CSS `@keyframes`/`transition` en runtime, shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y aislamiento multiproceso por pestaña llegarán en la fase Alpha.
 > El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
@@ -109,21 +109,25 @@ cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/rend
 
 ##  Arquitectura del Workspace
 
-El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 14 crates especializados:
+El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 17 crates especializados:
 
 ```mermaid
 graph TD
-    shell["crates/browser (UI & Ventana)"] --> render["crates/render (Pipeline Orquestador)"]
+    render["crates/render (Pipeline Orquestador)"]
     render --> html["crates/html (Parser WHATWG)"]
     render --> css["crates/css (Syntax, Cascade & Layers)"]
     render --> layout["crates/layout (BFC, IFC, Grid & Tables)"]
-    render --> paint["crates/paint (Display List & Rasterizer)"]
+    render --> display["crates/display (Contrato de Display List)"]
+    render --> raster["crates/raster (Rasterizador & PNG)"]
+    render --> paint["crates/paint (Construcción de Display List)"]
     render --> net["crates/net (HTTP/2, TLS & Cache)"]
     render --> js["crates/js (Boa Runtime & DOM Bindings)"]
     render --> fonts["crates/fonts (Tipografía & WOFF2)"]
     render --> image["crates/image (PNG, JPEG, GIF, WebP)"]
     render --> svg["crates/svg (Parser & Rasterizer)"]
     
+    webview["crates/webview (API embebible)"] --> render
+    browser["crates/browser (UI & Ventana)"] --> webview
     html --> dom["crates/core (Arena de Nodos)"]
     layout --> dom
     paint --> image
@@ -135,7 +139,10 @@ graph TD
 | [`crates/html`](crates/html) | Tokenizador y árbol WHATWG HTML5 con conformidad 100%. | `#![forbid(unsafe_code)]` |
 | [`crates/css`](crates/css) | Parser CSS Syntax L3, Cascade Layers, Selectors L4 y Bloom pruning. | `#![forbid(unsafe_code)]` |
 | [`crates/layout`](crates/layout) | Árbol de cajas, BFC, IFC, CSS Grid, Flexbox y Container Queries. | `#![forbid(unsafe_code)]` |
-| [`crates/paint`](crates/paint) | Generación de DisplayList, renderizado por capas y rasterizado 2D AA. | `#![forbid(unsafe_code)]` |
+| [`crates/display`](crates/display) | Contrato puro de DisplayList compartido por paint y raster. | `#![forbid(unsafe_code)]` |
+| [`crates/paint`](crates/paint) | Construcción de DisplayList y orden de pintado CSS 2.2. | `#![forbid(unsafe_code)]` |
+| [`crates/raster`](crates/raster) | Rasterizado 2D AA y codificación PNG determinista. | `#![forbid(unsafe_code)]` |
+| [`crates/webview`](crates/webview) | API embebible sin ventana: load/frame/eventos/hit-test. | `#![forbid(unsafe_code)]` |
 | [`crates/image`](crates/image) | Decodificadores y codificador PNG, JPEG, GIF y WebP deterministas. | `#![forbid(unsafe_code)]` |
 | [`crates/fonts`](crates/fonts) | Shaping de texto, integración de fuentes del sistema y WOFF2. | `#![forbid(unsafe_code)]` |
 | [`crates/svg`](crates/svg) | Parser XML de SVG y rasterizador vectorial analítico scanline. | `#![forbid(unsafe_code)]` |

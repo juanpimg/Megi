@@ -1,5 +1,8 @@
 # Difusión y captación de contribuciones
 
+> **DOCUMENTO HISTÓRICO**: refleja un estado anterior del proyecto (cuando tenía 14 crates). El estado vigente está en `README.md`, `docs/ARCHITECTURE.md` (bloque "ESTADO ACTUAL") y `AGENTS.md` (17 crates, todos los archivos <= 500 líneas, DAG y puente JS sin TLS).
+
+
 Materiales para dar a conocer **Megi Web Engine** y atraer colaboradores. Las cifras son la
 instantánea de `PROGRESS.md` (2026-11-18): 14 crates, 2.802 tests, 208k líneas Rust,
 77 % de capacidades (54/70), 0 `unsafe`, gate de conformidad en PASS, pre-alpha v0.1.0.

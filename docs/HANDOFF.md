@@ -1,5 +1,8 @@
 # Handoff de continuación — Post-Auditoría `v0.1.0` (2026-11-17)
 
+> **DOCUMENTO HISTÓRICO**: refleja un estado anterior del proyecto (cuando tenía 14 crates). El estado vigente está en `README.md`, `docs/ARCHITECTURE.md` (bloque "ESTADO ACTUAL") y `AGENTS.md` (17 crates, todos los archivos <= 500 líneas, DAG y puente JS sin TLS).
+
+
 **Fecha**: 2026-11-17 (Europe/Madrid)  
 **Rama**: `main` (último commit de código: `9f44916`, estado/badges: `7ab03bc`)  
 **Binario interactivo**: `./target/release/megi` (compilado con `cargo build --release --locked -p megi-browser -p megi-render -p megi-test-harness -p megi-bench`)
