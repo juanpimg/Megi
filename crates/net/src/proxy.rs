@@ -21,7 +21,7 @@
 //! ## Limitations
 //!
 //! PAC (`pac_url`, feature `pac`) is evaluated with the JS runtime's
-//! `FindProxyForURL(url, host)` and cached per host (5 min TTL); without the feature PAC
+//! `FindProxyForURL(url, host)` and cached per full target URL (5 min TTL); without the feature PAC
 //! is ignored. SOCKS5 (`socks5://[user:pass@]host:port`) uses CONNECT with optional
 //! username/password. HTTP proxy connections are pooled per proxy origin (cap 4, idle
 //! timeout). Proxy auth beyond Basic and nested TLS for `https:` proxies remain out of
