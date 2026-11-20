@@ -189,7 +189,8 @@ crates/css/src/animation_runtime.rs	58	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/css/src/animation_runtime/chunk1.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation_runtime/chunk2.rs	447	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation_runtime/chunk3.rs	187	src	F2	jp	2026-11-19	covered	#941,#942	
-crates/css/src/calc.rs	443	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/calc.rs	488	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/calc/mixed_tests.rs	56	src	F2	juanpimg	2026-11-20	covered	#1928	unit tests for mixed calc evaluation, split from calc.rs
 crates/css/src/cascade.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk1.rs	380	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk2.rs	379	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -246,7 +247,7 @@ crates/css/src/properties/values/content.rs	279	src	F2	wave-max-mod	2026-11-19	c
 crates/css/src/properties/values/effect.rs	106	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/gradient.rs	133	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/layout.rs	228	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/values/length.rs	144	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/values/length.rs	148	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/misc.rs	80	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/text.rs	380	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/query.rs	370	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -273,7 +274,7 @@ crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/user_agent/chunk1.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk2.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/tests/calc_lengths.rs	273	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/tests/calc_lengths.rs	324	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/cascade_core.rs	174	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/cascade_layers.rs	251	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/color4/common.rs	17	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2036,7 +2037,7 @@ tools/test_audit_coverage.py	313	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	w
 tools/test_check_arch.py	86	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	105	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_real_site_check.py	122	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_update_coverage.py	410	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_coverage.py	555	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
