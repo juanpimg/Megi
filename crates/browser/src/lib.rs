@@ -191,6 +191,7 @@ pub mod headless;
 pub mod history;
 pub mod i18n;
 pub mod images;
+pub mod ipc;
 pub mod links;
 pub mod navigation;
 pub mod pages;

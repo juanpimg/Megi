@@ -258,3 +258,24 @@ fn rejects_excessive_tabs_and_long_title_or_origin() {
         parse_cli(vec!["data:,x".to_string(), "--origin".to_string(), long].into_iter()).is_err()
     );
 }
+
+#[test]
+fn ipc_render_flag_is_parsed() {
+    let cli = parse_cli(args(&[
+        "data:text/html,<p>hi</p>",
+        "--screenshot",
+        "/tmp/megi-ipc.png",
+        "--ipc-render",
+    ]))
+    .expect("parse");
+    assert!(
+        cli.ipc_render,
+        "--ipc-render must opt into process rendering"
+    );
+    assert_eq!(
+        cli.mode,
+        LaunchMode::Screenshot(std::path::PathBuf::from("/tmp/megi-ipc.png"))
+    );
+    let plain = parse_cli(args(&["data:text/html,<p>hi</p>"])).expect("parse");
+    assert!(!plain.ipc_render, "process rendering is opt-in");
+}

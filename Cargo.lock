@@ -1750,6 +1750,8 @@ dependencies = [
  "accesskit",
  "accesskit_winit",
  "megi-webview",
+ "serde",
+ "serde_json",
  "softbuffer",
  "winit",
 ]

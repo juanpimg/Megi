@@ -19,6 +19,8 @@ winit.workspace = true
 softbuffer.workspace = true
 accesskit = { version = "0.25", optional = true }
 accesskit_winit = { version = "0.34", optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 [[bin]]
 name = "megi"

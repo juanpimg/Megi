@@ -122,6 +122,8 @@ pub struct CliArgs {
     pub refresh_ms: Option<u64>,
     /// CSS animation time in milliseconds (`--time`; default 0).
     pub time_ms: f64,
+    /// Render headless screenshots in an isolated OS process (`--ipc-render`, ADR-004).
+    pub ipc_render: bool,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
@@ -169,6 +171,8 @@ pub struct RawArgs {
     pub refresh_ms: Option<u64>,
     /// `--time` value in milliseconds, if provided.
     pub time_ms: Option<f64>,
+    /// `--ipc-render` was passed.
+    pub ipc_render: bool,
     /// `-h`/`--help` was passed.
     pub help: bool,
 }

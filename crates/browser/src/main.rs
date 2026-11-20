@@ -37,6 +37,16 @@ fn render_options(args: &CliArgs) -> megi_webview::render::RenderOptions {
 }
 
 fn main() -> ExitCode {
+    // ADR-004 phase 3: child renderer mode, driven over safe length-prefixed JSON IPC.
+    if std::env::args().any(|arg| arg == "--megi-ipc-worker") {
+        return match megi_browser::ipc::run_ipc_worker() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("megi renderer: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(ShellError::Usage(message)) => {
@@ -92,6 +102,27 @@ fn run() -> Result<(), ShellError> {
             } else {
                 active_url
             };
+            // ADR-004 phase 3: opt-in process isolation for headless renders. The child
+            // returns only the serializable PNG payload; chrome/find overlays are a parent
+            // concern and are therefore incompatible with this mode (documented limitation).
+            if args.ipc_render {
+                let png = megi_browser::ipc::render_png_in_process(&input, css_width, css_height)
+                    .map_err(|error| ShellError::Io {
+                    path: "ipc-render".to_owned(),
+                    reason: error.to_string(),
+                })?;
+                if png.is_empty() {
+                    return Err(ShellError::Io {
+                        path: "ipc-render".to_owned(),
+                        reason: "renderer produced no PNG".to_owned(),
+                    });
+                }
+                std::fs::write(&path, &png).map_err(|error| ShellError::Io {
+                    path: path.display().to_string(),
+                    reason: error.to_string(),
+                })?;
+                return Ok(());
+            }
             let output = if args.chrome && args.chrome_menu {
                 megi_browser::headless::render_target_with_chrome_menu(
                     &input,
