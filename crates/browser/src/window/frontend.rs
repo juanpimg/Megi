@@ -113,6 +113,7 @@ impl WindowApp {
             recent_history: recent,
             history_menu: None,
             download: crate::download::DownloadProgress::new(),
+            download_panel: crate::window::downloads::DownloadPanelState::new(),
             download_manager: crate::download::DownloadManager::new(
                 crate::download::DEFAULT_MAX_JOBS,
                 crate::download::DEFAULT_MAX_ACTIVE,

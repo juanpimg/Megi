@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// State of the visual Save-as dialog (F7-SAVE-AS / #988).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct SaveDialogState {
+    /// Editable file name (without the directory); sanitized on confirmation.
+    pub name: String,
+    /// `true` for an HTML snapshot, `false` for the rendered PNG.
+    pub html: bool,
+}
+
 impl SaveDialogState {
     /// Switches between PNG and HTML export and rewrites the filename extension so the
     /// saved file always matches the selected format.

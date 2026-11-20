@@ -423,3 +423,7 @@ pub fn draw_save_as_dialog(
         }
     }
 }
+
+#[path = "chrome/downloads_panel.rs"]
+mod downloads_panel;
+pub use downloads_panel::draw_downloads_panel;

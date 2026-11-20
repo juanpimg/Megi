@@ -28,6 +28,20 @@ pub struct DownloadJob {
     pub error: Option<String>,
 }
 
+impl DownloadJob {
+    /// Short status name for UI display.
+    pub fn state_name(&self) -> &'static str {
+        match self.state {
+            DownloadState::Queued => "queued",
+            DownloadState::Downloading => "downloading",
+            DownloadState::Paused => "paused",
+            DownloadState::Completed => "completed",
+            DownloadState::Canceled => "canceled",
+            DownloadState::Failed => "failed",
+        }
+    }
+}
+
 /// Default caps for the shell's download manager.
 pub const DEFAULT_MAX_JOBS: usize = 64;
 pub const DEFAULT_MAX_ACTIVE: usize = 4;
