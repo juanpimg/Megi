@@ -9,6 +9,7 @@ use crate::error::FetchError;
 use crate::url::Scheme;
 
 use super::chunked::ConnReader;
+use super::headers::validate_request_header;
 use super::redirect::is_redirect;
 use super::request::{lock_jar, url_basic_authorization};
 use super::response::{decode_response_body, parse_head_verbose, read_body};
@@ -227,6 +228,14 @@ pub fn fetch_pooled(
             };
             let mut reader = ConnReader::new(transport);
             let http_version = if options.force_http10 { "1.0" } else { "1.1" };
+            // #1856: the pooled fast path formats caller-supplied values straight into the
+            // request head. Validate them like the non-pooled `fetch_once` path does
+            // (`core.rs`) so CRLF/control bytes cannot inject headers or a second request
+            // (RFC 9110 §5.1/§5.5, request smuggling), and honour max_header_bytes.
+            validate_request_header("User-Agent", &options.user_agent)?;
+            if let Some(origin_header) = options.origin.as_deref() {
+                validate_request_header("Origin", origin_header)?;
+            }
             let mut request = format!(
                 "GET {request_target} HTTP/{http_version}\r\nHost: {host_header}\r\nUser-Agent: {}\r\nAccept: */*\r\n",
                 options.user_agent,
@@ -266,6 +275,11 @@ pub fn fetch_pooled(
                 request.push_str("Connection: keep-alive\r\n");
             }
             request.push_str("\r\n");
+            // #1856: the request head is framed before the socket write; enforce the same
+            // total-size cap the non-pooled path applies via validate_request_headers.
+            if request.len() > options.max_header_bytes {
+                return Err(FetchError::HeadersTooLarge);
+            }
             let result = (|| -> Result<Response, FetchError> {
                 reader
                     .stream
