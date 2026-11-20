@@ -37,6 +37,36 @@ use crate::cli::Options;
 use crate::generators;
 use crate::runner::{BenchEntry, Suite};
 
+/// Removes CSS declarations for `properties` from an HTML fixture, regardless of
+/// where the declaration sits on its line (#1683). The previous line-based strip
+/// only matched declarations at the start of a line, so fixtures such as
+/// `filter_effects.html` (`.gray { filter: grayscale(1); }`) were left byte-identical
+/// and the `*-no-effect` bench rows measured the full effect.
+pub(crate) fn strip_css_declarations(html: &str, properties: &[&str]) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut segment = String::new();
+    for ch in html.chars() {
+        if matches!(ch, '{' | '}' | ';') {
+            let trimmed = segment.trim_start();
+            let is_target = properties.iter().any(|property| {
+                trimmed
+                    .get(..property.len())
+                    .is_some_and(|head| head.eq_ignore_ascii_case(property))
+                    && trimmed.as_bytes().get(property.len()) == Some(&b':')
+            });
+            if !is_target {
+                out.push_str(&segment);
+            }
+            segment.clear();
+            out.push(ch);
+        } else {
+            segment.push(ch);
+        }
+    }
+    out.push_str(&segment);
+    out
+}
+
 /// Parse limits used to measure the *algorithmic* cost of extreme inputs.
 ///
 /// The production defaults (`max_depth: 4096`, `max_attributes_per_element:
@@ -130,4 +160,33 @@ fn collect_elements(document: &Document) -> Vec<NodeId> {
         }
     }
     elements
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_fixture_strip_removes_mid_line_declarations() {
+        let fixture = include_str!("../../../../tests/fixtures/render/filter_effects.html");
+        let stripped = strip_css_declarations(fixture, &["filter", "-webkit-filter"]);
+        assert_ne!(stripped, fixture, "strip must change the fixture (#1683)");
+        assert!(
+            !stripped.contains("filter:"),
+            "no filter declaration may survive: {stripped}"
+        );
+        assert!(stripped.contains(".gray"), "selectors must be kept");
+    }
+
+    #[test]
+    fn backdrop_fixture_strip_removes_mid_line_declarations() {
+        let fixture = include_str!("../../../../tests/fixtures/render/backdrop_filter.html");
+        let stripped =
+            strip_css_declarations(fixture, &["backdrop-filter", "-webkit-backdrop-filter"]);
+        assert_ne!(stripped, fixture, "strip must change the fixture (#1683)");
+        assert!(
+            !stripped.contains("backdrop-filter:"),
+            "no backdrop-filter declaration may survive"
+        );
+    }
 }
