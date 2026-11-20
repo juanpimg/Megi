@@ -556,7 +556,7 @@ source = "issue #946"
 state = "partial"
 evidence = "none"
 issue = 946
-reason = "ADR-004 phases 1-3 done: SiteKey, per-site renderer threads, IPC transport, DOM patches and link hit-region parity in opt-in --process-render mode; images/forms/find regions still missing so threads remain default"
+reason = "ADR-004 phases 1-3 done: SiteKey, per-site renderer threads, IPC transport, DOM patches and full hit-region/form/find parity in opt-in --process-render mode; threads remain default because process rendering is synchronous and uses one process per window, not per site"
 
 [[capability]]
 id = "X-BENCH"
