@@ -5,7 +5,17 @@
 //! parse errors (`surrogate-in-input-stream`, `noncharacter-in-input-stream`,
 //! `control-character-in-input-stream`) per WHATWG HTML §13.2.2 and §13.2.3.5.
 
-use crate::tokenizer::{ParseError, ParseErrorCode};
+use crate::tokenizer::{MAX_PARSE_ERRORS, ParseError, ParseErrorCode};
+
+/// Records an input-stream parse error while honoring the tokenizer's global cap (#1734).
+/// Preprocessing bypasses `record_error*`, so without this guard a stream of invalid code
+/// points (surrogates, noncharacters, control characters) can allocate millions of entries.
+#[inline]
+fn push_error(errors: &mut Vec<ParseError>, error: ParseError) {
+    if errors.len() < MAX_PARSE_ERRORS {
+        errors.push(error);
+    }
+}
 
 /// Returns `true` if `cp` is a Unicode noncharacter per WHATWG Infra §4.5:
 /// `U+FDD0..=U+FDEF`, or any code point ending in `0xFFFE` or `0xFFFF` up to `0x10FFFF`.
@@ -76,23 +86,32 @@ where
 
         col += 1;
         if is_surrogate(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::SurrogateInInputStream,
-                line,
-                col,
-            });
+            push_error(
+                &mut errors,
+                ParseError {
+                    code: ParseErrorCode::SurrogateInInputStream,
+                    line,
+                    col,
+                },
+            );
         } else if is_noncharacter(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::NoncharacterInInputStream,
-                line,
-                col,
-            });
+            push_error(
+                &mut errors,
+                ParseError {
+                    code: ParseErrorCode::NoncharacterInInputStream,
+                    line,
+                    col,
+                },
+            );
         } else if is_control_character_in_stream(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::ControlCharacterInInputStream,
-                line,
-                col,
-            });
+            push_error(
+                &mut errors,
+                ParseError {
+                    code: ParseErrorCode::ControlCharacterInInputStream,
+                    line,
+                    col,
+                },
+            );
         }
         has_wide |= cp > 0xFFFF;
         out.push(cp);
@@ -167,11 +186,14 @@ pub(crate) fn preprocess_str_with_line_starts(
             index += 1;
             col += 1;
             if is_control_character_in_stream(cp) {
-                errors.push(ParseError {
-                    code: ParseErrorCode::ControlCharacterInInputStream,
-                    line,
-                    col,
-                });
+                push_error(
+                    &mut errors,
+                    ParseError {
+                        code: ParseErrorCode::ControlCharacterInInputStream,
+                        line,
+                        col,
+                    },
+                );
             }
             out.push(cp);
             continue;
@@ -183,17 +205,23 @@ pub(crate) fn preprocess_str_with_line_starts(
         has_wide |= cp > 0xFFFF;
         col += 1;
         if is_noncharacter(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::NoncharacterInInputStream,
-                line,
-                col,
-            });
+            push_error(
+                &mut errors,
+                ParseError {
+                    code: ParseErrorCode::NoncharacterInInputStream,
+                    line,
+                    col,
+                },
+            );
         } else if is_control_character_in_stream(cp) {
-            errors.push(ParseError {
-                code: ParseErrorCode::ControlCharacterInInputStream,
-                line,
-                col,
-            });
+            push_error(
+                &mut errors,
+                ParseError {
+                    code: ParseErrorCode::ControlCharacterInInputStream,
+                    line,
+                    col,
+                },
+            );
         }
         out.push(cp);
     }
@@ -221,5 +249,28 @@ mod tests {
         assert_eq!(errs[0].code, ParseErrorCode::SurrogateInInputStream);
         assert_eq!(errs[1].code, ParseErrorCode::NoncharacterInInputStream);
         assert_eq!(errs[2].code, ParseErrorCode::ControlCharacterInInputStream);
+    }
+
+    #[test]
+    fn test_preprocessing_parse_errors_are_capped() {
+        // #1734: preprocessing inserts ParseError directly, bypassing the
+        // MAX_PARSE_ERRORS cap applied by the tokenizer's record_error* helpers.
+        // A stream of invalid code points must not grow errors without bound.
+        let control_count = crate::tokenizer::MAX_PARSE_ERRORS * 4;
+        let control_stream = "\u{0007}".repeat(control_count);
+        let (_, str_errors) = preprocess_str(&control_stream);
+        assert!(
+            str_errors.len() <= crate::tokenizer::MAX_PARSE_ERRORS,
+            "string preprocessing produced {} errors, exceeding the cap",
+            str_errors.len()
+        );
+
+        let raw: Vec<u32> = (0..control_count).map(|_| 0x0007).collect();
+        let (_, code_point_errors) = preprocess_code_points(&raw);
+        assert!(
+            code_point_errors.len() <= crate::tokenizer::MAX_PARSE_ERRORS,
+            "code-point preprocessing produced {} errors, exceeding the cap",
+            code_point_errors.len()
+        );
     }
 }

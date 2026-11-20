@@ -328,11 +328,15 @@ impl PendingTag {
                 .any(|(existing, _)| *existing == name)
         };
         if duplicate {
-            errors.push(ParseError {
-                code: ParseErrorCode::DuplicateAttribute,
-                line: self.name_end_line,
-                col: self.name_end_col,
-            });
+            // #1734: honor the global parse-error cap; many duplicate attributes across a
+            // document must not grow this shared vector without bound.
+            if errors.len() < MAX_PARSE_ERRORS {
+                errors.push(ParseError {
+                    code: ParseErrorCode::DuplicateAttribute,
+                    line: self.name_end_line,
+                    col: self.name_end_col,
+                });
+            }
         } else if self.attributes.len() >= MAX_TOKENIZER_ATTRIBUTES {
             // Drop the attribute to keep peak memory bounded; the tree builder's
             // cap would reject it anyway (#560).
