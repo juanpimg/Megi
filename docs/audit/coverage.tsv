@@ -416,10 +416,10 @@ crates/image/src/jpeg/frame.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/image/src/jpeg/huffman.rs	199	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/jpeg/markers.rs	318	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/jpeg/mod.rs	67	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/jpeg/progressive.rs	363	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/image/src/jpeg/progressive.rs	398	src	F2	jpeg-fix	2026-11-20	covered	#1888	re-read
 crates/image/src/jpeg/scan.rs	366	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/jpeg/store.rs	129	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/jpeg/tests.rs	25	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/image/src/jpeg/tests.rs	46	src	F2	jpeg-fix	2026-11-20	covered	#1888	re-read
 crates/image/src/lib.rs	407	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/orientation_tests.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/png/chunks.rs	216	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -473,6 +473,8 @@ crates/image/tests/fixtures/jpeg/baseline_ref.jpg	0	binary	-			exempt		not read 
 crates/image/tests/fixtures/jpeg/color_baseline.jpg	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/color_progressive.jpg	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/corrupt.jpg	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/jpeg/debconf26_group_photo.jpg	0	binary	-			exempt		not read line by line: binary
+crates/image/tests/fixtures/jpeg/dragora-tde-thumb.jpg	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/exif_o1.jpg	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/exif_o2.jpg	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/exif_o3.jpg	0	binary	-			exempt		not read line by line: binary
