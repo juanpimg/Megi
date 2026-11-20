@@ -63,6 +63,114 @@ pub(crate) fn string_attribute_set(
     Ok(JsValue::undefined())
 }
 
+/// Reflects an unsigned integer content attribute as a JS number (#1961,
+/// `HTMLCanvasElement.width/height`). Missing/invalid values return the `default`;
+/// out-of-range values are clamped to the surface capability bounds.
+pub(crate) fn uint_attribute_get(
+    this: &JsValue,
+    name: &str,
+    default: u32,
+    max: u32,
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let value = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(name))
+            .and_then(|raw| raw.trim().parse::<u32>().ok())
+    })
+    .flatten()
+    .unwrap_or(default)
+    .min(max);
+    Ok(JsValue::from(f64::from(value)))
+}
+
+/// Sets an unsigned integer content attribute from a JS number (#1961). Non-finite,
+/// negative or fractional values are ignored (WHATWG reflects only valid unsigned longs).
+pub(crate) fn uint_attribute_set(
+    this: &JsValue,
+    name: &str,
+    args: &[JsValue],
+    max: u32,
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let Some(raw) = args.first().and_then(|value| value.as_number()) else {
+        return Ok(JsValue::undefined());
+    };
+    if raw.is_finite() && raw >= 0.0 && raw.fract() == 0.0 {
+        let value = (raw as u64).min(u64::from(max)) as u32;
+        with_context_host(context, |host| {
+            if let Some(element) = host
+                .document
+                .try_node_mut(node_id)
+                .and_then(|node| node.as_element_mut())
+            {
+                element.set_attribute(
+                    megi_core::Attribute::new(name.to_string(), value.to_string()),
+                    true,
+                );
+            }
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+/// Default reflected dimension for `<canvas>` (300×150, WHATWG HTML §4.12.5).
+/// Other elements reflect 0 when the attribute is absent.
+fn canvas_dimension_default(is_canvas: bool, default: u32) -> u32 {
+    if is_canvas { default } else { 0 }
+}
+
+fn is_canvas_element(this: &JsValue, context: &mut Context) -> bool {
+    let Ok(node_id) = this_node(this, context) else {
+        return false;
+    };
+    with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|el| el.local_name.eq_ignore_ascii_case("canvas"))
+    })
+    .unwrap_or(false)
+}
+
+pub(crate) fn node_canvas_width_get(
+    this: &JsValue,
+    _a: &[JsValue],
+    c: &mut Context,
+) -> JsResult<JsValue> {
+    let default = canvas_dimension_default(is_canvas_element(this, c), 300);
+    uint_attribute_get(this, "width", default, crate::canvas::MAX_CANVAS_DIM, c)
+}
+
+pub(crate) fn node_canvas_width_set(
+    this: &JsValue,
+    a: &[JsValue],
+    c: &mut Context,
+) -> JsResult<JsValue> {
+    uint_attribute_set(this, "width", a, crate::canvas::MAX_CANVAS_DIM, c)
+}
+
+pub(crate) fn node_canvas_height_get(
+    this: &JsValue,
+    _a: &[JsValue],
+    c: &mut Context,
+) -> JsResult<JsValue> {
+    let default = canvas_dimension_default(is_canvas_element(this, c), 150);
+    uint_attribute_get(this, "height", default, crate::canvas::MAX_CANVAS_DIM, c)
+}
+
+pub(crate) fn node_canvas_height_set(
+    this: &JsValue,
+    a: &[JsValue],
+    c: &mut Context,
+) -> JsResult<JsValue> {
+    uint_attribute_set(this, "height", a, crate::canvas::MAX_CANVAS_DIM, c)
+}
+
 pub(crate) fn node_title_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     string_attribute_get(this, "title", c)
 }
