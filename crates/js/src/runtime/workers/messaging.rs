@@ -47,6 +47,9 @@ var document = {
         },
         setTextContent: function (text) {
           return __megi_dom_call('setTextContent', [nodeId, text]);
+        },
+        getComputedStyle: function (property) {
+          return __megi_dom_call('getComputedStyle', [nodeId, property]);
         }
       };
     });

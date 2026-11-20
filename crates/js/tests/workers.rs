@@ -284,3 +284,29 @@ fn worker_writes_dom_through_the_proxy() {
         "changed"
     );
 }
+
+#[test]
+fn worker_can_query_computed_style_through_the_proxy() {
+    // F6-WORKERS-DOM: proxy supports getComputedStyle(property) against the owning document.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.getComputedStyle('color').then(function (value) { postMessage(value); }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x style=\"color:red\">x</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "red");
+}
