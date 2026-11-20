@@ -74,6 +74,12 @@ pub(crate) fn canvas_get_context(
         ("fillRect", canvas_fill_rect as NativeFn),
         ("clearRect", canvas_clear_rect as NativeFn),
         ("strokeRect", canvas_stroke_rect as NativeFn),
+        ("beginPath", canvas_begin_path as NativeFn),
+        ("arc", canvas_arc as NativeFn),
+        ("fill", canvas_fill as NativeFn),
+        ("fillText", canvas_fill_text as NativeFn),
+        ("strokeText", canvas_fill_text as NativeFn),
+        ("measureText", canvas_measure_text as NativeFn),
         ("getImageData", canvas_get_image_data as NativeFn),
         ("putImageData", canvas_put_image_data as NativeFn),
     ] {
@@ -110,6 +116,93 @@ pub(crate) fn canvas_get_context(
         .build();
     let _ = context_object.define_property_or_throw(js_string!("globalAlpha"), descriptor, context);
     Ok(context_object.into())
+}
+
+fn canvas_number(args: &[JsValue], index: usize, context: &mut Context) -> JsResult<f64> {
+    args.get(index)
+        .map(|value| value.to_number(context))
+        .transpose()?
+        .ok_or_else(|| js_error("canvas method: missing numeric argument"))
+}
+
+pub(crate) fn canvas_begin_path(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store.with_surface_mut(node, |s| s.begin_path())
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_arc(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let x = canvas_number(args, 0, context)?;
+    let y = canvas_number(args, 1, context)?;
+    let radius = canvas_number(args, 2, context)?;
+    let start = canvas_number(args, 3, context)?;
+    let end = canvas_number(args, 4, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.arc(x, y, radius, start, end))
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_fill(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    with_context_host(context, |host| {
+        host.canvas_store.with_surface_mut(node, |s| s.fill_path())
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_fill_text(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let x = canvas_number(args, 1, context)?;
+    let y = canvas_number(args, 2, context)?;
+    let text = args
+        .first()
+        .map(|value| value.to_string(context))
+        .transpose()?
+        .map(|s| s.to_std_string_escaped())
+        .unwrap_or_default();
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.fill_text(x, y, &text))
+    });
+    Ok(JsValue::undefined())
+}
+
+pub(crate) fn canvas_measure_text(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let text = args
+        .first()
+        .map(|value| value.to_string(context))
+        .transpose()?
+        .map(|s| s.to_std_string_escaped())
+        .unwrap_or_default();
+    let width = crate::canvas::CanvasSurface::measure_text(&text);
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("width"), JsValue::from(width), Attribute::all());
+    Ok(JsValue::from(init.build()))
 }
 
 pub(crate) fn canvas_fill_rect(
