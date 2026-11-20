@@ -111,7 +111,7 @@
 //!   URL userinfo, `no_proxy` host/suffix/IP/port matching). Additionally:
 //!   **SOCKS5** (`ProxyConfig::socks`, RFC 1928 CONNECT, no-auth or username/password
 //!   RFC 1929) and **PAC** (`ProxyConfig::pac_url`, feature `pac`: evaluates
-//!   `FindProxyForURL(url, host)` with the JS runtime and caches per host for 5 min).
+//!   `FindProxyForURL(url, host)` with the JS runtime and caches per full target URL for 5 min).
 //!   HTTP proxy connections are pooled per proxy origin (cap 4, idle timeout).
 //!   `https:` proxies still only forward `http:` targets (no nested TLS); PAC without
 //!   the feature falls back to the static proxy/direct connection.
