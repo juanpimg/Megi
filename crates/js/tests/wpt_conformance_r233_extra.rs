@@ -427,3 +427,29 @@ fn document_get_elements_by_tag_name_wildcard_matches_every_element() {
     assert_eq!(span, "1", "case-insensitive lookup still works");
     assert_eq!(missing, "0", "a non-matching name stays empty");
 }
+
+#[test]
+fn conformance_workload_memory_accounting_is_finite_and_grows() {
+    // F6-CONFORMANCE: the memory-accounting estimate must track a WPT-style DOM workload
+    // (create/append/classList/dataset/remove) without overflowing or going backwards.
+    let mut runtime = runtime();
+    let before = runtime.estimated_heap_bytes().expect("estimate");
+    let out = eval(
+        &mut runtime,
+        "var i, el, nodes = []; for (i = 0; i < 40; i++) { el = document.createElement('div'); \
+         el.classList.add('c' + i); el.dataset.index = String(i); \
+         el.addEventListener('click', function () {}); document.body.appendChild(el); nodes.push(el); } \
+         for (i = 0; i < 20; i++) { document.body.removeChild(nodes[39 - i]); } \
+         document.getElementsByTagName('div').length + ':' + nodes[19].className;",
+    );
+    let after = runtime.estimated_heap_bytes().expect("estimate after");
+    assert_eq!(
+        out, "20:c19",
+        "conformance workload must produce the expected DOM state"
+    );
+    assert!(before > 0 && after > 0, "estimates must be real numbers");
+    assert!(
+        after >= before,
+        "accounting must not decrease while nodes are live: {before} -> {after}"
+    );
+}
