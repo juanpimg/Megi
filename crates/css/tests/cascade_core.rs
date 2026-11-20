@@ -149,3 +149,26 @@ fn lang_pseudo_class_matches_inherited_language_and_prefix_ranges() {
     );
     assert_eq!(styles.get(&target).expect("style").width, Length::Px(9.0));
 }
+
+#[test]
+fn standalone_viewport_units_resolve_in_computed_width() {
+    // #1927: a standalone vw/vh length must reach the computed style resolved against
+    // the viewport, not fall back to `auto`. The render pipeline wraps style collection
+    // in with_calc_viewport; mirror that here so the thread-local viewport is set.
+    let mut doc = Document::new();
+    let root = doc.root();
+    let html = append(&mut doc, root, "html", &[]);
+    let body = append(&mut doc, html, "body", &[]);
+    let target = append(&mut doc, body, "div", &[]);
+    let styles = megi_css::with_calc_viewport(1024.0, 768.0, || {
+        megi_css::resolve_document_styles_with_viewport(
+            &doc,
+            Some("div { width: 50vw; height: 25vh; }"),
+            1024.0,
+            768.0,
+        )
+    });
+    let style = styles.get(&target).expect("style");
+    assert_eq!(style.width, Length::Px(512.0));
+    assert_eq!(style.height, Length::Px(192.0));
+}

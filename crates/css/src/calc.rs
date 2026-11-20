@@ -74,7 +74,7 @@ pub fn with_viewport<T>(width: f32, height: f32, f: impl FnOnce() -> T) -> T {
     f()
 }
 
-fn viewport() -> (f32, f32) {
+pub(crate) fn viewport() -> (f32, f32) {
     VIEWPORT.with(Cell::get)
 }
 

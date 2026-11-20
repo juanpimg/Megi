@@ -55,6 +55,28 @@ impl Length {
             let px = pt * 96.0 / 72.0;
             return px.is_finite().then_some(Self::Px(px));
         }
+        // CSS Values 4 §5.1.2: viewport-percentage lengths are <length> units and must be
+        // accepted standalone, not only inside calc(). #1927: width:50vw used to fall back
+        // to `auto` (full width) because only calc() resolved these units. calc.rs already
+        // resolves vw/vh against the same thread-local viewport set by the render pipeline.
+        if let Some(val) = s.strip_suffix("vw") {
+            let vw: f32 = val.trim().parse().ok()?;
+            if !vw.is_finite() || vw.abs() > 1e6 {
+                return None;
+            }
+            let (width, _) = crate::calc::viewport();
+            let px = vw * width / 100.0;
+            return px.is_finite().then_some(Self::Px(px));
+        }
+        if let Some(val) = s.strip_suffix("vh") {
+            let vh: f32 = val.trim().parse().ok()?;
+            if !vh.is_finite() || vh.abs() > 1e6 {
+                return None;
+            }
+            let (_, height) = crate::calc::viewport();
+            let px = vh * height / 100.0;
+            return px.is_finite().then_some(Self::Px(px));
+        }
         if let Some(val) = s.strip_suffix('%') {
             let pct: f32 = val.trim().parse().ok()?;
             if !pct.is_finite() || pct.abs() > 1e6 {
