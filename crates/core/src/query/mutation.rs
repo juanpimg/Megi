@@ -52,6 +52,11 @@ impl Document {
         if !self.can_have_children(parent_id) {
             return Err(DomError::CannotHaveChildren(parent_id));
         }
+        // #1728 / DOM §4.2.3: "If referenceChild is node, then set referenceChild to node's
+        // next sibling". Inserting a node before itself is a successful no-op, not an error.
+        if reference == Some(new_child_id) {
+            return Ok(new_child_id);
+        }
         let inserted = match reference {
             Some(reference_id) => {
                 if self.slot_of(reference_id).is_none() {
@@ -177,7 +182,10 @@ impl Document {
         if self.slot_of(node_id).is_none() {
             return Err(DomError::UnknownNode(node_id));
         }
-        // DOM spec: inserting a node before itself is a no-op.
+        // #1728 / DOM §4.2.3: run "ensure pre-insert validity" (parent exists and accepts
+        // children) BEFORE the "referenceChild is node" no-op shortcut.
+        self.precheck_insert(parent_id, reference)?;
+        // DOM spec: inserting a node before itself is a successful no-op.
         if reference == Some(node_id) {
             return Ok(Vec::new());
         }
