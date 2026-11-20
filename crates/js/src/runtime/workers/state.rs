@@ -226,6 +226,13 @@ impl JsRuntime {
                 .as_object()
                 .and_then(|object| object.get(0, &mut self.context).ok())
                 .unwrap_or(JsValue::null());
+            let mut arg = |index: u32| -> String {
+                args.as_object()
+                    .and_then(|object| object.get(index, &mut self.context).ok())
+                    .and_then(|value| value.to_string(&mut self.context).ok())
+                    .map(|text| text.to_std_string_escaped())
+                    .unwrap_or_default()
+            };
             let result = match method.as_str() {
                 "getElementById" => {
                     let id = first
@@ -255,6 +262,34 @@ impl JsRuntime {
                         })
                         .unwrap_or_default();
                     JsValue::from(js_string!(text))
+                }
+                "setAttribute" => {
+                    let token = first.as_number().unwrap_or(0.0) as usize;
+                    let name = arg(1);
+                    let value = arg(2);
+                    if let Some(node) = worker_nodes.get(token).copied()
+                        && let Some(mut host) = host_cell(&mut self.context).ok()
+                    {
+                        let attribute = DomAttribute::new(name, value);
+                        if let Some(element) = host
+                            .document
+                            .try_node_mut(node)
+                            .and_then(|node| node.as_element_mut())
+                        {
+                            element.set_attribute(attribute, true);
+                        }
+                    }
+                    JsValue::null()
+                }
+                "setTextContent" => {
+                    let token = first.as_number().unwrap_or(0.0) as usize;
+                    let text = arg(1);
+                    if let Some(node) = worker_nodes.get(token).copied()
+                        && let Some(mut host) = host_cell(&mut self.context).ok()
+                    {
+                        let _ = host.document.set_text_content(node, &text);
+                    }
+                    JsValue::null()
                 }
                 _ => JsValue::null(),
             };

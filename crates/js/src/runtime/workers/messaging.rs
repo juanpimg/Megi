@@ -41,7 +41,13 @@ var document = {
     return __megi_dom_call('getElementById', [id]).then(function (nodeId) {
       return {
         __megi_node_id: nodeId,
-        textContent: __megi_dom_call('textContent', [nodeId])
+        textContent: __megi_dom_call('textContent', [nodeId]),
+        setAttribute: function (name, value) {
+          return __megi_dom_call('setAttribute', [nodeId, name, value]);
+        },
+        setTextContent: function (text) {
+          return __megi_dom_call('setTextContent', [nodeId, text]);
+        }
       };
     });
   }
