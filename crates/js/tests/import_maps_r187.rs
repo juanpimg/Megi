@@ -143,17 +143,19 @@ fn dynamic_import_literal_returns_a_promise_and_mutates_the_dom() {
 }
 
 #[test]
-fn dynamic_import_non_literal_is_a_typed_error() {
+fn dynamic_import_non_literal_is_rewritten_to_runtime_helper() {
+    // F6 resolves non-literal specifiers at call time via __megiDynamicImport,
+    // so a parse-time typed error is no longer expected (#2059).
     let (mut runtime, _modules) = runtime_with_modules();
-    let error = runtime
+    let outcome = runtime
         .eval_module(
-            "const name = './x.js'; import(name);",
+            "const name = './x.js'; globalThis.__pending = import(name);",
             "app.js",
             "file:///app.js",
             &Budget::SMALL,
         )
-        .expect_err("non-literal");
-    assert!(matches!(error, JsError::DynamicImport(_)), "{error:?}");
+        .expect("non-literal import() must be rewritten, not rejected");
+    assert_eq!(outcome.url, "file:///app.js");
 }
 
 #[test]
