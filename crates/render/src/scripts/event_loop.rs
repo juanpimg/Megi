@@ -136,7 +136,16 @@ pub(crate) fn run_event_loop(
         // still open but no timer is due, pump briefly so a response can arrive before the
         // render finalizes (bounded to keep the pipeline deterministic and non-hanging).
         runtime.poll_websockets();
-        let _ = runtime.run_frame_tasks(limits.max_tasks.saturating_sub(state.tasks).min(64));
+        // #1826: frame/postMessage deliveries consume the same task budget as timers,
+        // otherwise a self-reposting message handler could run unbounded. Also surface
+        // delivery errors instead of silently dropping them.
+        match runtime.run_frame_tasks(limits.max_tasks.saturating_sub(state.tasks).min(64)) {
+            Ok(delivered) => state.tasks = state.tasks.saturating_add(delivered),
+            Err(error) => {
+                warnings.push(format!("frame tasks failed: {error}"));
+                state.limited = true;
+            }
+        }
         drain_microtasks(runtime, warnings);
         let remaining = limits.max_tasks.saturating_sub(state.tasks);
         if remaining == 0 {
@@ -205,5 +214,46 @@ pub(crate) fn run_event_loop(
                 return;
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "js"))]
+mod tests {
+    use super::*;
+
+    /// #1826: a self-`postMessage` handler that re-posts must consume the `max_tasks`
+    /// budget. Without counting `run_frame_tasks` deliveries, the loop spins delivering
+    /// frame messages without ever exhausting the task budget.
+    #[test]
+    fn frame_messages_consume_the_task_budget() {
+        let doc = megi_html::parse_document("<!doctype html><html><body></body></html>", false);
+        let mut runtime = megi_js::JsRuntime::with_document(doc, "https://app.example/t".into())
+            .expect("runtime");
+        runtime
+            .eval(
+                "window.__n = 0; \
+                 window.addEventListener('message', function () { \
+                   __n += 1; \
+                   if (__n < 1000) { window.postMessage('again', '*'); } \
+                 }); \
+                 window.postMessage('go', '*');",
+                "t",
+            )
+            .expect("eval");
+        let limits = ScriptingLimits {
+            max_tasks: 4,
+            max_virtual_time_ms: 10_000,
+            ..ScriptingLimits::default()
+        };
+        let mut state = EventLoopState {
+            virtual_time_ms: VIRTUAL_EPOCH_MS,
+            ..EventLoopState::default()
+        };
+        let mut warnings = Vec::new();
+        run_event_loop(&mut runtime, &limits, &mut state, &mut warnings);
+        assert_eq!(
+            state.tasks, 4,
+            "frame deliveries must count against max_tasks (#1826)"
+        );
     }
 }
