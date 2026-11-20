@@ -150,6 +150,9 @@ pub struct CanvasSurface {
     pub pixels: Vec<u8>,
     pub fill_style: Rgba,
     pub stroke_style: Rgba,
+    /// Global alpha multiplier applied to every source-over drawing operation
+    /// (WHATWG HTML §4.12.5.1.12 `globalAlpha`, #1961). `putImageData` bypasses it.
+    pub global_alpha: f32,
     /// Number of pixel blends performed (bounded by the surface area after clipping). Useful
     /// for budget accounting and regression tests (#1618).
     pub operations: u64,
@@ -182,6 +185,7 @@ impl CanvasSurface {
                 b: 0,
                 a: 255,
             },
+            global_alpha: 1.0,
             operations: 0,
         })
     }
@@ -201,7 +205,9 @@ impl CanvasSurface {
             self.pixels[index + 2],
             self.pixels[index + 3],
         );
-        let sa = f32::from(color.a) / 255.0;
+        // WHATWG HTML §4.12.5.1.12: globalAlpha multiplies the source alpha of every
+        // source-over drawing operation (#1961). `putImageData`/`clearRect` bypass `blend`.
+        let sa = (f32::from(color.a) / 255.0) * self.global_alpha;
         let da = f32::from(da) / 255.0;
         let out_a = sa + da * (1.0 - sa);
         if out_a <= 0.0 {
