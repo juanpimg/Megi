@@ -139,6 +139,8 @@ pub struct ModuleAsyncOutcome {
     pub limited: bool,
 }
 
+// ARCH-EXCEPTION(#1853): Boa host hooks are shared static objects; the eval flag is
+// realm-local JS state (never TLS/global). Plan: #1853 — move into the ContextHost.
 struct CspEvalHooks {
     allow_eval: Rc<std::cell::Cell<bool>>,
 }
@@ -171,6 +173,8 @@ pub struct JsRuntime {
     /// Execution budget applied before each `eval`.
     budget: Budget,
     /// Whether `eval` / `new Function` are allowed by CSP (`'unsafe-eval'`).
+    // ARCH-EXCEPTION(#1853): shared with the CspEvalHooks host hook above.
+    // Plan: #1853 — move into the ContextHost.
     allow_eval: Rc<std::cell::Cell<bool>>,
     /// Last JS exception message (diagnostics).
     last_error: Option<String>,

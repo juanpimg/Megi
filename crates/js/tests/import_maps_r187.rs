@@ -154,7 +154,7 @@ fn dynamic_import_non_literal_resolves_at_runtime() {
     );
     runtime
         .eval_module(
-            "const name = './x.js'; import(name);",
+            "const name = './x.js'; globalThis.__pending = import(name);",
             "app.js",
             "file:///app/app.js",
             &Budget::SMALL,
