@@ -112,6 +112,12 @@ impl Document {
         if let Some(text) = effective_node.as_text() {
             return text.to_owned();
         }
+        // #1729 / DOM §4.4: textContent is `data` for any CharacterData node, not just Text.
+        match &effective_node.kind {
+            NodeKind::Comment(data) => return data.clone(),
+            NodeKind::ProcessingInstruction { data, .. } => return data.clone(),
+            _ => {}
+        }
         if matches!(effective_node.kind, NodeKind::Document) {
             return String::new();
         }
@@ -172,9 +178,12 @@ impl Document {
             return Err(DomError::UnknownNode(node_id));
         };
         match &node.kind {
-            NodeKind::Text(_) | NodeKind::Comment(_) => {
+            NodeKind::Text(_) | NodeKind::Comment(_) | NodeKind::ProcessingInstruction { .. } => {
+                // #1729 / DOM §4.4: CharacterData (Text/Comment/PI) updates its data in place.
                 match &mut self.node_mut(node_id).kind {
-                    NodeKind::Text(data) | NodeKind::Comment(data) => *data = text.to_owned(),
+                    NodeKind::Text(data)
+                    | NodeKind::Comment(data)
+                    | NodeKind::ProcessingInstruction { data, .. } => *data = text.to_owned(),
                     _ => unreachable!("kind checked above"),
                 }
                 Ok(())
@@ -191,9 +200,8 @@ impl Document {
                 }
                 Ok(())
             }
-            NodeKind::Document
-            | NodeKind::Doctype { .. }
-            | NodeKind::ProcessingInstruction { .. } => Err(DomError::CannotHaveChildren(node_id)),
+            // #1729 / DOM §4.4: setting textContent on Document or Doctype is a no-op.
+            NodeKind::Document | NodeKind::Doctype { .. } => Ok(()),
         }
     }
 

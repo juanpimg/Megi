@@ -351,10 +351,47 @@ fn test_text_content_and_set_text_content() {
     doc.set_text_content(text, "updated")
         .expect("set text node data");
     assert_eq!(doc.node(text).as_text(), Some("updated"));
-    assert!(matches!(
-        doc.set_text_content(doc.root(), "x"),
-        Err(DomError::CannotHaveChildren(_))
-    ));
+    // #1729: setting textContent on Document is a no-op (DOM §4.4), not an error.
+    doc.set_text_content(doc.root(), "x")
+        .expect("Document textContent is a no-op");
+    assert!(doc.validate_invariants().is_ok());
+}
+
+#[test]
+fn text_content_character_data_and_noop_setters() {
+    // #1729 / DOM §4.4: textContent is data for CharacterData (Text, Comment, PI),
+    // and setting it on Document/Doctype is a no-op (not an error).
+    use crate::NodeKind;
+    let mut doc = Document::new();
+    let comment = doc.create_comment("a comment");
+    let pi = doc.create_node(NodeKind::ProcessingInstruction {
+        target: "xml-stylesheet".to_owned(),
+        data: "href=style.xsl".to_owned(),
+    });
+    let doctype = doc.create_node(NodeKind::Doctype {
+        name: "html".to_owned(),
+        public_id: String::new(),
+        system_id: String::new(),
+    });
+    // A Doctype must be a direct child of the Document to keep invariants valid.
+    doc.append_child(doc.root(), doctype);
+
+    assert_eq!(doc.text_content(comment), "a comment");
+    assert_eq!(doc.text_content(pi), "href=style.xsl");
+
+    doc.set_text_content(comment, "changed comment")
+        .expect("comment data setter");
+    assert_eq!(doc.text_content(comment), "changed comment");
+    doc.set_text_content(pi, "href=new.xsl")
+        .expect("PI data setter");
+    assert_eq!(doc.text_content(pi), "href=new.xsl");
+
+    // Document and Doctype setters are silent no-ops.
+    doc.set_text_content(doc.root(), "ignored")
+        .expect("Document textContent is a no-op");
+    doc.set_text_content(doctype, "ignored")
+        .expect("Doctype textContent is a no-op");
+    assert_eq!(doc.text_content(doc.root()), "");
     assert!(doc.validate_invariants().is_ok());
 }
 
