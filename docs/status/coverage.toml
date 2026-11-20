@@ -461,7 +461,7 @@ name = "Web Workers con acceso a DOM"
 source = "PROGRESS.md F6 pending"
 state = "partial"
 evidence = "none"
-reason = "workers expose a message-based DOM proxy with read (getElementById, textContent) and write (setAttribute, setTextContent) operations; full element/event API surface still missing"
+reason = "workers expose a message-based DOM proxy with read (getElementById, textContent, getComputedStyle) and write (setAttribute, setTextContent) operations; event and traversal API surface still missing"
 
 [[capability]]
 id = "F6-IMPORTMAP-SCOPES"

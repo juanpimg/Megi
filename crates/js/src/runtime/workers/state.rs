@@ -263,6 +263,30 @@ impl JsRuntime {
                         .unwrap_or_default();
                     JsValue::from(js_string!(text))
                 }
+                "getComputedStyle" => {
+                    let token = first.as_number().unwrap_or(0.0) as usize;
+                    let property = arg(1);
+                    let value = worker_nodes
+                        .get(token)
+                        .copied()
+                        .and_then(|node| {
+                            host_ref(&self.context).ok().and_then(|host| {
+                                host.document
+                                    .try_node(node)
+                                    .and_then(|node| node.as_element())
+                                    .and_then(|element| element.get_attribute("style"))
+                                    .map(str::to_owned)
+                            })
+                        })
+                        .and_then(|style| {
+                            megi_css::parser::parse_list_of_declarations(&style)
+                                .into_iter()
+                                .find(|declaration| declaration.name == property)
+                                .map(|declaration| declaration.raw_value)
+                        })
+                        .unwrap_or_default();
+                    JsValue::from(js_string!(value))
+                }
                 "setAttribute" => {
                     let token = first.as_number().unwrap_or(0.0) as usize;
                     let name = arg(1);
