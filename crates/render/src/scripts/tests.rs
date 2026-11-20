@@ -190,49 +190,72 @@ mod layout_provider_freshness_tests {
 
     #[test]
     fn layout_provider_is_not_frozen_after_the_first_query() {
-        // Mirrors the new provider wrapper: every query re-invokes the underlying
-        // provider instead of caching the first result forever (#1470).
+        // Drive Megi's real geometry bridge (#1470): JS `getBoundingClientRect()` must
+        // re-invoke the installed LayoutProvider on every query, so later measurements
+        // observe fresh geometry instead of a one-shot cached rect.
+        use megi_js::host::LayoutRect;
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
         let calls = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&calls);
-        let provider = move || {
-            counter.fetch_add(1, Ordering::SeqCst);
-            let mut rects = std::collections::HashMap::new();
-            rects.insert(
-                megi_core::NodeId::from_index(1),
-                megi_js::host::LayoutRect {
-                    border_box: (0.0, 0.0, 10.0, 10.0),
-                    content_box: (0.0, 0.0, 10.0, 10.0),
-                },
-            );
-            rects
-        };
-        let node = megi_core::NodeId::from_index(1);
-        let _ = provider().get(&node).copied();
-        let _ = provider().get(&node).copied();
+        let provider: megi_js::host::LayoutProvider = Arc::new(move |_node| {
+            let n = counter.fetch_add(1, Ordering::SeqCst);
+            let width = 10.0 + n as f32;
+            Some(LayoutRect {
+                border_box: (0.0, 0.0, width, 10.0),
+                content_box: (0.0, 0.0, width, 10.0),
+            })
+        });
+        runtime.set_layout_provider(provider);
+        runtime
+            .eval(
+                "var el = document.createElement('div'); document.body.appendChild(el);",
+                "t",
+            )
+            .expect("setup");
+        let first = runtime
+            .eval("el.getBoundingClientRect().width", "t")
+            .expect("first query");
+        let second = runtime
+            .eval("el.getBoundingClientRect().width", "t")
+            .expect("second query");
+        assert_eq!((first.as_str(), second.as_str()), ("10", "11"));
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
-            "provider must be re-evaluated"
+            "the provider must be re-evaluated on every query, not cached"
         );
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "js"))]
 mod fetch_failure_tests {
+    use super::*;
+
     #[test]
     fn loader_failures_reject_instead_of_resolving_404() {
-        // Mirrors the non-HTTP loader error path: an Err from ResourceLoader must become
-        // an Err (rejected promise), never a synthetic successful 404 (#1456).
-        let result: Result<(), String> = Err("permission denied".to_string());
-        let bridged = result.map_err(|error| format!("fetch failed: {error}"));
-        assert!(bridged.is_err());
-        assert!(bridged.unwrap_err().contains("permission denied"));
-
-        let success: Result<(), String> = Ok(());
+        // Drive Megi's real fetch bridge (#1456): an Err from the host FetchProvider
+        // must reject the fetch() promise (a TypeError), never resolve as a synthetic
+        // successful 404 that scripts could inspect with `response.ok`.
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
+        runtime.set_fetch_provider(Arc::new(|_| {
+            Err(megi_js::JsError::Runtime("permission denied".to_owned()))
+        }));
+        runtime
+            .eval(
+                "window.__state = ''; fetch('/secret').then(function () { __state = 'resolved'; }) \
+                 .catch(function (e) { __state = e.name + ':' + String(e); });",
+                "t",
+            )
+            .expect("fetch");
+        runtime.run_microtasks().expect("microtasks");
+        let state = runtime.eval("__state", "t").expect("state");
         assert!(
-            success
-                .map_err(|error| format!("fetch failed: {error}"))
-                .is_ok()
+            state.starts_with("TypeError:"),
+            "a loader failure must reject the fetch promise, got {state}"
+        );
+        assert!(
+            state.contains("fetch failed"),
+            "the rejection must surface the loader error, got {state}"
         );
     }
 }
