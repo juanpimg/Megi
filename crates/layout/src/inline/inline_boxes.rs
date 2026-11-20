@@ -37,40 +37,65 @@ pub(crate) struct ActiveBoxFrame {
     pub(crate) anchor: Option<(f32, f32, f32)>,
 }
 
-/// Applies CSS `text-overflow: ellipsis` to a text run that exceeds its available width
-/// (CSS UI §4.6.1 / #1929). Only `white-space: nowrap` runs are eligible; the ellipsis is
-/// inserted in place of the trailing characters so the run fits the clipped line.
+/// Applies CSS `text-overflow: ellipsis` to a nowrap run that overflows a clipping
+/// block container (CSS UI 3 §4.1 / #1929).
 ///
-/// Widths are distributed evenly across characters (the line builder measures runs, not
-/// individual glyphs), which keeps the result deterministic and conservative.
+/// Both the reserved ellipsis advance and the width of the truncated run come from
+/// the font engine through [`TextMeasurer`], so proportional faces keep their real
+/// glyph advances. The block container's `overflow` must not be `visible`: CSS
+/// `text-overflow` only affects content clipped by its container.
 pub(crate) fn ellipsize_text(
     text: &str,
     width: f32,
     style: &ComputedStyle,
+    container_style: &ComputedStyle,
+    measurer: &dyn TextMeasurer,
     available_width: f32,
 ) -> (String, f32) {
-    if style.text_overflow != megi_css::TextOverflow::Ellipsis
-        || style.white_space != WhiteSpace::Nowrap
-        || width <= available_width
-    {
+    let eligible = container_style.text_overflow == megi_css::TextOverflow::Ellipsis
+        && container_style.white_space == WhiteSpace::Nowrap
+        && container_style.overflow != megi_css::Overflow::Visible
+        && available_width > 0.0
+        && width > available_width;
+    if !eligible {
         return (text.to_owned(), width);
     }
-    let char_count = text.chars().count();
-    if char_count == 0 {
+
+    let measure = |value: &str| super::shaped_width(measurer, value, style);
+    let ellipsis_width = measure("…");
+    if !ellipsis_width.is_finite() || ellipsis_width <= 0.0 {
         return (text.to_owned(), width);
     }
-    let per_char = width / char_count as f32;
-    if !per_char.is_finite() || per_char <= 0.0 {
+
+    let chars: Vec<char> = text.chars().collect();
+    if chars.is_empty() {
         return (text.to_owned(), width);
     }
-    // Reserve the width of one character for the ellipsis itself.
-    let ellipsis_width = per_char;
+    // Keep the longest prefix whose measured advance (plus the measured ellipsis)
+    // still fits the line. Binary search over UTF-8 char boundaries: advances are
+    // monotonic, and only overflowing nowrap lines reach this path.
     let budget = (available_width - ellipsis_width).max(0.0);
-    let keep = (budget / per_char).floor() as usize;
-    let keep = keep.min(char_count.saturating_sub(1));
-    let mut out: String = text.chars().take(keep).collect();
+    let (mut lo, mut hi) = (0usize, chars.len());
+    while lo < hi {
+        let mid = lo + (hi - lo).div_ceil(2);
+        let prefix: String = chars[..mid].iter().collect();
+        if measure(&prefix) <= budget {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    let mut out: String = chars[..lo].iter().collect();
     out.push('…');
-    (out, per_char * (keep as f32 + 1.0))
+    let measured = measure(&out);
+    (
+        out,
+        if measured.is_finite() {
+            measured
+        } else {
+            ellipsis_width
+        },
+    )
 }
 
 /// Fast path for a line made only of text from one text node (no inline boxes,
@@ -86,6 +111,7 @@ pub(crate) fn try_format_simple_text_line(
     text_pool: &str,
     styles: &[Arc<ComputedStyle>],
     ctx: &LineContext<'_>,
+    measurer: &dyn TextMeasurer,
 ) -> Option<LayoutBox> {
     if tokens.is_empty() || ctx.justify {
         return None;
@@ -150,6 +176,8 @@ pub(crate) fn try_format_simple_text_line(
         &text,
         width,
         styles[style_id as usize].as_ref(),
+        ctx.container_style,
+        measurer,
         (ctx.container_width - align_offset).max(0.0),
     );
     let mut text_box = LayoutBox::with_shared_style(
@@ -184,12 +212,15 @@ pub(crate) fn push_text_fragment(
     line_children: &mut Vec<LayoutBox>,
     curr_x: &mut f32,
     ctx: &LineContext<'_>,
+    measurer: &dyn TextMeasurer,
     line_height: f32,
     baseline_y_in_line: f32,
 ) {
     let style = styles[style_id as usize].as_ref();
-    let available = (ctx.container_width - *curr_x).max(0.0);
-    let (text, width) = ellipsize_text(text, width, style, available);
+    // `curr_x` is absolute; the line's right edge is `container_x + container_width`.
+    let available = (ctx.container_x + ctx.container_width - *curr_x).max(0.0);
+    let (text, width) =
+        ellipsize_text(text, width, style, ctx.container_style, measurer, available);
     let box_h = ascent + descent;
 
     // Vertical alignment comes from the innermost inline box; text runs themselves

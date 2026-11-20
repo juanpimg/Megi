@@ -22,7 +22,8 @@ pub(crate) fn format_line(
 
     // Plain single-text-node lines skip the generic two-pass bookkeeping.
     if incoming_active_boxes.is_empty()
-        && let Some(line_box) = try_format_simple_text_line(&tokens, text_pool, styles, ctx)
+        && let Some(line_box) =
+            try_format_simple_text_line(&tokens, text_pool, styles, ctx, measurer)
     {
         return (line_box, incoming_active_boxes);
     }
@@ -353,6 +354,7 @@ pub(crate) fn format_line(
                     &mut line_children,
                     &mut curr_x,
                     ctx,
+                    measurer,
                     line_height,
                     baseline_y_in_line,
                 );
@@ -382,6 +384,7 @@ pub(crate) fn format_line(
                     &mut line_children,
                     &mut curr_x,
                     ctx,
+                    measurer,
                     line_height,
                     baseline_y_in_line,
                 );
