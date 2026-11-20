@@ -48,3 +48,30 @@ fn no_transform_keeps_normal_flow() {
     let rect = div_content(&tree);
     assert!(rect.x.abs() < 0.5, "x={}", rect.x);
 }
+
+// #1934: the pivot is the element's border box, not the page origin.
+#[test]
+fn transform_origin_controls_the_rotation_pivot() {
+    let tree = layout_for_style(
+        "body { margin:0 } div { width:60px; height:20px; margin-left:100px; \
+         transform-origin:0 0; transform: rotate(90deg); }",
+    );
+    let rect = div_content(&tree);
+    // rotate(90deg) about the border-box top-left (100,0) yields AABB (80,0,20,60).
+    assert!((rect.x - 80.0).abs() < 0.5, "x={}", rect.x);
+    assert!(rect.y.abs() < 0.5, "y={}", rect.y);
+    assert!((rect.width - 20.0).abs() < 0.5, "width={}", rect.width);
+    assert!((rect.height - 60.0).abs() < 0.5, "height={}", rect.height);
+}
+
+#[test]
+fn default_transform_origin_is_the_box_center() {
+    let tree = layout_for_style(
+        "body { margin:0 } div { width:60px; height:20px; margin-left:100px; \
+         transform: rotate(90deg); }",
+    );
+    let rect = div_content(&tree);
+    // 50% 50% = (130,10): the rotated AABB is (120,-20,20,60).
+    assert!((rect.x - 120.0).abs() < 0.5, "x={}", rect.x);
+    assert!((rect.y + 20.0).abs() < 0.5, "y={}", rect.y);
+}

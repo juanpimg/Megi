@@ -179,28 +179,36 @@ pub(crate) fn specified_height(style: &ComputedStyle, cb_height: Option<f32>) ->
 /// relative resolution rules (`top` wins over `bottom`, `left` over `right`). The shell/scroll
 /// integration can later clamp the same displacement against a scroll offset (a future
 /// `LayoutOptions` hook); without sticky declarations the geometry is unchanged.
-/// Applies a CSS 2D `transform` to a box's geometry (#1539).
+/// Applies a CSS 2D `transform` to a box's geometry (#1539, #1934).
 ///
 /// The transformed axis-aligned bounding box of the content rectangle becomes the box's
 /// content rectangle. Paint and hit-testing consume this geometry, so translate/scale/rotate
 /// all move the painted box (rotation uses the enclosing AABB — a conservative approximation
-/// that keeps the change local and leaves every untransformed box byte-identical).
+/// that keeps the change local and leaves every untransformed box byte-identical). The
+/// pivot is `transform-origin`, resolved against the border box and composed as
+/// `T(origin) · M · T(-origin)`.
 pub(crate) fn apply_transform(layout_box: &mut LayoutBox) {
-    let transform = {
+    let (transform, origin) = {
         let Some(style) = layout_box.style.as_ref() else {
             return;
         };
         let Some(transform) = style.transform else {
             return;
         };
-        transform
+        (transform, style.transform_origin)
     };
+    // CSS Transforms 1 §3 (#1934): the pivot is the border box, and the used
+    // matrix is T(origin) · M · T(-origin) in the same (absolute) coordinate
+    // space as the box corners below.
+    let border = layout_box.dimensions.border_box();
+    let (ox, oy) = origin.resolve(border.width, border.height);
+    let effective = transform.around_origin(border.x + ox, border.y + oy);
     let rect = layout_box.dimensions.content;
     let corners = [
-        transform.apply(rect.x, rect.y),
-        transform.apply(rect.x + rect.width, rect.y),
-        transform.apply(rect.x, rect.y + rect.height),
-        transform.apply(rect.x + rect.width, rect.y + rect.height),
+        effective.apply(rect.x, rect.y),
+        effective.apply(rect.x + rect.width, rect.y),
+        effective.apply(rect.x, rect.y + rect.height),
+        effective.apply(rect.x + rect.width, rect.y + rect.height),
     ];
     let min_x = corners.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
     let max_x = corners

@@ -1,9 +1,10 @@
 //! CSS Transforms Level 1 — 2D transform parsing (subset, #1539).
 //!
 //! A transform is stored as an affine 2D matrix `[a, b, c, d, e, f]` mapping
-//! `(x, y) -> (a·x + c·y + e, b·x + d·y + f)`. The supported functions are
-//! `translate()`, `scale()` and `rotate()` (2D), which cover the common cases
-//! (centred modals, carousels, hover scales, rotated icons). `none` is the initial value.
+//! `(x, y) -> (a·x + c·y + e, b·x + d·y + f)`. Supported functions are
+//! `translate()`, `scale()`, `rotate()`, `matrix()`, `skewX()` and `skewY()`
+//! (2D), which cover the common cases (centred modals, carousels, animated
+//! matrices, skew effects). `none` is the initial value.
 
 use std::fmt;
 
@@ -56,6 +57,10 @@ impl Transform {
                 "scale" => (ArgKind::Number, 1..=2),
                 "scalex" | "scaley" => (ArgKind::Number, 1..=1),
                 "rotate" => (ArgKind::Angle, 1..=1),
+                // CSS Transforms 1 §3: matrix() takes six unitless <number>s, skewX/skewY
+                // one <angle>. #1933.
+                "matrix" => (ArgKind::Number, 6..=6),
+                "skewx" | "skewy" => (ArgKind::Angle, 1..=1),
                 _ => return None, // unsupported function -> treat whole value as invalid
             };
             if !expected.contains(&tokens.len()) {
@@ -139,6 +144,34 @@ impl Transform {
                         ..Self::IDENTITY
                     });
                 }
+                "matrix" => {
+                    // `matrix(a, b, c, d, e, f)` maps (x, y) to
+                    // (a·x + c·y + e, b·x + d·y + f) — CSS Transforms 1 §2.3.
+                    matrix = matrix.multiply(&Self {
+                        a: numbers[0],
+                        b: numbers[1],
+                        c: numbers[2],
+                        d: numbers[3],
+                        e: numbers[4],
+                        f: numbers[5],
+                    });
+                }
+                "skewx" => {
+                    // skewX(α) = matrix(1, 0, tan(α), 1, 0, 0).
+                    let skew = numbers[0].to_radians().tan();
+                    matrix = matrix.multiply(&Self {
+                        c: skew,
+                        ..Self::IDENTITY
+                    });
+                }
+                "skewy" => {
+                    // skewY(α) = matrix(1, tan(α), 0, 1, 0, 0).
+                    let skew = numbers[0].to_radians().tan();
+                    matrix = matrix.multiply(&Self {
+                        b: skew,
+                        ..Self::IDENTITY
+                    });
+                }
                 _ => unreachable!(),
             }
         }
@@ -146,6 +179,25 @@ impl Transform {
             return None;
         }
         Some(matrix)
+    }
+
+    /// Applies this transform about `(origin_x, origin_y)`, i.e.
+    /// `T(origin) · self · T(-origin)` (CSS Transforms 1 §3, #1934).
+    pub fn around_origin(&self, origin_x: f32, origin_y: f32) -> Self {
+        if !origin_x.is_finite() || !origin_y.is_finite() {
+            return *self;
+        }
+        let to_origin = Self {
+            e: origin_x,
+            f: origin_y,
+            ..Self::IDENTITY
+        };
+        let from_origin = Self {
+            e: -origin_x,
+            f: -origin_y,
+            ..Self::IDENTITY
+        };
+        to_origin.multiply(self).multiply(&from_origin)
     }
 
     /// Composes `self` with `other` (`self * other`).
