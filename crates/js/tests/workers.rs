@@ -310,3 +310,29 @@ fn worker_can_query_computed_style_through_the_proxy() {
     runtime.run_microtasks().expect("microtasks");
     assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "red");
 }
+
+#[test]
+fn worker_can_traverse_elements_by_tag_name() {
+    // F6-WORKERS-DOM: proxy supports document.getElementsByTagName() returning element proxies.
+    let mut runtime = runtime_with_worker(
+        "document.getElementsByTagName('p').then(function (els) { \
+           postMessage(els.length); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<p id=a>one</p><div>x</div><p id=b>two</p>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "2");
+}
