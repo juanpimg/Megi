@@ -440,6 +440,24 @@ if (typeof Element !== 'undefined' && Element.prototype) {
       }
     };
   }
+  // #1940: ChildNode.remove() is the modern parentNode.removeChild(this).
+  if (typeof Element.prototype.remove !== 'function') {
+    Element.prototype.remove = function () {
+      var parent = this.parentNode;
+      if (parent && parent.removeChild) parent.removeChild(this);
+    };
+  }
+  // #1940: Element.replaceChildren(...nodes) empties the node then appends the
+  // arguments; strings become text nodes. No arguments means "empty it".
+  if (typeof Element.prototype.replaceChildren !== 'function') {
+    Element.prototype.replaceChildren = function () {
+      while (this.firstChild) this.removeChild(this.firstChild);
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        this.appendChild(typeof v === 'string' ? document.createTextNode(v) : v);
+      }
+    };
+  }
 }
 
 // ResizeObserver / IntersectionObserver stubs (#1921/#1892). The deterministic
