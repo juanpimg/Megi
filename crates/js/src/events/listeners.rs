@@ -41,6 +41,28 @@ pub(crate) fn add_listener(
             capture = value.to_boolean();
         }
     }
+    // F6 signal option: an already-aborted signal prevents registration, otherwise the
+    // listener is tagged so the polyfill's `_abort()` can remove it through the native hook.
+    let signal = args
+        .get(2)
+        .and_then(|value| value.as_object())
+        .and_then(|options| prop(&options, "signal", context).ok())
+        .and_then(|value| value.as_object());
+    if let Some(signal) = &signal {
+        let aborted = prop(signal, "aborted", context)
+            .ok()
+            .and_then(|value| value.as_boolean())
+            .unwrap_or(false);
+        if aborted {
+            return Ok(JsValue::undefined());
+        }
+    }
+    let signal_id = signal
+        .as_ref()
+        .and_then(|signal| prop(signal, "__megi_signal_id", context).ok())
+        .and_then(|id| id.as_number())
+        .map(|id| id as u32);
+
     // DOM §2.7 step 2: adding the same callback with the same capture flag is a no-op.
     let (existing, at_cap): (Vec<u32>, bool) = {
         let host = host_ref(context)?;
@@ -79,6 +101,7 @@ pub(crate) fn add_listener(
         once,
         passive,
         slot,
+        signal_id,
     });
     Ok(JsValue::undefined())
 }
@@ -254,4 +277,30 @@ pub(crate) fn dispatch_event(
         context,
     );
     Ok(JsValue::from(!prevented))
+}
+
+/// Called by the `AbortSignal` polyfill when a signal aborts: removes every listener that
+/// was registered with `{ signal }` (F6).
+pub(crate) fn remove_signal_listeners(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    if let Some(id) = args.first().and_then(JsValue::as_number) {
+        let id = id as u32;
+        if let Ok(mut host) = host_cell(context) {
+            let doomed: Vec<u32> = host
+                .listeners
+                .iter()
+                .filter(|listener| listener.signal_id == Some(id))
+                .map(|listener| listener.slot)
+                .collect();
+            host.listeners
+                .retain(|listener| listener.signal_id != Some(id));
+            for slot in doomed {
+                host.free_listener_slots.push(slot);
+            }
+        }
+    }
+    Ok(JsValue::undefined())
 }

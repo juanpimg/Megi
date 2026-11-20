@@ -88,6 +88,14 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
             }
         }
     }
+    context
+        .register_global_builtin_callable(
+            js_string!("__megiRemoveSignalListeners"),
+            1,
+            native(remove_signal_listeners),
+        )
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+
     for (name, length, function) in timer_globals() {
         context
             .register_global_builtin_callable(js_string!(name), length, native(function))
