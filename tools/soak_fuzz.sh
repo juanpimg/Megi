@@ -22,7 +22,9 @@
 set -euo pipefail
 
 HOURS=24
-SLICE_SECONDS=900
+# 27 targets × 600 s = 16 200 s fits a full rotation inside the 5 h (18 000 s)
+# scheduled workflow budget (#1833). At 900 s the last target never ran.
+SLICE_SECONDS=600
 OUT="target/soak"
 TARGETS=(
   html_parse
@@ -46,6 +48,12 @@ TARGETS=(
   paint_display_list
   dom_tree
   fonts_shape
+  dom_mutate
+  font_decode
+  js_eval
+  js_module
+  layout_resolve
+  net_surface
 )
 
 while [[ $# -gt 0 ]]; do

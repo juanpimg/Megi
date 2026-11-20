@@ -267,7 +267,8 @@ get that:
   logs plus crash artifacts are uploaded even when the campaign fails.
 * **Locally**: `tools/soak_fuzz.sh --hours 24` runs the same rotation on this
   machine. Useful flags: `--slice-seconds 600` (time per target per rotation, default
-  900), `--targets "html_parse css_parse"`, `--out target/soak`. It keeps
+  600 — the 27-target rotation needs ≤ 666 s to fit the 5 h scheduled budget, #1833),
+  `--targets "html_parse css_parse"`, `--out target/soak`. It keeps
   `fuzz/corpus/<target>` between rotations, mirrors any libFuzzer artifact into
   `target/soak/crashes/<target>/`, and exits non-zero if a target run failed.
   `js_eval`/`js_module` run with `-detect_leaks=0` for the Boa reason above.
