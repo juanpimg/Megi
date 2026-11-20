@@ -163,8 +163,10 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
                 let _ = transport.send(&payload);
             }
             "close" => {
+                // #1847: keep the transport registered so poll() can deliver the
+                // Close event (and the JS prelude can set readyState=3 / fire
+                // onclose). The entry is removed in poll() when Close is delivered.
                 transport.close();
-                host.websockets.remove(&handle);
             }
             _ => {}
         }
@@ -218,6 +220,12 @@ pub fn poll(context: &mut Context) -> usize {
 
     let mut dispatched = 0;
     for (handle, events) in events {
+        // #1847: once a Close event is observed, retire the transport from the host
+        // so it is polled no further. The JS prelude sets readyState=3 and fires
+        // onclose when it receives this event.
+        let delivered_close = events
+            .iter()
+            .any(|event| matches!(event, WebSocketEvent::Close(_)));
         let args: Vec<JsValue> = events
             .into_iter()
             .map(|event| match event {
@@ -240,6 +248,12 @@ pub fn poll(context: &mut Context) -> usize {
                 context,
             );
             dispatched += 1;
+        }
+        if delivered_close {
+            // #1847: retire the closed transport now that its Close event was delivered.
+            if let Ok(mut host) = crate::host::host_cell(context) {
+                host.websockets.remove(&handle);
+            }
         }
     }
     dispatched
