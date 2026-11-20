@@ -5,3 +5,4 @@ mod arena_mutations;
 mod arena_traversal;
 mod fragment_insertion;
 mod template_child_edges;
+mod validate_perf;
