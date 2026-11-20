@@ -4,6 +4,10 @@ use super::*;
 // DOM utilities: NodeList, matches/closest, insertAdjacent*
 // ---------------------------------------------------------------------------
 
+/// #1851: hard cap on native `forEach` iterations so a tampered length cannot
+/// turn a snapshot walk into an unbudgeted billion-call loop.
+const MAX_NODE_LIST_ITERATIONS: u64 = 1_000_000;
+
 /// Deterministic accessibility snapshot (F7-A11Y, partial): a flat list of named
 /// `{role, name}` nodes in document order. Platform/AT integration is out of scope here.
 pub(crate) fn accessibility_tree_snapshot(
@@ -11,55 +15,63 @@ pub(crate) fn accessibility_tree_snapshot(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    const MAX_NODES: usize = 4096;
-    let entries = with_context_host(context, |host| {
-        let doc = &host.document;
-        let mut entries = Vec::new();
-        for id in doc.descendants(doc.root()) {
-            if entries.len() >= MAX_NODES {
-                break;
-            }
-            let Some(element) = doc.node(id).as_element() else {
-                continue;
-            };
-            if element
-                .get_attribute("aria-hidden")
-                .is_some_and(|value| value.eq_ignore_ascii_case("true"))
-            {
-                continue;
-            }
-            let tag = element.local_name.as_str();
-            let role = match tag {
-                "a" => "link",
-                "button" => "button",
-                "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => "heading",
-                "img" => "img",
-                "input" => match element.get_attribute("type") {
-                    Some("checkbox") => "checkbox",
-                    Some("radio") => "radio",
-                    _ => "textbox",
-                },
-                "li" => "listitem",
-                "nav" => "navigation",
-                "table" => "table",
-                _ => continue,
-            };
-            let name = element
-                .get_attribute("aria-label")
-                .or_else(|| element.get_attribute("alt"))
-                .or_else(|| element.get_attribute("title"))
-                .map(str::to_owned)
-                .unwrap_or_else(|| doc.text_content(id));
-            entries.push((role.to_owned(), name.trim().to_owned()));
-        }
-        entries
+    // F7-A11Y: expose the structured tree (role, name, states, parent/children) so a
+    // platform backend can consume the same snapshot that is used by tests.
+    let tree = with_context_host(context, |host| {
+        build_accessibility_tree(&host.document, host.active_element)
     })
     .unwrap_or_default();
-    let mut objects = Vec::with_capacity(entries.len());
-    for (role, name) in entries {
+    let mut objects = Vec::with_capacity(tree.nodes.len());
+    for node in &tree.nodes {
+        // Build arrays before `init` borrows `context` mutably (#borrow rules).
+        let states = JsValue::from(JsArray::from_iter(
+            node.states
+                .iter()
+                .cloned()
+                .map(|state| JsValue::from(js_string!(state))),
+            context,
+        ));
+        let children = JsValue::from(JsArray::from_iter(
+            node.children
+                .iter()
+                .map(|index| JsValue::from(*index as u32)),
+            context,
+        ));
         let mut init = ObjectInitializer::new(context);
-        init.property(js_string!("role"), js_string!(role), Attribute::all());
-        init.property(js_string!("name"), js_string!(name), Attribute::all());
+        init.property(
+            js_string!("role"),
+            js_string!(node.role.clone()),
+            Attribute::all(),
+        );
+        init.property(
+            js_string!("name"),
+            js_string!(node.name.clone()),
+            Attribute::all(),
+        );
+        init.property(
+            js_string!("description"),
+            js_string!(node.description.clone()),
+            Attribute::all(),
+        );
+        if let Some(level) = node.level {
+            init.property(js_string!("level"), JsValue::from(level), Attribute::all());
+        }
+        if let Some(value) = &node.value {
+            init.property(
+                js_string!("value"),
+                js_string!(value.clone()),
+                Attribute::all(),
+            );
+        }
+        init.property(js_string!("states"), states, Attribute::all());
+        init.property(js_string!("children"), children, Attribute::all());
+        if let Some(parent) = node.parent {
+            init.property(
+                js_string!("parent"),
+                JsValue::from(parent as u32),
+                Attribute::all(),
+            );
+        }
         objects.push(JsValue::from(init.build()));
     }
     Ok(JsValue::from(JsArray::from_iter(objects, context)))
@@ -71,6 +83,7 @@ pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<J
     for node in nodes {
         wrappers.push(wrap_node(context, node)?);
     }
+    let snapshot_size = wrappers.len();
     // #1937: an Array is natively iterable (`Symbol.iterator`), so `for...of` works on
     // HTMLCollections just like on NodeLists. Keep the DOM collection helpers as properties.
     let array = JsValue::from(JsArray::from_iter(wrappers, context));
@@ -79,6 +92,29 @@ pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<J
         js_string!("__megi_node_list"),
         JsValue::from(true),
         false,
+        context,
+    );
+    // #1851: Web IDL §3.7.8 declares `length` readonly. The backing Array's
+    // `length` is writable, which let a script inflate `forEach` into a billion
+    // native (unbudgeted) callback calls. Make it non-writable and keep the real
+    // snapshot length in a private field that `forEach` reads instead.
+    let snapshot_len = JsValue::from(snapshot_size as u64);
+    let length_descriptor = PropertyDescriptor::builder()
+        .value(snapshot_len.clone())
+        .writable(false)
+        .enumerable(false)
+        .configurable(false)
+        .build();
+    let _ = object.define_property_or_throw(js_string!("length"), length_descriptor, context);
+    let snapshot_descriptor = PropertyDescriptor::builder()
+        .value(snapshot_len)
+        .writable(false)
+        .enumerable(false)
+        .configurable(false)
+        .build();
+    let _ = object.define_property_or_throw(
+        js_string!("__megi_node_list_length"),
+        snapshot_descriptor,
         context,
     );
     let _ = object.set(
@@ -127,11 +163,21 @@ pub(crate) fn node_list_for_each(
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid NodeList receiver"))?;
+    // #1851: use the real snapshot length, never the public `length` property,
+    // which scripts may have tampered with. Fall back for foreign node-lists.
     let length = object
-        .get(js_string!("length"), context)
-        .map_err(|error| js_error(error.to_string()))?
-        .as_number()
+        .get(js_string!("__megi_node_list_length"), context)
+        .ok()
+        .and_then(|value| value.as_number())
+        .or_else(|| {
+            object
+                .get(js_string!("length"), context)
+                .ok()
+                .and_then(|value| value.as_number())
+        })
         .unwrap_or(0.0) as u64;
+    // Guard against absurd lengths even if a foreign list exposes a bogus value.
+    let length = length.min(MAX_NODE_LIST_ITERATIONS);
     for index in 0..length {
         let item = object
             .get(js_string!(index.to_string()), context)

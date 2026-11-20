@@ -198,6 +198,7 @@ fn classify_error(message: &str) -> JsError {
 // ---------------------------------------------------------------------------
 // Binding modules (split verbatim from the former monolithic runtime.rs)
 // ---------------------------------------------------------------------------
+mod a11y;
 mod api;
 mod cssom;
 mod document;
@@ -221,6 +222,7 @@ mod workers;
 
 // Re-export every binding item so all intra-runtime paths and the public
 // `runtime::{JsRuntime, Budget, ...}` API keep resolving unchanged.
+pub(crate) use a11y::*;
 pub(crate) use cssom::*;
 pub(crate) use document::*;
 pub(crate) use dom_utils::*;

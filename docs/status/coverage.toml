@@ -544,7 +544,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "deterministic DOM accessibility snapshot exposed; platform AT/widget integration still missing"
+reason = "structured accessibility tree (roles, names, states, hierarchy) exposed; platform AT/widget integration still missing"
 
 [[capability]]
 id = "F7-ISOLATION"
