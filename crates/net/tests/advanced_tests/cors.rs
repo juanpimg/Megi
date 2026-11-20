@@ -257,3 +257,43 @@ fn simple_request_needs_no_preflight() {
         "simple method issued a preflight request"
     );
 }
+
+#[test]
+fn preflight_never_sends_url_basic_credentials() {
+    // #1860: preflight declares credential mode "omit" (Fetch §4.8.2), so URL userinfo
+    // must not be turned into an Authorization header even though `fetch_once` normally
+    // does that for real requests (#310).
+    let first = ok(
+        &[
+            ("Access-Control-Allow-Origin", APP_ORIGIN),
+            ("Access-Control-Allow-Methods", "PUT"),
+        ],
+        b"",
+    );
+    let (base, server) = spawn_server(vec![first]);
+    let url = Url::parse(&format!(
+        "http://user:pass@{}/api",
+        base.trim_start_matches("http://")
+    ))
+    .expect("url with userinfo");
+    let options = FetchOptions {
+        origin: Some(APP_ORIGIN.to_owned()),
+        ..options()
+    };
+    preflight(&url, &options, "PUT", &[]).expect("preflight allowed");
+    let requests = server.join().expect("server thread");
+    let request = request_text(&requests[0]);
+    assert!(
+        !request.to_ascii_lowercase().contains("authorization:"),
+        "preflight must not send URL credentials: {request}"
+    );
+    // Sanity: without userinfo the same request still carries Origin and the ACRM header.
+    assert!(
+        request.contains(&format!("Origin: {APP_ORIGIN}")),
+        "{request}"
+    );
+    assert!(
+        request.contains("Access-Control-Request-Method: PUT"),
+        "{request}"
+    );
+}
