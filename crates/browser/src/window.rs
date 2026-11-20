@@ -198,6 +198,7 @@ mod frontend;
 mod input;
 mod keyboard;
 mod presentation;
+mod save_as;
 #[cfg(test)]
 mod tests;
 mod ui;
@@ -327,6 +328,15 @@ pub fn run_window_with_view_options(
         .map_err(|error| ShellError::Window(format!("event loop failed: {error}")))
 }
 
+/// State of the visual Save-as dialog (F7-SAVE-AS / #988).
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SaveDialogState {
+    /// Editable file name (without the directory); sanitized on confirmation.
+    name: String,
+    /// `true` for an HTML snapshot, `false` for the rendered PNG.
+    html: bool,
+}
+
 /// One keyboard-focusable element, in document order (#1517).
 ///
 /// Tab/Shift+Tab walk [`WindowApp::focus_targets`] instead of the form-control list alone,
@@ -416,6 +426,8 @@ struct WindowApp {
     editor: Option<TextEdit>,
     /// Active IME composition state (#1519).
     ime: crate::forms::ImeState,
+    /// Visual Save-as dialog (F7-SAVE-AS), open when `Some`.
+    save_dialog: Option<SaveDialogState>,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
     document: Option<Arc<megi_webview::core::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.

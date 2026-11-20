@@ -47,3 +47,20 @@ fn buffer(width: u32, height: u32) -> Vec<u32> {
 fn rgb(color: Color) -> u32 {
     (u32::from(color.r) << 16) | (u32::from(color.g) << 8) | u32::from(color.b)
 }
+
+#[test]
+fn save_as_dialog_paints_a_centered_panel() {
+    // F7-SAVE-AS / #988: the dialog must be a visible overlay, not an invisible state.
+    let mut dest = vec![0u32; 400 * 200];
+    draw_save_as_dialog(&mut dest, 400, 200, 1.0, "report.html");
+    let painted = dest.iter().filter(|&&pixel| pixel != 0).count();
+    assert!(
+        painted > 1000,
+        "the dialog panel must paint visible pixels: {painted}"
+    );
+    // The top-left corner stays untouched (the panel is centered, not full-screen).
+    assert_eq!(
+        dest[0], 0,
+        "dialog must not overwrite the whole framebuffer"
+    );
+}

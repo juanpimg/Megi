@@ -183,6 +183,9 @@ impl WindowApp {
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
+        if let Some(dialog) = &self.save_dialog {
+            chrome::draw_save_as_dialog(&mut buffer, width, height, chrome_scale, &dialog.name);
+        }
         if let Err(error) = buffer.present() {
             self.set_present_error(format!("window present failed: {error}"));
         }

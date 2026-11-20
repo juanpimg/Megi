@@ -117,3 +117,68 @@ pub fn resolve_download_dir(explicit: Option<&Path>) -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     default_download_dir(explicit, home.as_deref())
 }
+
+/// Maximum length of a user-supplied Save-as name (before the extension).
+pub const MAX_SAVE_AS_CHARS: usize = 80;
+
+/// Sanitizes a user-entered Save-as name into a safe file leaf name (F7-SAVE-AS / #988).
+///
+/// Path separators and `..` are rejected, runs of unsafe characters collapse to `-`, and the
+/// result is capped at [`MAX_SAVE_AS_CHARS`]. The extension is appended when missing.
+pub fn sanitize_save_as_name(input: &str, extension: &str) -> String {
+    let leaf = input.rsplit(['/', '\\']).next().unwrap_or("");
+    let mut name: String = leaf
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .take(MAX_SAVE_AS_CHARS)
+        .collect();
+    while name.contains("--") {
+        name = name.replace("--", "-");
+    }
+    let name = name.trim_matches(|ch| ch == '-' || ch == '.').to_owned();
+    let base = if name.is_empty() {
+        "download".to_owned()
+    } else {
+        name
+    };
+    if extension.is_empty() || extension.contains('/') || extension.contains('\\') {
+        return base;
+    }
+    let extension = extension.trim_start_matches('.');
+    if base
+        .rsplit_once('.')
+        .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case(extension))
+    {
+        base
+    } else {
+        format!("{base}.{extension}")
+    }
+}
+
+/// Finds the first free `<name>-<n>.<ext>` (or `<name>.<ext>`) path in `dir`.
+pub fn next_named_download_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let path = dir.join(name);
+    if !path.exists() {
+        return path;
+    }
+    let (stem, extension) = match name.rsplit_once('.') {
+        Some((stem, extension)) => (stem.to_owned(), Some(extension)),
+        None => (name.to_owned(), None),
+    };
+    for number in 1..=1024u32 {
+        let candidate = match extension {
+            Some(extension) => dir.join(format!("{stem}-{number}.{extension}")),
+            None => dir.join(format!("{stem}-{number}")),
+        };
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(format!("{stem}-overflow"))
+}
