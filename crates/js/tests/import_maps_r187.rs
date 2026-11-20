@@ -153,7 +153,6 @@ fn dynamic_import_non_literal_resolves_at_runtime() {
         "document.body.setAttribute('data-dyn', 'runtime');\nexport const value = 'runtime';",
     );
     runtime
-
         .eval_module(
             "const name = './x.js'; globalThis.__pending = import(name);",
             "app.js",
@@ -170,7 +169,6 @@ fn dynamic_import_non_literal_resolves_at_runtime() {
             .and_then(|element| element.get_attribute("data-dyn").map(str::to_owned))
     });
     assert_eq!(attribute.as_deref(), Some("runtime"));
-
 }
 
 #[test]

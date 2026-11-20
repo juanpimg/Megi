@@ -187,11 +187,13 @@ fn tabs_report_distinct_isolation_sites() {
     assert_eq!(one_site.distinct_sites(), 1);
     assert!(!one_site.has_cross_site_tabs());
 
-    let two_sites = TabsState::from_urls(vec![
+    // ADR-004 isolates by origin (scheme+host+port): http and https on the same
+    // host are different sites, so these three URLs yield three keys.
+    let three_sites = TabsState::from_urls(vec![
         "https://example.com/a".to_owned(),
         "http://example.com/b".to_owned(),
         "https://other.test/".to_owned(),
     ]);
-    assert_eq!(two_sites.distinct_sites(), 2);
-    assert!(two_sites.has_cross_site_tabs());
+    assert_eq!(three_sites.distinct_sites(), 3);
+    assert!(three_sites.has_cross_site_tabs());
 }
