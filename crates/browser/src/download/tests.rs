@@ -320,6 +320,7 @@ fn save_as_name_is_sanitized_and_extension_appended() {
 #[test]
 fn named_download_paths_avoid_collisions() {
     let dir = temp_dir("named-download");
+    fs::create_dir_all(&dir).expect("mkdir");
     let first = next_named_download_path(&dir, "page.html");
     assert_eq!(first.file_name().unwrap(), "page.html");
     std::fs::write(&first, b"x").expect("create first");
