@@ -103,9 +103,9 @@ crates/browser/src/i18n.rs	214	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/browser/src/images.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/lib.rs	274	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/links/collect.rs	149	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/links/tests.rs	236	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/links/tests.rs	290	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/main.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/navigation.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages.rs	24	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -323,8 +323,8 @@ crates/fonts/src/font.rs	393	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mod
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/types.rs	183	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/web.rs	201	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/woff1.rs	170	src	F2	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in calc UTF-8 PR	pre-existing upstream file, re-read before marking
-crates/fonts/tests/fixtures/DejaVuSans-woff1.woff	1337	test	F1	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in calc UTF-8 PR	pre-existing upstream file, re-read before marking
+crates/fonts/src/woff1.rs	170	src	F2	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
+crates/fonts/tests/fixtures/DejaVuSans-woff1.woff	1337	test	F1	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 crates/fonts/tests/fixtures/OFL-OpenSans.txt	92	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/fixtures/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
 crates/fonts/tests/font_engine/common.rs	15	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1227,7 +1227,7 @@ crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maxima
 crates/webview/src/lib.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/tests/embed.rs	49	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in calc UTF-8 PR	pre-existing upstream file, re-read before marking
+docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	216	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/CONTRIBUTOR-ONBOARDING.md	93	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned

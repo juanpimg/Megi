@@ -222,6 +222,60 @@ fn collect_link_regions_finds_anchors_in_a_rendered_page() {
 }
 
 #[test]
+fn dedup_keeps_first_occurrence_order_and_canonical_zero() {
+    // #1867: the O(n) HashSet dedup must preserve the exact semantics of the old linear scan:
+    // one region per (node, rect), first occurrence kept, -0.0 equal to +0.0.
+    use std::collections::HashSet;
+
+    let mut regions: Vec<LinkRegion> = Vec::new();
+    let mut seen: HashSet<RegionKey> = HashSet::new();
+
+    push_unique(
+        &mut regions,
+        &mut seen,
+        LinkRegion {
+            rect: CssRect::new(0.0, 0.0, 10.0, 10.0),
+            href: "first".into(),
+            node: None,
+            is_blocker: false,
+        },
+    );
+    // Exact duplicate of (node=None, rect) — with signed zeros to prove canonicalisation.
+    push_unique(
+        &mut regions,
+        &mut seen,
+        LinkRegion {
+            rect: CssRect::new(-0.0, -0.0, 10.0, 10.0),
+            href: "duplicate".into(),
+            node: None,
+            is_blocker: false,
+        },
+    );
+    push_unique(
+        &mut regions,
+        &mut seen,
+        LinkRegion {
+            rect: CssRect::new(20.0, 0.0, 10.0, 10.0),
+            href: "second".into(),
+            node: None,
+            is_blocker: false,
+        },
+    );
+
+    assert_eq!(regions.len(), 2, "duplicate (node, rect) must be dropped");
+    assert_eq!(
+        regions[0].href, "first",
+        "first occurrence kept, paint order intact"
+    );
+    assert_eq!(regions[1].href, "second");
+    assert_eq!(
+        rect_key(CssRect::new(-0.0, 0.0, 10.0, 10.0)),
+        rect_key(CssRect::new(0.0, 0.0, 10.0, 10.0)),
+        "-0.0 and +0.0 must hash identically"
+    );
+}
+
+#[test]
 fn collect_link_regions_skips_anchors_without_href() {
     let output = crate::headless::render_target(
         "data:text/html,<body><a name=\"x\">no href</a><a href=\"%23frag\">frag</a></body>",
