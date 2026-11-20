@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("real_site_check.py")
@@ -99,6 +101,21 @@ class FailureReasonTests(unittest.TestCase):
         reasons = real_site_check.failure_reasons([site], [result])
         self.assertTrue(reasons, "a blank page must be reported as a hard failure")
         self.assertIn("PÁGINA EN BLANCO", reasons[0])
+
+
+class RenderCommandTests(unittest.TestCase):
+    def test_render_one_invokes_real_megi_render_package(self) -> None:
+        # #1831: the package was renamed to `megi-render` in the modular split;
+        # invoking `-p render` makes every site fail with "package not found".
+        fake = mock.Mock(returncode=0, stdout='{"display_items": 1, "warnings": [], "status": 200}', stderr="")
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch.object(real_site_check.subprocess, "run", return_value=fake) as run:
+                result = real_site_check.render_one(
+                    Path(root), {"id": "hn", "name": "HN", "snapshot": "hn.html"}, live=False
+                )
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("-p") + 1], "megi-render")
+        self.assertEqual(result["result"], "PASS")
 
 
 if __name__ == "__main__":
