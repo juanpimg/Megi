@@ -555,7 +555,7 @@ source = "issue #946"
 state = "partial"
 evidence = "none"
 issue = 946
-reason = "ADR-004 phase 1 done: deterministic SiteKey policy and per-site tab grouping; renderer pools and OS processes still missing"
+reason = "ADR-004 phases 1-2 done: SiteKey policy and per-site renderer pool with LRU cap; OS processes with IPC still missing"
 
 [[capability]]
 id = "X-BENCH"

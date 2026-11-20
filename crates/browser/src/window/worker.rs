@@ -4,13 +4,46 @@
 use super::*;
 
 impl WindowApp {
+    /// Builds a render worker using this window's cloned options and event proxy.
+    fn new_worker(&self) -> Worker {
+        let render_options = self.render_options.clone();
+        let proxy = self.proxy.clone();
+        spawn_worker(
+            move |request: &RenderRequest| {
+                crate::worker::render_document_with_options(request, &render_options)
+            },
+            move || {
+                let _ = proxy.send_event(UserEvent::WorkerReady);
+            },
+        )
+    }
+
+    /// Routes a render request to the worker for its effective site (ADR-004 phase 2),
+    /// spawning a new one on first use. Returns `false` on a channel failure.
+    pub(super) fn send_render(&mut self, request: RenderRequest) -> bool {
+        let site = crate::worker::request_site(&request);
+        let needs_new = self
+            .render_pool
+            .as_ref()
+            .is_none_or(|pool| !pool.has_site(&site));
+        let worker = if needs_new {
+            Some(self.new_worker())
+        } else {
+            None
+        };
+        let pool = self
+            .render_pool
+            .get_or_insert_with(|| RendererPool::new(MAX_SITE_RENDERERS));
+        if pool.send_prebuilt(request, worker).is_err() {
+            self.error = Some("render worker stopped unexpectedly".to_string());
+            self.update_title();
+            return false;
+        }
+        true
+    }
+
     /// Enqueues a full-page render for the current viewport.
     pub(super) fn request_render(&mut self) {
-        let Some(sender) = &self.request_sender else {
-            self.error = Some("render worker is not running".to_string());
-            self.update_title();
-            return;
-        };
         let render_input = if crate::reader::is_reader_url(&self.input) {
             self.reader_html.clone().unwrap_or_else(|| {
                 crate::pages::data_url(&crate::pages::reader_page("Reader", &[], "about:reader"))
@@ -37,10 +70,7 @@ impl WindowApp {
             )
         };
         self.render_pending = true;
-        if sender.send(request).is_err() {
-            self.error = Some("render worker stopped unexpectedly".to_string());
-            self.update_title();
-        }
+        self.send_render(request);
     }
 
     /// Starts rendering `url` and resets per-page state (scroll, stale links/title).
@@ -121,7 +151,7 @@ impl WindowApp {
         if same_document
             && fragment_changed
             && self.document.is_some()
-            && self.request_sender.is_some()
+            && self.render_pool.is_some()
         {
             let snapshot =
                 crate::forms::snapshot_data_url(self.document.as_ref().expect("document present"));
@@ -139,11 +169,7 @@ impl WindowApp {
                 base.as_deref(),
                 &events,
             );
-            if let Some(sender) = &self.request_sender
-                && sender.send(request).is_err()
-            {
-                self.error = Some("render worker stopped unexpectedly".to_string());
-            }
+            self.send_render(request);
             self.input = url.as_str();
             self.update_title();
             if let Some(window) = &self.window {
@@ -172,10 +198,8 @@ impl WindowApp {
     pub(super) fn drain_worker_messages(&mut self) -> bool {
         let mut applied = false;
         let mut messages = Vec::new();
-        if let Some(receiver) = &self.message_receiver {
-            while let Ok(message) = receiver.try_recv() {
-                messages.push(message);
-            }
+        if let Some(pool) = &self.render_pool {
+            messages.extend(pool.drain_messages());
         }
         let mut sync_find = false;
         let mut rebuild_focus = false;

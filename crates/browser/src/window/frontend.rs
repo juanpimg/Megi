@@ -65,9 +65,7 @@ impl WindowApp {
             scale_factor: 1.0,
             scroll: restored_scroll,
             store: FrameStore::new(),
-            request_sender: None,
-            message_receiver: None,
-            worker: None,
+            render_pool: None,
             debounce: Debounce::new(RENDER_DEBOUNCE),
             pending_metrics: None,
             error: None,
@@ -161,20 +159,8 @@ impl WindowApp {
         self.context = Some(context);
         self.surface = Some(surface);
 
-        let proxy = self.proxy.clone();
-        let render_options = self.render_options.clone();
-        let (sender, receiver, handle) = spawn_worker(
-            move |request: &RenderRequest| {
-                crate::worker::render_document_with_options(request, &render_options)
-            },
-            move || {
-                // Wake the event loop; ignore a closed loop (window closing).
-                let _ = proxy.send_event(UserEvent::WorkerReady);
-            },
-        );
-        self.request_sender = Some(sender);
-        self.message_receiver = Some(receiver);
-        self.worker = Some(handle);
+        // ADR-004 phase 2: renderers are spawned lazily, one per effective site, by
+        // `WindowApp::send_render`. No worker exists until the first request arrives.
         Ok(())
     }
 }
