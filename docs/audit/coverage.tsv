@@ -5,7 +5,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/security_report.yml	19	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/PULL_REQUEST_TEMPLATE.md	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/actions/install-system-deps/action.yml	21	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/actions/install-system-deps/action.yml	23	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -814,7 +814,7 @@ crates/net/src/error.rs	281	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modu
 crates/net/src/file.rs	161	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client.rs	276	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/api.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/h2/client/session_body.rs	334	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/h2/client/session_body.rs	339	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/session_core.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/session_frames.rs	473	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/session_push.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -889,6 +889,7 @@ crates/net/tests/h2_flow_multiplex_tests/flow_control.rs	180	test	F1	wave-max-mo
 crates/net/tests/h2_flow_multiplex_tests/main.rs	128	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h2_flow_multiplex_tests/multiplex.rs	144	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h2_flow_multiplex_tests/settings_errors.rs	114	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/h2_priority_frame_size.rs	134	test	F1	juanpimg	2026-11-20	covered	#1857	RFC 9113 priority HEADERS frame-size integration test
 crates/net/tests/h2_push_tests.rs	396	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h2_tests.rs	404	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/hsts_tests.rs	262	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1108,7 +1109,7 @@ crates/render/tests/pipeline_tests/common.rs	223	test	F1	wave-max-mod	2026-11-19
 crates/render/tests/pipeline_tests/http.rs	109	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/limits.rs	102	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/main.rs	11	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/pipeline_tests/output.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/pipeline_tests/output.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/urls.rs	75	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pseudo_elements_tests.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/referrer_policy_tests.rs	355	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
