@@ -361,3 +361,48 @@ fn get_computed_style_provider_covers_render_properties() {
         "24"
     );
 }
+
+#[test]
+fn clear_timeout_does_not_cancel_animation_frames() {
+    // #1849: WHATWG HTML §8.1.6/§8.1.7 — the two timer families have separate handles.
+    let mut runtime = runtime();
+    let base = runtime.advance(Duration::ZERO).expect("pin");
+    runtime
+        .eval(
+            "globalThis.ran = false;
+             var handle = requestAnimationFrame(function () { ran = true; });
+             clearTimeout(handle);",
+            "raf-vs-timeout.js",
+        )
+        .expect("clearTimeout on rAF handle");
+    assert_eq!(
+        runtime.pending_animation_frames(),
+        1,
+        "rAF must survive clearTimeout"
+    );
+    runtime.run_until(base + 32).expect("advance");
+    assert_eq!(
+        runtime.eval("ran", "raf-vs-timeout.js").expect("ran"),
+        "true"
+    );
+}
+
+#[test]
+fn cancel_animation_frame_does_not_cancel_timeouts() {
+    // #1849: the reverse direction must also hold.
+    let mut runtime = runtime();
+    let base = runtime.advance(Duration::ZERO).expect("pin");
+    runtime
+        .eval(
+            "globalThis.ran = false;
+             var handle = setTimeout(function () { ran = true; }, 5);
+             cancelAnimationFrame(handle);",
+            "timeout-vs-raf.js",
+        )
+        .expect("cancelAnimationFrame on timeout handle");
+    runtime.run_until(base + 32).expect("advance");
+    assert_eq!(
+        runtime.eval("ran", "timeout-vs-raf.js").expect("ran"),
+        "true"
+    );
+}

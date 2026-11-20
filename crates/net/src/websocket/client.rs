@@ -363,6 +363,11 @@ impl WebSocketClient {
         }
         let opcode = self.fragment_opcode.take().expect("fragment opcode");
         let payload = std::mem::take(&mut self.fragments);
+        // #1858: RFC 6455 §8.1 — validate UTF-8 on the fully reassembled Text message,
+        // never on individual fragments (a code point may span frame boundaries).
+        if opcode == Opcode::Text && std::str::from_utf8(&payload).is_err() {
+            return Err(protocol("reassembled text message is not valid UTF-8"));
+        }
         Ok(Some(Frame {
             fin: true,
             opcode,

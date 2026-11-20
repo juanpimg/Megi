@@ -13,7 +13,11 @@ impl Length {
 
     pub fn parse(s: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
-        if s.starts_with("calc(") {
+        // CSS Values 4 §11: calc()/min()/max()/clamp() are <length> math functions.
+        if ["calc(", "min(", "max(", "clamp("]
+            .iter()
+            .any(|prefix| s.starts_with(prefix))
+        {
             return crate::calc::evaluate_length(s.as_str(), font_size, root_font_size);
         }
         if s == "auto" {
@@ -53,6 +57,28 @@ impl Length {
                 return None;
             }
             let px = pt * 96.0 / 72.0;
+            return px.is_finite().then_some(Self::Px(px));
+        }
+        // CSS Values 4 §5.1.2: viewport-percentage lengths are <length> units and must be
+        // accepted standalone, not only inside calc(). #1927: width:50vw used to fall back
+        // to `auto` (full width) because only calc() resolved these units. calc.rs already
+        // resolves vw/vh against the same thread-local viewport set by the render pipeline.
+        if let Some(val) = s.strip_suffix("vw") {
+            let vw: f32 = val.trim().parse().ok()?;
+            if !vw.is_finite() || vw.abs() > 1e6 {
+                return None;
+            }
+            let (width, _) = crate::calc::viewport();
+            let px = vw * width / 100.0;
+            return px.is_finite().then_some(Self::Px(px));
+        }
+        if let Some(val) = s.strip_suffix("vh") {
+            let vh: f32 = val.trim().parse().ok()?;
+            if !vh.is_finite() || vh.abs() > 1e6 {
+                return None;
+            }
+            let (_, height) = crate::calc::viewport();
+            let px = vh * height / 100.0;
             return px.is_finite().then_some(Self::Px(px));
         }
         if let Some(val) = s.strip_suffix('%') {

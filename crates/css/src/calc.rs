@@ -74,7 +74,7 @@ pub fn with_viewport<T>(width: f32, height: f32, f: impl FnOnce() -> T) -> T {
     f()
 }
 
-fn viewport() -> (f32, f32) {
+pub(crate) fn viewport() -> (f32, f32) {
     VIEWPORT.with(Cell::get)
 }
 
@@ -83,21 +83,36 @@ fn viewport() -> (f32, f32) {
 pub fn evaluate(value: &str, context: &CalcContext) -> Option<CalcValue> {
     let trimmed = value.trim();
     let lower = trimmed.to_ascii_lowercase();
-    if !lower.starts_with("calc(") || !trimmed.ends_with(')') {
+    // CSS Values 4 §11: calc(), min(), max() and clamp() are all <calc()>-style math
+    // functions and may appear standalone as a <length> (#1928).
+    let is_math_fn = ["calc(", "min(", "max(", "clamp("]
+        .iter()
+        .any(|prefix| lower.starts_with(prefix));
+    if !is_math_fn || !trimmed.ends_with(')') {
         return None;
     }
-    let inner = &trimmed[5..trimmed.len() - 1];
-    let mut parser = Parser {
-        input: inner.as_bytes(),
-        position: 0,
-        context: *context,
-        depth: 0,
+    let quantity = if lower.starts_with("calc(") {
+        let inner = &trimmed[5..trimmed.len() - 1];
+        let mut parser = Parser {
+            input: inner.as_bytes(),
+            position: 0,
+            context: *context,
+            depth: 0,
+        };
+        let quantity = parser.expression()?;
+        parser.skip_whitespace();
+        (parser.position == parser.input.len()).then_some(quantity)?
+    } else {
+        let mut parser = Parser {
+            input: trimmed.as_bytes(),
+            position: 0,
+            context: *context,
+            depth: 0,
+        };
+        let quantity = parser.math_function()??;
+        parser.skip_whitespace();
+        (parser.position == parser.input.len()).then_some(quantity)?
     };
-    let quantity = parser.expression()?;
-    parser.skip_whitespace();
-    if parser.position != parser.input.len() {
-        return None;
-    }
     let value = CalcValue {
         percent: quantity.percent,
         px: quantity.px,
@@ -228,7 +243,7 @@ impl Parser<'_> {
             self.skip_whitespace();
             saw_sign = true;
         }
-        // Now handle the parenthesised or primary case.
+        // Now handle the parenthesised, math-function, or primary case.
         let value = match self.peek()? {
             b'(' => {
                 if self.depth >= 64 {
@@ -244,6 +259,10 @@ impl Parser<'_> {
                     value
                 })?
             }
+            b'm' | b'M' | b'c' | b'C' => match self.math_function()? {
+                Some(value) => value,
+                None => self.number()?,
+            },
             _ => self.number()?,
         };
         if saw_sign && negate {
@@ -255,6 +274,98 @@ impl Parser<'_> {
         } else {
             Some(value)
         }
+    }
+
+    /// Parses CSS Values 4 math functions `min()`, `max()` and `clamp()` (#1928).
+    ///
+    /// Returns `Some(None)` (leaving `position` untouched) when the upcoming token is not
+    /// one of these functions, so the caller can fall through to the plain number path.
+    fn math_function(&mut self) -> Option<Option<Quantity>> {
+        let start = self.position;
+        let rest = std::str::from_utf8(self.input.get(start..)?).ok()?;
+        // Use `str::get(..n)` rather than `&rest[..n]`: the latter panics when byte index
+        // `n` falls inside a multi-byte character (e.g. input `c𑎐`, proptest #1928).
+        let (name, after_name) = if rest
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("clamp"))
+        {
+            ("clamp", 5)
+        } else if rest
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("max"))
+        {
+            ("max", 3)
+        } else if rest
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("min"))
+        {
+            ("min", 3)
+        } else {
+            return Some(None);
+        };
+        // Require an opening parenthesis immediately after the function name.
+        if self.input.get(start + after_name) != Some(&b'(') {
+            return Some(None);
+        }
+        if self.depth >= 64 {
+            return None;
+        }
+        self.position = start + after_name + 1;
+        self.depth += 1;
+        let mut args = Vec::new();
+        loop {
+            self.skip_whitespace();
+            args.push(self.expression()?);
+            self.skip_whitespace();
+            match self.peek() {
+                Some(b',') => {
+                    self.position += 1;
+                }
+                Some(b')') => {
+                    self.position += 1;
+                    break;
+                }
+                _ => return None,
+            }
+        }
+        self.depth -= 1;
+        // CSS Values 4 §11: min()/max() take two or more arguments; clamp() exactly three.
+        let arity_ok = if name == "clamp" {
+            args.len() == 3
+        } else {
+            args.len() >= 2
+        };
+        if !arity_ok || args.iter().any(|q| q.unitless) {
+            return None;
+        }
+        // Compare resolved magnitudes using viewport width as the percentage basis.
+        // The selected argument keeps its original units so layout can resolve a pure
+        // percentage against the real containing block.
+        let basis = self.context.viewport_width;
+        let resolved = |q: Quantity| q.px + q.percent * basis / 100.0;
+        let selected = match name {
+            "min" => args
+                .into_iter()
+                .min_by(|a, b| resolved(*a).total_cmp(&resolved(*b)))?,
+            "max" => args
+                .into_iter()
+                .max_by(|a, b| resolved(*a).total_cmp(&resolved(*b)))?,
+            _ => {
+                // clamp(MIN, VAL, MAX) == max(MIN, min(VAL, MAX)). Arity was checked above.
+                let (low, value, high) = (args[0], args[1], args[2]);
+                let inner = if resolved(value) < resolved(high) {
+                    value
+                } else {
+                    high
+                };
+                if resolved(inner) > resolved(low) {
+                    inner
+                } else {
+                    low
+                }
+            }
+        };
+        Some(Some(selected))
     }
 
     fn number(&mut self) -> Option<Quantity> {
@@ -359,7 +470,12 @@ pub(crate) fn evaluate_mixed(
 ) -> Option<CalcValue> {
     let (width, height) = viewport();
     let trimmed = value.trim();
-    if !trimmed.to_ascii_lowercase().starts_with("calc(") {
+    let lower = trimmed.to_ascii_lowercase();
+    // CSS Values 4 §11 math functions may also appear standalone (#1928).
+    if !["calc(", "min(", "max(", "clamp("]
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+    {
         return None;
     }
     evaluate(
@@ -380,64 +496,4 @@ pub fn resolve_calc(value: CalcValue, basis: Option<f32>) -> f32 {
 }
 
 #[cfg(test)]
-mod mixed_tests {
-    use super::*;
-
-    #[test]
-    fn test_evaluate_mixed_percentage_and_pixels() {
-        let value = evaluate_mixed("calc(100% - 20px)", 16.0, 16.0).expect("mixed calc");
-        assert_eq!(value.percent, 100.0);
-        assert_eq!(value.px, -20.0);
-        assert_eq!(resolve_calc(value, Some(300.0)), 280.0);
-        assert_eq!(resolve_calc(value, None), -20.0);
-    }
-
-    #[test]
-    fn test_evaluate_mixed_em_and_nested_arithmetic() {
-        let value = evaluate_mixed("calc(50% + 2 * 1em)", 16.0, 16.0).expect("mixed calc");
-        assert_eq!(value.percent, 50.0);
-        assert_eq!(value.px, 32.0);
-        assert_eq!(resolve_calc(value, Some(200.0)), 132.0);
-    }
-}
-
-#[cfg(test)]
-mod mixed_tests_extra {
-    use super::*;
-
-    #[test]
-    fn test_pure_percentage_and_pixel_results() {
-        let percent = evaluate_mixed("calc(50%)", 16.0, 16.0).expect("percent");
-        assert_eq!((percent.percent, percent.px), (50.0, 0.0));
-        assert_eq!(resolve_calc(percent, Some(300.0)), 150.0);
-        let pixels = evaluate_mixed("calc(2 * 15px)", 16.0, 16.0).expect("pixels");
-        assert_eq!((pixels.percent, pixels.px), (0.0, 30.0));
-        assert_eq!(resolve_calc(pixels, None), 30.0);
-    }
-
-    #[test]
-    fn test_negative_mixed_and_division() {
-        let value = evaluate_mixed("calc(100% - 80px / 2)", 16.0, 16.0).expect("mixed");
-        assert_eq!(value.percent, 100.0);
-        assert_eq!(value.px, -40.0);
-        assert_eq!(resolve_calc(value, Some(200.0)), 160.0);
-    }
-
-    #[test]
-    fn test_em_rem_and_nested_calc_expression() {
-        let value = evaluate_mixed("calc(50% + 1em - 2rem)", 16.0, 16.0).expect("mixed");
-        assert_eq!(value.percent, 50.0);
-        assert_eq!(value.px, -16.0);
-        let nested =
-            evaluate_mixed("calc(50% + 2 * (10px + 1em))", 16.0, 16.0).expect("nested mixed");
-        assert_eq!(nested.percent, 50.0);
-        assert_eq!(nested.px, 52.0);
-    }
-
-    #[test]
-    fn test_invalid_expressions_are_rejected() {
-        assert!(evaluate_mixed("calc(100% - )", 16.0, 16.0).is_none());
-        assert!(evaluate_mixed("calc(2px * 3px)", 16.0, 16.0).is_none());
-        assert!(evaluate_mixed("50%", 16.0, 16.0).is_none());
-    }
-}
+mod mixed_tests;

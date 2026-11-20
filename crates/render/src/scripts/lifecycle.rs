@@ -102,6 +102,9 @@ pub(crate) fn run_lifecycle_events(
         let kind = match &dom_event.kind {
             crate::HostUiEventKind::Simple => megi_js::JsUiEventKind::Simple,
             crate::HostUiEventKind::Focus => megi_js::JsUiEventKind::Focus,
+            crate::HostUiEventKind::Composition { data } => {
+                megi_js::JsUiEventKind::Composition { data: data.clone() }
+            }
             crate::HostUiEventKind::Input { data, input_type } => megi_js::JsUiEventKind::Input {
                 data: data.clone(),
                 input_type: input_type.clone(),

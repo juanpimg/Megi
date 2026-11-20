@@ -113,6 +113,11 @@ pub enum JsUiEventKind {
     },
     /// `FocusEvent` (`focus`, `blur`).
     Focus,
+    /// `CompositionEvent` (`compositionstart`, `compositionupdate`, `compositionend`).
+    Composition {
+        /// Current composition text (`CompositionEvent.data`).
+        data: String,
+    },
     /// `AnimationEvent` (`animationstart`, `animationiteration`, `animationend`).
     Animation {
         /// Name of the `@keyframes` rule (`AnimationEvent.animationName`).

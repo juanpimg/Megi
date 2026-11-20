@@ -121,8 +121,7 @@ impl WindowApp {
                 .frame()
                 .map(|frame| (frame.pixels.as_slice(), frame.width, frame.height))
         };
-        let chrome_px = ((f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale).round() as u32)
-            .min(height.saturating_sub(1));
+        let chrome_px = present::chrome_band_pixels(self.metrics.scale, height);
         let presented = present::present_region_at(
             frame,
             self.scroll.offset(),

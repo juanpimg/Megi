@@ -105,6 +105,16 @@ pub(crate) fn canvas_get_context(
         .configurable(true)
         .build();
     let _ = context_object.define_property_or_throw(js_string!("strokeStyle"), descriptor, context);
+    // globalAlpha accessor (#1961, WHATWG HTML §4.12.5.1.12).
+    let get_alpha = accessor_fn(context, canvas_global_alpha_get);
+    let set_alpha = accessor_fn(context, canvas_global_alpha_set);
+    let descriptor = PropertyDescriptor::builder()
+        .get(JsValue::from(get_alpha))
+        .set(JsValue::from(set_alpha))
+        .enumerable(true)
+        .configurable(true)
+        .build();
+    let _ = context_object.define_property_or_throw(js_string!("globalAlpha"), descriptor, context);
     Ok(context_object.into())
 }
 
@@ -308,6 +318,41 @@ pub(crate) fn canvas_stroke_style_set(
         with_context_host(context, |host| {
             host.canvas_store
                 .with_surface_mut(node, |s| s.stroke_style = color)
+        });
+    }
+    Ok(JsValue::undefined())
+}
+
+/// `globalAlpha` getter (#1961). Returns 1.0 when no surface exists yet.
+pub(crate) fn canvas_global_alpha_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let alpha = with_context_host(context, |host| {
+        host.canvas_store.get(node).map(|s| s.global_alpha)
+    })
+    .flatten()
+    .unwrap_or(1.0);
+    Ok(JsValue::from(f64::from(alpha)))
+}
+
+/// `globalAlpha` setter (#1961, WHATWG HTML §4.12.5.1.12): values outside [0, 1]
+/// are ignored, leaving the previous alpha unchanged.
+pub(crate) fn canvas_global_alpha_set(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let Some(raw) = args.first().and_then(|value| value.as_number()) else {
+        return Ok(JsValue::undefined());
+    };
+    if raw.is_finite() && (0.0..=1.0).contains(&raw) {
+        with_context_host(context, |host| {
+            host.canvas_store
+                .with_surface_mut(node, |s| s.global_alpha = raw as f32)
         });
     }
     Ok(JsValue::undefined())

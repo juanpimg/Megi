@@ -159,3 +159,81 @@ fn canvas_text_primitives_exist() {
         .expect("text primitives must not throw (#1961)");
     assert_eq!(out, "function|function|true");
 }
+
+#[test]
+fn canvas_global_alpha_blends_fill_rect() {
+    // #1961: globalAlpha must scale source alpha for drawing operations (WHATWG canvas §4.12.5.1.12).
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "var c = document.createElement('canvas'); \
+             c.setAttribute('width','2'); c.setAttribute('height','2'); \
+             document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); \
+             ctx.globalAlpha = 0.5; \
+             ctx.fillStyle = '#ff0000'; \
+             ctx.fillRect(0, 0, 1, 1);",
+            "t",
+        )
+        .expect("canvas script");
+    let surfaces = runtime.canvas_surfaces();
+    let surface = surfaces.values().next().expect("surface");
+    assert_eq!(
+        &surface.pixels[0..4],
+        &[255, 0, 0, 128],
+        "globalAlpha=0.5 must produce ~50% alpha, got {:?}",
+        &surface.pixels[0..4]
+    );
+}
+
+#[test]
+fn canvas_width_and_height_are_accessible_from_js() {
+    // #1961: HTMLCanvasElement.width/height reflect the backing surface dimensions.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var c = document.createElement('canvas'); \
+             c.setAttribute('width','7'); c.setAttribute('height','9'); \
+             document.body.appendChild(c); \
+             c.getContext('2d'); \
+             String(c.width + '|' + c.height);",
+            "t",
+        )
+        .expect("canvas script");
+    assert_eq!(out, "7|9");
+}
+
+#[test]
+fn canvas_global_alpha_getter_roundtrips() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var c = document.createElement('canvas'); document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); \
+             var initial = String(ctx.globalAlpha); \
+             ctx.globalAlpha = 0.25; \
+             initial + '|' + String(ctx.globalAlpha);",
+            "t",
+        )
+        .expect("canvas script");
+    assert_eq!(out, "1|0.25");
+}
+
+#[test]
+fn canvas_width_setter_reflects_and_sizes_backing_surface() {
+    // #1961: setting width/height from JS updates both the attribute and the backing store.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var c = document.createElement('canvas'); document.body.appendChild(c); \
+             c.width = 6; c.height = 4; \
+             var ctx = c.getContext('2d'); \
+             String(c.width) + '|' + String(c.height) + '|' + String(c.getAttribute('width'));",
+            "t",
+        )
+        .expect("canvas script");
+    assert_eq!(out, "6|4|6");
+    let surfaces = runtime.canvas_surfaces();
+    let surface = surfaces.values().next().expect("surface");
+    assert_eq!((surface.width, surface.height), (6, 4));
+}

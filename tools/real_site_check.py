@@ -93,7 +93,7 @@ def render_one(root: Path, site: dict, live: bool) -> dict:
         "run",
         "-q",
         "-p",
-        "render",
+        "megi-render",
         "--",
         source,
         str(png_path),

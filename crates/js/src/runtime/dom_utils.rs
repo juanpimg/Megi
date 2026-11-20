@@ -436,3 +436,40 @@ pub(crate) fn node_insert_adjacent_text(
     result.map_err(js_error)?;
     Ok(JsValue::undefined())
 }
+
+// #1942: insertAdjacentElement — insert an existing element at an adjacent position.
+pub(crate) fn node_insert_adjacent_element(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let target = this_node(this, context)?;
+    let is_element = with_context_host(context, |host| {
+        host.document
+            .try_node(target)
+            .is_some_and(|node| node.as_element().is_some())
+    })
+    .unwrap_or(false);
+    if !is_element {
+        return Err(js_error(
+            "insertAdjacentElement is only supported on elements",
+        ));
+    }
+    let position = adjacent_position(args, context)?;
+    let element_node = this_node(&args[1], context)?;
+    let is_element_node = with_context_host(context, |host| {
+        host.document
+            .try_node(element_node)
+            .is_some_and(|node| node.as_element().is_some())
+    })
+    .unwrap_or(false);
+    if !is_element_node {
+        return Err(js_error("insertAdjacentElement requires an element"));
+    }
+    let result = with_context_host(context, |host| {
+        insert_relative(host, target, element_node, position)
+    })
+    .unwrap_or(Ok(()));
+    result.map_err(js_error)?;
+    wrap_node(context, element_node)
+}

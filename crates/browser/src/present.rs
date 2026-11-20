@@ -52,6 +52,14 @@ pub fn viewport_slice(
     out
 }
 
+/// Physical-pixel height of the browser chrome band that must be reserved above the page
+/// (F7-CHROME-OVERLAY / #1012). The band scales with HiDPI and is clamped so the page always
+/// keeps at least one physical row. Pure so the wiring can be tested without a window.
+pub fn chrome_band_pixels(scale: f64, dest_height: u32) -> u32 {
+    let css_height = crate::chrome::CHROME_HEIGHT;
+    ((f64::from(css_height) * scale).round() as u32).min(dest_height.saturating_sub(1))
+}
+
 /// Presents `scroll_y..scroll_y + css_viewport_height` from the CSS-pixel frame
 /// into the physical window buffer, scaling with nearest-neighbour sampling.
 ///
@@ -230,6 +238,30 @@ mod unit_tests {
             2,
             2
         ));
+    }
+
+    #[test]
+    fn chrome_band_pixels_scales_and_clamps_to_the_window() {
+        // F7-CHROME-OVERLAY / #1012: the page must start below the chrome band at scroll_y=0.
+        // The band scales with HiDPI and is clamped so the page always keeps at least 1 row.
+        use crate::chrome::CHROME_HEIGHT;
+        assert_eq!(chrome_band_pixels(1.0, 800), CHROME_HEIGHT as u32);
+        assert_eq!(chrome_band_pixels(2.0, 800), (CHROME_HEIGHT * 2.0) as u32);
+        assert_eq!(
+            chrome_band_pixels(1.0, 30),
+            29,
+            "band clamped, page keeps 1 row"
+        );
+        assert_eq!(
+            chrome_band_pixels(1.0, 1),
+            0,
+            "zero-height band for a 1px window"
+        );
+        assert_eq!(
+            chrome_band_pixels(1.0, 0),
+            0,
+            "no band for a zero-height window"
+        );
     }
 
     #[test]

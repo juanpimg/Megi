@@ -176,6 +176,8 @@
 
 /// Generated `file://` directory listings and load-error pages.
 pub mod a11y;
+#[cfg(feature = "a11y")]
+pub mod a11y_backend;
 pub mod chrome;
 pub mod cli;
 pub mod convert;
@@ -272,3 +274,65 @@ pub use zoom::{
     DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, ZOOM_LEVELS, is_valid_cli_zoom, sanitize_zoom, zoom_in,
     zoom_label, zoom_out, zoom_reset, zoomed_viewport,
 };
+
+#[cfg(all(test, feature = "a11y"))]
+mod a11y_adapter_tests {
+    use super::a11y::SnapshotNode;
+    use super::a11y_backend::build_tree_update;
+    use megi_webview::core::NodeId;
+
+    fn node(id: usize, parent: Option<usize>, role: &str, name: &str) -> SnapshotNode {
+        SnapshotNode {
+            id: NodeId::from_index(id),
+            parent: parent.map(NodeId::from_index),
+            role: role.to_owned(),
+            name: name.to_owned(),
+            disabled: false,
+            hidden: false,
+            focusable: false,
+        }
+    }
+
+    #[test]
+    fn maps_shell_snapshot_to_accesskit_tree_update() {
+        let mut root = node(0, None, "document", "Test page");
+        root.focusable = true;
+        let mut button = node(1, Some(0), "button", "Go");
+        button.focusable = true;
+        button.disabled = true;
+        let heading = node(2, Some(0), "heading", "Title");
+
+        let update = build_tree_update(&[root, button, heading], NodeId::from_index(1));
+        assert_eq!(
+            update.nodes.len(),
+            3,
+            "one AccessKit node per snapshot node"
+        );
+        let roles: Vec<_> = update.nodes.iter().map(|(_, n)| n.role()).collect();
+        assert!(roles.contains(&accesskit::Role::Document));
+        assert!(roles.contains(&accesskit::Role::Button));
+        assert!(roles.contains(&accesskit::Role::Heading));
+
+        let btn = &update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == accesskit::Role::Button)
+            .unwrap()
+            .1;
+        assert_eq!(btn.label(), Some("Go"));
+        assert!(btn.is_disabled());
+        // A disabled control keeps Focus (so assistive tech can still reach it) but must
+        // NOT advertise Click — `build_tree_update` only adds Action::Click to enabled
+        // interactive nodes. The old assertion contradicted the documented contract.
+        assert!(!btn.supports_action(accesskit::Action::Click));
+        assert!(btn.supports_action(accesskit::Action::Focus));
+
+        let root_node = &update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == accesskit::Role::Document)
+            .unwrap()
+            .1;
+        assert_eq!(root_node.children().len(), 2, "children links preserved");
+    }
+}

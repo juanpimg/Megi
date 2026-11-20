@@ -63,10 +63,11 @@ pub mod error;
 pub mod font;
 pub mod types;
 pub mod web;
+mod woff1;
 
 // ## Web fonts (@font-face)
 //
-// WOFF2 decoding lives in [`web`] (pure-Rust `woff2-patched` 0.4, imported as `woff2`,
+// WOFF1/WOFF2 decoding lives in [`web`] and [`woff1`] (pure-Rust `woff2-patched` 0.4, imported as `woff2`,
 // **Apache-2.0**, no C/FFI/system libraries; authorized Phase 6 dependency). Use
 // [`decode_web_font`] to turn WOFF2 bytes into sfnt bytes and
 // [`FontDatabase::load_font_data_family`] to register the result under the CSS
@@ -79,3 +80,4 @@ pub use error::FontError;
 pub use font::Font;
 pub use types::{FontMetrics, FontRefInfo, FontStyle, GlyphMask, ShapedGlyph, ShapedRun};
 pub use web::{decode_web_font, is_woff2};
+pub use woff1::{decode_woff1, is_woff1};

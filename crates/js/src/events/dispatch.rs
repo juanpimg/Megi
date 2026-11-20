@@ -336,6 +336,10 @@ pub(crate) fn build_ui_event(
                 set_event_prototype(context, &object, "FocusEvent");
                 let _ = object.set(js_string!("relatedTarget"), JsValue::null(), false, context);
             }
+            JsUiEventKind::Composition { data } => {
+                set_event_prototype(context, &object, "CompositionEvent");
+                let _ = object.set(js_string!("data"), js_string!(data.clone()), false, context);
+            }
             JsUiEventKind::Animation {
                 animation_name,
                 elapsed_time,

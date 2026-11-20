@@ -11,10 +11,20 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             return;
         }
         self.present();
+        // ADR-002: publish an initial tree once a document is available.
+        #[cfg(feature = "a11y")]
+        self.publish_accessibility_tree(true);
         self.request_render();
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: UserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        #[cfg(feature = "a11y")]
+        if let UserEvent::Accessibility(a11y_event) = event {
+            self.handle_accessibility_event(a11y_event);
+            return;
+        }
+        #[cfg(not(feature = "a11y"))]
+        let _ = event;
         self.drain_worker_messages();
         if let Some(deadline) = self.refresh.deadline() {
             event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
@@ -27,6 +37,14 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        // ADR-002: the accessibility adapter must observe each window event before the
+        // application handles it (window bounds/focus tracking for AT-SPI/UIA).
+        #[cfg(feature = "a11y")]
+        if let (Some(adapter), Some(window)) =
+            (self.accessibility_adapter.as_mut(), self.window.as_ref())
+        {
+            adapter.process_event(window, &event);
+        }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => self.present(),
@@ -380,6 +398,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // ADR-002: publish a fresh tree whenever the DOM/focus signature changed.
+        #[cfg(feature = "a11y")]
+        self.publish_accessibility_tree(false);
         let now = Instant::now();
         // Auto-refresh: re-render the current URL (same generation-based worker path, scroll
         // preserved). The new frame re-arms the timer only while timers remain pending.

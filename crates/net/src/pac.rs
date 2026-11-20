@@ -5,7 +5,7 @@
 //! `dnsResolve`, `isResolvable`, `myIpAddress`, `dnsDomainLevels`, `weekdayRange`,
 //! `dateRange`, `timeRange`), evaluates `FindProxyForURL(url, host)` via the `js` runtime,
 //! and returns the ordered failover directive list (`PROXY`, `HTTP`, `HTTPS`, `SOCKS`,
-//! `SOCKS4`, `SOCKS5`, `DIRECT`). Results are cached per `(pac_url, host)` with a 5-minute
+//! `SOCKS4`, `SOCKS5`, `DIRECT`). Results are cached per `(pac_url, full target URL)` with a 5-minute
 //! TTL and LRU-like oldest eviction, resettable with [`clear_cache`].
 
 use std::collections::HashMap;
@@ -203,9 +203,18 @@ pub fn clear_cache() {
 
 /// Resolves the ordered PAC directive failover list for `target`, fetching/evaluating the
 /// script on a cache miss.
+/// Cache key for one PAC decision (#1862).
+///
+/// `FindProxyForURL(url, host)` receives the full target URL, so path, query and scheme can
+/// change the result even for the same host. Keying only by host made `shExpMatch(url, "*/internal/*")`
+/// style scripts return stale decisions for up to five minutes.
+fn pac_cache_key(target: &Url, pac_url: &Url) -> (String, String) {
+    (pac_url.as_str().to_owned(), target.as_str().to_owned())
+}
+
 pub fn resolve_directives(target: &Url, pac_url: &Url) -> Result<Vec<PacDirective>, String> {
     let host = target.host().to_ascii_lowercase();
-    let key = (pac_url.as_str().to_owned(), host.clone());
+    let key = pac_cache_key(target, pac_url);
     {
         let cache = cache()
             .lock()
@@ -441,5 +450,29 @@ mod cache_eviction_tests {
         }
         clear_cache();
         assert!(cache().lock().expect("PAC cache lock").is_empty());
+    }
+}
+
+#[cfg(test)]
+mod pac_cache_key_tests {
+    use super::*;
+
+    #[test]
+    fn cache_key_includes_full_url_not_just_host() {
+        // #1862: FindProxyForURL(url, host) depends on path/scheme, so two URLs of the
+        // same host must not share a cached decision.
+        let a = Url::parse("http://intranet.corp.local/a").expect("url a");
+        let b = Url::parse("http://intranet.corp.local/internal/a").expect("url b");
+        assert_ne!(
+            pac_cache_key(&a, &a),
+            pac_cache_key(&b, &a),
+            "path must be in the key"
+        );
+        let c = Url::parse("https://intranet.corp.local/a").expect("url c");
+        assert_ne!(
+            pac_cache_key(&a, &a),
+            pac_cache_key(&c, &a),
+            "scheme must be in the key"
+        );
     }
 }

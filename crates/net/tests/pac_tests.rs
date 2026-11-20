@@ -127,7 +127,10 @@ fn pac_find_proxy_for_url_selects_the_configured_proxy() {
 }
 
 #[test]
-fn pac_result_is_cached_per_host() {
+fn pac_result_is_cached_per_target_url() {
+    // #1862: FindProxyForURL(url, host) can branch on the full URL (path, query, scheme),
+    // so the decision is cached per (pac_url, target URL), not per host. The same URL must
+    // reuse the cached decision; a different URL on the same host must be re-evaluated.
     install_evaluator();
     let pac_hits = Arc::new(AtomicUsize::new(0));
     let proxy_hits = Arc::new(AtomicUsize::new(0));
@@ -138,20 +141,41 @@ fn pac_result_is_cached_per_host() {
     let (pac_port, pac_server) = spawn_pac(script, Arc::clone(&pac_hits));
     let pac_url = Url::parse(&format!("http://127.0.0.1:{pac_port}/proxy.pac")).expect("pac url");
     let options = options(pac_url);
+
     let first = fetch(&Url::parse("http://target.test/a").expect("a"), &options).expect("first");
-    let second = fetch(&Url::parse("http://target.test/b").expect("b"), &options).expect("second");
-    drop(proxy_server);
-    drop(pac_server);
-    assert_eq!(first.body, b"pac");
-    assert_eq!(second.body, b"pac");
     assert_eq!(
         pac_hits.load(Ordering::SeqCst),
         1,
-        "host cache must avoid re-evaluation"
+        "first URL evaluates PAC once"
+    );
+
+    // Same exact URL: cache hit, no re-evaluation of the PAC decision.
+    let same = fetch(
+        &Url::parse("http://target.test/a").expect("a again"),
+        &options,
+    )
+    .expect("same URL");
+    assert_eq!(
+        pac_hits.load(Ordering::SeqCst),
+        1,
+        "identical target URL must reuse the cached decision"
+    );
+
+    // Different path on the same host: the decision may differ, so re-evaluate.
+    let other = fetch(&Url::parse("http://target.test/b").expect("b"), &options).expect("other");
+    drop(proxy_server);
+    drop(pac_server);
+    assert_eq!(first.body, b"pac");
+    assert_eq!(same.body, b"pac");
+    assert_eq!(other.body, b"pac");
+    assert_eq!(
+        pac_hits.load(Ordering::SeqCst),
+        2,
+        "a different target URL on the same host must re-evaluate PAC"
     );
     assert_eq!(
         proxy_hits.load(Ordering::SeqCst),
-        2,
+        3,
         "each request goes via proxy"
     );
 }

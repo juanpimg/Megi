@@ -523,8 +523,8 @@ id = "F7-CHROME-OVERLAY"
 area = "F7"
 name = "La barra de chrome no tapa el contenido (scroll_y=0)"
 source = "issue #1012"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/browser/src/present.rs::chrome_band_pixels_scales_and_clamps_to_the_window"
 issue = 1012
 
 [[capability]]
@@ -544,7 +544,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "structured accessibility tree (roles, names, states, hierarchy) exposed; platform AT/widget integration still missing"
+reason = "structured tree + AccessKit mapping + winit platform adapter wired (AT-SPI/UIA/NSAccessibility); native widgets still missing and live AT verification unavailable in CI"
 
 [[capability]]
 id = "F7-ISOLATION"
