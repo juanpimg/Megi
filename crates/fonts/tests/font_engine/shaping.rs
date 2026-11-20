@@ -232,3 +232,35 @@ fn every_shaped_run_face_is_resolvable_for_rasterization() {
         );
     }
 }
+
+#[test]
+fn cjk_glyphs_are_real_not_tofu() {
+    // F4-CJK-FONTS: CJK text must shape to real glyphs, not `.notdef` (glyph 0).
+    let db = FontDatabase::new_with_bundled_and_system_fonts();
+    let text = "日本語中文한국어";
+    let run = db
+        .shape(&["sans-serif"], 400, FontStyle::Normal, 16.0, text)
+        .expect("shape CJK text");
+    assert_eq!(run.glyphs.len(), text.chars().count());
+    let ids: Vec<u32> = run.glyphs.iter().map(|glyph| glyph.glyph_id).collect();
+    assert!(
+        ids.iter().all(|id| *id != 0),
+        "CJK characters must not map to the .notdef glyph: {ids:?}"
+    );
+    let distinct = ids.iter().collect::<std::collections::HashSet<_>>().len();
+    assert!(
+        distinct >= 4,
+        "distinct CJK characters must resolve to distinct glyphs: {ids:?}"
+    );
+
+    // Emoji fallback (same capability): a color/emoji face must provide a real glyph.
+    let emoji = "😀";
+    let run = db
+        .shape(&["sans-serif"], 400, FontStyle::Normal, 16.0, emoji)
+        .expect("shape emoji");
+    let emoji_id = run.glyphs.first().map(|glyph| glyph.glyph_id);
+    assert!(
+        emoji_id.is_some_and(|id| id != 0),
+        "emoji must not map to the .notdef glyph: {emoji_id:?}"
+    );
+}
