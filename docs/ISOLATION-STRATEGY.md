@@ -7,7 +7,9 @@
 
 **Fase 1 — Política de sitio y claves de proceso (esta ADR).** Introducir una capa **pura y testeable** que derive, para cada URL, una `SiteKey` (origen effective: scheme + host + puerto, con reglas para `data:`, `file:`, `blob:` y orígenes opacos) y decida qué pestañas pueden compartir renderer. La política vive en `crates/browser/src/site.rs`, no depende de winit ni de IPC, y es la entrada obligatoria de cualquier planificador de procesos futuro. Todas las pestañas siguen usando hoy el worker único; la política se registra en cada pestaña y expone `can_share`/`group` para que el shell tome decisiones de agrupación.
 
-**Fase 2 — Pool de renderers por sitio (pendiente).** Instanciar un worker por `SiteKey`, con reutilización y límite (`MAX_SITE_RENDERERS`). Cambia el enrutamiento de `RenderRequest` pero no el protocolo (sigue siendo `RenderRequest`/`RenderFrame` serializable).
+**Fase 2 — Pool de renderers por sitio (HECHA).** Instanciar un worker por `SiteKey`, con reutilización y límite (`MAX_SITE_RENDERERS`). Cambia el enrutamiento de `RenderRequest` pero no el protocolo (sigue siendo `RenderRequest`/`RenderFrame` serializable).
+
+Tras la Fase 2 el shell enruta cada `RenderRequest` al worker de su sitio (`crates/browser/src/worker/pool.rs`), con límite `MAX_SITE_RENDERERS` y desalojo LRU controlado; las pestañas de sitios distintos ya no comparten hilo/realm de render.
 
 **Fase 3 — Procesos del SO (pendiente).** Sustituir cada worker por un proceso hijo usando `std::process::Command`, con IPC sobre `stdin`/`stdout` y `RenderFrame` serializado. Sin FFI: `#![forbid(unsafe_code)]` se mantiene. Requiere ADR complementaria para el formato de IPC, manejo de crashes y permisos.
 
@@ -26,6 +28,6 @@
 
 ## Consecuencias y honestidad
 
-- Tras la Fase 1, F7-ISOLATION seguirá marcada **`partial`**: existe la política y las claves, pero **no hay aún procesos ni renderers separados por sitio**. No se marcará `done` hasta la Fase 3 con evidencia verificable.
+- Tras la Fase 2, F7-ISOLATION sigue marcada **`partial`**: existen la política, las claves y renderers separados por sitio, pero **no hay aún procesos del SO**. No se marcará `done` hasta la Fase 3 con evidencia verificable.
 - `docs/ARCHITECTURE.md` añade una fila para la capa de política de sitio en `crates/browser`, sin autorizar dependencias nativas nuevas (no son necesarias en la Fase 1).
 - Tests: la política se valida con URLs reales (`http(s)`, `data:`, `file:`, `about:blank`) y reglas de agrupación, sin arrancar ventanas ni procesos.

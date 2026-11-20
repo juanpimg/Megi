@@ -40,6 +40,8 @@ pub(crate) use crate::title::document_title;
 pub(crate) use megi_webview::css::{Overflow, Position};
 pub(crate) use megi_webview::layout::LayoutBox;
 
+mod pool;
+pub use pool::*;
 mod types;
 pub use types::*;
 mod render;

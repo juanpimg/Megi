@@ -297,7 +297,7 @@ impl WindowApp {
         self.find_editing = false;
         self.find.clear();
         self.find_rects.clear();
-        if self.request_sender.is_some() {
+        if self.render_pool.is_some() {
             self.request_render();
         }
         self.update_title();

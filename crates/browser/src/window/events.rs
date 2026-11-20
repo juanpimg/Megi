@@ -446,10 +446,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         // Persist the session before shutting the worker down.
         self.save_session();
-        // Dropping the sender stops the worker; join so the process exits cleanly.
-        self.request_sender = None;
-        if let Some(handle) = self.worker.take() {
-            let _ = handle.join();
+        // Dropping the pool's senders stops every per-site worker; join cleanly.
+        if let Some(pool) = self.render_pool.take() {
+            pool.join();
         }
     }
 }
