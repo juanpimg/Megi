@@ -183,6 +183,26 @@ impl WindowApp {
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
+        if self.download_panel.open {
+            let lines: Vec<String> = self
+                .download_manager
+                .jobs()
+                .iter()
+                .map(|job| {
+                    self.download_manager
+                        .progress_text(job.id)
+                        .unwrap_or_else(|| format!("{} {}", job.state_name(), job.url))
+                })
+                .collect();
+            chrome::draw_downloads_panel(
+                &mut buffer,
+                width,
+                height,
+                chrome_scale,
+                &lines,
+                self.download_panel.selected,
+            );
+        }
         if let Some(dialog) = &self.save_dialog {
             chrome::draw_save_as_dialog(
                 &mut buffer,

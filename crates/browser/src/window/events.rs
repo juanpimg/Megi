@@ -309,6 +309,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.request_repaint();
                     return;
                 }
+                if self.handle_download_panel_key(&event.logical_key, ctrl_pressed) {
+                    return;
+                }
                 if self.save_dialog.is_some()
                     && self.handle_save_dialog_key(
                         &event.logical_key,

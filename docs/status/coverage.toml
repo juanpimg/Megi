@@ -536,7 +536,7 @@ source = "issue #988"
 state = "partial"
 evidence = "none"
 issue = 988
-reason = "visual Save-as dialog with Tab file-type picker, PNG/HTML export, resource save path and bounded download manager (progress/pause/resume/cancel state machine); UI controls for pause/resume/cancel still missing"
+reason = "visual Save-as dialog with Tab file-type picker, PNG/HTML export, image save path, bounded download manager and Ctrl+J panel with P/C pause-resume-cancel keys; CSS/JS/font resource download batch still missing"
 
 [[capability]]
 id = "F7-A11Y"
