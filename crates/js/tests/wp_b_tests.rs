@@ -442,3 +442,40 @@ fn wrapper_identity_is_cached_per_realm() {
         "true"
     );
 }
+
+/// #1851: Web IDL §3.7.8 declares `length` readonly; a writable length lets a
+/// script inflate `forEach` into a billion native (unbudgeted) callback calls.
+#[test]
+fn nodelist_length_is_readonly_and_foreach_uses_the_real_snapshot() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "var host = document.createElement('div'); \
+             host.appendChild(document.createElement('span')); \
+             host.appendChild(document.createElement('span')); \
+             document.body.appendChild(host); \
+             globalThis.list = host.children;",
+            "nodelist-dos.js",
+        )
+        .expect("setup");
+    // Assignment to a readonly accessor must not change length (non-strict mode).
+    assert_eq!(
+        runtime
+            .eval(
+                "list.length = 1000000; String(list.length)",
+                "nodelist-dos.js"
+            )
+            .expect("length after write"),
+        "2"
+    );
+    // forEach must walk the real 2-element snapshot, not the tampered length.
+    assert_eq!(
+        runtime
+            .eval(
+                "var count = 0; list.forEach(function () { count += 1; }); String(count)",
+                "nodelist-dos.js",
+            )
+            .expect("forEach count"),
+        "2"
+    );
+}

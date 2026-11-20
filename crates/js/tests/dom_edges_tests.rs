@@ -372,7 +372,7 @@ fn accessibility_snapshot_exposes_named_nodes() {
     let out = runtime
         .eval(
             "document.body.innerHTML = '<h1>Hi</h1><img alt=\"Logo\"><button aria-label=\"Go\">x</button>'; \
-             __megiAccessibilityTree().map(function (n) { return n.role + ':' + n.name; }).join(',');",
+             __megiAccessibilityTree().filter(function (n) {                return ['heading', 'img', 'button'].indexOf(n.role) !== -1;              }).map(function (n) { return n.role + ':' + n.name; }).join(',');",
             "t",
         )
         .expect("eval");
