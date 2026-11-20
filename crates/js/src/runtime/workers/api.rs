@@ -3,6 +3,42 @@ use super::*;
 impl JsRuntime {
     pub(crate) fn deliver_worker_message(&mut self, json: &str) -> Result<(), JsError> {
         let data = self.parse_json_value(json)?;
+        // F6-WORKERS-DOM: a reply to a proxied DOM call resolves its pending Promise and is
+        // never delivered to the worker's `onmessage`.
+        if let Some(object) = data.as_object()
+            && let Ok(reply) = crate::events::prop(&object, "__megi_dom_reply", &mut self.context)
+            && let Some(reply) = reply.as_object()
+        {
+            let seq = crate::events::prop(&reply, "seq", &mut self.context)?
+                .as_number()
+                .unwrap_or(0.0) as u64;
+            let result = crate::events::prop(&reply, "result", &mut self.context)?;
+            self.context
+                .global_object()
+                .set(
+                    js_string!("__megi_dom_reply_seq"),
+                    JsValue::from(seq),
+                    false,
+                    &mut self.context,
+                )
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            self.context
+                .global_object()
+                .set(
+                    js_string!("__megi_dom_reply_data"),
+                    result,
+                    false,
+                    &mut self.context,
+                )
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            self.context
+                .eval(Source::from_bytes(
+                    "(function () { var r = __megi_dom_pending[__megi_dom_reply_seq];                      if (r) { delete __megi_dom_pending[__megi_dom_reply_seq]; r(__megi_dom_reply_data); } })();",
+                ))
+                .map(|_| ())
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            return Ok(());
+        }
         self.context
             .global_object()
             .set(

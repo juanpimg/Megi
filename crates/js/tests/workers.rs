@@ -81,15 +81,17 @@ fn worker_without_loader_throws_typed_error() {
 }
 
 #[test]
-fn worker_has_no_dom_globals() {
+fn worker_has_no_direct_dom_globals() {
+    // F6-WORKERS-DOM: `document` is now a message-based proxy (not the real DOM), while
+    // `window` stays absent and `self` is still the worker global.
     let mut runtime = runtime_with_worker(
-        "postMessage(typeof document + ':' + typeof window + ':' + (self === globalThis));",
+        "postMessage(typeof document + ':' + typeof document.getElementById + ':' + typeof window + ':' + (self === globalThis));",
     );
     runtime.eval("window.__info = ''; var w = new Worker('worker.js'); w.onmessage = function (e) { __info = e.data; };", "t").expect("script");
     runtime.run_worker_tasks(16).expect("tasks");
     assert_eq!(
         runtime.eval("__info", "t").unwrap(),
-        "undefined:undefined:true"
+        "object:function:undefined:true"
     );
 }
 
@@ -207,4 +209,34 @@ fn terminated_worker_id_is_not_reused_by_a_new_worker() {
         .expect("script");
     runtime.run_worker_tasks(16).expect("tasks");
     assert_eq!(runtime.eval("__info", "t").unwrap(), "0:1");
+}
+
+#[test]
+fn worker_reads_dom_through_a_message_proxy() {
+    // F6-WORKERS-DOM: workers have no direct DOM, but a proxy forwards queries to the
+    // owning document over the existing deterministic postMessage channel.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.textContent.then(function (text) { postMessage(text); }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x>hello dom</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(64).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__seen", "page.js").expect("seen"),
+        "hello dom"
+    );
 }
