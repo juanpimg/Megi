@@ -368,6 +368,7 @@ pub fn draw_save_as_dialog(
     dest_height: u32,
     scale: f32,
     name: &str,
+    format: &str,
 ) {
     if dest_width == 0 || dest_height == 0 {
         return;
@@ -403,7 +404,7 @@ pub fn draw_save_as_dialog(
     );
     drawing::draw_text(
         &mut pixmap,
-        &format!("{name}|  (Enter save, Esc cancel)"),
+        &format!("{name}  [{format}]  (Tab format, Enter save, Esc cancel)"),
         x + 14.0,
         y + 58.0,
         scale,
