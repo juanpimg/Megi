@@ -134,15 +134,38 @@ impl NodeId {
     /// process-unique arena id (modulo the 12-bit generation space), so generation-0
     /// handles only resolve in the rare arena whose id is a multiple of 4,095. Prefer the
     /// handles returned by [`Document`] methods.
+    ///
+    /// Indices outside the 20-bit slot space (including [`usize::MAX`], often used as a
+    /// sentinel) never panic: they yield an invalid handle whose [`NodeId::index`] is
+    /// [`usize::MAX`], which every document rejects as out of range.
     #[inline]
     pub const fn from_index(idx: usize) -> Self {
+        if idx >= MAX_SLOTS {
+            // The slot field is `(slot + 1) & SLOT_MASK`, so an out-of-range index would
+            // either wrap the field to 0 (making the whole handle zero -> panic) or
+            // overflow `slot as u32 + 1` in debug. Encode a permanently invalid handle
+            // instead: slot field 0 with generation 1 keeps the raw value non-zero, and
+            // `index()` maps field 0 to usize::MAX so document lookups reject it (#1732).
+            return Self(match NonZeroU32::new(1 << SLOT_BITS) {
+                Some(value) => value,
+                None => panic!("NodeId sentinel cannot be zero"),
+            });
+        }
         Self::pack(idx, 0)
     }
 
     /// Returns the 0-based arena slot index addressed by this handle.
+    ///
+    /// Invalid handles created from an out-of-range [`NodeId::from_index`] return
+    /// [`usize::MAX`] here so they are rejected as out of range rather than underflowing.
     #[inline]
     pub const fn index(self) -> usize {
-        ((self.0.get() & SLOT_MASK) - 1) as usize
+        let slot_field = self.0.get() & SLOT_MASK;
+        if slot_field == 0 {
+            usize::MAX
+        } else {
+            (slot_field - 1) as usize
+        }
     }
 
     /// Alias for [`NodeId::index`]: the arena slot addressed by this handle.

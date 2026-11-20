@@ -420,3 +420,27 @@ fn test_remove_root_is_rejected() {
     assert!(doc.owns(root));
     assert!(doc.validate_invariants().is_ok());
 }
+
+#[test]
+fn from_index_out_of_range_never_panics_and_does_not_resolve() {
+    // #1732: `pack` masks `slot + 1` into 20 bits, so indices congruent to MAX_SLOTS
+    // (mod 2^20) wrapped to the zero handle and panicked, and usize::MAX overflowed in debug.
+    // They must instead produce an invalid handle that `try_node` rejects.
+    let invalid = [MAX_SLOTS, 2 * MAX_SLOTS - 1, usize::MAX];
+    let mut doc = Document::new();
+    for idx in invalid {
+        let id = NodeId::from_index(idx);
+        assert_ne!(
+            id,
+            NodeId::from_index(0),
+            "idx {idx} must not be the zero-slot handle"
+        );
+        assert!(doc.try_node(id).is_none(), "idx {idx} must not resolve");
+        assert!(
+            doc.try_node_mut(id).is_none(),
+            "idx {idx} must not resolve mutably"
+        );
+    }
+    // The highest representable slot still round-trips.
+    assert_eq!(NodeId::from_index(MAX_SLOTS - 1).index(), MAX_SLOTS - 1);
+}
