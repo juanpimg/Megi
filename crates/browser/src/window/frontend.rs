@@ -104,6 +104,10 @@ impl WindowApp {
             hover_url: None,
             context_menu: None,
             clipboard: String::new(),
+            #[cfg(feature = "a11y")]
+            accessibility_adapter: None,
+            #[cfg(feature = "a11y")]
+            accessibility_publisher: crate::a11y_backend::AccessibilityPublisher::new(),
             recent_history: recent,
             history_menu: None,
             download: crate::download::DownloadProgress::new(),
@@ -125,7 +129,9 @@ impl WindowApp {
             .with_inner_size(LogicalSize::new(
                 f64::from(self.requested_width),
                 f64::from(self.requested_height),
-            ));
+            ))
+            // ADR-002: the AccessKit adapter must be created before the window is shown.
+            .with_visible(cfg!(not(feature = "a11y")));
         let window =
             Arc::new(event_loop.create_window(attributes).map_err(|error| {
                 ShellError::Window(format!("cannot create the window: {error}"))
@@ -139,6 +145,17 @@ impl WindowApp {
         let size = window.inner_size();
         self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
         self.scroll = ScrollState::new(1, self.page_viewport_height());
+        #[cfg(feature = "a11y")]
+        {
+            // Must happen before the window becomes visible, per accesskit_winit docs.
+            let adapter = accesskit_winit::Adapter::with_event_loop_proxy(
+                event_loop,
+                &window,
+                self.proxy.clone(),
+            );
+            self.accessibility_adapter = Some(adapter);
+            window.set_visible(true);
+        }
         self.window = Some(window);
         self.context = Some(context);
         self.surface = Some(surface);

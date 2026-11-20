@@ -190,6 +190,8 @@ fn dom_key_and_code(key: &Key) -> Option<(String, String)> {
     }
 }
 
+#[cfg(feature = "a11y")]
+mod accessibility;
 mod events;
 mod form_controls;
 mod frontend;
@@ -205,10 +207,20 @@ type ShellContext = softbuffer::Context<Arc<Window>>;
 type ShellSurface = softbuffer::Surface<Arc<Window>, Arc<Window>>;
 
 /// Wake-up event sent by the render worker when it has a message.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 enum UserEvent {
     /// A worker message (frame or error) is ready on the channel.
     WorkerReady,
+    /// A platform accessibility request forwarded by `accesskit_winit` (ADR-002).
+    #[cfg(feature = "a11y")]
+    Accessibility(accesskit_winit::Event),
+}
+
+#[cfg(feature = "a11y")]
+impl From<accesskit_winit::Event> for UserEvent {
+    fn from(event: accesskit_winit::Event) -> Self {
+        UserEvent::Accessibility(event)
+    }
 }
 
 /// Shell-specific view settings for one window: page zoom and auto-refresh policy.
@@ -439,6 +451,12 @@ struct WindowApp {
     context_menu: Option<ContextMenu>,
     /// Internal text clipboard shared by context-menu copy actions.
     clipboard: String,
+    /// Platform accessibility adapter (ADR-002): publishes the shell snapshot to AT-SPI/UIA.
+    #[cfg(feature = "a11y")]
+    accessibility_adapter: Option<accesskit_winit::Adapter>,
+    /// Pure state tracking which tree signature was last published.
+    #[cfg(feature = "a11y")]
+    accessibility_publisher: crate::a11y_backend::AccessibilityPublisher,
     /// Global recent history (newest first) for Ctrl+H and the internal history page.
     recent_history: RecentHistory,
     /// Open Ctrl+H history menu.
