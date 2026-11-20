@@ -179,3 +179,51 @@ fn socks5_proxy_connection_is_reused_across_fetch_pooled_calls() {
         "SOCKS5 tunnel must be reused from pool"
     );
 }
+
+#[test]
+fn pooled_path_rejects_crlf_in_user_agent() {
+    // #1856: a hostile embedder-supplied user_agent with CRLF must not inject headers
+    // into the pooled request. RFC 9110 §5.5 / request-smuggling prevention.
+    let accepts = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&accepts);
+    let (port, server) = spawn(move |listener| {
+        let (mut tcp, _) = listener.accept().expect("accept");
+        seen.fetch_add(1, Ordering::SeqCst);
+        let _ = read_head(&mut tcp);
+        let _ =
+            tcp.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+    });
+    let target = Url::parse(&format!("http://127.0.0.1:{port}/")).expect("target");
+    let options = FetchOptions {
+        user_agent: "Agent\r\nX-Injected: yes".to_owned(),
+        ..FetchOptions::default()
+    };
+    let mut pool = H1Pool::new(4, Duration::from_secs(2));
+    let result = fetch_pooled(&target, &options, &mut pool);
+    assert!(
+        result.is_err(),
+        "pooled path must reject CRLF in user_agent (#1856)"
+    );
+    server.join().expect("server");
+}
+
+#[test]
+fn pooled_path_enforces_max_header_bytes_cap() {
+    // #1856: a tiny max_header_bytes must be honoured on the pooled path too,
+    // not just the non-pooled `fetch_once` path.
+    let (port, server) = spawn(move |listener| {
+        let (mut tcp, _) = listener.accept().expect("accept");
+        let _ = read_head(&mut tcp);
+        let _ =
+            tcp.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+    });
+    let target = Url::parse(&format!("http://127.0.0.1:{port}/")).expect("target");
+    let options = FetchOptions {
+        max_header_bytes: 16, // far below a minimal GET head
+        ..FetchOptions::default()
+    };
+    let mut pool = H1Pool::new(4, Duration::from_secs(2));
+    let result = fetch_pooled(&target, &options, &mut pool);
+    assert!(matches!(result, Err(megi_net::FetchError::HeadersTooLarge)));
+    server.join().expect("server");
+}
