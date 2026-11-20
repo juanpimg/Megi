@@ -169,3 +169,53 @@ fn stacked_modal_dialogs_focus_topmost_modal() {
     let names: Vec<String> = order.iter().map(|node| name(&document, *node)).collect();
     assert_eq!(names, vec!["Upper"]);
 }
+
+#[test]
+fn snapshot_exposes_widget_states() {
+    let document = doc("<input type=checkbox checked id=cb> \
+         <button aria-pressed=true id=toggle>x</button> \
+         <div aria-expanded=false id=tree>x</div> \
+         <h2 id=title>Title</h2> \
+         <input type=text value=hello id=field>");
+    let snap = crate::a11y::snapshot(&document, document.root());
+    let find = |id: &str| {
+        let node = document.get_element_by_id(id).expect("element");
+        snap.iter()
+            .find(|entry| entry.id == node)
+            .expect("snapshot node")
+    };
+    assert_eq!(find("cb").checked, Some(true), "checked checkbox state");
+    assert_eq!(find("toggle").pressed, Some(true), "aria-pressed state");
+    assert_eq!(find("tree").expanded, Some(false), "aria-expanded state");
+    assert_eq!(find("title").level, Some(2), "heading level");
+    assert_eq!(find("field").value.as_deref(), Some("hello"), "input value");
+}
+
+#[test]
+fn widget_states_map_to_accesskit_nodes() {
+    use crate::a11y::SnapshotNode;
+    use accesskit::{Action, Role, Toggled};
+    let node = SnapshotNode {
+        id: megi_webview::core::NodeId::from_index(1),
+        parent: None,
+        role: "checkbox".to_owned(),
+        name: "Remember".to_owned(),
+        disabled: false,
+        hidden: false,
+        focusable: true,
+        checked: Some(true),
+        pressed: None,
+        expanded: None,
+        level: None,
+        value: None,
+    };
+    let update = crate::a11y_backend::build_tree_update(std::slice::from_ref(&node), node.id);
+    let (_, ak) = update.nodes.first().expect("one node");
+    assert_eq!(ak.role(), Role::CheckBox);
+    assert_eq!(
+        ak.toggled(),
+        Some(Toggled::True),
+        "checked state must reach AT"
+    );
+    assert!(ak.supports_action(Action::Click));
+}
