@@ -1,4 +1,34 @@
 use super::*;
+use std::collections::HashSet;
+
+/// Hashable key for the exact `(node, rect)` identity used to dedup painted primitives.
+///
+/// `f32::to_bits` gives a total, `Hash`-able view of the rectangle. Zero is canonicalised so
+/// `-0.0` and `+0.0` compare equal, matching the `PartialEq` semantics the previous linear
+/// scan used. NaN rectangles cannot pass the positive-area gate in `collect_link_regions`.
+pub(crate) fn rect_key(rect: CssRect) -> [u32; 4] {
+    let bits = |value: f32| if value == 0.0 { 0.0_f32 } else { value }.to_bits();
+    [
+        bits(rect.x),
+        bits(rect.y),
+        bits(rect.width),
+        bits(rect.height),
+    ]
+}
+
+pub(crate) type RegionKey = (Option<megi_webview::core::NodeId>, [u32; 4]);
+
+/// Pushes `region` only when its exact `(node, rect)` pair has not been seen, preserving the
+/// first occurrence and therefore paint order. O(1) per call via `HashSet` (#1867).
+pub(crate) fn push_unique(
+    regions: &mut Vec<LinkRegion>,
+    seen: &mut HashSet<RegionKey>,
+    region: LinkRegion,
+) {
+    if seen.insert((region.node, rect_key(region.rect))) {
+        regions.push(region);
+    }
+}
 
 /// Converts a physical cursor position into page CSS coordinates.
 ///
@@ -65,6 +95,7 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
         return collect_link_regions_from_layout(output);
     }
     let mut regions: Vec<LinkRegion> = Vec::new();
+    let mut seen: HashSet<RegionKey> = HashSet::new();
     for hit_region in &output.hit_regions {
         let rect = hit_region.rect;
         let center_x = rect.x + rect.width / 2.0;
@@ -84,13 +115,8 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
                 is_blocker: false,
             };
             // Several painted primitives can cover the same anchor (e.g. a text run plus
-            // its underline); keep one region per exact (node, rect) pair.
-            if !regions
-                .iter()
-                .any(|existing| existing.node == region.node && existing.rect == region.rect)
-            {
-                regions.push(region);
-            }
+            // its underline); keep one region per exact (node, rect) pair (#1867).
+            push_unique(&mut regions, &mut seen, region);
         } else if rect.width > 0.0 && rect.height > 0.0 {
             // #1723: keep opaque non-link primitives so they block clicks on
             // anchors painted underneath instead of being skipped entirely.
@@ -100,12 +126,7 @@ pub fn collect_link_regions(output: &megi_webview::render::RenderOutput) -> Vec<
                 node: hit_region.node_id,
                 is_blocker: true,
             };
-            if !regions
-                .iter()
-                .any(|existing| existing.node == blocker.node && existing.rect == blocker.rect)
-            {
-                regions.push(blocker);
-            }
+            push_unique(&mut regions, &mut seen, blocker);
         }
     }
     if regions.is_empty() {
