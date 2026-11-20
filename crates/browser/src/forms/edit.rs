@@ -73,6 +73,24 @@ impl FocusState {
 pub struct ImeState {
     enabled: bool,
     preedit: String,
+    composing: bool,
+}
+
+/// One DOM composition event derived from an OS IME transition (#1519 / F7-IME).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompositionEventSpec {
+    event_type: &'static str,
+    data: String,
+}
+
+impl CompositionEventSpec {
+    pub fn event_type(&self) -> &'static str {
+        self.event_type
+    }
+
+    pub fn data(&self) -> &str {
+        &self.data
+    }
 }
 
 impl ImeState {
@@ -88,6 +106,7 @@ impl ImeState {
     /// composition that had been inserted as placeholder text.
     pub fn disable(&mut self) -> String {
         self.enabled = false;
+        self.composing = false;
         std::mem::take(&mut self.preedit)
     }
 
@@ -102,6 +121,35 @@ impl ImeState {
 
     pub fn preedit(&self) -> &str {
         &self.preedit
+    }
+
+    /// Composition events for an OS preedit update: `compositionstart` on the first
+    /// non-empty preedit, then `compositionupdate` (UI Events §4.4).
+    pub fn preedit_events(&mut self, text: String) -> Vec<CompositionEventSpec> {
+        self.preedit = text.clone();
+        let mut events = Vec::new();
+        if !self.composing {
+            self.composing = true;
+            events.push(CompositionEventSpec {
+                event_type: "compositionstart",
+                data: text.clone(),
+            });
+        }
+        events.push(CompositionEventSpec {
+            event_type: "compositionupdate",
+            data: text,
+        });
+        events
+    }
+
+    /// Composition events for a final commit: `compositionend` with the committed text.
+    pub fn commit_events(&mut self, text: String) -> Vec<CompositionEventSpec> {
+        self.preedit.clear();
+        self.composing = false;
+        vec![CompositionEventSpec {
+            event_type: "compositionend",
+            data: text,
+        }]
     }
 
     /// Commits the composition: returns the final text and clears the preedit.

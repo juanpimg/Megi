@@ -17,7 +17,8 @@ impl WindowApp {
                 self.request_repaint();
             }
             Ime::Preedit(text, _cursor) => {
-                self.ime.set_preedit(text);
+                let events = self.ime.preedit_events(text);
+                self.queue_composition_events(events);
                 self.request_repaint();
             }
             Ime::Commit(text) => {
@@ -38,7 +39,23 @@ impl WindowApp {
                         if let (Some(control), Some(value)) =
                             (self.focused_control().cloned(), value)
                         {
-                            let ui_events = vec![megi_webview::render::HostDomEvent {
+                            let mut ui_events: Vec<megi_webview::render::HostDomEvent> = self
+                                .ime
+                                .commit_events(committed.clone())
+                                .into_iter()
+                                .map(|spec| megi_webview::render::HostDomEvent {
+                                    event_type: spec.event_type().to_owned(),
+                                    target: megi_webview::render::HostEventTarget::FormControl(
+                                        control.form_id,
+                                    ),
+                                    bubbles: true,
+                                    cancelable: false,
+                                    kind: megi_webview::render::HostUiEventKind::Composition {
+                                        data: spec.data().to_owned(),
+                                    },
+                                })
+                                .collect();
+                            ui_events.push(megi_webview::render::HostDomEvent {
                                 event_type: "input".to_owned(),
                                 target: megi_webview::render::HostEventTarget::FormControl(
                                     control.form_id,
@@ -49,7 +66,7 @@ impl WindowApp {
                                     data: Some(committed),
                                     input_type: "insertCompositionText".to_owned(),
                                 },
-                            }];
+                            });
                             self.apply_form_patch_with_events(
                                 Some(control.form_id),
                                 Some(&value),
@@ -63,6 +80,29 @@ impl WindowApp {
                 self.request_repaint();
             }
         }
+    }
+
+    /// Queues DOM composition events from an OS IME transition to the focused form control.
+    fn queue_composition_events(&mut self, events: Vec<crate::forms::CompositionEventSpec>) {
+        if events.is_empty() {
+            return;
+        }
+        let Some(control) = self.focused_control().cloned() else {
+            return;
+        };
+        let host_events: Vec<megi_webview::render::HostDomEvent> = events
+            .into_iter()
+            .map(|spec| megi_webview::render::HostDomEvent {
+                event_type: spec.event_type().to_owned(),
+                target: megi_webview::render::HostEventTarget::FormControl(control.form_id),
+                bubbles: true,
+                cancelable: false,
+                kind: megi_webview::render::HostUiEventKind::Composition {
+                    data: spec.data().to_owned(),
+                },
+            })
+            .collect();
+        self.apply_form_patch_with_events(Some(control.form_id), None, None, false, host_events);
     }
 
     /// Submits the form owning the currently focused control (#1538).

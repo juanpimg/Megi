@@ -299,3 +299,27 @@ fn native_constructor_prototypes_are_sealed() {
         .expect("eval");
     assert_eq!(out, "false:false|false:false");
 }
+
+#[test]
+fn composition_event_constructor_and_dispatch() {
+    // F7-IME: DOM CompositionEvent with `data`, dispatched via dispatch_ui_event.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "window.__log = ''; \
+             var e = new CompositionEvent('compositionend', { \
+               bubbles: true, data: 'にほん' \
+             }); \
+             if (!(e instanceof CompositionEvent) || !(e instanceof Event) || e.data !== 'にほん') { \
+               throw new Error('bad CompositionEvent'); \
+             } \
+             document.addEventListener('compositionend', function (ev) { \
+               __log += ev.data + ':' + (ev instanceof CompositionEvent); \
+             }); \
+             document.dispatchEvent(e); \
+             __log;",
+            "ime.js",
+        )
+        .expect("eval");
+    assert_eq!(out, "にほん:true");
+}
