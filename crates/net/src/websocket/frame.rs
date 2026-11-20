@@ -218,9 +218,11 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
     if bytes.len() < end {
         return Err(protocol("truncated frame payload"));
     }
-    // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. Binary and
-    // continuation frames may carry arbitrary bytes (fragmented reassembly is separate).
-    if opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
+    // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. #1858: when
+    // FIN=0 the message is fragmented and a UTF-8 sequence may span frames (RFC 6455 §8.1),
+    // so validation is deferred to the reassembled message in `client.rs`. Only a complete
+    // (FIN=1) Text frame is checked here; Binary and Continuation carry arbitrary bytes.
+    if fin && opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
         return Err(protocol("text frame payload is not valid UTF-8"));
     }
     Ok(DecodedFrame {
@@ -296,4 +298,38 @@ pub fn decode_frames(bytes: &[u8], max_payload: usize) -> Result<(Vec<Frame>, &[
 
 pub(super) fn protocol(reason: &str) -> FetchError {
     FetchError::InvalidResponse(format!("websocket: {reason}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_fragment_with_partial_utf8_is_accepted_when_not_final() {
+        // #1858: RFC 6455 §8.1 allows a UTF-8 sequence to span frames. Validation belongs
+        // to the reassembled message, not to each fragment. A Text frame with FIN=0 whose
+        // payload ends mid-sequence (0xC3) must decode without error.
+        let frame = Frame {
+            fin: false,
+            opcode: Opcode::Text,
+            masked: false,
+            payload: vec![0xC3],
+        };
+        let bytes = encode_frame(&frame, [0, 0, 0, 0]);
+        let decoded = decode_frame(&bytes, 1024).expect("partial UTF-8 fragment must decode");
+        assert_eq!(decoded.frame.payload, vec![0xC3]);
+    }
+
+    #[test]
+    fn final_text_frame_still_rejects_invalid_utf8() {
+        // The per-frame check must remain for a complete (FIN=1) Text message.
+        let frame = Frame {
+            fin: true,
+            opcode: Opcode::Text,
+            masked: false,
+            payload: vec![0xC3],
+        };
+        let bytes = encode_frame(&frame, [0, 0, 0, 0]);
+        assert!(decode_frame(&bytes, 1024).is_err());
+    }
 }

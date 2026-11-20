@@ -440,3 +440,7 @@ fn websocket_wrapper_recv_bytes_returns_binary() {
     assert_eq!(socket.recv_bytes().expect("recv_bytes"), vec![0xAB, 0xCD]);
     server.join().expect("server");
 }
+
+// #1858: RFC 6455 §8.1 fragmented UTF-8 (code point split across frames).
+#[path = "websocket_tests/fragmented_utf8.rs"]
+mod fragmented_utf8;
