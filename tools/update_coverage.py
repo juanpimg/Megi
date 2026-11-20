@@ -177,6 +177,26 @@ def _strip_rust_comments_and_strings(source: str) -> str:
     return "".join(out)
 
 
+def _fn_body(code: str, search_from: int) -> str:
+    """Return the brace-balanced body of the function whose name ends before `search_from`.
+
+    `code` has comments/strings blanked out with offsets preserved, so scanning braces
+    from the first `{` after the name yields the exact function body (#1834).
+    """
+    opening = code.find("{", search_from)
+    if opening < 0:
+        return ""
+    depth = 0
+    for i in range(opening, len(code)):
+        if code[i] == "{":
+            depth += 1
+        elif code[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return code[opening : i + 1]
+    return code[opening:]
+
+
 def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, str]:
     """Return (verified, reason). `done` requires evidence that machines can check."""
     state = str(cap.get("state", ""))
@@ -223,19 +243,24 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
         match = pattern.search(code)
         if not match:
             return False, f"no aparece fn {fn} en {path_text}"
-        # A real test needs `#[test]`/`#[tokio::test]`, unless the file lives under a
-        # `tests/` directory (integration-test files need no attribute).
-        in_tests_dir = "tests" in path.parts
-        if not in_tests_dir:
-            prefix = code[: match.start()]
-            if not re.search(r"#\[(?:tokio::)?test\]\s*(?:#\[[^\]]*\]\s*)*$", prefix):
-                return False, f"{fn} no está marcado con #[test] en {path_text}"
+        # #1834: a real test needs `#[test]`/`#[tokio::test]` AND at least one assertion,
+        # even under `tests/` (integration-test files need no `mod tests`, but they still
+        # need `#[test]`). Previously any `fn <name>` under tests/ verified a capability,
+        # so a helper, a renamed test or an empty test body all counted as done.
+        prefix = code[: match.start()]
+        if not re.search(r"#\[(?:tokio::)?test\]\s*(?:#\[[^\]]*\]\s*)*$", prefix):
+            return False, f"{fn} no está marcado con #[test] en {path_text}"
+        body = _fn_body(code, match.end())
+        if not re.search(r"\bassert(?:_eq|_ne|_true|_false|_matches|_ok|_err)?\s*!|\.expect\s*\(|\.unwrap\s*\(", body):
+            return False, f"{fn} no contiene ninguna aserción en {path_text}"
         return True, f"test {path_text}::{fn}"
 
     if kind == "fixture":
         path = root / detail
         if not path.is_file():
             return False, f"no existe el fixture {detail}"
+        if path.stat().st_size == 0:
+            return False, f"fixture {detail} está vacío"
         return True, f"fixture {detail} existe"
 
     return False, f"tipo de evidencia desconocido: {kind!r}"
