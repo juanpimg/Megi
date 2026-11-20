@@ -235,6 +235,8 @@ pub struct WindowViewOptions {
     pub session_path: Option<std::path::PathBuf>,
     /// Download directory (`None` = `$HOME/Downloads`/temp fallback).
     pub download_dir: Option<std::path::PathBuf>,
+    /// Use OS renderer processes with DOM-patching IPC instead of per-site threads.
+    pub process_render: bool,
 }
 
 impl Default for WindowViewOptions {
@@ -245,6 +247,7 @@ impl Default for WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
+            process_render: false,
         }
     }
 }
@@ -258,7 +261,14 @@ impl WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
+            process_render: false,
         }
+    }
+
+    /// Enables OS renderer processes with DOM-patching IPC (ADR-004).
+    pub fn with_process_render(mut self, enabled: bool) -> Self {
+        self.process_render = enabled;
+        self
     }
 
     /// Adds the initial tab list (`--tabs`, repeatable).
@@ -386,6 +396,10 @@ struct WindowApp {
     store: FrameStore,
     /// Per-site renderer pool (ADR-004 phase 2). Workers spawn on first request per site.
     render_pool: Option<RendererPool>,
+    /// OS renderer process, process-mode flag and its queued replies (ADR-004 phase 3).
+    process_session: Option<crate::ipc::ProcessRenderSession>,
+    use_process_render: bool,
+    process_messages: std::collections::VecDeque<crate::worker::WorkerMessage>,
     debounce: Debounce,
     pending_metrics: Option<WindowMetrics>,
     error: Option<String>,
