@@ -314,7 +314,7 @@ fn interlaced_rows(height: usize) -> Vec<usize> {
     rows
 }
 
-/// MSB-first bit reader for the LZW stream.
+/// LSB-first bit reader for the LZW stream (GIF packs codes least-significant-bit first).
 struct LzwBits<'a> {
     data: &'a [u8],
     bit: usize,
