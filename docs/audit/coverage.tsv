@@ -870,8 +870,8 @@ crates/net/src/url/encoding.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/net/src/url/parsing.rs	288	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/url/tests.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/websocket/client.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/websocket/frame.rs	299	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/websocket/client.rs	392	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/websocket/frame.rs	335	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket/handshake.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket/tests.rs	343	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket/wrapper.rs	128	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -926,7 +926,8 @@ crates/net/tests/upload_streaming/h2.rs	262	test	F1	wave-max-mod	2026-11-19	cove
 crates/net/tests/upload_streaming/main.rs	91	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/url_tests.rs	354	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/url_userinfo_auth.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/tests/websocket_tests.rs	442	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/websocket_tests.rs	446	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/websocket_tests/fragmented_utf8.rs	60	test	F1	juanpimg	2026-11-20	covered	#1858	TDD regression: UTF-8 code point split across Text+Continuation frames (RFC 6455 §8.1)
 crates/paint/Cargo.toml	24	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/examples/html_to_png.rs	181	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/background.rs	444	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
