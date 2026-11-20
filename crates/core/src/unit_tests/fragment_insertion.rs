@@ -45,6 +45,35 @@ fn append_child_with_fragment_expands_children_in_order() {
 }
 
 #[test]
+fn self_reference_insert_validates_parent_before_noop() {
+    // #1728 / DOM §4.2.3: "ensure pre-insert validity" runs before the
+    // "referenceChild is node" adjustment, so a bogus/non-container parent must still fail.
+    let mut doc = Document::new();
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    doc.append_child(doc.root(), body);
+    let child = doc.create_element(Namespace::Html, "div", vec![]);
+    doc.append_child(body, child);
+    let text_parent = doc.create_text_node("text");
+
+    let bogus = NodeId::from_index(9999);
+    assert!(matches!(
+        doc.insert_node(bogus, child, Some(child)),
+        Err(DomError::UnknownNode(_))
+    ));
+    assert!(matches!(
+        doc.insert_node(text_parent, child, Some(child)),
+        Err(DomError::CannotHaveChildren(_))
+    ));
+    // A valid parent yields a successful no-op.
+    assert_eq!(doc.insert_node(body, child, Some(child)), Ok(vec![]));
+
+    // (b) insert_before_child with reference == node is a successful no-op, not HierarchyRequest.
+    assert_eq!(doc.insert_before_child(body, child, Some(child)), Ok(child));
+    assert_eq!(doc.children(body).collect::<Vec<_>>(), vec![child]);
+    assert!(doc.validate_invariants().is_ok());
+}
+
+#[test]
 fn insert_before_with_fragment_keeps_reference_position() {
     let (mut document, body, _html) = setup();
     let first = element(&mut document, "first");
