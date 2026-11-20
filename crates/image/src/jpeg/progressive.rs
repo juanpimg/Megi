@@ -259,6 +259,33 @@ pub(crate) fn decode_ac_first(
     Ok(())
 }
 
+/// Appends correction bits to already-significant coefficients of one block
+/// (ITU T.81 G.1.2.3, fig. G.7). The encoder buffers these bits and emits them
+/// together with the EOB run symbol, so they must be consumed even for blocks
+/// that contain no new coefficients.
+fn append_ac_corrections(
+    reader: &mut BitReader<'_>,
+    coefficients: &mut [i32; BLOCK_LEN],
+    from: usize,
+    se: usize,
+    p1: i32,
+    m1: i32,
+) -> Result<(), ImageError> {
+    for &natural in ZIGZAG.iter().take(se + 1).skip(from) {
+        if coefficients[natural] != 0
+            && reader.get_bits(1)? == 1
+            && (coefficients[natural] & p1) == 0
+        {
+            if coefficients[natural] >= 0 {
+                coefficients[natural] += p1;
+            } else {
+                coefficients[natural] += m1;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn decode_ac_refine(
     reader: &mut BitReader<'_>,
     ac_table: &HuffmanTable,
@@ -268,58 +295,66 @@ pub(crate) fn decode_ac_refine(
     al: u8,
     eob_run: &mut u32,
 ) -> Result<(), ImageError> {
-    if *eob_run > 0 {
-        *eob_run -= 1;
-        return Ok(());
-    }
     let p1 = 1i32 << al;
     let m1 = -p1;
     let mut k = usize::from(ss);
     let se = usize::from(se);
-    while k <= se {
-        let symbol = reader.decode_huffman(ac_table)?;
-        let mut r = i32::from(symbol >> 4);
-        let mut s = i32::from(symbol & 0x0F);
-        if s == 0 {
-            if r < 15 {
-                *eob_run = (1u32 << r) + reader.get_bits(r as u8)?;
-                *eob_run -= 1;
-                return Ok(());
-            }
-        } else {
-            if s != 1 {
-                return Err(ImageError::InvalidData {
-                    reason: "progressive JPEG AC refinement symbol size is not 1",
-                });
-            }
-            s = if reader.get_bits(1)? == 1 { p1 } else { m1 };
-        }
-        // Advance over already-nonzero coefficients (appending correction bits)
-        // until the run of still-zero coefficients is exhausted.
+
+    if *eob_run == 0 {
         while k <= se {
-            let natural = ZIGZAG[k];
-            if coefficients[natural] != 0 {
-                if reader.get_bits(1)? == 1 {
-                    if coefficients[natural] >= 0 {
-                        coefficients[natural] += p1;
-                    } else {
-                        coefficients[natural] += m1;
-                    }
+            let symbol = reader.decode_huffman(ac_table)?;
+            let mut r = i32::from(symbol >> 4);
+            let mut s = i32::from(symbol & 0x0F);
+            if s == 0 {
+                if r < 15 {
+                    *eob_run = (1u32 << r) + reader.get_bits(r as u8)?;
+                    break;
                 }
-            } else if r == 0 {
-                break;
+                // ZRL: no new coefficient, `r = 15` advances the band below.
             } else {
-                r -= 1;
+                if s != 1 {
+                    return Err(ImageError::InvalidData {
+                        reason: "progressive JPEG AC refinement symbol size is not 1",
+                    });
+                }
+                s = if reader.get_bits(1)? == 1 { p1 } else { m1 };
+            }
+            // Advance over already-nonzero coefficients (appending correction bits)
+            // and over the run of still-zero coefficients.
+            while k <= se {
+                let natural = ZIGZAG[k];
+                if coefficients[natural] != 0 {
+                    if reader.get_bits(1)? == 1 {
+                        if coefficients[natural] >= 0 {
+                            coefficients[natural] += p1;
+                        } else {
+                            coefficients[natural] += m1;
+                        }
+                    }
+                } else if r == 0 {
+                    break;
+                } else {
+                    r -= 1;
+                }
+                k += 1;
+            }
+            if k > se {
+                break;
+            }
+            if s != 0 {
+                coefficients[ZIGZAG[k]] = s;
             }
             k += 1;
         }
-        if k > se {
-            break;
-        }
-        if s != 0 {
-            coefficients[ZIGZAG[k]] = s;
-        }
-        k += 1;
+    }
+
+    if *eob_run > 0 {
+        // Every block covered by an EOB run still carries correction bits for
+        // its already-significant coefficients. This block starts at `k` when
+        // the EOB symbol was just decoded, or at `Ss` when the run was pending
+        // on entry (ITU T.81 G.1.2.3).
+        append_ac_corrections(reader, coefficients, k, se, p1, m1)?;
+        *eob_run -= 1;
     }
     Ok(())
 }

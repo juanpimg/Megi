@@ -23,3 +23,24 @@ mod dequantize_overflow_tests {
         assert_eq!(small[0], 6);
     }
 }
+
+/// Real-world progressive JPEGs (GNU/Debian sites) must decode (#1888).
+///
+/// Both files contain AC successive-approximation refinement scans whose EOB
+/// runs carry buffered correction bits for already-significant coefficients.
+#[test]
+fn decodes_real_progressive_jpegs() {
+    for (name, bytes) in [
+        (
+            "dragora-tde-thumb.jpg",
+            include_bytes!("../../tests/fixtures/jpeg/dragora-tde-thumb.jpg") as &[u8],
+        ),
+        (
+            "debconf26_group_photo.jpg",
+            include_bytes!("../../tests/fixtures/jpeg/debconf26_group_photo.jpg") as &[u8],
+        ),
+    ] {
+        let result = decode_jpeg(bytes, &PngLimits::default());
+        assert!(result.is_ok(), "{name}: {:?}", result.err());
+    }
+}
