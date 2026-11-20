@@ -52,6 +52,10 @@ fn process_frame_restores_dom_from_wire_response() {
         warnings: 0,
         script_errors: 0,
         links: Vec::new(),
+        images: Vec::new(),
+        forms: Vec::new(),
+        find_matches: Vec::new(),
+        find_rects: Vec::new(),
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
         error: None,
@@ -78,6 +82,10 @@ fn failed_response_uses_an_empty_document() {
         warnings: 0,
         script_errors: 0,
         links: Vec::new(),
+        images: Vec::new(),
+        forms: Vec::new(),
+        find_matches: Vec::new(),
+        find_rects: Vec::new(),
         document_html: String::new(),
         error: Some("boom".to_owned()),
     };
@@ -111,4 +119,69 @@ fn link_region_survives_the_process_boundary() {
         "ordinal maps to a parent document node later"
     );
     assert!(!region.is_blocker);
+}
+
+#[test]
+fn image_and_find_regions_round_trip_through_json() {
+    let image = IpcImageRegion {
+        node_ordinal: Some(5),
+        x: 1.0,
+        y: 2.0,
+        width: 3.0,
+        height: 4.0,
+        url: "https://example.test/i.png".to_owned(),
+    };
+    let rect = IpcRect {
+        x: 10.0,
+        y: 20.0,
+        width: 30.0,
+        height: 40.0,
+    };
+    let find = IpcFindMatch {
+        node_ordinal: Some(2),
+        start: 3,
+        end: 7,
+    };
+    let json = serde_json::to_string(&(image.clone(), rect, find.clone())).expect("serialize");
+    let (back_image, back_rect, back_find): (IpcImageRegion, IpcRect, IpcFindMatch) =
+        serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(back_image, image);
+    assert_eq!(back_rect, rect);
+    assert_eq!(back_find, find);
+    assert_eq!(
+        back_rect.into_rect(),
+        crate::links::CssRect::new(10.0, 20.0, 30.0, 40.0)
+    );
+}
+
+#[test]
+fn form_control_round_trip_preserves_kind_and_options() {
+    let control = IpcFormControl {
+        form_id: 7,
+        name: "q".to_owned(),
+        node_ordinal: Some(11),
+        kind: "select".to_owned(),
+        x: 0.0,
+        y: 0.0,
+        width: 100.0,
+        height: 20.0,
+        value: "b".to_owned(),
+        checked: false,
+        disabled: false,
+        options: vec![IpcSelectOption {
+            label: "B".to_owned(),
+            value: "b".to_owned(),
+            selected: true,
+            group: Some("letters".to_owned()),
+        }],
+        multiple: false,
+    };
+    let json = serde_json::to_string(&control).expect("serialize");
+    let back: IpcFormControl = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(back, control);
+    let document = megi_webview::core::Document::new();
+    let restored = back.into_control(&document).expect("known kind");
+    assert_eq!(restored.form_id, 7);
+    assert_eq!(restored.kind, crate::forms::FormControlKind::Select);
+    assert_eq!(restored.options[0].group.as_deref(), Some("letters"));
 }
