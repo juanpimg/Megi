@@ -168,18 +168,22 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
 pub(crate) fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, JsError> {
     let mut specifiers: Vec<String> = Vec::new();
     let mut output = String::with_capacity(body.len());
-    let mut rest = body.as_str();
-    while let Some(index) = rest.find("import") {
-        let after = &rest[index + "import".len()..];
-        let mut spaces = after.len() - after.trim_start().len();
-        let trimmed = after.trim_start();
-        if !trimmed.starts_with('(') {
-            output.push_str(&rest[..index + "import".len()]);
-            rest = after;
+    // #1850: search a masked copy, where strings/template literals and comments are
+    // spaces, so an `import(...)` written inside one of them is not mistaken for a
+    // real dynamic import. `mask_js_literals` preserves byte length, so every offset
+    // found here maps directly onto the original source.
+    let masked = mask_js_literals(body);
+    let mut cursor = 0usize;
+    while let Some(relative) = masked[cursor..].find("import") {
+        let index = cursor + relative;
+        let after = &body[index + "import".len()..];
+        if !after.trim_start().starts_with('(') {
+            output.push_str(&body[cursor..index + "import".len()]);
+            cursor = index + "import".len();
             continue;
         }
-        spaces += 0;
-        let mut inner = &trimmed[1..];
+        let mut inner = after.trim_start();
+        inner = &inner[1..];
         inner = inner.trim_start();
         let Some(quote) = inner.chars().next().filter(|ch| *ch == '\'' || *ch == '"') else {
             return Err(JsError::DynamicImport(
@@ -211,10 +215,9 @@ pub(crate) fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, 
                 specifiers.len() - 1
             });
         output.push_str(&format!("__MEGI_DYNAMIC_{position}__"));
-        rest = &after_literal[paren_offset + 1..];
-        let _ = spaces;
+        cursor = body.len() - after_literal[paren_offset + 1..].len();
     }
-    output.push_str(rest);
+    output.push_str(&body[cursor..]);
     *body = output;
     Ok(specifiers)
 }
