@@ -58,7 +58,10 @@ impl Document {
             index_b -= 1;
         }
         let Some(common) = common else {
-            return DISCONNECTED | IMPLEMENTATION_SPECIFIC;
+            // DOM §4.4: a disconnected comparison still reports exactly one of
+            // PRECEDING/FOLLOWING. The choice is implementation-defined; pick PRECEDING
+            // so consumers masking `(PRECEDING | FOLLOWING)` get a non-zero answer (#1822).
+            return DISCONNECTED | IMPLEMENTATION_SPECIFIC | PRECEDING;
         };
         // The child of `common` on each path: the chain entry just below it, or the node
         // itself when it *is* a direct child of `common`.

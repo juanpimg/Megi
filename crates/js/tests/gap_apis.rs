@@ -224,7 +224,7 @@ fn document_normalize_and_disconnected_bits() {
             "t"
         )
         .unwrap(),
-        "33"
+        "35"
     );
 }
 
