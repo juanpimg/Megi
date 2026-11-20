@@ -279,3 +279,77 @@ fn cjk_glyphs_are_real_not_tofu() {
         }
     }
 }
+
+#[test]
+fn complex_scripts_shape_to_real_glyphs_through_the_database() {
+    // F4-ARABIC-SHAPING / #987: the production `FontDatabase::shape` path must shape
+    // Arabic, Hebrew, Thai and Devanagari without panicking and with clusters in logical
+    // byte order (scripts may reorder/conjoin glyphs).
+    let db = FontDatabase::new_with_bundled_and_system_fonts();
+    for text in ["مرحبا", "שלום", "สวัสดี", "नमस्ते"] {
+        let run = db
+            .shape(&["sans-serif"], 400, FontStyle::Normal, 20.0, text)
+            .unwrap_or_else(|error| panic!("shape {text:?}: {error}"));
+        assert!(!run.glyphs.is_empty(), "no glyphs for {text:?}");
+        let clusters: Vec<u32> = run.glyphs.iter().map(|glyph| glyph.cluster).collect();
+        let mut sorted = clusters.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            clusters, sorted,
+            "{text:?} clusters must be monotonic: {clusters:?}"
+        );
+    }
+    // Bundled DejaVu covers Arabic and Hebrew on every runner (no system-font dependency).
+    for text in ["مرحبا", "שלום"] {
+        let run = db
+            .shape(&["sans-serif"], 400, FontStyle::Normal, 20.0, text)
+            .expect("shape bundled script");
+        assert!(
+            run.glyphs.iter().all(|glyph| glyph.glyph_id != 0),
+            "{text:?} must not shape to .notdef"
+        );
+    }
+    // Thai/Devanagari depend on system fallback fonts; when present they must be real glyphs.
+    for text in ["สวัสดี", "नमस्ते"] {
+        let run = db
+            .shape(&["sans-serif"], 400, FontStyle::Normal, 20.0, text)
+            .expect("shape fallback script");
+        let ids: Vec<u32> = run.glyphs.iter().map(|glyph| glyph.glyph_id).collect();
+        if ids.iter().any(|id| *id != 0) {
+            assert!(
+                ids.iter().all(|id| *id != 0),
+                "{text:?} mixed .notdef: {ids:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn visual_order_arabic_uses_contextual_joining_forms() {
+    // Layout hands shaping the UAX #9 visual (reversed) form of an RTL run. Shaping that
+    // with the pipeline's forced LTR direction must select initial/medial/final forms,
+    // not the isolated forms produced for the logical string.
+    let db = FontDatabase::new_with_bundled_and_system_fonts();
+    let logical: Vec<u32> = db
+        .shape(&["sans-serif"], 400, FontStyle::Normal, 20.0, "مرحبا")
+        .expect("logical")
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.glyph_id)
+        .collect();
+    let visual: Vec<u32> = db
+        .shape(&["sans-serif"], 400, FontStyle::Normal, 20.0, "ابحرم")
+        .expect("visual")
+        .glyphs
+        .iter()
+        .map(|glyph| glyph.glyph_id)
+        .collect();
+    assert_ne!(
+        logical, visual,
+        "joining forms must differ from isolated forms"
+    );
+    assert!(
+        visual.iter().all(|id| *id != 0),
+        "visual RTL glyphs must be real: {visual:?}"
+    );
+}

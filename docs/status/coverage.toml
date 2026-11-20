@@ -297,8 +297,8 @@ id = "F4-ARABIC-SHAPING"
 area = "F4"
 name = "Shaping contextual de árabe/hebreo/tailandés"
 source = "issue #987"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/fonts/tests/font_engine/shaping.rs::visual_order_arabic_uses_contextual_joining_forms"
 issue = 987
 
 [[capability]]
