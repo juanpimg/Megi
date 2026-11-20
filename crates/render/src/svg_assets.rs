@@ -120,8 +120,19 @@ fn render_limits() -> Limits {
 pub(crate) fn render(bytes: &[u8]) -> Result<RenderedSvg, SvgError> {
     let limits = render_limits();
     let intrinsic = megi_svg::intrinsic_size_with_limits(bytes, &limits)?;
-    let width = intrinsic.0.ceil().max(1.0);
-    let height = intrinsic.1.ceil().max(1.0);
+    let mut width = intrinsic.0.ceil().max(1.0);
+    let mut height = intrinsic.1.ceil().max(1.0);
+    // Browser logos (e.g. WHATWG's browser-logos/*.svg) declare a huge viewBox
+    // but are displayed at ~11px. Rasterizing at the viewBox size blows the
+    // pixel cap and drops the image entirely (#1922). Clamp the raster to a
+    // bounded dimension while keeping `intrinsic` for layout: CSS width/height
+    // still stretches the bitmap to the real box.
+    const MAX_RASTER_DIMENSION: f32 = 1024.0;
+    if width > MAX_RASTER_DIMENSION || height > MAX_RASTER_DIMENSION {
+        let scale = MAX_RASTER_DIMENSION / width.max(height);
+        width = (width * scale).ceil().max(1.0);
+        height = (height * scale).ceil().max(1.0);
+    }
     if !width.is_finite() || !height.is_finite() {
         return Err(SvgError::Invalid("non-finite intrinsic size".to_owned()));
     }
@@ -165,5 +176,28 @@ mod tests {
         assert!(looks_like_svg("image/svg+xml", page));
         assert!(looks_like_svg("", page));
         assert!(looks_like_svg("application/octet-stream", page));
+    }
+}
+
+#[cfg(test)]
+mod huge_viewbox_tests {
+    use super::*;
+
+    /// Browser logos with a huge viewBox but displayed tiny must still rasterize (#1922).
+    #[test]
+    fn huge_viewbox_svg_rasterizes_within_cap() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 27600 27600"><rect width="27600" height="27600" fill="red"/></svg>"#;
+        let rendered = render(svg).expect("huge viewBox must not be rejected");
+        assert!(
+            rendered.raster.width <= 1024 && rendered.raster.height <= 1024,
+            "raster {}x{} too large",
+            rendered.raster.width,
+            rendered.raster.height
+        );
+        assert_eq!(
+            rendered.intrinsic,
+            (27600.0, 27600.0),
+            "layout keeps intrinsic size"
+        );
     }
 }

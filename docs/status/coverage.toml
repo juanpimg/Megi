@@ -379,8 +379,8 @@ id = "F5-PROXY-PAC"
 area = "F5"
 name = "PAC/SOCKS completo y pooling de proxies"
 source = "PROGRESS.md next_up"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/net/src/pac.rs::cache_key_includes_full_url_not_just_host"
 
 [[capability]]
 id = "F5-IMAGE-BUDGETS"
