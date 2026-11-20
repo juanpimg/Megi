@@ -2,6 +2,32 @@
 
 use super::*;
 
+impl SaveDialogState {
+    /// Switches between PNG and HTML export and rewrites the filename extension so the
+    /// saved file always matches the selected format.
+    fn toggle_format(&mut self) {
+        self.html = !self.html;
+        let base = match self.name.rfind('.') {
+            Some(index)
+                if index > 0
+                    && self.name[index + 1..]
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric()) =>
+            {
+                &self.name[..index]
+            }
+            _ => &self.name,
+        };
+        let extension = if self.html { "html" } else { "png" };
+        self.name = format!("{base}.{extension}");
+    }
+
+    /// Human-readable format label for the dialog.
+    pub(super) fn format_label(&self) -> &'static str {
+        if self.html { "HTML" } else { "PNG" }
+    }
+}
+
 impl WindowApp {
     /// Opens the visual Save-as dialog (F7-SAVE-AS / #988). `html` selects the HTML
     /// snapshot exporter; otherwise the rendered PNG is saved. The name is pre-filled
@@ -46,6 +72,13 @@ impl WindowApp {
             Key::Named(NamedKey::Enter) => {
                 if let Some(dialog) = self.save_dialog.take() {
                     self.confirm_save(dialog);
+                }
+                self.request_repaint();
+                true
+            }
+            Key::Named(NamedKey::Tab) => {
+                if let Some(dialog) = self.save_dialog.as_mut() {
+                    dialog.toggle_format();
                 }
                 self.request_repaint();
                 true
@@ -115,5 +148,35 @@ impl WindowApp {
             })
         };
         self.finish_download(result);
+    }
+}
+
+#[cfg(test)]
+mod save_as_tests {
+    use super::*;
+
+    #[test]
+    fn toggling_format_updates_the_filename_extension() {
+        let mut dialog = SaveDialogState {
+            name: "page.png".to_owned(),
+            html: false,
+        };
+        dialog.toggle_format();
+        assert!(dialog.html, "toggle must select HTML export");
+        assert_eq!(dialog.name, "page.html", "extension must follow the format");
+
+        dialog.toggle_format();
+        assert!(!dialog.html, "toggle must return to PNG export");
+        assert_eq!(dialog.name, "page.png");
+    }
+
+    #[test]
+    fn toggling_format_preserves_an_unrelated_name() {
+        let mut dialog = SaveDialogState {
+            name: "my-page.txt".to_owned(),
+            html: false,
+        };
+        dialog.toggle_format();
+        assert_eq!(dialog.name, "my-page.html");
     }
 }
