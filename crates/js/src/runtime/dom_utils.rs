@@ -4,6 +4,10 @@ use super::*;
 // DOM utilities: NodeList, matches/closest, insertAdjacent*
 // ---------------------------------------------------------------------------
 
+/// #1851: hard cap on native `forEach` iterations so a tampered length cannot
+/// turn a snapshot walk into an unbudgeted billion-call loop.
+const MAX_NODE_LIST_ITERATIONS: u64 = 1_000_000;
+
 /// Deterministic accessibility snapshot (F7-A11Y, partial): a flat list of named
 /// `{role, name}` nodes in document order. Platform/AT integration is out of scope here.
 pub(crate) fn accessibility_tree_snapshot(
@@ -71,6 +75,7 @@ pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<J
     for node in nodes {
         wrappers.push(wrap_node(context, node)?);
     }
+    let snapshot_size = wrappers.len();
     // #1937: an Array is natively iterable (`Symbol.iterator`), so `for...of` works on
     // HTMLCollections just like on NodeLists. Keep the DOM collection helpers as properties.
     let array = JsValue::from(JsArray::from_iter(wrappers, context));
@@ -79,6 +84,29 @@ pub(crate) fn node_list(context: &mut Context, nodes: Vec<NodeId>) -> JsResult<J
         js_string!("__megi_node_list"),
         JsValue::from(true),
         false,
+        context,
+    );
+    // #1851: Web IDL §3.7.8 declares `length` readonly. The backing Array's
+    // `length` is writable, which let a script inflate `forEach` into a billion
+    // native (unbudgeted) callback calls. Make it non-writable and keep the real
+    // snapshot length in a private field that `forEach` reads instead.
+    let snapshot_len = JsValue::from(snapshot_size as u64);
+    let length_descriptor = PropertyDescriptor::builder()
+        .value(snapshot_len.clone())
+        .writable(false)
+        .enumerable(false)
+        .configurable(false)
+        .build();
+    let _ = object.define_property_or_throw(js_string!("length"), length_descriptor, context);
+    let snapshot_descriptor = PropertyDescriptor::builder()
+        .value(snapshot_len)
+        .writable(false)
+        .enumerable(false)
+        .configurable(false)
+        .build();
+    let _ = object.define_property_or_throw(
+        js_string!("__megi_node_list_length"),
+        snapshot_descriptor,
         context,
     );
     let _ = object.set(
@@ -127,11 +155,21 @@ pub(crate) fn node_list_for_each(
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid NodeList receiver"))?;
+    // #1851: use the real snapshot length, never the public `length` property,
+    // which scripts may have tampered with. Fall back for foreign node-lists.
     let length = object
-        .get(js_string!("length"), context)
-        .map_err(|error| js_error(error.to_string()))?
-        .as_number()
+        .get(js_string!("__megi_node_list_length"), context)
+        .ok()
+        .and_then(|value| value.as_number())
+        .or_else(|| {
+            object
+                .get(js_string!("length"), context)
+                .ok()
+                .and_then(|value| value.as_number())
+        })
         .unwrap_or(0.0) as u64;
+    // Guard against absurd lengths even if a foreign list exposes a bogus value.
+    let length = length.min(MAX_NODE_LIST_ITERATIONS);
     for index in 0..length {
         let item = object
             .get(js_string!(index.to_string()), context)
