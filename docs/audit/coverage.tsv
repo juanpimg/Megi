@@ -813,8 +813,8 @@ crates/net/src/cookies/tests.rs	468	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/net/src/cookies/types.rs	186	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cors.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cors/tests.rs	344	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/csp.rs	403	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/csp/sources.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/csp.rs	425	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/csp/sources.rs	293	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/data.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/error.rs	281	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/file.rs	161	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
