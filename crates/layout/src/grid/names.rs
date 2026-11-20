@@ -14,7 +14,9 @@ pub(super) fn line_boundary(line: &GridLine, track_count: usize) -> Option<usize
                 usize::try_from(value - 1).ok()
             } else {
                 let index = track_count as i64 + 1 + value;
-                (index >= 0).then_some(index.min(track_count as i64 + 1) as usize)
+                // #1846: CSS Grid §8.3 — a negative line that resolves before line 1
+                // clamps to line 1 (boundary 0) instead of falling back to `auto`.
+                Some(index.clamp(0, track_count as i64 + 1) as usize)
             }
         }
         GridLine::Span(_) | GridLine::Auto | GridLine::Name(_) => None,
@@ -202,4 +204,20 @@ fn span_from(start: &GridLine, end: &GridLine) -> usize {
         },
     };
     span.clamp(1, MAX_SPAN)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn negative_line_out_of_range_clamps_to_first_line() {
+        // #1846: CSS Grid §8.3 — a negative line index resolving before line 1
+        // clamps to line 1 (boundary 0), not `auto`/None.
+        assert_eq!(line_boundary(&GridLine::Line(-100), 10), Some(0));
+        assert_eq!(line_boundary(&GridLine::Line(-11), 10), Some(0));
+        // In-range negatives still count back from the end (line 11 for -1).
+        assert_eq!(line_boundary(&GridLine::Line(-1), 10), Some(10));
+        assert_eq!(line_boundary(&GridLine::Line(-10), 10), Some(1));
+    }
 }
