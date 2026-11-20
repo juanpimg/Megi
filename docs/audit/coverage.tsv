@@ -642,7 +642,7 @@ crates/js/src/runtime/workers.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/js/src/runtime/workers/api.rs	295	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/workers/messaging.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/workers/state.rs	292	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/websocket.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/websocket.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr/prelude_a.js	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr/prelude_b.js	353	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -682,7 +682,7 @@ crates/js/tests/shadow_dom_tests.rs	56	test	F1	wave-max-mod	2026-11-19	covered	#
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/websocket_api_tests.rs	84	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/websocket_api_tests.rs	158	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/wp_a_events_timers.rs	412	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/wp_b_tests.rs	481	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
