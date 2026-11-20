@@ -13,7 +13,7 @@
 //!
 //! # Limits
 //!
-//! - WOFF1 is **not** decoded (only WOFF2; TTF/OTF pass through unchanged).
+//! - WOFF1 is decoded by [`crate::woff1`]; TTF/OTF pass through unchanged.
 //! - The header and the whole table directory are validated before handing the bytes over
 //!   (`totalSfntSize`, `totalCompressedSize`, `numTables`, file length and every declared
 //!   table/transform length), the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and
@@ -170,6 +170,9 @@ pub fn decode_web_font(bytes: &[u8]) -> Result<Vec<u8>, FontError> {
         return Err(FontError::InvalidWebFont {
             reason: "empty web font data".to_string(),
         });
+    }
+    if crate::is_woff1(bytes) {
+        return crate::decode_woff1(bytes);
     }
     if !is_woff2(bytes) {
         return Ok(bytes.to_vec());

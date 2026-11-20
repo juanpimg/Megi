@@ -322,3 +322,25 @@ fn clamp_min_max_work_in_computed_width() {
         assert!(matches!(style.width, megi_css::Length::Px(px) if px == 150.0));
     });
 }
+
+/// #1928 regression: math-function prefix detection used byte slicing on a UTF-8 `&str`,
+/// panicking for multi-byte characters right after a leading ASCII letter (e.g. `c𑎐`).
+#[test]
+fn math_function_prefix_never_panics_on_utf8_boundaries() {
+    let tricky = [
+        "c𑎐",
+        "m𑎐",
+        "min𑎐",
+        "max𑎐",
+        "clamp𑎐",
+        "c\u{10FFFF}",
+        "𑎐calc(1px)",
+    ];
+    for expr in tricky {
+        // Wrap in calc() so parsing reaches Parser::factor() -> math_function(), where
+        // a leading ASCII letter followed by a multi-byte char used to panic (#1928).
+        let css = format!("#target {{ width: calc({expr}); }}");
+        // Must not panic, regardless of parse success.
+        let _ = computed(&css);
+    }
+}

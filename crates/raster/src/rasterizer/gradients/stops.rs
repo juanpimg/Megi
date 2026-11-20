@@ -79,7 +79,11 @@ pub(crate) fn resolve_gradient_stops(
         }
         index += 1;
     }
-    let mut previous = 0.0f32;
+    // Seed with -∞ so an explicit negative first stop keeps its position: CSS Images 3
+    // §3.4.1 permits stops outside [0, 1], and clamping the first one to 0 changed the
+    // color at t=0 (e.g. `linear-gradient(red -50%, blue 150%)` was pure red). Implicit
+    // positions still default to 0/1 above (#1864).
+    let mut previous = f32::NEG_INFINITY;
     let mut resolved = Vec::with_capacity(stops.len());
     for (position, stop) in positions.into_iter().zip(stops.iter()) {
         let position = position.unwrap_or(0.0).max(previous);
@@ -295,6 +299,39 @@ pub(crate) fn radial_gradient_geometry(
         return None;
     }
     Some((center_x, center_y, rx, ry))
+}
+
+#[cfg(test)]
+mod gradient_stop_position_tests {
+    use super::*;
+
+    #[test]
+    fn negative_first_stop_position_is_not_clamped_to_zero() {
+        // CSS Images 3 §3.4.1 allows stop positions outside [0, 1]. A leading
+        // `linear-gradient(red -50%, blue 150%)` must keep its first stop at -0.5;
+        // clamping it to 0 made t=0 pure red instead of the interpolated color (#1864).
+        let stops = [
+            megi_display::GradientStop {
+                color: Color::RED,
+                position: Some(megi_display::Length::Percent(-50.0)),
+            },
+            megi_display::GradientStop {
+                color: Color::BLUE,
+                position: Some(megi_display::Length::Percent(150.0)),
+            },
+        ];
+        let resolved = resolve_gradient_stops(&stops, 100.0);
+        assert!(
+            (resolved[0].0 - -0.5).abs() < 1e-6,
+            "first stop must stay at -0.5, got {}",
+            resolved[0].0
+        );
+        assert!(
+            (resolved[1].0 - 1.5).abs() < 1e-6,
+            "last stop must stay at 1.5, got {}",
+            resolved[1].0
+        );
+    }
 }
 
 #[cfg(test)]

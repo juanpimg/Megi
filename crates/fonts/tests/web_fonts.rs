@@ -193,3 +193,29 @@ fn rejects_woff2_collections() {
         "{error:?}"
     );
 }
+
+#[test]
+fn decodes_woff1_into_a_usable_sfnt() {
+    // #1893: WOFF1 (zlib-compressed sfnt tables) must decode like WOFF2.
+    const WOFF1: &[u8] = include_bytes!("fixtures/DejaVuSans-woff1.woff");
+    let ttf = decode_web_font(WOFF1).expect("decode WOFF1");
+    assert!(!is_woff2(&ttf));
+    assert_eq!(&ttf[..4], b"\x00\x01\x00\x00", "sfnt version");
+    let face = ttf_parser::Face::parse(&ttf, 0).expect("valid decoded sfnt");
+    assert!(face.number_of_glyphs() > 10);
+    assert!(face.glyph_index('A').is_some());
+
+    let mut database = FontDatabase::new_with_bundled_fonts();
+    database
+        .load_font_data_family("WOFF1 Test", ttf)
+        .expect("register decoded WOFF1");
+    let font = database
+        .font(
+            &["WOFF1 Test"],
+            400,
+            FontStyle::Normal,
+            fontdb::Stretch::Normal,
+        )
+        .expect("resolve WOFF1 family");
+    assert!(font.shape(16.0, "ABC").is_ok());
+}

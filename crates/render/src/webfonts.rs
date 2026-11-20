@@ -74,6 +74,7 @@ pub type LocatedFontFace = (Url, FontFaceRule);
 fn is_supported_format(format: &str) -> bool {
     format.is_empty()
         || format.eq_ignore_ascii_case("woff2")
+        || format.eq_ignore_ascii_case("woff")
         || format.eq_ignore_ascii_case("truetype")
         || format.eq_ignore_ascii_case("opentype")
         || format.eq_ignore_ascii_case("ttf")
@@ -82,7 +83,7 @@ fn is_supported_format(format: &str) -> bool {
 
 /// Candidate sources for one `@font-face`, in the order they must be tried.
 ///
-/// WOFF2 comes first (smallest transfer), then the remaining supported formats in authored
+/// WOFF2 comes first (smallest transfer), then WOFF1, then the remaining supported formats in authored
 /// order. Trying the alternatives matters: a broken or rejected WOFF2 used to kill the whole
 /// face even when a `truetype` fallback was declared right after it (#665).
 fn face_sources(face: &FontFaceRule) -> Vec<&str> {
@@ -274,5 +275,20 @@ pub fn load_webfonts_with_csp(
         loaded,
         failed,
         bytes,
+    }
+}
+
+#[cfg(test)]
+mod supported_format_tests {
+    use super::is_supported_format;
+
+    #[test]
+    fn woff1_is_a_supported_src_format() {
+        // #1893: woff-only faces (postgresql.org) must reach the loader, not be discarded.
+        assert!(is_supported_format("woff"));
+        assert!(is_supported_format("WOFF"));
+        assert!(is_supported_format("woff2"));
+        assert!(is_supported_format("truetype"));
+        assert!(!is_supported_format("unknown-format"));
     }
 }

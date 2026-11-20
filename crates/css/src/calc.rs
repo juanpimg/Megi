@@ -283,11 +283,22 @@ impl Parser<'_> {
     fn math_function(&mut self) -> Option<Option<Quantity>> {
         let start = self.position;
         let rest = std::str::from_utf8(self.input.get(start..)?).ok()?;
-        let (name, after_name) = if rest.len() >= 5 && rest[..5].eq_ignore_ascii_case("clamp") {
+        // Use `str::get(..n)` rather than `&rest[..n]`: the latter panics when byte index
+        // `n` falls inside a multi-byte character (e.g. input `c𑎐`, proptest #1928).
+        let (name, after_name) = if rest
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("clamp"))
+        {
             ("clamp", 5)
-        } else if rest.len() >= 3 && rest[..3].eq_ignore_ascii_case("max") {
+        } else if rest
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("max"))
+        {
             ("max", 3)
-        } else if rest.len() >= 3 && rest[..3].eq_ignore_ascii_case("min") {
+        } else if rest
+            .get(..3)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("min"))
+        {
             ("min", 3)
         } else {
             return Some(None);
