@@ -24,11 +24,15 @@ impl JsRuntime {
         url: String,
         is_worker: bool,
     ) -> Result<Self, JsError> {
+        // ARCH-EXCEPTION(#1853): Boa 0.22 ModuleLoader is stored as Rc<dyn ModuleLoader>.
+        // Plan: #1853 — swap to arena handle if/when Boa accepts an owned loader.
         let module_loader = Rc::new(MegiModuleLoader {
             base_url: url.clone(),
             cache: RefCell::new(HashMap::new()),
             max_cache_entries: 256,
         });
+        // ARCH-EXCEPTION(#1853): shared realm-local CSP flag (see runtime.rs).
+        // Plan: #1853 — move into the ContextHost.
         let allow_eval = Rc::new(std::cell::Cell::new(true));
         let mut context = Context::builder()
             .module_loader(module_loader)
@@ -40,6 +44,7 @@ impl JsRuntime {
         // The Context is the single owner of the host cell; no thread-local mirror.
         crate::host::install_host(
             &mut context,
+            // ARCH-EXCEPTION(#1853): the sole documented ContextHost owner of JS state.
             Rc::new(RefCell::new(Host::new(document, url))),
         );
         // Make the immutable provider slot reachable from every binding.

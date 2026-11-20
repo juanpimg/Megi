@@ -182,6 +182,8 @@ pub(crate) fn post_target_origin_arg(
 pub(crate) fn ensure_iframe_state(
     node_id: NodeId,
     context: &mut Context,
+    // ARCH-EXCEPTION(#1853): Boa native functions need an owned handle to the child realm.
+    // Plan: #1853 — return a NodeId and resolve via host on each access.
 ) -> Result<(u32, Rc<RefCell<IframeState>>), JsError> {
     let existing = with_context_host(context, |host| {
         if let Some(&idx) = host.frame_by_node.get(&node_id)

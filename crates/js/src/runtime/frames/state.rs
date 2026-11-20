@@ -252,6 +252,8 @@ pub(crate) fn bridge_decode_to_parent(
 pub(crate) fn get_iframe_rc(
     frame_id: u32,
     context: &mut Context,
+    // ARCH-EXCEPTION(#1853): shares the child iframe realm with the frame bridge.
+    // Plan: #1853 — return a NodeId and resolve via host on each access.
 ) -> Option<Rc<RefCell<IframeState>>> {
     with_context_host(context, |host| {
         host.frames

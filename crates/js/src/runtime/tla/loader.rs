@@ -28,6 +28,8 @@ pub(crate) struct MegiModuleLoader {
 
 impl ModuleLoader for MegiModuleLoader {
     async fn load_imported_module(
+        // ARCH-EXCEPTION(#1853): Boa 0.22 ModuleLoader requires Rc<Self> for the loader.
+        // Plan: #1853 — replace with an arena handle once Boa accepts Arc/owned loaders.
         self: Rc<Self>,
         referrer: Referrer,
         request: boa_engine::module::ModuleRequest,
@@ -135,6 +137,8 @@ impl ModuleLoader for MegiModuleLoader {
     }
 
     fn init_import_meta(
+        // ARCH-EXCEPTION(#1853): Boa 0.22 ModuleLoader requires Rc<Self> for the loader.
+        // Plan: #1853 — replace with an arena handle once Boa accepts Arc/owned loaders.
         self: Rc<Self>,
         import_meta: &JsObject,
         module: &Module,

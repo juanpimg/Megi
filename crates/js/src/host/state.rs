@@ -148,6 +148,9 @@ pub(crate) struct Host {
     /// Pending self-targeted `window.postMessage(...)` messages (`(json_payload, origin)`).
     pub self_messages: VecDeque<(String, String)>,
     /// Child `<iframe>` browsing contexts owned by this document.
+    // ARCH-EXCEPTION(#1853): iframe realms are JS-owned state reached from Boa callbacks
+    // (frame bridge) and the host simultaneously; move to NodeId + arena when the frame
+    // bridge stops capturing Rc across native-function boundaries. Plan: #1853.
     pub frames: Vec<Option<Rc<RefCell<crate::runtime::IframeState>>>>,
     /// Map from `<iframe>` element `NodeId` to index in `frames`.
     pub frame_by_node: HashMap<NodeId, u32>,

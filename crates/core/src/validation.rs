@@ -291,13 +291,12 @@ impl Document {
     ///
     /// Iteration is safe against corrupted arenas: it stops (rather than panicking) if a
     /// sibling link stops resolving to a live handle.
-    pub fn children(&self, parent_id: NodeId) -> ChildrenIter<'_> {
+    pub fn children(&self, parent_id: NodeId) -> ChildrenIter {
         // DOM `template.childNodes` is empty: parsed content lives in the separate contents
         // fragment (`element.template_contents`), which callers reach explicitly.
+        let first = self.try_node(parent_id).and_then(|node| node.first_child);
         ChildrenIter {
-            doc: self,
-            next: self.try_node(parent_id).and_then(|node| node.first_child),
-            remaining: self.len() + 1,
+            nodes: crate::iter::collect_siblings(self, first, self.len() + 1).into_iter(),
         }
     }
 
@@ -308,34 +307,14 @@ impl Document {
     /// The iterator uses an explicit heap stack (never recursion, so 100k-level DOMs are
     /// safe) and a visited set, so a corrupted cyclic child/sibling chain terminates
     /// instead of hanging.
-    pub fn descendants(&self, node_id: NodeId) -> DescendantsIter<'_> {
-        let mut visited = HashSet::new();
-        visited.insert(node_id);
-        let mut order = Vec::new();
-        if let Some(node) = self.try_node(node_id) {
-            let mut child = node.first_child;
-            let mut steps = 0usize;
-            while let Some(child_id) = child {
-                steps += 1;
-                if steps > self.len() {
-                    break; // corrupted sibling chain
-                }
-                if visited.insert(child_id) {
-                    order.push(child_id);
-                }
-                child = self.try_node(child_id).and_then(|node| node.next_sibling);
-            }
-        }
-        order.reverse(); // stack pops children in document order
+    pub fn descendants(&self, node_id: NodeId) -> DescendantsIter {
         DescendantsIter {
-            doc: self,
-            stack: order,
-            visited,
+            nodes: crate::iter::collect_descendants(self, node_id).into_iter(),
         }
     }
 
     /// Like [`Document::descendants`], but yields `node_id` itself first.
-    pub fn descendants_inclusive(&self, node_id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+    pub fn descendants_inclusive(&self, node_id: NodeId) -> std::vec::IntoIter<NodeId> {
         let mut result = Vec::new();
         if self.try_node(node_id).is_some() {
             result.push(node_id);
@@ -348,11 +327,18 @@ impl Document {
     ///
     /// The walk is bounded by the live-node count, so a corrupted cyclic parent chain
     /// terminates instead of hanging.
-    pub fn ancestors(&self, node_id: NodeId) -> AncestorsIter<'_> {
+    pub fn ancestors(&self, node_id: NodeId) -> AncestorsIter {
+        let mut result = Vec::new();
+        let mut next = self.try_node(node_id).and_then(|node| node.parent);
+        while let Some(id) = next {
+            if result.len() > self.len() {
+                break; // corrupted parent cycle
+            }
+            result.push(id);
+            next = self.try_node(id).and_then(|node| node.parent);
+        }
         AncestorsIter {
-            doc: self,
-            next: self.try_node(node_id).and_then(|node| node.parent),
-            remaining: self.len() + 1,
+            nodes: result.into_iter(),
         }
     }
 }
