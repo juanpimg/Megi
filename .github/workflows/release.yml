@@ -122,20 +122,24 @@ jobs:
       - name: Collect SBOM files
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p sbom-dist
-          find . -name '*sbom*.json' -not -path './sbom-dist/*' -print -exec cp {} sbom-dist/ \; || true
+          find . -name '*sbom*.json' -not -path './sbom-dist/*' -print -exec cp {} sbom-dist/ \;
           # Fallback: workspace-level BOM name may vary
           if [ -z "$(ls -A sbom-dist 2>/dev/null)" ]; then
-            cargo cyclonedx --format json || true
-            find . -name '*.cdx.json' -o -name 'bom.json' -o -name 'sbom*.json' | head -20 | xargs -I{} cp {} sbom-dist/ || true
+            cargo cyclonedx --format json
+            find . -name '*.cdx.json' -o -name 'bom.json' -o -name 'sbom*.json' | head -20 | xargs -I{} cp {} sbom-dist/
           fi
-          ls -la sbom-dist || true
+          ls -la sbom-dist
+          # #1837: fail here if nothing valid was produced, so a broken release
+          # cannot publish an empty SBOM artifact.
+          python3 tools/check_sbom.py sbom-dist
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom
           path: sbom-dist/
-          if-no-files-found: warn
+          if-no-files-found: error
 
   publish:
     name: Publish GitHub Release
@@ -174,20 +178,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           NOTES_FILE="${{ steps.git-cliff.outputs.changelog }}"
           if [ -z "$NOTES_FILE" ] || [ ! -f "$NOTES_FILE" ]; then
             NOTES_FILE="CHANGES.md"
           fi
           if [ -f "$NOTES_FILE" ]; then
-            gh release create "${{ github.ref_name }}" \
-              --title "${{ github.ref_name }}" \
-              --notes-file "$NOTES_FILE" \
-              release-assets/megi-* release-assets/sbom/* 2>/dev/null || \
-            gh release upload "${{ github.ref_name }}" release-assets/megi-* release-assets/sbom/* --clobber
+            NOTES_ARGS=(--notes-file "$NOTES_FILE")
           else
-            gh release create "${{ github.ref_name }}" \
+            NOTES_ARGS=(--generate-notes)
+          fi
+          # #1837: keep the original stderr for diagnosis, and only fall back to
+          # `gh release upload` when the release already exists. Any other error
+          # (token, permissions, notes, network) must fail the job loudly.
+          if ! CREATE_OUTPUT=$(gh release create "${{ github.ref_name }}" \
               --title "${{ github.ref_name }}" \
-              --generate-notes \
-              release-assets/megi-* release-assets/sbom/* 2>/dev/null || \
-            gh release upload "${{ github.ref_name }}" release-assets/megi-* release-assets/sbom/* --clobber
+              "${NOTES_ARGS[@]}" \
+              release-assets/megi-* release-assets/sbom/* 2>&1); then
+            printf '%s\n' "$CREATE_OUTPUT" >&2
+            if printf '%s' "$CREATE_OUTPUT" | grep -qiE 'already exists|already_exists'; then
+              echo "Release already exists; uploading assets instead."
+              gh release upload "${{ github.ref_name }}" release-assets/megi-* release-assets/sbom/* --clobber
+            else
+              echo "gh release create failed for a reason other than an existing release" >&2
+              exit 1
+            fi
           fi
