@@ -44,7 +44,12 @@ pub(super) fn paint_block_backgrounds(
                 let alpha = alpha_scale * child.opacity.clamp(0.0, 1.0);
                 // #1713: paint the box's own background/border before pushing the
                 // clip it inherits/generates; CSS 2.2 §11.1.1 excludes it from clipping.
-                if child.is_block() && !hidden {
+                // Inline-blocks are inline-level (`is_block()` is false) but still
+                // own a background/border box. The inline pass only visits their
+                // line boxes, so paint it here (#1884: Wikipedia wordmark sprite).
+                if (child.is_block() || matches!(child.box_type, BoxType::InlineBlock(_)))
+                    && !hidden
+                {
                     let bg_clip = own_background_clip(child);
                     if let Some(rect) = bg_clip {
                         push_clip_item(list, resources, rect);

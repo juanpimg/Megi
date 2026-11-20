@@ -288,10 +288,9 @@ id = "F4-CJK-FONTS"
 area = "F4"
 name = "Fallback de fuentes CJK/emoji (sin tofu)"
 source = "issue #1015"
-state = "partial"
-evidence = "none"
+state = "done"
+evidence = "test:crates/fonts/tests/font_engine/shaping.rs::cjk_glyphs_are_real_not_tofu"
 issue = 1015
-reason = "CJK/emoji fallback works with installed system fonts; CI runners ship no CJK fonts so portable evidence is limited"
 
 [[capability]]
 id = "F4-ARABIC-SHAPING"

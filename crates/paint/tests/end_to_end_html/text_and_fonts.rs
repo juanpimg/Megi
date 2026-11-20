@@ -227,3 +227,21 @@ fn test_absolutely_positioned_image_paints() {
         "absolute <img> painted only {inked} px (#1884)"
     );
 }
+
+/// A background image on an inline-block must paint (#1884: Wikipedia's
+/// `.central-textlogo__image` uses display:inline-block + a sprite background).
+#[test]
+fn test_inline_block_background_image_paints() {
+    let source = "<!doctype html><html><body style=\"margin:0\">\
+        <div style=\"display:inline-block;width:60px;height:30px;background:#00f\">X</div>\
+        </body></html>";
+    let (pixmap, _) = render(source, 200, 80);
+    let blue = (0..pixmap.height)
+        .flat_map(|y| (0..pixmap.width).map(move |x| (x, y)))
+        .filter(|(x, y)| pixmap.pixel(*x, *y) == Color::BLUE)
+        .count();
+    assert!(
+        blue > 100,
+        "inline-block background not painted: {blue}px (#1884)"
+    );
+}
