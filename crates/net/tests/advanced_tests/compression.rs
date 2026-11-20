@@ -91,11 +91,12 @@ fn corrupt_gzip_isize_is_a_typed_decompression_error() {
 
 #[test]
 fn unsupported_content_encoding_is_rejected() {
-    let first = ok(&[("Content-Encoding", "br")], b"brotli bytes");
+    // #1918: `br` is now decoded (ADR-003); use a genuinely unsupported coding here.
+    let first = ok(&[("Content-Encoding", "zstd")], b"zstd bytes");
     let (base, server) = spawn_server(vec![first]);
     let error = fetch(&base_url(&base).join("/").unwrap(), &options()).unwrap_err();
     assert!(
-        matches!(error, FetchError::ContentEncoding(ref reason) if reason.contains("br")),
+        matches!(error, FetchError::ContentEncoding(ref reason) if reason.contains("zstd")),
         "{error}"
     );
     let _ = server.join();

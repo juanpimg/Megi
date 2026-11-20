@@ -33,7 +33,7 @@ fn content_encoding_parses_supported_codings() {
     ));
     assert!(matches!(
         ContentEncoding::parse("br"),
-        Err(FetchError::ContentEncoding(reason)) if reason.contains("br")
+        Ok(ContentEncoding::Brotli)
     ));
     assert!(matches!(
         ContentEncoding::parse("gzip, br"),
@@ -43,7 +43,10 @@ fn content_encoding_parses_supported_codings() {
 
 #[test]
 fn accept_encoding_header_modes() {
-    assert_eq!(AcceptEncoding::Gzip.header_value(), Some("gzip"));
+    assert_eq!(
+        AcceptEncoding::Gzip.header_value(),
+        Some("gzip, deflate, br")
+    );
     assert_eq!(AcceptEncoding::Identity.header_value(), None);
     assert_eq!(AcceptEncoding::default(), AcceptEncoding::Gzip);
 }
@@ -252,4 +255,55 @@ fn decode_body_dispatches_by_encoding() {
         decode_body(ContentEncoding::Deflate, &zlib_stored(data), limits()).unwrap(),
         data
     );
+}
+
+#[test]
+fn brotli_content_encoding_is_supported() {
+    // #1918: real-world CDN JS bundles use `Content-Encoding: br`.
+    assert!(matches!(
+        ContentEncoding::parse("br"),
+        Ok(ContentEncoding::Brotli)
+    ));
+    assert!(matches!(
+        ContentEncoding::parse(" BR "),
+        Ok(ContentEncoding::Brotli)
+    ));
+    assert_eq!(ContentEncoding::Brotli.as_str(), "br");
+}
+
+#[test]
+fn brotli_roundtrip_decodes_a_real_stream() {
+    const HTML: &[u8] = b"<!DOCTYPE html><html><body>hello brotli</body></html>";
+    let compressed = brotli_compress(HTML);
+    assert_ne!(
+        compressed, HTML,
+        "fixture must actually be Brotli-compressed"
+    );
+    assert_eq!(decode_brotli(&compressed, limits()).unwrap(), HTML);
+    assert_eq!(
+        decode_body(ContentEncoding::Brotli, &compressed, limits()).unwrap(),
+        HTML
+    );
+}
+
+#[test]
+fn brotli_output_cap_is_enforced_with_typed_error() {
+    const ZEROS: &[u8] = &[0u8; 16 * 1024];
+    let compressed = brotli_compress(ZEROS);
+    let tight = CompressionLimits::new(1024, 1000);
+    assert!(matches!(
+        decode_brotli(&compressed, tight),
+        Err(FetchError::DecompressionLimit { .. })
+    ));
+}
+
+/// Test-only Brotli compressor (RFC 7932) so the fixture is a genuine `br` stream.
+fn brotli_compress(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut compressed = Vec::new();
+    {
+        let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 5, 22);
+        writer.write_all(data).expect("write brotli");
+    }
+    compressed
 }
