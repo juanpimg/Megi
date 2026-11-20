@@ -29,3 +29,17 @@ fn finite_scientific_notation_and_percentages_still_parse() {
     );
     assert_eq!(Length::parse("auto", 16.0, 16.0), Some(Length::Auto));
 }
+
+#[test]
+fn standalone_viewport_units_resolve_against_viewport() {
+    // CSS Values 4 §5.1.2: vw/vh are <length> units usable standalone, not only in calc().
+    // #1927: width:50vw must resolve against the viewport width, not fall back to auto.
+    megi_css::with_calc_viewport(1024.0, 768.0, || {
+        assert_eq!(Length::parse("50vw", 16.0, 16.0), Some(Length::Px(512.0)));
+        assert_eq!(Length::parse("25vh", 16.0, 16.0), Some(Length::Px(192.0)));
+    });
+    megi_css::with_calc_viewport(1000.0, 500.0, || {
+        assert_eq!(Length::parse("10vw", 16.0, 16.0), Some(Length::Px(100.0)));
+        assert_eq!(Length::parse("50vh", 16.0, 16.0), Some(Length::Px(250.0)));
+    });
+}
