@@ -126,3 +126,36 @@ fn canvas_rejects_utf8_color_and_overflowing_image_data() {
         "invalid fill is a no-op"
     );
 }
+
+/// Canvas arc + fill primitives (#1959): charts and canvas-confetti rely on them.
+#[test]
+fn canvas_arc_and_fill_paint_pixels() {
+    let mut rt = runtime();
+    rt.eval(
+        "var c=document.createElement('canvas'); c.width=100; c.height=100; \
+         var x=c.getContext('2d'); x.fillStyle='#ff0000'; x.beginPath(); \
+         x.arc(50,50,20,0,Math.PI*2); x.fill(); \
+         var d=x.getImageData(50,50,1,1).data; window.__px=[d[0],d[1],d[2],d[3]].join(',');",
+        "t",
+    )
+    .expect("arc/fill must not throw (#1959)");
+    assert_eq!(rt.eval("window.__px", "t").unwrap(), "255,0,0,255");
+}
+
+/// Text primitives must exist so canvas scripts don't abort (#1961). The
+/// deterministic engine has no font rasterizer in `js` (DAG), so fillText
+/// paints a simple glyph box and measureText returns an approximate advance.
+#[test]
+fn canvas_text_primitives_exist() {
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c=document.createElement('canvas'); c.width=80; c.height=40; \
+             var x=c.getContext('2d'); x.fillStyle='#00ff00'; x.fillText('AB',5,20); \
+             x.strokeText('AB',5,20); \
+             [typeof x.fillText, typeof x.strokeText, x.measureText('AB').width>0].join('|')",
+            "t",
+        )
+        .expect("text primitives must not throw (#1961)");
+    assert_eq!(out, "function|function|true");
+}

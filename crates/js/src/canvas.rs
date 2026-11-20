@@ -8,6 +8,10 @@ use std::collections::HashMap;
 
 use megi_core::NodeId;
 
+mod color;
+pub use color::rgba_to_css;
+mod path;
+
 /// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
 pub const MAX_CANVAS_DIM: u32 = 4096;
 pub const MAX_CANVAS_PIXELS: u64 = 16_777_216;
@@ -127,21 +131,6 @@ impl Rgba {
     }
 }
 
-/// Serializes a color back to a CSS hex string (used by the `fillStyle`/`strokeStyle` getters).
-pub fn rgba_to_css(color: Rgba) -> String {
-    if color.a == 255 {
-        format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
-    } else {
-        format!(
-            "rgba({},{},{},{})",
-            color.r,
-            color.g,
-            color.b,
-            color.a as f32 / 255.0
-        )
-    }
-}
-
 /// A bounded RGBA drawing surface.
 #[derive(Clone, Debug)]
 pub struct CanvasSurface {
@@ -153,7 +142,13 @@ pub struct CanvasSurface {
     /// Number of pixel blends performed (bounded by the surface area after clipping). Useful
     /// for budget accounting and regression tests (#1618).
     pub operations: u64,
+    /// Current path as filled circles (x, y, radius). Bounded to avoid unbounded growth
+    /// from scripts calling arc() in a loop (#1959).
+    pub arcs: Vec<(f64, f64, f64)>,
 }
+
+/// Maximum number of path primitives retained by a canvas context (#1959).
+pub const MAX_CANVAS_PATH_ITEMS: usize = 4096;
 
 impl CanvasSurface {
     /// Creates a transparent surface, or `None` when dimensions exceed the caps.
@@ -183,6 +178,7 @@ impl CanvasSurface {
                 a: 255,
             },
             operations: 0,
+            arcs: Vec::new(),
         })
     }
 
