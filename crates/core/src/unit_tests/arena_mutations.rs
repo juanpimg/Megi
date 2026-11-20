@@ -276,3 +276,44 @@ fn test_browser_api_respects_stale_handles() {
     assert_eq!(doc.get_elements_by_tag_name("div"), Vec::<NodeId>::new());
     assert!(doc.validate_invariants().is_ok());
 }
+
+#[test]
+fn remove_subtree_terminates_on_cyclic_siblings() {
+    // #1730: a corrupt arena with a cyclic sibling chain must not hang or grow `pending`
+    // without bound. Free the outer subtree; the walk must be capped at the arena size.
+    let mut doc = Document::new();
+    let root = doc.root();
+    let parent = doc.create_element(Namespace::Html, "div", vec![]);
+    let a = doc.create_element(Namespace::Html, "span", vec![]);
+    let b = doc.create_element(Namespace::Html, "em", vec![]);
+    doc.append_child(root, parent);
+    doc.append_child(parent, a);
+    doc.append_child(parent, b);
+    // Make b's next_sibling point back to a (cycle).
+    doc.nodes[b.index()].next_sibling = Some(a);
+    // Must terminate and free at most the number of live nodes.
+    let freed = doc.remove_subtree(parent);
+    assert!((1..=4).contains(&freed), "freed {freed}");
+    assert!(doc.try_node(parent).is_none());
+}
+
+#[test]
+fn clone_node_into_terminates_on_cyclic_siblings_in_source() {
+    // #1730: import_shallow walks the source sibling chain with no cycle guard; a corrupt
+    // source arena must be rejected (NodeLimitExceeded), not loop forever.
+    let mut source = Document::new();
+    let parent = source.create_element(Namespace::Html, "div", vec![]);
+    let a = source.create_element(Namespace::Html, "span", vec![]);
+    let b = source.create_element(Namespace::Html, "em", vec![]);
+    source.append_child(source.root(), parent);
+    source.append_child(parent, a);
+    source.append_child(parent, b);
+    source.nodes[b.index()].next_sibling = Some(a);
+
+    let mut dest = Document::new();
+    let result = dest.clone_node_into(&source, parent, true);
+    // Either an error or a bounded clone is acceptable — the key is termination.
+    if let Ok(id) = result {
+        assert!(dest.subtree_size(id) <= MAX_CLONE_NODES);
+    }
+}

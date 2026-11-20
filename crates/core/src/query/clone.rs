@@ -38,9 +38,17 @@ impl Document {
             if !descend {
                 continue;
             }
-            let mut child = source.node(source_id).first_child;
+            // #1730: a stale source node must not panic (`node()` unwraps), and a cyclic
+            // sibling chain must terminate even before the node-limit cap is reached.
+            let Some(source_node) = source.try_node(source_id) else {
+                continue;
+            };
+            let max_steps = source.nodes.len();
+            let mut steps = 0usize;
+            let mut child = source_node.first_child;
             while let Some(child_id) = child {
-                if cloned_count >= MAX_CLONE_NODES.min(available) {
+                steps += 1;
+                if steps > max_steps || cloned_count >= MAX_CLONE_NODES.min(available) {
                     return Err(DomError::NodeLimitExceeded);
                 }
                 let next = source.try_node(child_id).and_then(|node| node.next_sibling);
