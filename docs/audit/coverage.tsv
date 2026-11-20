@@ -129,7 +129,7 @@ crates/browser/src/session/tests_a.rs	299	src	F2	wave-max-mod	2026-11-19	covered
 crates/browser/src/session/tests_b.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/site.rs	151	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/tabs.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/tabs/tests.rs	197	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
+crates/browser/src/tabs/tests.rs	200	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/title.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window.rs	486	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/accessibility.rs	114	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
@@ -2044,7 +2044,7 @@ tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	lead	2026-11-17	
 tools/audit_coverage.py	406	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/bench_compare.py	197	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/bench_compare.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_arch.py	190	tool	F3	jp	2026-11-19	covered	#1759	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
@@ -2056,6 +2056,7 @@ tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	123	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	313	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/test_bench_compare.py	68	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	86	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
