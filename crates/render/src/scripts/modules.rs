@@ -155,12 +155,24 @@ pub(crate) fn install_module_providers(
         let max_module_bytes = limits.max_script_bytes;
         let total_module_bytes = Arc::new(Mutex::new(0usize));
         let max_total_module_bytes = limits.max_total_bytes;
+        // A module imported by N dependents was fetched and verified N times: the
+        // JS graph evaluator calls the loader once per import edge. Cache by URL
+        // so a shared dependency is downloaded/integrity-checked once (#1899).
+        let module_source_cache: Arc<Mutex<std::collections::HashMap<String, String>>> =
+            Arc::new(Mutex::new(std::collections::HashMap::new()));
         // The module graph is fetched by the JS module loader, outside `load_scripts`: an
         // unbounded graph of tiny/empty modules would otherwise bypass the attempt cap.
         let module_fetches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let max_module_fetches = limits.max_module_fetches;
         runtime.set_module_loader(Arc::new(
             move |url_str: &str| -> Result<String, megi_js::JsError> {
+                if let Some(cached) = module_source_cache
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .get(url_str)
+                {
+                    return Ok(cached.clone());
+                }
                 if module_fetches.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                     >= max_module_fetches
                 {
@@ -226,6 +238,10 @@ pub(crate) fn install_module_providers(
                     )));
                 }
                 *total = total.saturating_add(text.len());
+                module_source_cache
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(url_str.to_owned(), text.clone());
                 Ok(text)
             },
         ));
