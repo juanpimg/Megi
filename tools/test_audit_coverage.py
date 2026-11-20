@@ -302,6 +302,7 @@ class CiToolTestsCoverageTest(unittest.TestCase):
             "tools.test_png_check",
             "tools.test_real_site_check",
             "tools.test_check_arch",
+            "tools.test_soak_fuzz",
         ):
             self.assertIn(module, joined, f"CI must run {module}: {joined}")
         # `test_inspector.py` is a CLI, not a test module; a broad `test_*.py` discovery
