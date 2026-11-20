@@ -263,6 +263,27 @@ impl JsRuntime {
                         .unwrap_or_default();
                     JsValue::from(js_string!(text))
                 }
+                "getElementsByTagName" => {
+                    let tag = arg(0).to_ascii_lowercase();
+                    let mut ordinals = Vec::new();
+                    if let Ok(host) = host_ref(&self.context) {
+                        for (ordinal, node) in host
+                            .document
+                            .descendants_inclusive(host.document.root())
+                            .enumerate()
+                        {
+                            if host
+                                .document
+                                .try_node(node)
+                                .and_then(|node| node.as_element())
+                                .is_some_and(|element| element.local_name == tag)
+                            {
+                                ordinals.push(JsValue::from(ordinal as u64));
+                            }
+                        }
+                    }
+                    JsValue::from(JsArray::from_iter(ordinals, &mut self.context))
+                }
                 "getComputedStyle" => {
                     let token = first.as_number().unwrap_or(0.0) as usize;
                     let property = arg(1);
