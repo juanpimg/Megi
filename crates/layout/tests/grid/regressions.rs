@@ -83,3 +83,23 @@ fn test_grid_item_respects_min_max_width_and_min_wins_over_max() {
     );
     assert!((case_min_wins.item(0).dimensions.content.width - 120.0).abs() < 0.1);
 }
+
+#[test]
+fn test_minmax_fixed_min_fr_row_does_not_double_count_minimum() {
+    // WHATWG CSS Grid §12.7.1 (#1839) — with `grid-template-rows: minmax(40px, 1fr)`
+    // in a 100px-tall container, the 40px minimum is the *floor inside* the free
+    // space, not an amount added on top of it. The row must be 100px, not 140px.
+    let mut container = grid_container_style(Length::Px(200.0), Length::Px(100.0));
+    container.grid_template_rows = template(vec![TrackSize::MinMax {
+        min: megi_css::TrackMin::Fixed(Length::Px(40.0)),
+        max: megi_css::TrackMax::Fraction(1.0),
+    }]);
+    // An auto-height item stretches to fill its grid area, so its box height reveals
+    // the computed row height even though the container height is fixed at 100px.
+    let case = layout_case(container, vec![item_style(Length::Auto, Length::Auto)]);
+    let row_height = case.item(0).dimensions.content.height;
+    assert!(
+        (row_height - 100.0).abs() < 0.5,
+        "minmax(40px,1fr) row in 100px container must be 100px, got {row_height}"
+    );
+}
