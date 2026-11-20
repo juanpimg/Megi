@@ -209,6 +209,8 @@ pub struct ComputedStyle {
     /// required by CSS 2.2 §10.8.1 when a numeric `line-height` is inherited.
     pub line_height_factor: Option<f32>,
     pub text_align: TextAlign,
+    /// CSS `text-overflow` (#1929): how clipped inline content signals truncation.
+    pub text_overflow: TextOverflow,
     pub direction: Direction,
     pub unicode_bidi: UnicodeBidi,
     pub white_space: WhiteSpace,

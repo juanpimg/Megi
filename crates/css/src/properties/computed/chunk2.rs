@@ -100,6 +100,7 @@ impl ComputedStyle {
             line_height: None,
             line_height_factor: None,
             text_align: TextAlign::Left,
+            text_overflow: TextOverflow::Clip,
             direction: Direction::Ltr,
             unicode_bidi: UnicodeBidi::Normal,
             white_space: WhiteSpace::Normal,
@@ -232,6 +233,7 @@ impl ComputedStyle {
             u64::from(self.background_color.b) | (u64::from(self.background_color.a) << 8),
         );
         mix(&mut hash, self.text_align as u64);
+        mix(&mut hash, self.text_overflow as u64);
         mix(&mut hash, self.white_space as u64);
         mix(&mut hash, self.text_transform as u64);
         mix_len(&mut hash, self.letter_spacing);

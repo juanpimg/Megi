@@ -76,7 +76,7 @@ pub use properties::{
     Length, LinearDirection, LinearGradient, ListStyleType, MAX_FILTER_FUNCTIONS,
     MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow, Position, RadialExtent,
     RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign, TextDecoration,
-    TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
+    TextOverflow, TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,
