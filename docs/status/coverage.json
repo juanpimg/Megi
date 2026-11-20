@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 61,
+    "implemented": 62,
     "partial": 3,
     "known": 70,
-    "percent": 87,
+    "percent": 89,
     "unverified": [],
     "invalid_states": []
   },
@@ -39,10 +39,10 @@
     },
     {
       "id": "F5",
-      "implemented": 9,
+      "implemented": 10,
       "partial": 0,
       "known": 10,
-      "percent": 90
+      "percent": 100
     },
     {
       "id": "F6",
@@ -85,16 +85,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 1014,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F5-PROXY-PAC",
-      "area": "F5",
-      "name": "PAC/SOCKS completo y pooling de proxies",
-      "source": "PROGRESS.md next_up",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
       "reason": "no requiere evidencia"
     },
     {
