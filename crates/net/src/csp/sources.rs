@@ -40,7 +40,7 @@ pub(super) fn url_allowed_by_sources(sources: &[String], url: &Url, document_url
         if source.eq_ignore_ascii_case("'self'") && same_origin(url, document_url) {
             return true;
         }
-        if source_matches_host(source, url) {
+        if source_matches_host(source, url, document_url) {
             return true;
         }
     }
@@ -90,7 +90,10 @@ pub(super) fn same_origin(a: &Url, b: &Url) -> bool {
 }
 
 /// Matches a CSP host or scheme source expression against `url`.
-pub(super) fn source_matches_host(source: &str, url: &Url) -> bool {
+///
+/// `document_url` is the protected resource: CSP3 §6.7.2.7 requires a host-source
+/// without an explicit scheme to inherit that scheme (with the http→https upgrade).
+pub(super) fn source_matches_host(source: &str, url: &Url, document_url: &Url) -> bool {
     if source.starts_with('\'') {
         // Unrecognised quoted keyword (e.g. `'strict-dynamic'`, `'unsafe-eval'`) never matches URLs.
         return false;
@@ -120,7 +123,14 @@ pub(super) fn source_matches_host(source: &str, url: &Url) -> bool {
     } else if let Some(rest) = source.strip_prefix("*://") {
         (true, rest)
     } else {
-        (true, source)
+        // #1859: no explicit scheme in the source → inherit the protected resource's
+        // scheme (CSP3 §6.7.2.7), with a one-way http→https upgrade. Never downgrade.
+        let inherited_ok = match document_url.scheme() {
+            Scheme::Https => url.scheme() == Scheme::Https,
+            Scheme::Http => matches!(url.scheme(), Scheme::Http | Scheme::Https),
+            _ => url.scheme() == document_url.scheme(),
+        };
+        (inherited_ok, source)
     };
     if !scheme_ok {
         return false;
