@@ -1,5 +1,7 @@
 //! DEFLATE/zlib/gzip decoding helpers and anti-bomb limit enforcement.
 
+use std::io::Read;
+
 use megi_image::{InflateError, InflateLimits, inflate_deflate, inflate_zlib};
 
 use crate::error::FetchError;
@@ -37,6 +39,30 @@ fn check_limits(
         return Err(limit_error(limits));
     }
     Ok(())
+}
+
+/// Decodes an RFC 7932 Brotli stream (ADR-003), enforcing the same anti-bomb caps as gzip.
+///
+/// The decoder reads incrementally into a bounded buffer so a hostile stream cannot force an
+/// allocation beyond `limits.max_output`; corrupt streams map to a typed `FetchError`.
+pub fn decode_brotli(body: &[u8], limits: CompressionLimits) -> Result<Vec<u8>, FetchError> {
+    let mut reader = brotli::Decompressor::new(body, 4096);
+    let mut out = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .map_err(|error| FetchError::Decompression(format!("brotli decode failed: {error}")))?;
+        if read == 0 {
+            break;
+        }
+        if out.len().saturating_add(read) > limits.max_output {
+            return Err(limit_error(limits));
+        }
+        out.extend_from_slice(&buffer[..read]);
+    }
+    check_limits(body.len(), out.len(), limits)?;
+    Ok(out)
 }
 
 /// Decodes an RFC 1952 gzip stream, validating the header, CRC-32 and ISIZE trailer.
