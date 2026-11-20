@@ -34,6 +34,52 @@ impl TextAlign {
             _ => None,
         }
     }
+
+    /// Resolves `text-align` from a declaration and the inherited parent value.
+    ///
+    /// A parent's *default* start/end alignment must be recomputed against the child's
+    /// direction, otherwise a direction change would inherit a mismatched physical side.
+    pub fn resolve_inherited(
+        direction: Direction,
+        raw: Option<&str>,
+        parent: Option<(Direction, TextAlign)>,
+    ) -> Self {
+        let default_align = match direction {
+            Direction::Ltr => Self::Left,
+            Direction::Rtl => Self::Right,
+        };
+        let declared = raw.and_then(|value| Self::parse_for_direction(value, direction));
+        declared.unwrap_or_else(|| {
+            parent.map_or(default_align, |(parent_direction, parent_align)| {
+                let is_default = parent_direction != direction
+                    && ((parent_direction == Direction::Ltr && parent_align == Self::Left)
+                        || (parent_direction == Direction::Rtl && parent_align == Self::Right));
+                if is_default {
+                    default_align
+                } else {
+                    parent_align
+                }
+            })
+        })
+    }
+}
+
+/// CSS `text-overflow` property (CSS UI §4.6.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextOverflow {
+    #[default]
+    Clip,
+    Ellipsis,
+}
+
+impl TextOverflow {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "clip" => Some(Self::Clip),
+            "ellipsis" => Some(Self::Ellipsis),
+            _ => None,
+        }
+    }
 }
 
 /// CSS `direction` property (CSS Writing Modes §2.1, inherited).

@@ -365,3 +365,48 @@ fn test_vertical_align_positioning() {
     assert_eq!(line_box.dimensions.content.height, 30.0);
     assert_eq!(p_box.dimensions.content.height, 30.0);
 }
+
+#[test]
+fn text_overflow_ellipsis_truncates_nowrap_text() {
+    // #1929: a nowrap line clipped by overflow:hidden must end with an ellipsis.
+    use megi_css::{Overflow, TextOverflow};
+
+    fn find_text(node: &megi_layout::LayoutBox) -> Option<&str> {
+        if let BoxType::TextNode(text) = &node.box_type {
+            return Some(text);
+        }
+        node.children.iter().find_map(find_text)
+    }
+
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let div = doc.create_element(Namespace::Html, "div", vec![]);
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, div);
+    doc.append_text(div, "ABCDEFGHIJKLMNOP");
+
+    let mut div_style = make_block_style(Length::Px(60.0), Length::Auto);
+    div_style.font_size = 16.0;
+    div_style.font_family = "sans-serif".to_string();
+    div_style.white_space = WhiteSpace::Nowrap;
+    div_style.overflow = Overflow::Hidden;
+    div_style.text_overflow = TextOverflow::Ellipsis;
+
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto, Length::Auto));
+    styles.insert(div, div_style);
+
+    let tree = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 200.0, 60.0)).expect("layout");
+    let text = find_text(&tree).expect("text box");
+    assert!(
+        text.ends_with('…'),
+        "clipped nowrap text must end with an ellipsis: {text:?}"
+    );
+    assert!(
+        text.chars().count() < 16,
+        "text must be truncated: {text:?}"
+    );
+}
