@@ -467,8 +467,8 @@ id = "F6-IMPORTMAP-SCOPES"
 area = "F6"
 name = "Import-map scopes/integrity y dynamic import no literal"
 source = "PROGRESS.md F6 pending"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/js/tests/es_modules.rs::non_literal_dynamic_import_resolves_at_runtime"
 
 [[capability]]
 id = "F6-CONFORMANCE"
