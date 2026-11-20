@@ -200,6 +200,7 @@ pub mod refresh;
 pub mod scale;
 pub mod scroll;
 pub mod session;
+pub mod site;
 pub mod tabs;
 pub mod title;
 pub mod window;
