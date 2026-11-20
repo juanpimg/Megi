@@ -353,4 +353,17 @@ pub(crate) mod tests_part1 {
         assert_eq!(longhands.border_style.top, BorderStyle::Solid);
         assert_eq!(longhands.border_width.bottom, 0.0);
     }
+    #[test]
+    fn text_overflow_is_parsed_and_inherited() {
+        // #1929: text-overflow: clip | ellipsis must reach computed style.
+        use crate::TextOverflow;
+        let root = style_with_inline("div", "text-overflow: ellipsis");
+        assert_eq!(root.text_overflow, TextOverflow::Ellipsis);
+        let clip = style_with_inline("div", "text-overflow: clip");
+        assert_eq!(clip.text_overflow, TextOverflow::Clip);
+        let initial = style_with_inline("div", "");
+        assert_eq!(initial.text_overflow, TextOverflow::Clip);
+        let invalid = style_with_inline("div", "text-overflow: bogus");
+        assert_eq!(invalid.text_overflow, TextOverflow::Clip);
+    }
 }

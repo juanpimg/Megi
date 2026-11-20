@@ -22,7 +22,7 @@ pub use values::{
     Length, LinearDirection, LinearGradient, ListStyleType, MAX_FILTER_FUNCTIONS,
     MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow, Position, RadialExtent,
     RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign, TextDecoration,
-    TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
+    TextOverflow, TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
 };
 
 // Crate-internal helpers other modules rely on.
