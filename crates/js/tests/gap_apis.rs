@@ -355,6 +355,45 @@ fn string_prototype_substr_is_available() {
 }
 
 /// Element.prototype must expose the standard navigation/mutation methods and
+#[test]
+fn node_remove_and_replace_children() {
+    // #1940: ChildNode.remove() and Element.replaceChildren() are standard WHATWG
+    // DOM APIs used by frameworks as the modern removeChild/innerHTML='' replacement.
+    let mut rt = runtime();
+    assert_eq!(
+        rt.eval(
+            "var p = document.createElement('p'); document.body.appendChild(p); p.remove(); p.parentNode === null",
+            "t"
+        )
+        .unwrap(),
+        "true"
+    );
+    assert_eq!(
+        rt.eval(
+            "var host = document.createElement('div'); host.appendChild(document.createElement('b')); host.replaceChildren(document.createElement('i')); host.childNodes.length + '|' + host.firstChild.tagName",
+            "t"
+        )
+        .unwrap(),
+        "1|I"
+    );
+    assert_eq!(
+        rt.eval(
+            "var host2 = document.createElement('div'); host2.replaceChildren('hi'); host2.firstChild.nodeType + '|' + host2.firstChild.nodeValue",
+            "t"
+        )
+        .unwrap(),
+        "3|hi"
+    );
+    assert_eq!(
+        rt.eval(
+            "var host3 = document.createElement('div'); host3.appendChild(document.createElement('b')); host3.replaceChildren(); host3.childNodes.length",
+            "t"
+        )
+        .unwrap(),
+        "0"
+    );
+}
+
 /// HTMLElement must exist as a subclass, so `instanceof` checks work (#1915/#1876).
 #[test]
 fn element_prototype_methods_and_htmlelement() {
