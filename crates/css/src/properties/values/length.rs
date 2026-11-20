@@ -13,7 +13,11 @@ impl Length {
 
     pub fn parse(s: &str, font_size: f32, root_font_size: f32) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
-        if s.starts_with("calc(") {
+        // CSS Values 4 §11: calc()/min()/max()/clamp() are <length> math functions.
+        if ["calc(", "min(", "max(", "clamp("]
+            .iter()
+            .any(|prefix| s.starts_with(prefix))
+        {
             return crate::calc::evaluate_length(s.as_str(), font_size, root_font_size);
         }
         if s == "auto" {
