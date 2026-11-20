@@ -340,6 +340,17 @@ impl ComputedStyle {
         // carries no transform even when an ancestor has one.
         let transform = find_declaration(&entries, "transform")
             .and_then(|d| crate::transform::Transform::parse(&d.raw_value));
+        // CSS `transform-origin` (#1934). Not inherited: absent/malformed values keep
+        // the initial `50% 50%` rather than copying the parent.
+        let transform_origin = find_declaration(&entries, "transform-origin")
+            .and_then(|d| {
+                crate::transform_origin::TransformOrigin::parse(
+                    &d.raw_value,
+                    font_size,
+                    root_font_size,
+                )
+            })
+            .unwrap_or(crate::transform_origin::TransformOrigin::INITIAL);
 
         // CSS Animations 1 / Transitions 1 longhand lists (not inherited).
         let animations = crate::animation::parse_animations(&entries);
@@ -461,6 +472,7 @@ impl ComputedStyle {
             visibility,
             opacity,
             transform,
+            transform_origin,
             text_transform,
             word_spacing,
             letter_spacing,
