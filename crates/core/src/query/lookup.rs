@@ -116,7 +116,7 @@ impl Document {
 
     /// Returns an iterator over the direct child [`NodeId`]s of `parent_id` in document
     /// order (alias of [`Document::children`], named for DOM familiarity).
-    pub fn children_ids(&self, parent_id: NodeId) -> ChildrenIter<'_> {
+    pub fn children_ids(&self, parent_id: NodeId) -> ChildrenIter {
         self.children(parent_id)
     }
 
