@@ -262,14 +262,8 @@ pub(super) fn register_fixture_effect_rows(suite: &mut Suite) {
     }
     let filter_fixture: &'static str =
         include_str!("../../../../tests/fixtures/render/filter_effects.html");
-    let filter_stripped: String = filter_fixture
-        .lines()
-        .filter(|line| {
-            let line = line.trim_start();
-            !(line.starts_with("filter:") || line.starts_with("-webkit-filter:"))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let filter_stripped =
+        super::strip_css_declarations(filter_fixture, &["filter", "-webkit-filter"]);
     let filter_stripped: &'static str = Box::leak(filter_stripped.into_boxed_str());
     let filter_viewport = Rect::new(0.0, 0.0, 300.0, 260.0);
     suite.add(BenchEntry::new(
@@ -287,14 +281,10 @@ pub(super) fn register_fixture_effect_rows(suite: &mut Suite) {
 
     let backdrop_fixture: &'static str =
         include_str!("../../../../tests/fixtures/render/backdrop_filter.html");
-    let backdrop_stripped: String = backdrop_fixture
-        .lines()
-        .filter(|line| {
-            let line = line.trim_start();
-            !(line.starts_with("backdrop-filter:") || line.starts_with("-webkit-backdrop-filter:"))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let backdrop_stripped = super::strip_css_declarations(
+        backdrop_fixture,
+        &["backdrop-filter", "-webkit-backdrop-filter"],
+    );
     let backdrop_stripped: &'static str = Box::leak(backdrop_stripped.into_boxed_str());
     let backdrop_viewport = Rect::new(0.0, 0.0, 300.0, 240.0);
     suite.add(BenchEntry::new(

@@ -35,15 +35,7 @@ pub(super) fn register_effect_fixture_pipelines(suite: &mut Suite) {
     }
 
     fn without_property(fixture: &'static str, properties: &[&str]) -> &'static str {
-        let mut text = fixture.to_string();
-        for property in properties {
-            let needle = format!("{property}:");
-            text = text
-                .lines()
-                .filter(|line| !line.trim_start().starts_with(&needle))
-                .collect::<Vec<_>>()
-                .join("\n");
-        }
+        let text = super::strip_css_declarations(fixture, properties);
         Box::leak(text.into_boxed_str())
     }
 
@@ -113,12 +105,7 @@ pub(super) fn register_backdrop_stage_rows(suite: &mut Suite) {
         (display_list, pixmap)
     }
     fn strip(html_source: &'static str, property: &str) -> &'static str {
-        let needle = format!("{property}:");
-        let stripped = html_source
-            .lines()
-            .filter(|line| !line.trim_start().starts_with(&needle))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let stripped = super::strip_css_declarations(html_source, &[property]);
         Box::leak(stripped.into_boxed_str())
     }
     let fixture: &'static str =
