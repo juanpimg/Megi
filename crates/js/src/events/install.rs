@@ -90,6 +90,14 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
     }
     context
         .register_global_builtin_callable(
+            js_string!("__megiDynamicImport"),
+            2,
+            native(crate::runtime::dynamic_import_native),
+        )
+        .map_err(|error| CrateJsError::Internal(error.to_string()))?;
+
+    context
+        .register_global_builtin_callable(
             js_string!("__megiRemoveSignalListeners"),
             1,
             native(remove_signal_listeners),

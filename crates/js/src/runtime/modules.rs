@@ -154,7 +154,7 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
         }
     }
     let mut body = body_lines.join("\n");
-    let dynamic_imports = rewrite_dynamic_imports(&mut body)?;
+    let dynamic_imports = rewrite_dynamic_imports(&mut body, url)?;
     Ok(ParsedModule {
         imports,
         body,
@@ -164,8 +164,12 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
 }
 
 /// Rewrites literal `import("specifier")` calls into `__MEGI_DYNAMIC_k__` placeholders and
-/// returns the specifiers. Non-literal arguments are a documented subset limitation.
-pub(crate) fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, JsError> {
+/// returns the literal specifiers. Non-literal arguments are rewritten to a native
+/// `__megiDynamicImport(expr, base_url)` call resolved at runtime (F6).
+pub(crate) fn rewrite_dynamic_imports(
+    body: &mut String,
+    url: &str,
+) -> Result<Vec<String>, JsError> {
     let mut specifiers: Vec<String> = Vec::new();
     let mut output = String::with_capacity(body.len());
     // #1850: search a masked copy, where strings/template literals and comments are
@@ -186,9 +190,26 @@ pub(crate) fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, 
         inner = &inner[1..];
         inner = inner.trim_start();
         let Some(quote) = inner.chars().next().filter(|ch| *ch == '\'' || *ch == '"') else {
-            return Err(JsError::DynamicImport(
-                "only string-literal import() specifiers are supported".to_string(),
-            ));
+            // F6-IMPORTMAP-SCOPES: a runtime (non-literal) specifier is resolved when the
+            // call executes, through the host module resolver/import map. Rewrite the whole
+            // call into a native helper carrying the current module's base URL.
+            let Some(end) = matching_paren(inner) else {
+                return Err(JsError::DynamicImport(
+                    "unterminated import() call".to_string(),
+                ));
+            };
+            let expression = inner[..end].trim();
+            if expression.is_empty() {
+                return Err(JsError::DynamicImport(
+                    "empty import() specifier".to_string(),
+                ));
+            }
+            let replacement = format!("__megiDynamicImport({expression}, {})", module_quote(url));
+            let consumed = index + "import".len() + (after.len() - inner.len()) + end + 1;
+            output.push_str(&body[cursor..index]);
+            output.push_str(&replacement);
+            cursor = consumed.min(body.len());
+            continue;
         };
         let Some(close) = inner[1..].find(quote) else {
             return Err(JsError::DynamicImport(
@@ -220,6 +241,33 @@ pub(crate) fn rewrite_dynamic_imports(body: &mut String) -> Result<Vec<String>, 
     output.push_str(&body[cursor..]);
     *body = output;
     Ok(specifiers)
+}
+
+/// Finds the index of the `)` matching the first `(` in `expression` (which starts just
+/// after the opening paren), honouring nested brackets and quoted strings.
+fn matching_paren(expression: &str) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut quote: Option<char> = None;
+    for (offset, ch) in expression.char_indices() {
+        if let Some(active) = quote {
+            if ch == active {
+                quote = None;
+            }
+            continue;
+        }
+        match ch {
+            '\'' | '"' | '`' => quote = Some(ch),
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Replaces the contents of JS strings, template literals and comments with spaces,
