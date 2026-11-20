@@ -227,3 +227,27 @@ fn non_ascii_specifiers_and_surrogate_escapes_parse() {
         "a surrogate pair escape decodes to one character"
     );
 }
+
+#[test]
+fn import_call_inside_string_and_comment_is_not_rewritten() {
+    let (mut runtime, modules) = runtime_with_modules();
+    add_module(
+        &modules,
+        "file:///app/SHOULD_NOT_LOAD.js",
+        "throw new Error('must not be loaded');",
+    );
+    runtime
+        .eval_module(
+            "var s = \"import('./SHOULD_NOT_LOAD.js')\"; // import('./ALSO_NOT.js')\nglobalThis.__value = s;\nexport const value = s;",
+            "app.js",
+            "file:///app/app.js",
+            &Budget::SMALL,
+        )
+        .expect("module with import() inside a string and a comment");
+    // If the preprocessor rewrote the text inside the string, the module either fails
+    // to parse or the exported value is a placeholder instead of the literal text.
+    assert_eq!(
+        runtime.eval("globalThis.__value", "t").expect("read value"),
+        "import('./SHOULD_NOT_LOAD.js')"
+    );
+}
