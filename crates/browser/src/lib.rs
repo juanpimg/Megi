@@ -321,7 +321,10 @@ mod a11y_adapter_tests {
             .1;
         assert_eq!(btn.label(), Some("Go"));
         assert!(btn.is_disabled());
-        assert!(btn.supports_action(accesskit::Action::Click));
+        // A disabled control keeps Focus (so assistive tech can still reach it) but must
+        // NOT advertise Click — `build_tree_update` only adds Action::Click to enabled
+        // interactive nodes. The old assertion contradicted the documented contract.
+        assert!(!btn.supports_action(accesskit::Action::Click));
         assert!(btn.supports_action(accesskit::Action::Focus));
 
         let root_node = &update
