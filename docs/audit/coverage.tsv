@@ -1251,7 +1251,7 @@ docs/FUZZING.md	296	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	docume
 docs/GAPS.md	147	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/HANDOFF.md	127	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ISOLATION-STRATEGY.md	31	docs	F3			pending		
+docs/ISOLATION-STRATEGY.md	31	docs	F3	juanpimg	2026-11-20	covered	#2062	ADR-004 phased per-site isolation strategy doc from main
 docs/JAVASCRIPT-STRATEGY.md	259	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/MILESTONES.md	152	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/OUTREACH.md	150	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
