@@ -78,13 +78,17 @@ jobs:
           workspaces: fuzz -> target
 
       - name: Cache cargo-fuzz binary
+        id: cargo-fuzz-bin
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.2-${{ runner.os }}
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --version 0.13.2 --locked --force
+        # #1832: a cache hit already restored the binary; installing with --force
+        # recompiles it in every matrix leg, wasting minutes of CI compute.
+        if: steps.cargo-fuzz-bin.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
 
       - name: Build every target
         working-directory: fuzz
@@ -219,13 +223,17 @@ jobs:
           workspaces: fuzz -> target
 
       - name: Cache cargo-fuzz binary
+        id: cargo-fuzz-bin
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.2-${{ runner.os }}
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --version 0.13.2 --locked --force
+        # #1832: a cache hit already restored the binary; installing with --force
+        # recompiles it in every matrix leg, wasting minutes of CI compute.
+        if: steps.cargo-fuzz-bin.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
 
       - name: Restore corpus
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -311,13 +319,17 @@ jobs:
           workspaces: fuzz -> target
 
       - name: Cache cargo-fuzz binary
+        id: cargo-fuzz-bin
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-fuzz
           key: cargo-fuzz-0.13.2-${{ runner.os }}
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --version 0.13.2 --locked --force
+        # #1832: a cache hit already restored the binary; installing with --force
+        # recompiles it in every matrix leg, wasting minutes of CI compute.
+        if: steps.cargo-fuzz-bin.outputs.cache-hit != 'true'
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
 
       - name: Build ${{ matrix.target }} (UBSan)
         working-directory: fuzz

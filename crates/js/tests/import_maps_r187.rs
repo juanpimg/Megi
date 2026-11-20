@@ -143,19 +143,34 @@ fn dynamic_import_literal_returns_a_promise_and_mutates_the_dom() {
 }
 
 #[test]
-fn dynamic_import_non_literal_is_rewritten_to_runtime_helper() {
-    // F6 resolves non-literal specifiers at call time via __megiDynamicImport,
-    // so a parse-time typed error is no longer expected (#2059).
-    let (mut runtime, _modules) = runtime_with_modules();
-    let outcome = runtime
+fn dynamic_import_non_literal_resolves_at_runtime() {
+    // #2061: import(specifier) with a runtime string is resolved against the
+    // module resolver, not rejected as a typed error (HTML §dynamic import).
+    let (mut runtime, modules) = runtime_with_modules();
+    add_module(
+        &modules,
+        "file:///app/x.js",
+        "document.body.setAttribute('data-dyn', 'runtime');\nexport const value = 'runtime';",
+    );
+    runtime
+
         .eval_module(
             "const name = './x.js'; globalThis.__pending = import(name);",
             "app.js",
-            "file:///app.js",
+            "file:///app/app.js",
             &Budget::SMALL,
         )
-        .expect("non-literal import() must be rewritten, not rejected");
-    assert_eq!(outcome.url, "file:///app.js");
+        .expect("non-literal import specifier must be accepted");
+    let _ = runtime.run_microtasks();
+    let attribute = runtime.document().body().and_then(|body| {
+        runtime
+            .document()
+            .try_node(body)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute("data-dyn").map(str::to_owned))
+    });
+    assert_eq!(attribute.as_deref(), Some("runtime"));
+
 }
 
 #[test]

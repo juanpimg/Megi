@@ -2,7 +2,7 @@
   "schema": 1,
   "overall": {
     "implemented": 63,
-    "partial": 4,
+    "partial": 5,
     "known": 70,
     "percent": 90,
     "unverified": [],
@@ -54,7 +54,7 @@
     {
       "id": "F7",
       "implemented": 6,
-      "partial": 2,
+      "partial": 3,
       "known": 9,
       "percent": 67
     },
@@ -122,7 +122,7 @@
       "area": "F7",
       "name": "Aislamiento multiproceso por pestaña",
       "source": "issue #946",
-      "state": "missing",
+      "state": "partial",
       "evidence": "none",
       "issue": 946,
       "reason": "no requiere evidencia"

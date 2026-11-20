@@ -136,11 +136,7 @@ impl WindowApp {
                     content_type,
                     body.to_vec(),
                 );
-                if let Some(sender) = &self.request_sender
-                    && sender.send(request).is_err()
-                {
-                    self.error = Some("render worker stopped unexpectedly".to_string());
-                }
+                self.send_render(request);
                 self.input = submission.action.clone();
                 self.update_title();
                 return true;
@@ -243,9 +239,6 @@ impl WindowApp {
         let Some(document) = self.document.clone() else {
             return;
         };
-        let Some(sender) = self.request_sender.as_ref() else {
-            return;
-        };
         let mut patched = (*document).clone();
         if !crate::forms::patch_multi_select(&mut patched, control.form_id, selected) {
             return;
@@ -258,9 +251,7 @@ impl WindowApp {
             self.metrics.css_height,
             base.as_deref(),
         );
-        if sender.send(request).is_err() {
-            self.error = Some("render worker stopped unexpectedly".to_string());
-            self.update_title();
+        if !self.send_render(request) {
             return;
         }
         self.document = Some(Arc::new(patched));
@@ -271,9 +262,6 @@ impl WindowApp {
     pub(super) fn select_option(&mut self, form_id: u32, option_index: usize) {
         self.dropdown = None;
         let Some(document) = self.document.clone() else {
-            return;
-        };
-        let Some(sender) = self.request_sender.as_ref() else {
             return;
         };
         let mut patched = (*document).clone();
@@ -288,9 +276,7 @@ impl WindowApp {
             self.metrics.css_height,
             base.as_deref(),
         );
-        if sender.send(request).is_err() {
-            self.error = Some("render worker stopped unexpectedly".to_string());
-            self.update_title();
+        if !self.send_render(request) {
             return;
         }
         self.document = Some(Arc::new(patched));
@@ -375,9 +361,6 @@ impl WindowApp {
         let Some(document) = self.document.clone() else {
             return;
         };
-        let Some(sender) = self.request_sender.as_ref() else {
-            return;
-        };
         let focused = self.focus.focused().is_some();
         let target = form_id.or_else(|| self.focused_control().map(|control| control.form_id));
         let focused_link = self.focused_link().and_then(|region| region.node);
@@ -419,9 +402,7 @@ impl WindowApp {
                 base.as_deref(),
             )
         };
-        if sender.send(request).is_err() {
-            self.error = Some("render worker stopped unexpectedly".to_string());
-            self.update_title();
+        if !self.send_render(request) {
             return;
         }
         self.document = Some(Arc::new(patched));

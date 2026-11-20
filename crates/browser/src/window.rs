@@ -67,8 +67,6 @@
 
 use std::num::NonZeroU32;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread::JoinHandle;
 use std::time::Instant;
 
 use winit::application::ApplicationHandler;
@@ -96,8 +94,8 @@ use crate::scroll::{self, ScrollState};
 use crate::tabs::{self, CloseOutcome, TabsState};
 use crate::title::{self, StatusSummary};
 use crate::worker::{
-    Debounce, FrameStore, RENDER_DEBOUNCE, RenderRequest, SessionAutosave, WorkerMessage,
-    spawn_worker,
+    Debounce, FrameStore, MAX_SITE_RENDERERS, RENDER_DEBOUNCE, RenderRequest, RendererPool,
+    SessionAutosave, Worker, spawn_worker,
 };
 use crate::zoom;
 
@@ -386,9 +384,8 @@ struct WindowApp {
     scale_factor: f64,
     scroll: ScrollState,
     store: FrameStore,
-    request_sender: Option<Sender<RenderRequest>>,
-    message_receiver: Option<Receiver<WorkerMessage>>,
-    worker: Option<JoinHandle<()>>,
+    /// Per-site renderer pool (ADR-004 phase 2). Workers spawn on first request per site.
+    render_pool: Option<RendererPool>,
     debounce: Debounce,
     pending_metrics: Option<WindowMetrics>,
     error: Option<String>,
