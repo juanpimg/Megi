@@ -139,6 +139,18 @@ fn invalid_utf8_text_frames_are_rejected() {
 }
 
 #[test]
+fn fragmented_text_first_frame_may_carry_partial_utf8() {
+    // #1858: RFC 6455 §8.1 allows a UTF-8 sequence to be split across fragments. The first
+    // Text frame of a fragmented message (FIN=0) can hold only part of a code point, so
+    // per-frame UTF-8 validation must not reject it.
+    let first = [0x01u8, 0x01, 0xC3]; // FIN=0, opcode=Text, payload=[0xC3] (lead byte of 'é')
+    let decoded = decode_frame(&first, 1024).expect("partial UTF-8 fragment must decode");
+    assert_eq!(decoded.frame.opcode, Opcode::Text);
+    assert!(!decoded.frame.fin);
+    assert_eq!(decoded.frame.payload, vec![0xC3]);
+}
+
+#[test]
 fn reserved_bits_are_rejected() {
     // #1625: RSV1/2/3 must be zero when no extension negotiated them.
     assert!(decode_frame(&[0xC1, 0x00], 1024).is_err(), "RSV1 set");

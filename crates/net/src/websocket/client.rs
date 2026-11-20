@@ -13,7 +13,10 @@ use crate::http::FetchOptions;
 use crate::url::{Scheme, Url};
 
 use super::DEFAULT_MAX_MESSAGE_BYTES;
-use super::frame::{Frame, Opcode, client_mask, close_code, decode_frames, encode_frame, protocol};
+use super::frame::{
+    Frame, Opcode, client_mask, close_code, decode_frames, encode_frame, protocol,
+    validate_text_message,
+};
 use super::handshake::{handshake_key, random_key_bytes, validate_handshake_response};
 
 /// Byte-stream transport for one WebSocket connection: plain TCP (`ws://`) or a rustls session
@@ -363,6 +366,9 @@ impl WebSocketClient {
         }
         let opcode = self.fragment_opcode.take().expect("fragment opcode");
         let payload = std::mem::take(&mut self.fragments);
+        // #1858: validate UTF-8 on the reassembled message (FIN=1), not on each fragment —
+        // RFC 6455 §8.1 permits a multi-byte code point to be split across fragments.
+        validate_text_message(opcode, &payload)?;
         Ok(Some(Frame {
             fin: true,
             opcode,

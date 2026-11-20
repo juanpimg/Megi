@@ -218,10 +218,12 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
     if bytes.len() < end {
         return Err(protocol("truncated frame payload"));
     }
-    // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. Binary and
-    // continuation frames may carry arbitrary bytes (fragmented reassembly is separate).
-    if opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
-        return Err(protocol("text frame payload is not valid UTF-8"));
+    // #1626/#1858: RFC 6455 §5.6/§8.1 require a complete *Text message* to be valid UTF-8.
+    // A fragmented message may split a multi-byte code point across frames, so only validate
+    // here when this frame is itself a complete message (FIN=1). The final fragment of a
+    // fragmented Text message is validated by `reassemble` once the whole payload is known.
+    if fin {
+        validate_text_message(opcode, &bytes[offset..end])?;
     }
     Ok(DecodedFrame {
         frame: Frame {
@@ -296,4 +298,14 @@ pub fn decode_frames(bytes: &[u8], max_payload: usize) -> Result<(Vec<Frame>, &[
 
 pub(super) fn protocol(reason: &str) -> FetchError {
     FetchError::InvalidResponse(format!("websocket: {reason}"))
+}
+
+/// #1858 / RFC 6455 §8.1: a *complete* Text message must be valid UTF-8. Fragments may split a
+/// multi-byte code point, so this is only called on the reassembled message (FIN=1), never on
+/// individual fragments. Binary messages carry arbitrary bytes and are never checked.
+pub(super) fn validate_text_message(opcode: Opcode, payload: &[u8]) -> Result<(), FetchError> {
+    if opcode == Opcode::Text && std::str::from_utf8(payload).is_err() {
+        return Err(protocol("text message payload is not valid UTF-8"));
+    }
+    Ok(())
 }

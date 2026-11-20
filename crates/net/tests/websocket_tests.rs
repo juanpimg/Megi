@@ -440,3 +440,87 @@ fn websocket_wrapper_recv_bytes_returns_binary() {
     assert_eq!(socket.recv_bytes().expect("recv_bytes"), vec![0xAB, 0xCD]);
     server.join().expect("server");
 }
+
+/// #1858: a UTF-8 sequence split across a Text fragment and a Continuation fragment must be
+/// validated only after reassembly, not per frame. `Text [C3]` + `Cont [A9]` is "é".
+#[test]
+fn ws_fragmented_utf8_is_validated_after_reassembly() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let request = read_head(&mut stream);
+        assert!(request.starts_with("GET /chat HTTP/1.1"), "{request}");
+        let key = request
+            .lines()
+            .find_map(|line| {
+                line.split_once(':')
+                    .filter(|(name, _)| name.eq_ignore_ascii_case("Sec-WebSocket-Key"))
+                    .map(|(_, value)| value.trim().to_owned())
+            })
+            .expect("client key");
+        let response = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+            accept_value(&key)
+        );
+        stream.write_all(response.as_bytes()).expect("handshake");
+        // Read the client's first (masked) text frame so the socket stays in sync.
+        let _ = read_frame(&mut stream);
+        // Text FIN=0 with the lead byte of a 2-byte UTF-8 sequence, then its continuation.
+        stream
+            .write_all(&[0x01, 0x01, 0xC3])
+            .expect("first fragment");
+        stream
+            .write_all(&[0x80, 0x01, 0xA9])
+            .expect("final fragment");
+        let _ = stream.flush();
+    });
+    let mut socket = WebSocket::connect(&format!("ws://127.0.0.1:{port}/chat")).expect("connect");
+    socket.send_text("go").expect("send");
+    assert_eq!(socket.recv_text().expect("reassembled text"), "é");
+    server.join().expect("server thread");
+}
+
+/// #1858: invalid UTF-8 that only becomes invalid after reassembly must still be rejected.
+#[test]
+fn ws_fragmented_invalid_utf8_is_rejected() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let request = read_head(&mut stream);
+        let key = request
+            .lines()
+            .find_map(|line| {
+                line.split_once(':')
+                    .filter(|(name, _)| name.eq_ignore_ascii_case("Sec-WebSocket-Key"))
+                    .map(|(_, value)| value.trim().to_owned())
+            })
+            .expect("client key");
+        let response = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+            accept_value(&key)
+        );
+        stream.write_all(response.as_bytes()).expect("handshake");
+        let _ = read_frame(&mut stream);
+        stream.write_all(&[0x01, 0x01, 0xC3]).expect("lead byte");
+        stream
+            .write_all(&[0x80, 0x01, 0x28])
+            .expect("invalid continuation");
+        let _ = stream.flush();
+    });
+    let mut socket = WebSocket::connect(&format!("ws://127.0.0.1:{port}/chat")).expect("connect");
+    socket.send_text("go").expect("send");
+    let result = socket.recv_text();
+    assert!(
+        result.is_err(),
+        "reassembled invalid UTF-8 must be rejected"
+    );
+    // `protocol()` errors map to InvalidHandshake through the convenience wrapper; assert the
+    // underlying reason regardless of the outer variant.
+    assert!(
+        format!("{:?}", result.unwrap_err()).contains("UTF-8"),
+        "rejection must cite UTF-8 validation"
+    );
+    server.join().expect("server thread");
+}
