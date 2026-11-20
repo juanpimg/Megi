@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Work unit for the `render/html-to-png` row: the 800x600 viewport area in
+/// megapixels (0.48 MPix). Was 0.096 MPix, understating throughput 5x (#1684).
+pub(crate) const HTML_TO_PNG_MPIX: f64 =
+    VIEWPORT_WIDTH as f64 * VIEWPORT_HEIGHT as f64 / 1_000_000.0;
+
 /// Image decoding workloads (rounds 22/25/31): PNG/JPEG/GIF 800×600, real WebP
 /// VP8L lossless fixtures (transforms/alpha/palette) and WebP VP8 **lossy**
 /// keyframes (1024×768 + 64×48 q75/q90) → RGBA8.
@@ -152,7 +157,21 @@ pub(super) fn register_render_pipeline(suite: &mut Suite) {
         BenchEntry::new("render/html-to-png", "render", detail, move || {
             black_box(megi_render::render_url(&url, &options).expect("render benchmark fixture"));
         })
-        .with_units(0.096, "MPix")
+        .with_units(HTML_TO_PNG_MPIX, "MPix")
         .heavy(),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn html_to_png_work_unit_matches_the_viewport_area() {
+        // #1684: the row rendered an 800x600 viewport (0.48 MPix) but declared
+        // 0.096 MPix, understating throughput by 5x.
+        assert_eq!(HTML_TO_PNG_MPIX, 0.48);
+        // Guards against a literal regression to the old 0.096 value.
+        assert!((HTML_TO_PNG_MPIX - 0.096).abs() > f64::EPSILON);
+    }
 }
