@@ -1155,7 +1155,8 @@ crates/svg/src/document/smil_value.rs	242	src	F2	wave-max-mod	2026-11-19	covered
 crates/svg/src/document/style.rs	258	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/document/text.rs	158	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/document/visit.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/svg/src/gradient.rs	492	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/svg/src/gradient.rs	399	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/svg/src/gradient/tests.rs	131	src	F2	juanpimg	2026-11-20	covered	#1863	gradient tests module, read before marking
 crates/svg/src/lib.rs	351	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/path/flatten.rs	190	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/path/mod.rs	24	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
