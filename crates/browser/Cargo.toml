@@ -8,10 +8,16 @@ authors.workspace = true
 repository.workspace = true
 description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer presentation and headless screenshots"
 
+[features]
+default = ["a11y"]
+# ADR-002: platform accessibility backend (AT-SPI/UIA/NSAccessibility via AccessKit).
+a11y = ["dep:accesskit"]
+
 [dependencies]
 megi-webview = { workspace = true, features = ["full"] }
 winit.workspace = true
 softbuffer.workspace = true
+accesskit = { version = "0.25", optional = true }
 
 [[bin]]
 name = "megi"
