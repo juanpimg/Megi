@@ -194,7 +194,8 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     && matches!(event.logical_key.as_ref(), Key::Character(text) if text.eq_ignore_ascii_case("s"))
                 {
                     if self.modifiers.shift_key() {
-                        self.save_frame_html();
+                        // Standard "Save As" shortcut opens the visual dialog (#988).
+                        self.open_save_dialog(true);
                     } else {
                         self.save_frame_png();
                     }
@@ -306,6 +307,16 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 {
                     self.overflow_menu = None;
                     self.request_repaint();
+                    return;
+                }
+                if self.save_dialog.is_some()
+                    && self.handle_save_dialog_key(
+                        &event.logical_key,
+                        ctrl_pressed,
+                        alt_pressed,
+                        shift_pressed,
+                    )
+                {
                     return;
                 }
                 if self.handle_dropdown_key(&event.logical_key) {
