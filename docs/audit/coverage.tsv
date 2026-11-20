@@ -928,7 +928,7 @@ crates/paint/src/background/tests.rs	251	src	F2	wave-max-mod	2026-11-19	covered	
 crates/paint/src/lib.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter.rs	339	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/backgrounds.rs	356	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/src/painter/blocks.rs	180	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/src/painter/blocks.rs	185	src	F2	juanpimg	2026-11-20	covered	#1884	inline-block background paint
 crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/effects.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/hit_regions.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -951,7 +951,7 @@ crates/paint/tests/effects.rs	387	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/paint/tests/end_to_end_html/main.rs	21	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/end_to_end_html/pipeline.rs	350	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/end_to_end_html/support.rs	86	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/end_to_end_html/text_and_fonts.rs	229	test	F1	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
+crates/paint/tests/end_to_end_html/text_and_fonts.rs	247	test	F1	juanpimg	2026-11-20	covered	#1884	inline-block background image test
 crates/paint/tests/filter_blend.rs	414	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/gradients/basic.rs	433	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/gradients/color.rs	151	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
