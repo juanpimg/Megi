@@ -50,9 +50,16 @@ impl LiveWebSocketTransport {
                 let result = lock(&pump_client).recv();
                 match result {
                     Ok(frame) => match frame.opcode {
-                        Opcode::Text | Opcode::Binary => {
+                        // #1711: binary frames must keep their exact bytes; only Text frames
+                        // are decoded as UTF-8 strings.
+                        Opcode::Text => {
                             let text = String::from_utf8_lossy(&frame.payload).into_owned();
                             if tx.send(WebSocketEvent::Message(text)).is_err() {
+                                break;
+                            }
+                        }
+                        Opcode::Binary => {
+                            if tx.send(WebSocketEvent::Binary(frame.payload)).is_err() {
                                 break;
                             }
                         }

@@ -151,6 +151,8 @@ pub enum WebSocketEvent {
     Open,
     /// A text message arrived.
     Message(String),
+    /// A binary message arrived (#1711). Delivered to JS as an `ArrayBuffer`.
+    Binary(Vec<u8>),
     /// The connection closed with the given code.
     Close(u16),
     /// A transport error occurred.
