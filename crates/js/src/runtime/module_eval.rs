@@ -232,7 +232,8 @@ impl JsRuntime {
     /// [`JsError::ModuleExport`]. Import maps installed with [`Self::set_import_map_json`]
     /// are consulted first. Dynamic `import()` is supported with **string literals** and
     /// evaluates the dependency eagerly when the graph runs, returning a Promise resolved
-    /// immediately; non-literal arguments are [`JsError::DynamicImport`]. Top-level await is
+    /// immediately; non-literal arguments are resolved at call time via the host resolver
+    /// through the `__megiDynamicImport` native helper (F6). Top-level await is
     /// a documented gap ([`JsError::TopLevelAwait`]). No network/filesystem access (the
     /// host supplies all module text).
     pub fn eval_module(
@@ -277,4 +278,62 @@ impl JsRuntime {
             exports: values,
         })
     }
+}
+
+/// Native implementation of runtime `import(specifier)` (F6-IMPORTMAP-SCOPES).
+///
+/// The preprocessor rewrites non-literal `import(expr)` calls here, passing the current
+/// module's base URL. Resolution goes through the host resolver/import map; the module is
+/// loaded and evaluated on demand and the namespace is delivered through a Promise.
+pub(crate) fn dynamic_import_native(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let specifier = args
+        .first()
+        .map(|value| value.to_string(context))
+        .transpose()?
+        .map(|text| text.to_std_string_escaped())
+        .unwrap_or_default();
+    let base = args
+        .get(1)
+        .map(|value| value.to_string(context))
+        .transpose()?
+        .map(|text| text.to_std_string_escaped())
+        .unwrap_or_default();
+    let evaluated = (|| -> Result<JsObject, JsError> {
+        let url = resolve_module(context, &specifier, &base)?;
+        let source = load_module(context, &url)?;
+        let mut visiting = HashSet::new();
+        let mut done = HashMap::new();
+        eval_module_graph(
+            context,
+            &url,
+            &source,
+            &Budget::default(),
+            &mut visiting,
+            0,
+            &mut done,
+        )
+    })();
+    let promise = boa_engine::object::builtins::JsPromise::new(
+        move |resolvers, context| {
+            match evaluated {
+                Ok(namespace) => resolvers.resolve.call(
+                    &JsValue::undefined(),
+                    &[JsValue::from(namespace)],
+                    context,
+                )?,
+                Err(error) => resolvers.reject.call(
+                    &JsValue::undefined(),
+                    &[JsValue::from(js_string!(error.to_string()))],
+                    context,
+                )?,
+            };
+            Ok(JsValue::undefined())
+        },
+        context,
+    )?;
+    Ok(JsValue::from(promise))
 }

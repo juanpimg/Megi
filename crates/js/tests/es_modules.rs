@@ -479,3 +479,21 @@ fn trailing_comma_export_list_parses() {
         outcome.exports
     );
 }
+
+#[test]
+fn non_literal_dynamic_import_resolves_at_runtime() {
+    // F6-IMPORTMAP-SCOPES: `import(specifier)` with a runtime string must work, not just
+    // a string literal known at preprocessing time.
+    let modules = fixture_modules();
+    let mut runtime = runtime_with(&modules);
+    runtime
+        .eval_module(
+            "var spec = './a.js'; import(spec).then(function (ns) { window.__dyn = ns.named; });",
+            "dyn.js",
+            "mem://main",
+            &Budget::default(),
+        )
+        .expect("module with runtime import()");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("window.__dyn", "t").expect("dyn"), "7");
+}
