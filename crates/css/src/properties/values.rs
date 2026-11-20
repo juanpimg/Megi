@@ -33,8 +33,8 @@ pub use layout::{
 pub use length::{CalcLengths, Length};
 pub use misc::{AspectRatio, ContainerType, ObjectFit};
 pub use text::{
-    Direction, FontStyle, ListStyleType, Overflow, TextAlign, TextDecoration, TextTransform,
-    UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
+    Direction, FontStyle, ListStyleType, Overflow, TextAlign, TextDecoration, TextOverflow,
+    TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
 };
 
 pub(crate) use border::*;

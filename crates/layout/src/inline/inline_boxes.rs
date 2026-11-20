@@ -37,6 +37,42 @@ pub(crate) struct ActiveBoxFrame {
     pub(crate) anchor: Option<(f32, f32, f32)>,
 }
 
+/// Applies CSS `text-overflow: ellipsis` to a text run that exceeds its available width
+/// (CSS UI §4.6.1 / #1929). Only `white-space: nowrap` runs are eligible; the ellipsis is
+/// inserted in place of the trailing characters so the run fits the clipped line.
+///
+/// Widths are distributed evenly across characters (the line builder measures runs, not
+/// individual glyphs), which keeps the result deterministic and conservative.
+pub(crate) fn ellipsize_text(
+    text: &str,
+    width: f32,
+    style: &ComputedStyle,
+    available_width: f32,
+) -> (String, f32) {
+    if style.text_overflow != megi_css::TextOverflow::Ellipsis
+        || style.white_space != WhiteSpace::Nowrap
+        || width <= available_width
+    {
+        return (text.to_owned(), width);
+    }
+    let char_count = text.chars().count();
+    if char_count == 0 {
+        return (text.to_owned(), width);
+    }
+    let per_char = width / char_count as f32;
+    if !per_char.is_finite() || per_char <= 0.0 {
+        return (text.to_owned(), width);
+    }
+    // Reserve the width of one character for the ellipsis itself.
+    let ellipsis_width = per_char;
+    let budget = (available_width - ellipsis_width).max(0.0);
+    let keep = (budget / per_char).floor() as usize;
+    let keep = keep.min(char_count.saturating_sub(1));
+    let mut out: String = text.chars().take(keep).collect();
+    out.push('…');
+    (out, per_char * (keep as f32 + 1.0))
+}
+
 /// Fast path for a line made only of text from one text node (no inline boxes,
 /// atomic boxes, vertical alignment or justification).
 ///
@@ -110,6 +146,12 @@ pub(crate) fn try_format_simple_text_line(
     };
     let box_h = ascent + descent;
     let y = ctx.line_y + (max_ascent - ascent).clamp(0.0, (line_height - box_h).max(0.0));
+    let (text, width) = ellipsize_text(
+        &text,
+        width,
+        styles[style_id as usize].as_ref(),
+        (ctx.container_width - align_offset).max(0.0),
+    );
     let mut text_box = LayoutBox::with_shared_style(
         BoxType::TextNode(text),
         Some(styles[style_id as usize].clone()),
@@ -146,6 +188,8 @@ pub(crate) fn push_text_fragment(
     baseline_y_in_line: f32,
 ) {
     let style = styles[style_id as usize].as_ref();
+    let available = (ctx.container_width - *curr_x).max(0.0);
+    let (text, width) = ellipsize_text(text, width, style, available);
     let box_h = ascent + descent;
 
     // Vertical alignment comes from the innermost inline box; text runs themselves
@@ -193,14 +237,14 @@ pub(crate) fn push_text_fragment(
         && (last.baseline - a_prime).abs() <= 0.01
         && (last.dimensions.content.y - y).abs() <= 0.01
     {
-        last_text.push_str(text);
+        last_text.push_str(&text);
         last.dimensions.content.width += width;
         *curr_x += width;
         return;
     }
 
     let mut text_box = LayoutBox::with_shared_style(
-        BoxType::TextNode(text.to_owned()),
+        BoxType::TextNode(text),
         Some(styles[style_id as usize].clone()),
     );
     text_box.dimensions.content.x = *curr_x;

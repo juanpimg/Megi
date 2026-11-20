@@ -14,6 +14,7 @@ impl ComputedStyle {
         self.line_height = parent.line_height;
         self.line_height_factor = parent.line_height_factor;
         self.text_align = parent.text_align;
+        self.text_overflow = parent.text_overflow;
         self.white_space = parent.white_space;
         self.text_transform = parent.text_transform;
         self.word_spacing = parent.word_spacing;

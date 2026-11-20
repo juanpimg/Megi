@@ -86,35 +86,11 @@ impl ComputedStyle {
             UnicodeBidi::Normal
         };
 
-        let default_align = match direction {
-            Direction::Ltr => TextAlign::Left,
-            Direction::Rtl => TextAlign::Right,
-        };
-        let text_align = if let Some(decl) = find_declaration(&entries, "text-align") {
-            TextAlign::parse_for_direction(&decl.raw_value, direction).unwrap_or_else(|| {
-                parent.map_or(default_align, |p| {
-                    if p.direction != direction
-                        && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
-                            || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
-                    {
-                        default_align
-                    } else {
-                        p.text_align
-                    }
-                })
-            })
-        } else {
-            parent.map_or(default_align, |p| {
-                if p.direction != direction
-                    && ((p.direction == Direction::Ltr && p.text_align == TextAlign::Left)
-                        || (p.direction == Direction::Rtl && p.text_align == TextAlign::Right))
-                {
-                    default_align
-                } else {
-                    p.text_align
-                }
-            })
-        };
+        let text_align = TextAlign::resolve_inherited(
+            direction,
+            find_declaration(&entries, "text-align").map(|decl| decl.raw_value.as_str()),
+            parent.map(|parent| (parent.direction, parent.text_align)),
+        );
 
         let (line_height, line_height_factor) =
             if let Some(decl) = find_declaration(&entries, "line-height") {
@@ -133,6 +109,11 @@ impl ComputedStyle {
                     parent.and_then(|p| p.line_height_factor),
                 )
             };
+
+        let text_overflow = TextOverflow::parse(
+            find_declaration(&entries, "text-overflow").map_or("", |decl| &decl.raw_value),
+        )
+        .unwrap_or_else(|| parent.map_or(TextOverflow::Clip, |p| p.text_overflow));
 
         let white_space = if let Some(decl) = find_declaration(&entries, "white-space") {
             WhiteSpace::parse(&decl.raw_value)
@@ -469,6 +450,7 @@ impl ComputedStyle {
             line_height,
             line_height_factor,
             text_align,
+            text_overflow,
             direction,
             unicode_bidi,
             white_space,
