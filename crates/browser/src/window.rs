@@ -472,6 +472,8 @@ struct WindowApp {
     history_menu: Option<HistoryMenu>,
     /// Download progress/last-download state shown in the status bar.
     download: crate::download::DownloadProgress,
+    /// Bounded resource download manager with pause/resume/cancel (F7-SAVE-AS).
+    download_manager: crate::download::DownloadManager,
     /// Last clicked option of a multi-select list (Shift range anchor).
     multi_anchor: Option<(u32, usize)>,
     /// Form control under the mouse (native hover visual).

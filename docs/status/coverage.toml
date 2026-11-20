@@ -536,7 +536,7 @@ source = "issue #988"
 state = "partial"
 evidence = "none"
 issue = 988
-reason = "visual Save-as dialog with editable name, PNG/HTML export and collision-safe naming; resource downloads and pause/resume/cancel manager still missing"
+reason = "visual Save-as dialog, PNG/HTML export, resource save path and bounded download manager (progress/pause/resume/cancel state machine); UI controls for pause/resume/cancel and file-type picker still missing"
 
 [[capability]]
 id = "F7-A11Y"
