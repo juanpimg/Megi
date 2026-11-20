@@ -11,6 +11,8 @@ description = "Megi Engine — Phase 5 network stack: WHATWG URL subset, HTTP/1.
 [dependencies]
 megi-image = { workspace = true }
 rustls = { workspace = true, optional = true }
+# ADR-003: pure-Rust Brotli inflate for Content-Encoding: br (no C/FFI).
+brotli = "9"
 webpki-roots = { workspace = true, optional = true }
 
 [features]
