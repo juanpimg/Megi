@@ -299,3 +299,30 @@ fn download_names_are_unique_and_sanitized() {
     assert!(first.path.to_string_lossy().contains("megi-example"));
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn save_as_name_is_sanitized_and_extension_appended() {
+    assert_eq!(sanitize_save_as_name("My Page", "html"), "My-Page.html");
+    assert_eq!(sanitize_save_as_name("report.html", "html"), "report.html");
+    assert_eq!(
+        sanitize_save_as_name("../../etc/passwd", "png"),
+        "passwd.png"
+    );
+    assert_eq!(sanitize_save_as_name("a//b\\c.jpg", "png"), "c.jpg.png");
+    assert_eq!(sanitize_save_as_name("../..", "png"), "download.png");
+    assert_eq!(sanitize_save_as_name("  a___b  ", "png"), "a___b.png");
+    assert!(
+        sanitize_save_as_name(&"x".repeat(200), "png").len() <= MAX_SAVE_AS_CHARS + 4,
+        "hostile long name must be capped"
+    );
+}
+
+#[test]
+fn named_download_paths_avoid_collisions() {
+    let dir = temp_dir("named-download");
+    let first = next_named_download_path(&dir, "page.html");
+    assert_eq!(first.file_name().unwrap(), "page.html");
+    std::fs::write(&first, b"x").expect("create first");
+    let second = next_named_download_path(&dir, "page.html");
+    assert_eq!(second.file_name().unwrap(), "page-1.html");
+}

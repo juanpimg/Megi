@@ -88,6 +88,7 @@ impl WindowApp {
             focus_targets: Vec::new(),
             editor: None,
             ime: crate::forms::ImeState::new(),
+            save_dialog: None,
             document: None,
             release_button: None,
             find: FindState::new(),

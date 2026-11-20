@@ -2,7 +2,7 @@
   "schema": 1,
   "overall": {
     "implemented": 62,
-    "partial": 3,
+    "partial": 4,
     "known": 70,
     "percent": 89,
     "unverified": [],
@@ -54,7 +54,7 @@
     {
       "id": "F7",
       "implemented": 6,
-      "partial": 1,
+      "partial": 2,
       "known": 9,
       "percent": 67
     },
@@ -112,7 +112,7 @@
       "area": "F7",
       "name": "Diálogo visual de guardado y descarga de recursos",
       "source": "issue #988",
-      "state": "missing",
+      "state": "partial",
       "evidence": "none",
       "issue": 988,
       "reason": "no requiere evidencia"
