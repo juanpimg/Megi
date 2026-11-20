@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 64,
-    "partial": 6,
+    "implemented": 65,
+    "partial": 5,
     "known": 70,
-    "percent": 91,
+    "percent": 93,
     "unverified": [],
     "invalid_states": []
   },
@@ -53,10 +53,10 @@
     },
     {
       "id": "F7",
-      "implemented": 6,
-      "partial": 3,
+      "implemented": 7,
+      "partial": 2,
       "known": 9,
-      "percent": 67
+      "percent": 78
     },
     {
       "id": "X",
@@ -85,16 +85,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F7-SAVE-AS",
-      "area": "F7",
-      "name": "Diálogo visual de guardado y descarga de recursos",
-      "source": "issue #988",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 988,
       "reason": "no requiere evidencia"
     },
     {

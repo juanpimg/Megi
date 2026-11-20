@@ -23,6 +23,8 @@ pub enum MenuAction {
     SavePagePng,
     /// Save the page as serialized HTML (same path as Ctrl+Shift+S).
     SavePageHtml,
+    /// Download CSS/JS/font/image subresources as a bounded batch.
+    SavePageResources,
 }
 
 impl MenuAction {
@@ -99,6 +101,10 @@ impl ContextMenu {
         items.push(ContextMenuItem {
             action: MenuAction::SavePageHtml,
             label: strings.save_page_as_html,
+        });
+        items.push(ContextMenuItem {
+            action: MenuAction::SavePageResources,
+            label: strings.save_page_resources,
         });
         Self {
             target_link,
