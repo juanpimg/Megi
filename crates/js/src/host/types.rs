@@ -25,6 +25,8 @@ pub(crate) struct Listener {
     pub once: bool,
     pub passive: bool,
     pub slot: u32,
+    /// Id of the `AbortSignal` from `addEventListener(..., { signal })`, if any.
+    pub signal_id: Option<u32>,
 }
 
 /// An inline event handler property (`el.onclick = fn`) registered in the host.
