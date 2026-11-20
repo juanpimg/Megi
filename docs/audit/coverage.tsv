@@ -923,7 +923,7 @@ crates/net/tests/request_bodies/h2_bodies.rs	219	test	F1	wave-max-mod	2026-11-19
 crates/net/tests/request_bodies/main.rs	161	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/socks5_tests.rs	218	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/streaming_compression_tests.rs	438	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/tests/streaming_cors_tests.rs	69	test	F1			pending		
+crates/net/tests/streaming_cors_tests.rs	69	test	F1	transforms-fix	2026-11-20	covered	#1933,#1934	re-read
 crates/net/tests/streaming_pool_tests.rs	386	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/tls_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/trailers_tests.rs	357	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
