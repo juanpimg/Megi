@@ -51,6 +51,7 @@ fn process_frame_restores_dom_from_wire_response() {
         script_timers_pending: 0,
         warnings: 0,
         script_errors: 0,
+        links: Vec::new(),
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
         error: None,
@@ -76,10 +77,38 @@ fn failed_response_uses_an_empty_document() {
         script_timers_pending: 0,
         warnings: 0,
         script_errors: 0,
+        links: Vec::new(),
         document_html: String::new(),
         error: Some("boom".to_owned()),
     };
     let frame = ProcessFrame::from_response(response);
     assert!(frame.document.get_element_by_id("anything").is_none());
     assert_eq!(frame.response.error.as_deref(), Some("boom"));
+}
+
+#[test]
+fn link_region_survives_the_process_boundary() {
+    let wire = IpcLinkRegion {
+        x: 10.0,
+        y: 20.0,
+        width: 30.0,
+        height: 12.0,
+        href: "/dest".to_owned(),
+        node_ordinal: Some(3),
+        is_blocker: false,
+    };
+    let json = serde_json::to_string(&wire).expect("serialize link region");
+    let restored: IpcLinkRegion = serde_json::from_str(&json).expect("deserialize link region");
+    assert_eq!(restored, wire);
+    let region = restored.into_link_region();
+    assert_eq!(
+        region.rect,
+        crate::links::CssRect::new(10.0, 20.0, 30.0, 12.0)
+    );
+    assert_eq!(region.href, "/dest");
+    assert!(
+        region.node.is_none(),
+        "ordinal maps to a parent document node later"
+    );
+    assert!(!region.is_blocker);
 }
