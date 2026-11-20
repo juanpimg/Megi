@@ -173,9 +173,13 @@ pub(super) fn fetch_once(
     // This runs per hop inside `fetch_once`, so a redirect to a URL without credentials never
     // inherits them; cross-origin hops already drop any `Authorization` in `headers`. A
     // caller-supplied `Authorization` (e.g. a revalidation header) wins over the URL.
-    if !request_headers
-        .iter()
-        .any(|(name, _)| name.eq_ignore_ascii_case("authorization"))
+    // #1860: preflights run with `include_cookies = false` (credential mode "omit"),
+    // so URL userinfo must not be turned into an Authorization header there either.
+    // The userinfo is otherwise a legitimate credential source for real requests (#310).
+    if include_cookies
+        && !request_headers
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case("authorization"))
         && let Some(auth) = url_basic_authorization(url)
     {
         request_headers.push(("Authorization".to_owned(), auth));
