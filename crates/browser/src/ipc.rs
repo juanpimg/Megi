@@ -145,6 +145,12 @@ impl ProcessRenderer {
     pub fn spawn() -> Result<Self, IpcError> {
         let executable =
             std::env::current_exe().map_err(|error| IpcError::Io(error.to_string()))?;
+        Self::spawn_with_executable(&executable)
+    }
+
+    /// Spawns a renderer from an explicit executable path (used by integration tests that
+    /// drive the real `megi --megi-ipc-worker` binary).
+    pub fn spawn_with_executable(executable: &std::path::Path) -> Result<Self, IpcError> {
         let mut child = std::process::Command::new(executable)
             .arg("--megi-ipc-worker")
             .stdin(std::process::Stdio::piped())

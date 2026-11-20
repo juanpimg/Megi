@@ -555,7 +555,7 @@ source = "issue #946"
 state = "partial"
 evidence = "none"
 issue = 946
-reason = "ADR-004 phases 1-3 done: SiteKey, async per-site process pool with crash recovery, DOM patches and region parity; in-memory protocol E2E covers multi-site requests and truncated/dead-peer signals, real multi-tab window E2E still pending"
+reason = "ADR-004 phases 1-3 done: SiteKey, async per-site process pool with crash recovery, DOM patches and region parity; protocol E2E and real megi --megi-ipc-worker child E2E (multi-site render + kill detection) in CI"
 
 [[capability]]
 id = "X-BENCH"
