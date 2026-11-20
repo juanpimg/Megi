@@ -110,6 +110,11 @@ impl WindowApp {
             recent_history: recent,
             history_menu: None,
             download: crate::download::DownloadProgress::new(),
+            download_manager: crate::download::DownloadManager::new(
+                crate::download::DEFAULT_MAX_JOBS,
+                crate::download::DEFAULT_MAX_ACTIVE,
+                crate::download::DEFAULT_MAX_BYTES,
+            ),
             multi_anchor: None,
             hover_form: None,
             site_zooms,

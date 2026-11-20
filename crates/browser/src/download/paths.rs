@@ -13,6 +13,12 @@ pub enum DownloadKind {
     Html,
     /// A rendered page image resource (`<img>` bytes fetched on demand).
     Image,
+    /// A fetched stylesheet resource.
+    Css,
+    /// A fetched JavaScript resource.
+    Script,
+    /// A fetched web-font resource.
+    Font,
 }
 
 impl DownloadKind {
@@ -22,6 +28,9 @@ impl DownloadKind {
             Self::Png => "png",
             Self::Html => "html",
             Self::Image => "image",
+            Self::Css => "css",
+            Self::Script => "js",
+            Self::Font => "woff2",
         }
     }
 }
