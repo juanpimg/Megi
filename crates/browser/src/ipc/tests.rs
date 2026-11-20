@@ -222,3 +222,55 @@ fn fatal_ipc_errors_trigger_process_respawn() {
     assert!(!IpcError::InvalidPayload("bad json".to_owned()).is_fatal());
     assert!(!IpcError::TooLarge(1).is_fatal());
 }
+
+#[test]
+fn worker_stream_serves_requests_from_distinct_sites() {
+    // E2E of the child-side protocol: two navigations to distinct origins produce two framed
+    // responses with their own document URLs, without any real process/display.
+    let mut input = Vec::new();
+    for (generation, url) in [
+        (1u64, "data:text/html,<title>First</title><p>one</p>"),
+        (2u64, "data:text/html,<title>Second</title><p>two</p>"),
+    ] {
+        let request = IpcRenderRequest {
+            generation,
+            input: url.to_owned(),
+            css_width: 320,
+            css_height: 200,
+            base_override: None,
+            scripting: false,
+            find_query: None,
+        };
+        write_message(&mut input, &request).expect("write request");
+    }
+    let mut output = Vec::new();
+    crate::ipc::run_ipc_worker_stream(&mut &input[..], &mut output).expect("worker stream");
+    let mut cursor = &output[..];
+    for expected_generation in [1u64, 2] {
+        let response: IpcRenderResponse = read_message(&mut cursor).expect("read response");
+        assert_eq!(response.generation, expected_generation);
+        assert_eq!(response.css_width, 320);
+        assert!(
+            response.error.is_none(),
+            "render failed: {:?}",
+            response.error
+        );
+        assert!(
+            !response.png_bytes.is_empty(),
+            "a PNG must cross the boundary"
+        );
+    }
+}
+
+#[test]
+fn worker_stream_detects_a_truncated_request_from_a_dead_peer() {
+    // E2E crash signal: a peer that dies mid-frame yields Truncated, which the pool classifies
+    // as fatal and uses to respawn the renderer process.
+    let truncated = [0u8, 2];
+    let mut output = Vec::new();
+    assert_eq!(
+        crate::ipc::run_ipc_worker_stream(&mut &truncated[..], &mut output),
+        Err(IpcError::Truncated)
+    );
+    assert!(output.is_empty(), "no response for an incomplete request");
+}

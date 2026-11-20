@@ -266,8 +266,17 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
     let stdout = std::io::stdout();
     let mut reader = stdin.lock();
     let mut writer = stdout.lock();
+    run_ipc_worker_stream(&mut reader, &mut writer)
+}
+
+/// Stream-based worker loop: serves framed requests until EOF. Testable in memory, which
+/// gives the per-site process backend real protocol E2E coverage without a display server.
+pub fn run_ipc_worker_stream<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+) -> Result<(), IpcError> {
     loop {
-        let request: IpcRenderRequest = match read_message(&mut reader) {
+        let request: IpcRenderRequest = match read_message(reader) {
             Ok(request) => request,
             Err(IpcError::Truncated) => return Ok(()),
             Err(error) => return Err(error),
@@ -347,7 +356,7 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
                 error: Some(error),
             },
         };
-        write_message(&mut writer, &response)?;
+        write_message(writer, &response)?;
     }
 }
 
