@@ -29,6 +29,7 @@ pub struct ProcessRenderPool {
     max: usize,
     clock: u64,
     evictions: usize,
+    recoveries: usize,
 }
 
 impl ProcessRenderPool {
@@ -38,6 +39,7 @@ impl ProcessRenderPool {
             max: max.clamp(1, MAX_PROCESS_RENDERERS),
             clock: 0,
             evictions: 0,
+            recoveries: 0,
         }
     }
 
@@ -45,6 +47,15 @@ impl ProcessRenderPool {
     pub fn send(&mut self, request: IpcRenderRequest) -> Result<(), IpcError> {
         let site = request_process_site(&request);
         self.clock = self.clock.saturating_add(1);
+        let existing = self.slots.iter().position(|slot| slot.site == site);
+        // A child that exited (crash or killed renderer) must be replaced before reuse.
+        if let Some(index) = existing
+            && !self.slots[index].renderer.is_alive()
+        {
+            let dead = self.slots.remove(index);
+            drop(dead.renderer);
+            self.recoveries = self.recoveries.saturating_add(1);
+        }
         let index = match self.slots.iter().position(|slot| slot.site == site) {
             Some(index) => index,
             None if self.slots.len() < self.max => {
@@ -88,10 +99,19 @@ impl ProcessRenderPool {
     /// Drains all available responses without blocking.
     pub fn drain(&mut self) -> Vec<Result<IpcRenderResponse, IpcError>> {
         let mut out = Vec::new();
-        for slot in &self.slots {
+        let mut dead = Vec::new();
+        for (index, slot) in self.slots.iter_mut().enumerate() {
             while let Ok(response) = slot.responses.try_recv() {
+                if response.as_ref().is_err_and(|error| error.is_fatal()) {
+                    dead.push(index);
+                }
                 out.push(response);
             }
+        }
+        for index in dead.into_iter().rev() {
+            let slot = self.slots.remove(index);
+            drop(slot.renderer);
+            self.recoveries = self.recoveries.saturating_add(1);
         }
         out
     }
@@ -110,6 +130,11 @@ impl ProcessRenderPool {
 
     pub fn evictions(&self) -> usize {
         self.evictions
+    }
+
+    /// Number of crashed renderers replaced so far (diagnostics/tests).
+    pub fn recoveries(&self) -> usize {
+        self.recoveries
     }
 
     /// Terminates every process (called on shutdown).

@@ -213,3 +213,12 @@ fn process_requests_route_to_their_effective_site() {
         crate::site::site_key("http://other.test/")
     );
 }
+
+#[test]
+fn fatal_ipc_errors_trigger_process_respawn() {
+    // A crashed renderer produces Truncated or Io; a malformed payload does not kill it.
+    assert!(IpcError::Truncated.is_fatal());
+    assert!(IpcError::Io("broken pipe".to_owned()).is_fatal());
+    assert!(!IpcError::InvalidPayload("bad json".to_owned()).is_fatal());
+    assert!(!IpcError::TooLarge(1).is_fatal());
+}
