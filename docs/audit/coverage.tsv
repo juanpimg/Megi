@@ -5,7 +5,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/security_report.yml	19	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/PULL_REQUEST_TEMPLATE.md	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/actions/install-system-deps/action.yml	21	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/actions/install-system-deps/action.yml	23	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -566,7 +566,7 @@ crates/image/tests/webp_tests/lossy.rs	152	test	F1	wave-max-mod	2026-11-19	cover
 crates/image/tests/webp_tests/main.rs	173	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/Cargo.toml	22	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/canvas.rs	373	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
-crates/js/src/canvas/tests.rs	144	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
+crates/js/src/canvas/tests.rs	143	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/computed_style.rs	185	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -619,7 +619,7 @@ crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/js/src/runtime/location_storage.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	280	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_parse.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/modules.rs	385	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/modules.rs	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/network.rs	213	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_accessors.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods.rs	18	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -672,7 +672,7 @@ crates/js/tests/form_tests.rs	295	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/js/tests/gap_apis.rs	588	test	F1	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
 crates/js/tests/host_reentrancy_new.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/iframe_tests.rs	201	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/import_maps_r187.rs	229	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/import_maps_r187.rs	253	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/intl_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/js_tests.rs	335	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
