@@ -82,5 +82,60 @@ class TestCheckArchPredicates(unittest.TestCase):
             )
 
 
+    def test_dag_manifest_is_the_single_source_of_truth(self):
+        # #1838: the linter must read the DAG from one documented manifest,
+        # not from a hand-maintained copy that can silently drift.
+        import tomllib
+        from pathlib import Path
+
+        manifest_path = Path("docs/architecture-deps.toml")
+        self.assertTrue(
+            manifest_path.exists(),
+            "docs/architecture-deps.toml must be the single source of the crate DAG",
+        )
+        manifest = tomllib.loads(manifest_path.read_text())
+        self.assertIn("edges", manifest)
+        self.assertEqual(
+            check_arch.allowed_edges(),
+            {name: set(deps) for name, deps in manifest["edges"].items()},
+            "allowed_edges() must be derived from docs/architecture-deps.toml",
+        )
+
+    def test_manifest_core_consumers_match_agents_md(self):
+        # #1838: AGENTS.md §3 declares which crates may import `core`.
+        import re
+        from pathlib import Path
+
+        text = Path("AGENTS.md").read_text()
+        match = re.search(r"^\s*core\s*→\s*([a-z,\s]+)$", text, re.MULTILINE)
+        self.assertIsNotNone(match, "AGENTS.md must declare the core → ... DAG line")
+        declared = {part.strip() for part in match.group(1).split(",") if part.strip()}
+        allowed = check_arch.allowed_edges()
+        for consumer in sorted(declared):
+            with self.subTest(consumer=consumer):
+                self.assertIn(
+                    "core",
+                    allowed.get(consumer, set()),
+                    f"AGENTS.md allows {consumer} → core, so the DAG must allow it too",
+                )
+
+    def test_net_image_and_fonts_may_import_core(self):
+        # #1838: these three were flagged as forbidden edges despite AGENTS.md
+        # explicitly listing them as consumers of `core`.
+        allowed = check_arch.allowed_edges()
+        for consumer in ("net", "image", "fonts"):
+            with self.subTest(consumer=consumer):
+                self.assertEqual(
+                    check_arch.violations_for_edge(consumer, "core", allowed),
+                    [],
+                    f"{consumer} → core is a legitimate edge per AGENTS.md §3",
+                )
+
+    def test_retired_shell_alias_is_gone(self):
+        # #1838: `shell` was renamed to `browser`; keeping the alias in the
+        # DAG makes the gate enforce a crate that no longer exists.
+        self.assertNotIn("shell", check_arch.allowed_edges())
+
+
 if __name__ == "__main__":
     unittest.main()
