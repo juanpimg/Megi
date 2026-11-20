@@ -118,6 +118,64 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
     }
 }
 
+/// FNV-1a signature of a shell accessibility snapshot plus the focused DOM node.
+///
+/// Used to avoid re-publishing an identical tree to the platform adapter on every frame.
+pub fn snapshot_signature(snapshot: &[SnapshotNode], focused: DomNodeId) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    let mut mix = |bytes: &[u8]| {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100_0000_01b3);
+        }
+    };
+    for node in snapshot {
+        mix(node.id.get().to_be_bytes().as_slice());
+        mix(node.role.as_bytes());
+        mix(node.name.as_bytes());
+        mix(&[
+            u8::from(node.disabled),
+            u8::from(node.hidden),
+            u8::from(node.focusable),
+        ]);
+    }
+    mix(focused.get().to_be_bytes().as_slice());
+    hash
+}
+
+/// Pure state deciding whether a tree must be re-published (TDD / ADR-002).
+#[derive(Debug, Default)]
+pub struct AccessibilityPublisher {
+    last_signature: Option<u64>,
+    publications: usize,
+}
+
+impl AccessibilityPublisher {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Number of trees published so far (diagnostics and tests).
+    pub fn publications(&self) -> usize {
+        self.publications
+    }
+
+    /// Returns `true` only when `signature` differs from the last published one.
+    pub fn should_publish(&mut self, signature: u64) -> bool {
+        if self.last_signature == Some(signature) {
+            return false;
+        }
+        self.last_signature = Some(signature);
+        self.publications += 1;
+        true
+    }
+
+    /// Forces the next update to be a full tree (AT re-activation / new document).
+    pub fn invalidate(&mut self) {
+        self.last_signature = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,5 +194,68 @@ mod tests {
         let update = build_tree_update(&[], DomNodeId::from_index(0));
         assert!(update.nodes.is_empty());
         assert!(update.tree.is_none());
+    }
+}
+
+#[cfg(test)]
+mod publisher_tests {
+    use super::*;
+    use crate::a11y::SnapshotNode;
+    use megi_webview::core::NodeId;
+
+    fn node(id: usize, role: &str, name: &str) -> SnapshotNode {
+        SnapshotNode {
+            id: NodeId::from_index(id),
+            parent: None,
+            role: role.to_owned(),
+            name: name.to_owned(),
+            disabled: false,
+            hidden: false,
+            focusable: false,
+        }
+    }
+
+    #[test]
+    fn signature_changes_with_name_disabled_and_focus() {
+        let a = snapshot_signature(&[node(1, "button", "Go")], NodeId::from_index(1));
+        let renamed = snapshot_signature(&[node(1, "button", "Stop")], NodeId::from_index(1));
+        assert_ne!(a, renamed, "name must affect the signature");
+
+        let mut disabled = node(1, "button", "Go");
+        disabled.disabled = true;
+        let disabled_sig = snapshot_signature(&[disabled], NodeId::from_index(1));
+        assert_ne!(a, disabled_sig, "disabled must affect the signature");
+
+        let refocused = snapshot_signature(&[node(1, "button", "Go")], NodeId::from_index(2));
+        assert_ne!(a, refocused, "focused node must affect the signature");
+    }
+
+    #[test]
+    fn publisher_skips_identical_snapshots() {
+        let mut publisher = AccessibilityPublisher::new();
+        let snapshot = [node(1, "button", "Go")];
+        let signature = snapshot_signature(&snapshot, NodeId::from_index(1));
+        assert!(
+            publisher.should_publish(signature),
+            "first update is published"
+        );
+        assert!(
+            !publisher.should_publish(signature),
+            "identical snapshot must not be re-published"
+        );
+        assert_eq!(publisher.publications(), 1);
+    }
+
+    #[test]
+    fn publisher_republishes_after_invalidation() {
+        let mut publisher = AccessibilityPublisher::new();
+        let signature = snapshot_signature(&[node(1, "button", "Go")], NodeId::from_index(1));
+        assert!(publisher.should_publish(signature));
+        publisher.invalidate();
+        assert!(
+            publisher.should_publish(signature),
+            "invalidate forces a full-tree republish (AT re-activation)"
+        );
+        assert_eq!(publisher.publications(), 2);
     }
 }
