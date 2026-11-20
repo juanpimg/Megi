@@ -13,7 +13,7 @@
 //!
 //! # Limits
 //!
-//! - WOFF1 is decoded by [`crate::woff1`]; TTF/OTF pass through unchanged.
+//! - WOFF1 is decoded by [`crate::decode_woff1`]; TTF/OTF pass through unchanged.
 //! - The header and the whole table directory are validated before handing the bytes over
 //!   (`totalSfntSize`, `totalCompressedSize`, `numTables`, file length and every declared
 //!   table/transform length), the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and
