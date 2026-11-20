@@ -2065,8 +2065,8 @@ tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#205
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	122	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_update_coverage.py	410	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_coverage.py	555	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	461	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_coverage.py	580	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	296	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	

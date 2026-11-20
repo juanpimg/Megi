@@ -64,7 +64,7 @@ class CoverageCountingTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "crates/example/tests").mkdir(parents=True)
         (self.root / "crates/example/tests/feature.rs").write_text(
-            "fn real_capability_test() {}\n", encoding="utf-8"
+            "#[test]\nfn real_capability_test() { assert!(true); }\n", encoding="utf-8"
         )
         (self.root / "fixtures").mkdir()
         (self.root / "fixtures/golden.html").write_text("<p>ok</p>\n", encoding="utf-8")
@@ -225,7 +225,7 @@ class ValidatorHardeningTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         (self.root / "crates/example/tests").mkdir(parents=True)
         (self.root / "crates/example/tests/feature.rs").write_text(
-            "fn real_capability_test_extended() {}\n", encoding="utf-8"
+            "#[test]\nfn real_capability_test_extended() { assert!(true); }\n", encoding="utf-8"
         )
 
     def tearDown(self) -> None:
@@ -284,6 +284,57 @@ class ValidatorHardeningTests(unittest.TestCase):
                 {"state": "done", "evidence": evidence}, self.root, GATE_PASS
             )
             self.assertFalse(ok, f"{evidence} must not verify a capability: {reason}")
+
+    def test_test_evidence_in_tests_dir_requires_test_attribute(self) -> None:
+        # #1834: a plain helper under tests/ used to verify a `done` capability because
+        # the `#[test]` check was skipped for any path containing a `tests` component.
+        self.root.joinpath("crates/example/tests/helper.rs").write_text(
+            "#[allow(dead_code)]\nfn unannotated_helper() { assert!(true); }\n",
+            encoding="utf-8",
+        )
+        ok, reason = update_coverage.verify_evidence(
+            {
+                "state": "done",
+                "evidence": "test:crates/example/tests/helper.rs::unannotated_helper",
+            },
+            self.root,
+            GATE_PASS,
+        )
+        self.assertFalse(ok, f"unannotated helper must not verify: {reason}")
+
+    def test_test_evidence_requires_an_assertion(self) -> None:
+        # #1834: an annotated but empty test used to verify a capability. Require at
+        # least one assertion/expect/unwrap macro in the function body.
+        self.root.joinpath("crates/example/tests/empty.rs").write_text(
+            "#[test]\nfn empty_test() {}\n", encoding="utf-8"
+        )
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "test:crates/example/tests/empty.rs::empty_test"},
+            self.root,
+            GATE_PASS,
+        )
+        self.assertFalse(ok, f"empty test must not verify: {reason}")
+
+    def test_test_evidence_accepts_real_test_in_tests_dir(self) -> None:
+        # All 53 real evidences under tests/ must keep verifying after the hardening.
+        ok, reason = update_coverage.verify_evidence(
+            {
+                "state": "done",
+                "evidence": "test:crates/example/tests/feature.rs::real_capability_test_extended",
+            },
+            self.root,
+            GATE_PASS,
+        )
+        self.assertTrue(ok, reason)
+
+    def test_fixture_evidence_rejects_empty_file(self) -> None:
+        # #1834: `fixture:` used to accept any path via is_file(), including empty files.
+        empty = self.root / "empty.html"
+        empty.write_text("", encoding="utf-8")
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "fixture:empty.html"}, self.root, GATE_PASS
+        )
+        self.assertFalse(ok, f"empty fixture must not verify: {reason}")
 
     def test_gate_evidence_rejects_stale_verified_commit(self) -> None:
         # #1392: `verified_commit` must be HEAD (or an ancestor); a copied-forward commit
