@@ -187,11 +187,14 @@ fn tabs_report_distinct_isolation_sites() {
     assert_eq!(one_site.distinct_sites(), 1);
     assert!(!one_site.has_cross_site_tabs());
 
+    // ADR-004 defines a site as scheme + host + effective port. `http://example.com`
+    // (port 80) and `https://example.com` (port 443) are therefore DIFFERENT sites,
+    // so these three URLs span three distinct isolation sites, not two.
     let two_sites = TabsState::from_urls(vec![
         "https://example.com/a".to_owned(),
         "http://example.com/b".to_owned(),
         "https://other.test/".to_owned(),
     ]);
-    assert_eq!(two_sites.distinct_sites(), 2);
+    assert_eq!(two_sites.distinct_sites(), 3);
     assert!(two_sites.has_cross_site_tabs());
 }
