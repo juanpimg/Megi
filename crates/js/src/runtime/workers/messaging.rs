@@ -29,6 +29,12 @@ impl JsRuntime {
         let dom_prelude = r#"
 var __megi_dom_seq = 0;
 var __megi_dom_pending = {};
+var __megi_dom_event_callbacks = {};
+function __megi_dom_on(type, nodeId, callback) {
+  var key = nodeId + '|' + type;
+  if (!__megi_dom_event_callbacks[key]) { __megi_dom_event_callbacks[key] = []; }
+  if (__megi_dom_event_callbacks[key].length < 32) { __megi_dom_event_callbacks[key].push(callback); }
+}
 function __megi_dom_call(method, args) {
   var seq = ++__megi_dom_seq;
   return new Promise(function (resolve) {
@@ -48,6 +54,12 @@ function __megi_make_element(nodeId) {
     },
     getComputedStyle: function (property) {
       return __megi_dom_call('getComputedStyle', [nodeId, property]);
+    },
+    addEventListener: function (type, callback) {
+      if (typeof callback === 'function') {
+        __megi_dom_on(type, nodeId, callback);
+        __megi_dom_call('listen', [nodeId, type]);
+      }
     },
     classList: {
       contains: function (name) { return __megi_dom_call('classList', [nodeId, 'contains', name]); },

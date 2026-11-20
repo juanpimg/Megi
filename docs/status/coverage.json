@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 65,
-    "partial": 5,
+    "implemented": 66,
+    "partial": 4,
     "known": 70,
-    "percent": 93,
+    "percent": 94,
     "unverified": [],
     "invalid_states": []
   },
@@ -46,10 +46,10 @@
     },
     {
       "id": "F6",
-      "implemented": 10,
-      "partial": 1,
+      "implemented": 11,
+      "partial": 0,
       "known": 11,
-      "percent": 91
+      "percent": 100
     },
     {
       "id": "F7",
@@ -75,16 +75,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 1014,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F6-WORKERS-DOM",
-      "area": "F6",
-      "name": "Web Workers con acceso a DOM",
-      "source": "PROGRESS.md F6 pending",
-      "state": "partial",
-      "evidence": "none",
-      "issue": "",
       "reason": "no requiere evidencia"
     },
     {

@@ -380,3 +380,41 @@ fn worker_can_read_and_mutate_classlist_through_the_proxy() {
         "class mutations must reach the owning document"
     );
 }
+
+#[test]
+fn worker_receives_dom_events_from_a_proxied_element() {
+    // F6-WORKERS-DOM: a worker can listen for events on a proxied element and receives them
+    // through the deterministic message pump when the page dispatches them.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.addEventListener('click', function (event) { postMessage('clicked:' + event.type); }); \
+           postMessage('listening'); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<button id=x>x</button>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__log = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __log += e.data + ';'; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("setup tasks");
+    runtime
+        .eval(
+            "document.getElementById('x').dispatchEvent(new Event('click'));",
+            "page.js",
+        )
+        .expect("dispatch click");
+    runtime.run_worker_tasks(128).expect("delivery tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__log", "page.js").expect("log"),
+        "listening;clicked:click;"
+    );
+}
