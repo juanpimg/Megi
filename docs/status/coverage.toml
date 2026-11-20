@@ -191,8 +191,8 @@ id = "F3-TABLE-CENTER"
 area = "F3"
 name = "Maquetación real de HN (<center>/<table>) sin página en blanco"
 source = "issue #1011"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/tests/pipeline_tests/output.rs::centered_nested_table_is_not_a_blank_page"
 issue = 1011
 
 [[capability]]
@@ -288,9 +288,10 @@ id = "F4-CJK-FONTS"
 area = "F4"
 name = "Fallback de fuentes CJK/emoji (sin tofu)"
 source = "issue #1015"
-state = "done"
-evidence = "test:crates/fonts/tests/font_engine/shaping.rs::cjk_glyphs_are_real_not_tofu"
+state = "partial"
+evidence = "none"
 issue = 1015
+reason = "CJK/emoji fallback works with installed system fonts; CI runners ship no CJK fonts so portable evidence is limited"
 
 [[capability]]
 id = "F4-ARABIC-SHAPING"

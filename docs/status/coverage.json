@@ -2,7 +2,7 @@
   "schema": 1,
   "overall": {
     "implemented": 56,
-    "partial": 3,
+    "partial": 4,
     "known": 70,
     "percent": 80,
     "unverified": [],
@@ -25,17 +25,17 @@
     },
     {
       "id": "F3",
-      "implemented": 6,
+      "implemented": 7,
       "partial": 0,
       "known": 8,
-      "percent": 75
+      "percent": 88
     },
     {
       "id": "F4",
-      "implemented": 11,
-      "partial": 1,
+      "implemented": 10,
+      "partial": 2,
       "known": 13,
-      "percent": 85
+      "percent": 77
     },
     {
       "id": "F5",
@@ -68,16 +68,6 @@
   ],
   "missing": [
     {
-      "id": "F3-TABLE-CENTER",
-      "area": "F3",
-      "name": "Maquetación real de HN (<center>/<table>) sin página en blanco",
-      "source": "issue #1011",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1011,
-      "reason": "no requiere evidencia"
-    },
-    {
       "id": "F3-IFC-EDGES",
       "area": "F3",
       "name": "Casos límite IFC (bidi/justify) y profundidad de tablas",
@@ -85,6 +75,16 @@
       "state": "missing",
       "evidence": "none",
       "issue": "",
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F4-CJK-FONTS",
+      "area": "F4",
+      "name": "Fallback de fuentes CJK/emoji (sin tofu)",
+      "source": "issue #1015",
+      "state": "partial",
+      "evidence": "none",
+      "issue": 1015,
       "reason": "no requiere evidencia"
     },
     {
