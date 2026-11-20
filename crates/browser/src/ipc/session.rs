@@ -27,7 +27,7 @@ impl ProcessFrame {
     /// Converts the wire response into a shell `RenderFrame`. Hit regions and form controls
     /// are empty in process mode (they require the in-process layout tree); document editing
     /// still works because `DomPatch` round-trips the serialized DOM (ADR-004 phase 3).
-    pub fn to_render_frame(&self, css_width: u32) -> Result<crate::worker::RenderFrame, IpcError> {
+    pub fn to_render_frame(&self, _css_width: u32) -> Result<crate::worker::RenderFrame, IpcError> {
         if let Some(error) = &self.response.error {
             return Err(IpcError::Io(error.clone()));
         }
@@ -52,7 +52,7 @@ impl ProcessFrame {
         };
         Ok(crate::worker::RenderFrame {
             generation: self.response.generation,
-            width: css_width,
+            width: self.response.css_width,
             height,
             pixels,
             png_bytes: self.response.png_bytes.clone(),

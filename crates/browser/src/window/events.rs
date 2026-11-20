@@ -453,5 +453,8 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         if let Some(pool) = self.render_pool.take() {
             pool.join();
         }
+        if let Some(pool) = self.process_pool.take() {
+            pool.join();
+        }
     }
 }

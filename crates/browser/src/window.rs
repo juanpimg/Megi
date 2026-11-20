@@ -248,7 +248,7 @@ impl Default for WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
-            process_render: false,
+            process_render: true,
         }
     }
 }
@@ -262,7 +262,7 @@ impl WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
-            process_render: false,
+            process_render: true,
         }
     }
 
@@ -389,7 +389,7 @@ struct WindowApp {
     /// Per-site renderer pool (ADR-004 phase 2).
     render_pool: Option<RendererPool>,
     /// OS renderer process and its queued replies (ADR-004 phase 3).
-    process_session: Option<crate::ipc::ProcessRenderSession>,
+    process_pool: Option<crate::ipc::ProcessRenderPool>,
     use_process_render: bool,
     process_messages: std::collections::VecDeque<crate::worker::WorkerMessage>,
     debounce: Debounce,

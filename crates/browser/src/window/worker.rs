@@ -18,20 +18,9 @@ impl WindowApp {
         )
     }
 
-    /// Renders in an isolated OS process and queues the converted frame like a worker reply
-    /// (ADR-004 phase 3). DOM mutations are sent as `DomPatch` data URLs with the real base
-    /// URL, so form editing survives the process boundary.
+    /// Queues a render to the per-site process pool (ADR-004 phase 3). Responses arrive
+    /// asynchronously through the pool's reader threads and are drained like worker messages.
     fn send_process_render(&mut self, request: RenderRequest) -> bool {
-        if self.process_session.is_none() {
-            match crate::ipc::ProcessRenderSession::spawn() {
-                Ok(session) => self.process_session = Some(session),
-                Err(error) => {
-                    self.error = Some(format!("cannot start renderer process: {error}"));
-                    self.update_title();
-                    return false;
-                }
-            }
-        }
         let wire = crate::ipc::IpcRenderRequest {
             generation: request.generation,
             input: request.input.clone(),
@@ -41,16 +30,11 @@ impl WindowApp {
             scripting: request.scripting,
             find_query: request.find_query.clone(),
         };
-        let session = self.process_session.as_mut().expect("session just spawned");
-        match session
-            .render(wire)
-            .and_then(|frame| frame.to_render_frame(request.css_width))
-        {
-            Ok(frame) => {
-                self.process_messages
-                    .push_back(crate::worker::WorkerMessage::Frame(frame));
-                true
-            }
+        let pool = self.process_pool.get_or_insert_with(|| {
+            crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
+        });
+        match pool.send(wire) {
+            Ok(()) => true,
             Err(error) => {
                 self.error = Some(format!("renderer process failed: {error}"));
                 self.update_title();
@@ -247,6 +231,28 @@ impl WindowApp {
         }
         while let Some(message) = self.process_messages.pop_front() {
             messages.push(message);
+        }
+        if let Some(pool) = &mut self.process_pool {
+            for response in pool.drain() {
+                match response {
+                    Ok(response) => {
+                        let frame = crate::ipc::ProcessFrame::from_response(response);
+                        match frame.to_render_frame(0) {
+                            Ok(rendered) => {
+                                messages.push(crate::worker::WorkerMessage::Frame(rendered))
+                            }
+                            Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
+                                generation: frame.response.generation,
+                                message: error.to_string(),
+                            }),
+                        }
+                    }
+                    Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
+                        generation: 0,
+                        message: error.to_string(),
+                    }),
+                }
+            }
         }
         let mut sync_find = false;
         let mut rebuild_focus = false;

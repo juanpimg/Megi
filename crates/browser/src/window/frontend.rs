@@ -66,7 +66,7 @@ impl WindowApp {
             scroll: restored_scroll,
             store: FrameStore::new(),
             render_pool: None,
-            process_session: None,
+            process_pool: None,
             use_process_render: view.process_render,
             process_messages: std::collections::VecDeque::new(),
             debounce: Debounce::new(RENDER_DEBOUNCE),
