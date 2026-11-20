@@ -45,6 +45,7 @@ fn process_frame_restores_dom_from_wire_response() {
         generation: 3,
         png_bytes: vec![0x89, b'P', b'N', b'G'],
         content_height: 100,
+        css_width: 100,
         title: Some("probe".to_owned()),
         document_url: "https://example.test/".to_owned(),
         scripts_executed: 1,
@@ -75,6 +76,7 @@ fn failed_response_uses_an_empty_document() {
         generation: 1,
         png_bytes: Vec::new(),
         content_height: 0,
+        css_width: 0,
         title: None,
         document_url: String::new(),
         scripts_executed: 0,
@@ -184,4 +186,30 @@ fn form_control_round_trip_preserves_kind_and_options() {
     assert_eq!(restored.form_id, 7);
     assert_eq!(restored.kind, crate::forms::FormControlKind::Select);
     assert_eq!(restored.options[0].group.as_deref(), Some("letters"));
+}
+
+#[test]
+fn process_requests_route_to_their_effective_site() {
+    let request = IpcRenderRequest {
+        generation: 1,
+        input: "data:text/html,<p>patched</p>".to_owned(),
+        css_width: 100,
+        css_height: 100,
+        base_override: Some("https://real.example/page".to_owned()),
+        scripting: true,
+        find_query: None,
+    };
+    assert_eq!(
+        crate::ipc::request_process_site(&request),
+        crate::site::site_key("https://real.example/page")
+    );
+    let direct = IpcRenderRequest {
+        base_override: None,
+        input: "http://other.test/".to_owned(),
+        ..request
+    };
+    assert_eq!(
+        crate::ipc::request_process_site(&direct),
+        crate::site::site_key("http://other.test/")
+    );
 }

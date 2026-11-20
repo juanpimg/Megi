@@ -6,8 +6,10 @@
 
 use std::io::{Read, Write};
 
+mod process_pool;
 mod regions;
 mod session;
+pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
 pub use regions::{
     IpcFindMatch, IpcFormControl, IpcImageRegion, IpcLinkRegion, IpcRect, IpcSelectOption,
 };
@@ -102,6 +104,8 @@ pub struct IpcRenderResponse {
     pub generation: u64,
     pub png_bytes: Vec<u8>,
     pub content_height: u32,
+    /// CSS viewport width used for the render (for frame reconstruction).
+    pub css_width: u32,
     pub title: Option<String>,
     pub document_url: String,
     pub scripts_executed: usize,
@@ -125,7 +129,7 @@ pub struct IpcRenderResponse {
 pub struct ProcessRenderer {
     child: std::process::Child,
     stdin: std::process::ChildStdin,
-    stdout: std::process::ChildStdout,
+    stdout: Option<std::process::ChildStdout>,
 }
 
 impl ProcessRenderer {
@@ -151,14 +155,57 @@ impl ProcessRenderer {
         Ok(Self {
             child,
             stdin,
-            stdout,
+            stdout: Some(stdout),
         })
     }
 
     /// Renders one request in the child process and returns the serializable result.
     pub fn render(&mut self, request: IpcRenderRequest) -> Result<IpcRenderResponse, IpcError> {
         write_message(&mut self.stdin, &request)?;
-        read_message(&mut self.stdout)
+        let stdout = self.stdout.as_mut().ok_or_else(|| {
+            IpcError::Io("renderer stdout is owned by the reader thread".to_owned())
+        })?;
+        read_message(stdout)
+    }
+
+    /// Spawns a renderer whose stdout is drained by a reader thread into a channel, so the
+    /// event loop can send requests and poll replies without blocking (ADR-004 phase 3).
+    pub fn spawn_with_reader() -> Result<
+        (
+            Self,
+            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
+        ),
+        IpcError,
+    > {
+        let mut renderer = Self::spawn()?;
+        let stdout = renderer
+            .stdout
+            .take()
+            .ok_or_else(|| IpcError::Io("no stdout".to_owned()))?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut stdout = stdout;
+            loop {
+                match read_message::<_, IpcRenderResponse>(&mut stdout) {
+                    Ok(response) => {
+                        if sender.send(Ok(response)).is_err() {
+                            break;
+                        }
+                    }
+                    Err(IpcError::Truncated) => break,
+                    Err(error) => {
+                        let _ = sender.send(Err(error));
+                        break;
+                    }
+                }
+            }
+        });
+        Ok((renderer, receiver))
+    }
+
+    /// Writes one render request without waiting for the response.
+    pub fn write_request(&mut self, request: &IpcRenderRequest) -> Result<(), IpcError> {
+        write_message(&mut self.stdin, request)
     }
 
     /// PID of the renderer process (diagnostics/tests).
@@ -231,6 +278,7 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
                 generation: frame.generation,
                 png_bytes: frame.png_bytes,
                 content_height: frame.content_height,
+                css_width: request.css_width,
                 title: frame.title,
                 document_url: frame.document_url,
                 scripts_executed: frame.scripts_executed,
@@ -270,6 +318,7 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
                 generation: request.generation,
                 png_bytes: Vec::new(),
                 content_height: 0,
+                css_width: 0,
                 title: None,
                 document_url: request.input,
                 scripts_executed: 0,
@@ -342,6 +391,7 @@ mod tests {
             generation: 7,
             png_bytes: vec![0x89, b'P', b'N', b'G'],
             content_height: 1200,
+            css_width: 640,
             title: Some("Título".to_owned()),
             document_url: "https://example.com/".to_owned(),
             scripts_executed: 3,

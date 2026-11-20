@@ -11,7 +11,7 @@
 
 Tras la Fase 2 el shell enruta cada `RenderRequest` al worker de su sitio (`crates/browser/src/worker/pool.rs`), con límite `MAX_SITE_RENDERERS` y desalojo LRU controlado; las pestañas de sitios distintos ya no comparten hilo/realm de render.
 
-**Fase 3 — Procesos del SO (transporte + integración opt-in HECHOS).** Sustituir cada worker por un proceso hijo usando `std::process::Command`, con IPC sobre `stdin`/`stdout` y `RenderFrame` serializado. Sin FFI: `#![forbid(unsafe_code)]` se mantiene. Requiere ADR complementaria para el formato de IPC, manejo de crashes y permisos.
+**Fase 3 — Procesos del SO (por sitio, asíncronos, modo por defecto).** Sustituir cada worker por un proceso hijo usando `std::process::Command`, con IPC sobre `stdin`/`stdout` y `RenderFrame` serializado. Sin FFI: `#![forbid(unsafe_code)]` se mantiene. Requiere ADR complementaria para el formato de IPC, manejo de crashes y permisos.
 
 ## Principios
 
@@ -28,6 +28,6 @@ Tras la Fase 2 el shell enruta cada `RenderRequest` al worker de su sitio (`crat
 
 ## Consecuencias y honestidad
 
-- Tras la Fase 3 (transporte + protocolo de parcheo), F7-ISOLATION sigue marcada **`partial`**: el modo proceso es opt-in y no ofrece paridad completa de hit-testing/formularios. No se marcará `done` hasta que sea el modo predeterminado y pase la batería E2E completa.
+- Tras la Fase 3, F7-ISOLATION sigue marcada **`partial`** hasta que la batería E2E completa (multi-pestaña con sitios distintos, crashes de hijos, sesiones) pase en CI con el modo proceso por defecto. La arquitectura ya está en su lugar.
 - `docs/ARCHITECTURE.md` añade una fila para la capa de política de sitio en `crates/browser`, sin autorizar dependencias nativas nuevas (no son necesarias en la Fase 1).
 - Tests: la política se valida con URLs reales (`http(s)`, `data:`, `file:`, `about:blank`) y reglas de agrupación, sin arrancar ventanas ni procesos.
