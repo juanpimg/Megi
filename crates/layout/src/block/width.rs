@@ -80,25 +80,23 @@ pub(crate) fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
 
     // First pass per §10.3.3, then min/max per §10.4, then a second pass with the clamped
     // width so that e.g. `max-width` plus `margin: auto` centers the box.
+    let margins = HorizontalMargins {
+        left_spec: margin_left_spec,
+        right_spec: margin_right_spec,
+        left_auto: margin_left_auto,
+        right_auto: margin_right_auto,
+    };
+    let direction = style.direction;
     let (tentative_content, _, _) = solve_block_width(
         cb_width,
         edges_h,
         specified_content_width,
-        margin_left_spec,
-        margin_right_spec,
-        margin_left_auto,
-        margin_right_auto,
+        margins,
+        direction,
     );
     let clamped_content = to_content(apply_constraints(to_box(tentative_content)));
-    let (content_width, margin_left, margin_right) = solve_block_width(
-        cb_width,
-        edges_h,
-        Some(clamped_content),
-        margin_left_spec,
-        margin_right_spec,
-        margin_left_auto,
-        margin_right_auto,
-    );
+    let (content_width, margin_left, margin_right) =
+        solve_block_width(cb_width, edges_h, Some(clamped_content), margins, direction);
 
     layout_box.dimensions.content.width = content_width;
     layout_box.dimensions.padding.left = padding_left;
@@ -108,21 +106,34 @@ pub(crate) fn calculate_block_width(layout_box: &mut LayoutBox, cb_width: f32) {
     layout_box.dimensions.margin.left = margin_left;
     layout_box.dimensions.margin.right = margin_right;
 }
+/// Specified/auto state of the two horizontal margins for §10.3.3 solving.
+#[derive(Clone, Copy)]
+pub(crate) struct HorizontalMargins {
+    pub left_spec: f32,
+    pub right_spec: f32,
+    pub left_auto: bool,
+    pub right_auto: bool,
+}
+
 /// Solves the horizontal equation of CSS 2.2 §10.3.3 for a block-level box.
 ///
 /// Returns `(content_width, used_margin_left, used_margin_right)`. When
 /// `content_width` is `None` the width is `auto`; when a margin is `auto` its flag is
 /// set and its specified value is ignored. With no auto values the equation is
-/// over-constrained and, in LTR, `margin-right` is ignored/solved for.
+/// over-constrained `margin-right` (LTR) or `margin-left` (RTL, #1845) is ignored/solved for.
 pub(crate) fn solve_block_width(
     cb_width: f32,
     edges_h: f32,
     content_width: Option<f32>,
-    margin_left_spec: f32,
-    margin_right_spec: f32,
-    margin_left_auto: bool,
-    margin_right_auto: bool,
+    margins: HorizontalMargins,
+    direction: megi_css::Direction,
 ) -> (f32, f32, f32) {
+    let HorizontalMargins {
+        left_spec: margin_left_spec,
+        right_spec: margin_right_spec,
+        left_auto: margin_left_auto,
+        right_auto: margin_right_auto,
+    } = margins;
     match content_width {
         Some(width) => {
             let width = width.max(0.0);
@@ -137,8 +148,12 @@ pub(crate) fn solve_block_width(
                 }
                 (true, false) => (underflow - margin_right_spec, margin_right_spec),
                 (false, true) => (margin_left_spec, underflow - margin_left_spec),
-                // Over-constrained: ignore margin-right (LTR assumption).
-                (false, false) => (margin_left_spec, underflow - margin_left_spec),
+                // #1845: over-constrained equation (CSS 2.2 §10.3.3). LTR solves for and
+                // ignores margin-right; RTL ignores margin-left instead.
+                (false, false) => match direction {
+                    megi_css::Direction::Ltr => (margin_left_spec, underflow - margin_left_spec),
+                    megi_css::Direction::Rtl => (underflow - margin_right_spec, margin_right_spec),
+                },
             };
             (width, margin_left, margin_right)
         }
@@ -267,4 +282,31 @@ pub(crate) fn shrink_to_fit_content_width(
         .max(preferred_minimum)
         .min(preferred_maximum)
         .max(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use megi_css::Direction;
+
+    #[test]
+    fn over_constrained_rtl_ignores_margin_left() {
+        // #1845: CSS 2.2 §10.3.3 — with width not auto and neither margin auto,
+        // the equation is over-constrained. LTR ignores margin-right; RTL ignores
+        // margin-left. CB 250px, width 200px, margins 50px each, no edges.
+        let margins = HorizontalMargins {
+            left_spec: 50.0,
+            right_spec: 50.0,
+            left_auto: false,
+            right_auto: false,
+        };
+        let (_, ltr_left, ltr_right) =
+            solve_block_width(250.0, 0.0, Some(200.0), margins, Direction::Ltr);
+        let (_, rtl_left, rtl_right) =
+            solve_block_width(250.0, 0.0, Some(200.0), margins, Direction::Rtl);
+        // LTR: margin-left specified (50), margin-right solved to 0.
+        assert_eq!((ltr_left, ltr_right), (50.0, 0.0));
+        // RTL: margin-right specified (50), margin-left solved to 0.
+        assert_eq!((rtl_left, rtl_right), (0.0, 50.0));
+    }
 }
