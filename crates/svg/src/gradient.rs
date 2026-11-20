@@ -360,7 +360,15 @@ fn parse_stops(element: &XmlElement) -> Vec<Stop> {
             color: color.with_opacity(opacity),
         });
     }
-    stops.sort_by(|left, right| left.offset.total_cmp(&right.offset));
+    // SVG 1.1 §13.2.4: a stop with a smaller offset than the previous one is clamped
+    // up to the previous offset, preserving declaration order. Sorting instead
+    // reordered the colors (#1863). The result stays non-decreasing, which `evaluate`'s
+    // binary search relies on.
+    let mut previous = 0.0f32;
+    for stop in &mut stops {
+        stop.offset = stop.offset.max(previous);
+        previous = stop.offset;
+    }
     stops
 }
 
@@ -388,105 +396,4 @@ fn lerp_channel(start: u8, end: u8, t: f32) -> u8 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::xml::parse_document;
-
-    fn gradient(source: &str, id: &str) -> Option<GradientSpec> {
-        let root = parse_document(source.as_bytes(), &crate::Limits::default()).expect("xml");
-        let mut defs = HashMap::new();
-        let mut stack = vec![&root];
-        while let Some(element) = stack.pop() {
-            if let Some(element_id) = element.attribute("id") {
-                defs.insert(element_id.to_owned(), element);
-            }
-            for child in element.children.iter().rev() {
-                if let XmlNode::Element(child) = child {
-                    stack.push(child);
-                }
-            }
-        }
-        if !defs.contains_key(id) {
-            return None;
-        }
-        GradientSpec::resolve(&defs, id)
-    }
-
-    #[test]
-    fn test_linear_defaults_and_stops_sorted() {
-        let source = "<svg><linearGradient id='g'><stop offset='100%' stop-color='#0000ff'/>\
-                      <stop offset='0' stop-color='#ff0000'/></linearGradient></svg>";
-        let spec = gradient(source, "g").expect("gradient");
-        assert_eq!(
-            spec.geometry,
-            GradientGeometry::Linear {
-                x1: 0.0,
-                y1: 0.0,
-                x2: 1.0,
-                y2: 0.0
-            }
-        );
-        assert_eq!(spec.stops[0].offset, 0.0);
-        assert_eq!(spec.stops[1].offset, 1.0);
-        assert_eq!(spec.evaluate(0.0), Color::rgba(255, 0, 0, 255));
-        assert_eq!(spec.evaluate(1.0), Color::rgba(0, 0, 255, 255));
-    }
-
-    #[test]
-    fn test_interpolation_and_stop_opacity() {
-        let source = "<svg><linearGradient id='g'>\
-                      <stop offset='0' stop-color='red' stop-opacity='0.5'/>\
-                      <stop offset='1' stop-color='blue'/></linearGradient></svg>";
-        let spec = gradient(source, "g").expect("gradient");
-        let middle = spec.evaluate(0.5);
-        assert!((middle.r as i32 - 128).abs() <= 2);
-        assert!((middle.b as i32 - 128).abs() <= 2);
-        assert!((middle.a as i32 - 191).abs() <= 2);
-    }
-
-    #[test]
-    fn test_spread_methods_clamp_reflect_repeat() {
-        let source = "<svg><linearGradient id='g' spreadMethod='reflect'>\
-                      <stop offset='0' stop-color='black'/>\
-                      <stop offset='1' stop-color='white'/></linearGradient></svg>";
-        let spec = gradient(source, "g").expect("gradient");
-        assert_eq!(spec.apply_spread(1.25), 0.75);
-        assert_eq!(spec.apply_spread(-0.25), 0.25);
-        let source = source.replace("reflect", "repeat");
-        let repeat = gradient(&source, "g").expect("gradient");
-        assert!((repeat.apply_spread(1.25) - 0.25).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_href_inheritance_and_cycles() {
-        let source = "<svg>\
-            <linearGradient id='base'><stop offset='0' stop-color='red'/>\
-            <stop offset='1' stop-color='blue'/></linearGradient>\
-            <linearGradient id='child' href='#base' y2='100%'/></svg>";
-        let child = gradient(source, "child").expect("inherited gradient");
-        assert_eq!(child.stops.len(), 2);
-        assert_eq!(
-            child.geometry,
-            GradientGeometry::Linear {
-                x1: 0.0,
-                y1: 0.0,
-                x2: 1.0,
-                y2: 1.0
-            }
-        );
-        let cycle =
-            "<svg><linearGradient id='a' href='#b'/><linearGradient id='b' href='#a'/></svg>";
-        assert!(gradient(cycle, "a").is_none());
-    }
-
-    #[test]
-    fn test_radial_parameter_and_focus() {
-        let source = "<svg><radialGradient id='g'><stop offset='0' stop-color='red'/>\
-                      <stop offset='1' stop-color='blue'/></radialGradient></svg>";
-        let spec = gradient(source, "g").expect("gradient");
-        assert!((spec.parameter(0.5, 0.5) - 0.0).abs() < 1e-4);
-        assert!((spec.parameter(1.0, 0.5) - 1.0).abs() < 1e-3);
-        let far = spec.evaluate(1.5);
-        assert_eq!(far, Color::rgba(0, 0, 255, 255));
-    }
-}
+mod tests;
