@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 59,
+    "implemented": 60,
     "partial": 3,
     "known": 70,
-    "percent": 84,
+    "percent": 86,
     "unverified": [],
     "invalid_states": []
   },
@@ -25,10 +25,10 @@
     },
     {
       "id": "F3",
-      "implemented": 7,
+      "implemented": 8,
       "partial": 0,
       "known": 8,
-      "percent": 88
+      "percent": 100
     },
     {
       "id": "F4",
@@ -67,16 +67,6 @@
     }
   ],
   "missing": [
-    {
-      "id": "F3-IFC-EDGES",
-      "area": "F3",
-      "name": "Casos límite IFC (bidi/justify) y profundidad de tablas",
-      "source": "PROGRESS.md F3 pending",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
     {
       "id": "F4-ARABIC-SHAPING",
       "area": "F4",

@@ -200,8 +200,8 @@ id = "F3-IFC-EDGES"
 area = "F3"
 name = "Casos límite IFC (bidi/justify) y profundidad de tablas"
 source = "PROGRESS.md F3 pending"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/layout/tests/bidi_tests.rs::mixed_ltr_and_rtl_keeps_ltr_outer_order_and_reverses_rtl_word"
 
 [[capability]]
 id = "F4-PNG-DECODE"

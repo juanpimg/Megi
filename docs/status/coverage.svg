@@ -5,10 +5,10 @@
 <rect x="0.5" y="0.5" width="899" height="661" fill="none" stroke="#d0d7de"/>
 <text x="28" y="46" font-family="DejaVu Sans, Verdana, sans-serif" font-size="26" font-weight="700" fill="#1f2328">Megi — cobertura de capacidades</text>
 <text x="28" y="68" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" fill="#57606a">Implementadas / conocidas · inventario verificable (estilo AnyPS5)</text>
-<text x="872" y="58" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="34" font-weight="700" fill="#1f2328">84%</text>
-<text x="872" y="78" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">59/70 capacidades</text>
+<text x="872" y="58" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="34" font-weight="700" fill="#1f2328">86%</text>
+<text x="872" y="78" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">60/70 capacidades</text>
 <rect x="28" y="92" width="844" height="10" rx="5" fill="#d0d7de"/>
-<rect x="28" y="92" width="709" height="10" rx="5" fill="#d29922"/>
+<rect x="28" y="92" width="726" height="10" rx="5" fill="#1f6feb"/>
 <text x="28" y="150" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#1f2328">F1</text>
 <text x="66" y="150" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" fill="#1f2328">HTML, DOM y serialización</text>
 <text x="872" y="150" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">7/7</text>
@@ -23,10 +23,10 @@
 <text x="872" y="229" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#2ea043">100%</text>
 <text x="28" y="254" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#1f2328">F3</text>
 <text x="66" y="254" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" fill="#1f2328">Layout (BFC/IFC, grid, flex, tablas)</text>
-<text x="872" y="254" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">7/8</text>
+<text x="872" y="254" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">8/8</text>
 <rect x="28" y="268" width="690" height="16" rx="8" fill="#eaeef2"/>
-<rect x="28" y="268" width="607" height="16" rx="8" fill="#1f6feb"/>
-<text x="872" y="281" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#1f6feb">88%</text>
+<rect x="28" y="268" width="690" height="16" rx="8" fill="#2ea043"/>
+<text x="872" y="281" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#2ea043">100%</text>
 <text x="28" y="306" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#1f2328">F4</text>
 <text x="66" y="306" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" fill="#1f2328">Paint, raster, fuentes y SVG</text>
 <text x="872" y="306" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">11/13 · 1 parcial</text>
@@ -58,7 +58,7 @@
 <rect x="28" y="528" width="462" height="16" rx="8" fill="#da3633"/>
 <text x="872" y="541" text-anchor="end" font-family="DejaVu Sans, Verdana, sans-serif" font-size="13" font-weight="700" fill="#da3633">67%</text>
 <line x1="28" y1="574" x2="872" y2="574" stroke="#d0d7de"/>
-<text x="28" y="598" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">59/70 · 3 parciales · 11 pendientes. Si añadimos capacidades conocidas, el % baja: es honestidad.</text>
+<text x="28" y="598" font-family="DejaVu Sans, Verdana, sans-serif" font-size="12" fill="#57606a">60/70 · 3 parciales · 10 pendientes. Si añadimos capacidades conocidas, el % baja: es honestidad.</text>
 <text x="28" y="620" font-family="DejaVu Sans, Verdana, sans-serif" font-size="11" fill="#8c959f">Generado por tools/update_coverage.py desde docs/status/coverage.toml — no editar a mano.</text>
 <text x="28" y="638" font-family="DejaVu Sans, Verdana, sans-serif" font-size="11" fill="#8c959f">Legend: verde ≥95% · azul ≥85% · ámbar ≥70% · rojo &lt;70%</text>
 </svg>
