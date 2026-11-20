@@ -15,11 +15,13 @@ and CI machines are slower than a laptop:
   from firing on measurement noise.
 * Rows at or below the floor still appear in the table, marked `noise`, so a
   real slowdown is visible even when it does not fail the gate.
-* Missing rows (renamed/removed bench) and new rows are reported separately and
-  never fail the gate by themselves.
+* Missing rows (renamed/removed bench) fail the gate by themselves (#1836): a fresh
+  run that silently drops a slow row would otherwise erase the regression and
+  print "no regressions". Pass ``--allow-missing`` when the baseline is being
+  updated intentionally in the same PR. New rows never fail the gate.
 
-Exit status: 0 when no row regressed, 1 when at least one did (so CI fails),
-2 on a malformed input document.
+Exit status: 0 when no row regressed or went missing (or missing was allowed),
+1 when at least one did (so CI fails), 2 on a malformed input document.
 """
 
 from __future__ import annotations
@@ -104,6 +106,11 @@ def main() -> int:
         help="absolute growth floor in ms below which growth is treated as noise",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    parser.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="allow baseline rows absent from the fresh run (#1836); default: fail",
+    )
     args = parser.parse_args()
 
     try:
@@ -188,6 +195,11 @@ def main() -> int:
 
     if regressions:
         print(f"{len(regressions)} regression(s): {', '.join(regressions)}")
+        return 1
+    # #1836: a dropped slow row must fail the gate unless the baseline is being
+    # updated deliberately (--allow-missing); otherwise the regression vanishes.
+    if missing and not args.allow_missing:
+        print(f"{len(missing)} missing baseline row(s): {', '.join(missing)}")
         return 1
     print(f"no regressions above {args.threshold:g} % / {args.min_ms:g} ms")
     return 0
