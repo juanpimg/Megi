@@ -257,6 +257,28 @@ mod tests {
     }
 
     #[test]
+    fn host_source_without_scheme_uses_protected_resource_scheme() {
+        // #1859: CSP3 §6.7.2.7 — a schemeless host-source inherits the protected
+        // resource's scheme. An http→https upgrade is allowed, but an https page must
+        // NOT authorize an http:// subresource (the reported downgrade bug).
+        let policy = ContentSecurityPolicy::parse("script-src cdn.test");
+        let https = Url::parse("https://cdn.test/x.js").expect("url");
+        let http = Url::parse("http://cdn.test/x.js").expect("url");
+
+        // Protected page is HTTPS → only https matches; http is a forbidden downgrade.
+        assert!(policy.allows_external(&https, &doc()));
+        assert!(
+            !policy.allows_external(&http, &doc()),
+            "https page must not authorize http via a schemeless source (#1859)"
+        );
+
+        // Protected page is HTTP → both http and the https upgrade match.
+        let http_doc = Url::parse("http://site.test/page").expect("url");
+        assert!(policy.allows_external(&http, &http_doc));
+        assert!(policy.allows_external(&https, &http_doc));
+    }
+
+    #[test]
     fn self_allows_same_origin_only() {
         let policy = ContentSecurityPolicy::parse("script-src 'self'");
         assert!(policy.allows_external(&doc(), &doc()));
