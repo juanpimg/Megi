@@ -18,9 +18,53 @@ impl WindowApp {
         )
     }
 
+    /// Renders in an isolated OS process and queues the converted frame like a worker reply
+    /// (ADR-004 phase 3). DOM mutations are sent as `DomPatch` data URLs with the real base
+    /// URL, so form editing survives the process boundary.
+    fn send_process_render(&mut self, request: RenderRequest) -> bool {
+        if self.process_session.is_none() {
+            match crate::ipc::ProcessRenderSession::spawn() {
+                Ok(session) => self.process_session = Some(session),
+                Err(error) => {
+                    self.error = Some(format!("cannot start renderer process: {error}"));
+                    self.update_title();
+                    return false;
+                }
+            }
+        }
+        let wire = crate::ipc::IpcRenderRequest {
+            generation: request.generation,
+            input: request.input.clone(),
+            css_width: request.css_width,
+            css_height: request.css_height,
+            base_override: request.base_override.clone(),
+            scripting: request.scripting,
+            find_query: request.find_query.clone(),
+        };
+        let session = self.process_session.as_mut().expect("session just spawned");
+        match session
+            .render(wire)
+            .and_then(|frame| frame.to_render_frame(request.css_width))
+        {
+            Ok(frame) => {
+                self.process_messages
+                    .push_back(crate::worker::WorkerMessage::Frame(frame));
+                true
+            }
+            Err(error) => {
+                self.error = Some(format!("renderer process failed: {error}"));
+                self.update_title();
+                false
+            }
+        }
+    }
+
     /// Routes a render request to the worker for its effective site (ADR-004 phase 2),
     /// spawning a new one on first use. Returns `false` on a channel failure.
     pub(super) fn send_render(&mut self, request: RenderRequest) -> bool {
+        if self.use_process_render {
+            return self.send_process_render(request);
+        }
         let site = crate::worker::request_site(&request);
         let needs_new = self
             .render_pool
@@ -200,6 +244,9 @@ impl WindowApp {
         let mut messages = Vec::new();
         if let Some(pool) = &self.render_pool {
             messages.extend(pool.drain_messages());
+        }
+        while let Some(message) = self.process_messages.pop_front() {
+            messages.push(message);
         }
         let mut sync_find = false;
         let mut rebuild_focus = false;

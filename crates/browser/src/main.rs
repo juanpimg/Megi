@@ -73,7 +73,8 @@ fn run() -> Result<(), ShellError> {
         args.refresh_ms
             .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
     )
-    .with_tabs(args.tabs.clone());
+    .with_tabs(args.tabs.clone())
+    .with_process_render(args.ipc_render);
     let mut view = view;
     view.session_path = if args.no_session {
         None
