@@ -39,38 +39,13 @@ def normalize(name: str) -> str:
 
 
 def allowed_edges() -> dict[str, set[str]]:
-    """Target DAG from design doc §2.3 (plain crate names, no `megi_` prefix)."""
-    return {
-        "core": set(),
-        "html": {"core"},
-        "css": {"core"},
-        "fonts": set(),
-        "image": set(),
-        "net": {"image"},  # MIME sniffing / image decode in the loader
-        "js": {"core", "html", "css"},
-        # Temporary: DisplayItem embeds css::Color/BorderStyle/Gradient and
-        # image::RgbaImage value types. Move those DTOs to core in Task 8.x.
-        "display": {"core", "fonts", "css", "image"},
-        "layout": {"core", "css", "fonts"},
-        "paint": {"core", "css", "layout", "fonts", "image", "display"},
-        "raster": {"core", "display", "fonts"},
-        "svg": {"image", "fonts", "display"},
-        "render": {
-            "core", "html", "css", "layout", "fonts", "image",
-            "display", "paint", "raster", "net", "js", "svg",
-        },
-        # Facade: re-exports the whole engine so `browser` needs no direct
-        # engine dependency. The light feature graph still compiles the same
-        # crates transitively through `render`; no window/UI dependency here.
-        "webview": {
-            "core", "display", "net", "render", "raster",
-            "css", "html", "layout", "fonts", "image", "paint",
-        },
-        "browser": {"webview"},
-        "shell": {"webview"},  # pre-rename alias of `browser`
-        "test_harness": {"core", "html", "css", "js"},
-        "bench": {"core", "html", "css", "layout", "fonts", "image", "paint", "render"},
-    }
+    """Target DAG from docs/architecture-deps.toml (single source of truth, #1838).
+
+    AGENTS.md §3 and docs/ARCHITECTURE.md document the same edges in prose;
+    tools/test_check_arch.py asserts the manifest stays in sync with them.
+    """
+    manifest = tomllib.loads((ROOT / "docs" / "architecture-deps.toml").read_text())
+    return {name: set(deps) for name, deps in manifest["edges"].items()}
 
 
 def violations_for_edge(src: str, dst: str, allowed: dict[str, set[str]]) -> list[str]:
