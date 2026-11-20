@@ -39,6 +39,15 @@ fn compare_document_position_disconnected() {
     let mut document = Document::new();
     let first = document.create_element(Namespace::Html, "div", vec![]);
     let second = document.create_element(Namespace::Html, "div", vec![]);
-    assert_eq!(document.compare_document_position(first, second), 33);
+    // DOM §4.4: disconnected nodes must still report exactly one of PRECEDING (2)
+    // or FOLLOWING (4) in addition to DISCONNECTED (1) | IMPLEMENTATION_SPECIFIC (32).
+    const DISCONNECTED: u16 = 1;
+    const PRECEDING: u16 = 2;
+    const FOLLOWING: u16 = 4;
+    const IMPLEMENTATION_SPECIFIC: u16 = 32;
+    let position = document.compare_document_position(first, second);
+    assert_eq!(position & DISCONNECTED, DISCONNECTED);
+    assert_eq!(position & IMPLEMENTATION_SPECIFIC, IMPLEMENTATION_SPECIFIC);
+    assert_eq!((position & (PRECEDING | FOLLOWING)).count_ones(), 1);
     assert!(matches!(document.node(first).kind, NodeKind::Element(_)));
 }
