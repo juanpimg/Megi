@@ -230,6 +230,11 @@ fn stream_encoded_body(
     encoding: ContentEncoding,
     on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
 ) -> Result<(Vec<u8>, Headers), FetchError> {
+    // Brotli has no incremental inflater here (ADR-003): buffer the wire bytes under the same
+    // caps, then decode once with the bounded full-body decoder before delivery.
+    if encoding == ContentEncoding::Brotli {
+        return stream_brotli_body(reader, headers, options, on_data);
+    }
     let compression = CompressionLimits::new(
         options.compression_limits.max_output,
         options.compression_limits.max_ratio,
@@ -242,6 +247,7 @@ fn stream_encoded_body(
         ContentEncoding::Deflate => megi_image::StreamingInflater::new_auto_deflate(
             megi_image::InflateLimits::new(output_cap),
         ),
+        ContentEncoding::Brotli => unreachable!("brotli responses are handled above"),
         ContentEncoding::Identity => unreachable!("identity responses are streamed directly"),
     };
     let mut compressed_seen = 0usize;
@@ -302,6 +308,58 @@ fn stream_encoded_body(
             max_output: compression.max_output,
             max_ratio: compression.max_ratio,
         });
+    }
+    Ok((Vec::new(), trailers))
+}
+
+/// Streams a `Content-Encoding: br` response: buffers compressed chunks under the wire cap,
+/// then decodes with the bounded full-body Brotli decoder (ADR-003). Anti-bomb caps and typed
+/// errors match the gzip/deflate path.
+fn stream_brotli_body(
+    reader: &mut ConnReader,
+    headers: &Headers,
+    options: &FetchOptions,
+    on_data: &mut dyn FnMut(&[u8]) -> Result<(), FetchError>,
+) -> Result<(Vec<u8>, Headers), FetchError> {
+    let compression = CompressionLimits::new(
+        options.compression_limits.max_output,
+        options.compression_limits.max_ratio,
+    );
+    let mut compressed = Vec::new();
+    let mut feed = |chunk: &[u8]| -> Result<(), FetchError> {
+        if compressed.len().saturating_add(chunk.len()) > options.max_response_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        compressed.extend_from_slice(chunk);
+        Ok(())
+    };
+    let chunked = header_value(headers, "transfer-encoding").is_some_and(|value| {
+        value
+            .split(',')
+            .any(|token| token.trim().eq_ignore_ascii_case("chunked"))
+    });
+    let (_, trailers) = if chunked {
+        stream_chunked_body(
+            reader,
+            options.max_response_bytes,
+            options.max_header_bytes,
+            &mut feed,
+        )?
+    } else if let Some(length) = content_length(headers)? {
+        if length > options.max_response_bytes {
+            return Err(FetchError::ResponseTooLarge);
+        }
+        stream_fixed_body(reader, length, &mut feed)?
+    } else {
+        stream_until_eof(reader, options.max_response_bytes, &mut feed)?
+    };
+    let limits = CompressionLimits::new(
+        compression.max_output.min(options.max_response_bytes),
+        compression.max_ratio,
+    );
+    let decoded = crate::compression::decode_brotli(&compressed, limits)?;
+    if !decoded.is_empty() {
+        on_data(&decoded)?;
     }
     Ok((Vec::new(), trailers))
 }

@@ -71,7 +71,7 @@ impl Default for CompressionLimits {
 /// `Accept-Encoding` negotiation mode for [`crate::http::FetchOptions`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AcceptEncoding {
-    /// Send `Accept-Encoding: gzip` and decode `gzip`/`deflate` response bodies (default).
+    /// Send `Accept-Encoding: gzip, deflate, br` and decode `gzip`/`deflate`/`br` bodies (default).
     #[default]
     Gzip,
     /// Send no `Accept-Encoding` header and leave any `Content-Encoding` body encoded.
@@ -82,7 +82,7 @@ impl AcceptEncoding {
     /// Returns the `Accept-Encoding` request header value, if any.
     pub const fn header_value(self) -> Option<&'static str> {
         match self {
-            Self::Gzip => Some("gzip"),
+            Self::Gzip => Some("gzip, deflate, br"),
             Self::Identity => None,
         }
     }
@@ -97,6 +97,8 @@ pub enum ContentEncoding {
     Gzip,
     /// RFC 1950 zlib stream (also accepts raw RFC 1951 DEFLATE on decode).
     Deflate,
+    /// RFC 7932 Brotli stream (`br`), decoded by pure-Rust `brotli` (ADR-003).
+    Brotli,
 }
 
 impl ContentEncoding {
@@ -120,17 +122,21 @@ impl ContentEncoding {
         if value.eq_ignore_ascii_case("deflate") {
             return Ok(Self::Deflate);
         }
+        if value.eq_ignore_ascii_case("br") {
+            return Ok(Self::Brotli);
+        }
         Err(FetchError::ContentEncoding(format!(
             "unsupported content encoding `{value}`"
         )))
     }
 
-    /// Returns the canonical lowercase coding name (`identity`, `gzip`, `deflate`).
+    /// Returns the canonical lowercase coding name (`identity`, `gzip`, `deflate`, `br`).
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Identity => "identity",
             Self::Gzip => "gzip",
             Self::Deflate => "deflate",
+            Self::Brotli => "br",
         }
     }
 }
@@ -161,12 +167,13 @@ pub fn decode_body(
         ContentEncoding::Identity => Ok(body.to_vec()),
         ContentEncoding::Gzip => decode_gzip(body, limits),
         ContentEncoding::Deflate => decode_deflate(body, limits),
+        ContentEncoding::Brotli => decode_brotli(body, limits),
     }
 }
 
 mod codec;
 
-pub use codec::{decode_deflate, decode_gzip};
+pub use codec::{decode_brotli, decode_deflate, decode_gzip};
 
 #[cfg(test)]
 mod tests;

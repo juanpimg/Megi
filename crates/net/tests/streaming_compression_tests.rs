@@ -332,7 +332,7 @@ fn normal_fetch_still_returns_the_decoded_body() {
 
 #[test]
 fn unsupported_content_encoding_is_a_typed_streaming_error() {
-    for declared in ["br", "gzip, br", "nonsense"] {
+    for declared in ["zstd", "gzip, br", "nonsense"] {
         let (port, handle) = spawn_server(move |mut tcp| {
             read_request_head(&mut tcp);
             let body = b"still-compressed".to_vec();
@@ -359,4 +359,80 @@ fn unsupported_content_encoding_is_a_typed_streaming_error() {
             "no still-compressed bytes may be delivered for {declared:?}"
         );
     }
+}
+
+/// Compresses `data` as a genuine RFC 7932 Brotli stream (ADR-003 / #1918).
+fn brotli_compress(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut compressed = Vec::new();
+    {
+        let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 5, 22);
+        writer.write_all(data).expect("write brotli");
+    }
+    compressed
+}
+
+#[test]
+fn brotli_response_body_is_decoded_like_gzip() {
+    // #1918: hola.com serves Next.js JS chunks with `Content-Encoding: br`.
+    const JS: &[u8] = b"export default function chunk(){return 'brotli bundle';}";
+    let compressed = brotli_compress(JS);
+    let (port, server) = spawn_server(move |mut tcp| {
+        read_request_head(&mut tcp);
+        let _ = tcp.write_all(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Encoding: br\r\nContent-Length: {}\r\n\r\n",
+                compressed.len()
+            )
+            .as_bytes(),
+        );
+        let _ = tcp.write_all(&compressed);
+    });
+    let response = fetch(&target(port), &options()).expect("br fetch");
+    server.join().expect("server");
+    assert_eq!(response.status, 200);
+    assert_eq!(
+        response.body, JS,
+        "br body must be decoded before reaching scripts"
+    );
+    assert!(
+        String::from_utf8_lossy(&response.body).contains("brotli bundle"),
+        "the JS bundle must be readable by the script loader"
+    );
+}
+
+#[test]
+fn brotli_streaming_response_is_decoded_with_caps() {
+    const HTML: &[u8] = b"<!doctype html><title>br</title><p>streamed brotli body</p>";
+    let compressed = brotli_compress(HTML);
+    let (port, server) = spawn_server(move |mut tcp| {
+        read_request_head(&mut tcp);
+        let _ = tcp.write_all(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Encoding: br\r\nContent-Length: {}\r\n\r\n",
+                compressed.len()
+            )
+            .as_bytes(),
+        );
+        // Deliver the wire bytes in two writes; the buffered decoder must still decode once.
+        let half = compressed.len() / 2;
+        let _ = tcp.write_all(&compressed[..half]);
+        let _ = tcp.flush();
+        let _ = tcp.write_all(&compressed[half..]);
+    });
+    let mut body = Vec::new();
+    let mut calls = 0usize;
+    let response = fetch_streaming(&target(port), &options(), &mut |chunk| {
+        calls += 1;
+        body.extend_from_slice(chunk);
+        Ok(())
+    })
+    .expect("br streamed fetch");
+    server.join().expect("server");
+    assert_eq!(response.status, 200);
+    assert_eq!(body, HTML);
+    assert_eq!(
+        calls, 1,
+        "brotli is buffered then delivered as one decoded chunk"
+    );
 }
