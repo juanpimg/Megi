@@ -76,6 +76,7 @@ pub struct Strings {
     pub reload: &'static str,
     pub save_page_as_png: &'static str,
     pub save_page_as_html: &'static str,
+    pub save_page_resources: &'static str,
     /// Marker appended to the window title when the page was clipped.
     pub capped_marker: &'static str,
     /// Singular warning label in the window title.
@@ -118,6 +119,7 @@ pub fn strings(locale: Locale) -> Strings {
             reload: "Reload",
             save_page_as_png: "Save page as PNG",
             save_page_as_html: "Save page as HTML",
+            save_page_resources: "Download page resources",
             capped_marker: " [clipped]",
             warning: "warning",
             warnings: "warnings",
@@ -151,6 +153,7 @@ pub fn strings(locale: Locale) -> Strings {
             reload: "Recargar",
             save_page_as_png: "Guardar página como PNG",
             save_page_as_html: "Guardar página como HTML",
+            save_page_resources: "Descargar recursos de la página",
             capped_marker: " [recortado]",
             warning: "aviso",
             warnings: "avisos",
@@ -195,6 +198,7 @@ mod tests {
                 s.reload,
                 s.save_page_as_png,
                 s.save_page_as_html,
+                s.save_page_resources,
                 s.capped_marker,
                 s.warning,
                 s.warnings,

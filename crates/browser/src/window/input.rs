@@ -200,6 +200,7 @@ impl WindowApp {
             MenuAction::Reload => self.reload(),
             MenuAction::SavePagePng => self.save_frame_png(),
             MenuAction::SavePageHtml => self.save_frame_html(),
+            MenuAction::SavePageResources => self.save_page_resources(),
         }
         self.request_repaint();
     }

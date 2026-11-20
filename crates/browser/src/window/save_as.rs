@@ -160,6 +160,79 @@ impl WindowApp {
     }
 }
 
+impl WindowApp {
+    /// Fetches and saves the page's CSS/JS/font/image subresources as a bounded batch
+    /// (F7-SAVE-AS / #988), tracking every job in the bounded download manager.
+    pub(super) fn save_page_resources(&mut self) {
+        let Some(document) = self.document.clone() else {
+            self.notify("no page to save yet".to_string());
+            return;
+        };
+        let base_owned = self.nav.current().map(|url| url.as_str());
+        let base = base_owned.as_deref();
+        let mut urls = Vec::new();
+        for (tag, attribute) in [
+            ("link", "href"),
+            ("script", "src"),
+            ("img", "src"),
+            ("source", "src"),
+        ] {
+            for node in document.get_elements_by_tag_name(tag) {
+                if let Some(value) = document
+                    .try_node(node)
+                    .and_then(|node| node.as_element())
+                    .and_then(|element| element.get_attribute(attribute))
+                {
+                    urls.push(value.to_owned());
+                }
+            }
+        }
+        let plan =
+            crate::download::plan_batch_downloads(&urls, base, crate::download::DEFAULT_MAX_JOBS);
+        if plan.is_empty() {
+            self.notify("no downloadable resources on this page".to_string());
+            return;
+        }
+        let dir =
+            crate::download::resolve_download_dir(self.download_dir.as_deref()).join("resources");
+        let mut saved = 0usize;
+        let mut failed = 0usize;
+        for item in plan.items {
+            let Ok(url) = megi_webview::net::Url::parse(&item.url) else {
+                failed += 1;
+                continue;
+            };
+            if let Ok(id) = self.download_manager.enqueue(&item.url, item.kind, None)
+                && self.download_manager.start(id).is_ok()
+            {
+                let mut loader = megi_webview::net::ResourceLoader::new();
+                let outcome = loader
+                    .load(&url)
+                    .map_err(|error| error.to_string())
+                    .and_then(|resource| {
+                        let size = resource.bytes.len() as u64;
+                        let _ = self.download_manager.progress(id, size);
+                        crate::download::write_atomic(&dir.join(&item.filename), &resource.bytes)
+                    });
+                match outcome {
+                    Ok(_) => {
+                        let _ = self.download_manager.complete(id);
+                        saved += 1;
+                    }
+                    Err(_) => {
+                        let _ = self.download_manager.fail(id, "resource download failed");
+                        failed += 1;
+                    }
+                }
+            }
+        }
+        self.notify(format!(
+            "saved {saved} resources ({failed} failed, {} skipped)",
+            plan.skipped
+        ));
+    }
+}
+
 #[cfg(test)]
 mod save_as_tests {
     use super::*;

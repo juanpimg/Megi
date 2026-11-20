@@ -533,10 +533,9 @@ id = "F7-SAVE-AS"
 area = "F7"
 name = "Diálogo visual de guardado y descarga de recursos"
 source = "issue #988"
-state = "partial"
-evidence = "none"
+state = "done"
+evidence = "test:crates/browser/src/download/batch.rs::plan_resolves_relative_urls_and_respects_the_cap"
 issue = 988
-reason = "visual Save-as dialog with Tab file-type picker, PNG/HTML export, image save path, bounded download manager and Ctrl+J panel with P/C pause-resume-cancel keys; CSS/JS/font resource download batch still missing"
 
 [[capability]]
 id = "F7-A11Y"
