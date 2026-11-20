@@ -475,8 +475,8 @@ id = "F6-CONFORMANCE"
 area = "F6"
 name = "JS/DOM conformance testing y memory accounting"
 source = "PROGRESS.md next_up"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/js/tests/wpt_conformance_r233_extra.rs::conformance_workload_memory_accounting_is_finite_and_grows"
 
 [[capability]]
 id = "F7-WINDOW"
