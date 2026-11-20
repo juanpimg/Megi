@@ -128,6 +128,12 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
     }
 
     let root = nodes[0].0;
+    // A focus target outside the exposed snapshot (e.g. `body`) would dangle for AT consumers.
+    let focus = if nodes.iter().any(|(id, _)| *id == accesskit_id(focused)) {
+        accesskit_id(focused)
+    } else {
+        root
+    };
     let mut tree = TreeInfo::new(root);
     tree.toolkit_name = Some("Megi".to_owned());
     tree.toolkit_version = Some(env!("CARGO_PKG_VERSION").to_owned());
@@ -136,7 +142,7 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
     TreeUpdate {
         nodes,
         tree: Some(tree),
-        focus: accesskit_id(focused),
+        focus,
         tree_id: accesskit::TreeId::ROOT,
     }
 }
@@ -197,6 +203,28 @@ impl AccessibilityPublisher {
     pub fn invalidate(&mut self) {
         self.last_signature = None;
     }
+}
+
+/// Validates the structural coherence of a published tree update, the way an AT consumer
+/// would before walking it. Returns the first violation found (F7-A11Y verifiable AT tree).
+pub fn validate_tree_update(update: &TreeUpdate) -> Result<(), String> {
+    let mut ids = std::collections::HashSet::new();
+    for (id, node) in &update.nodes {
+        if !ids.insert(*id) {
+            return Err(format!("duplicate node id {:?}", id.0));
+        }
+        for child in node.children() {
+            if !ids.contains(child) && !update.nodes.iter().any(|(other, _)| other == child) {
+                return Err(format!("dangling child {:?}", child.0));
+            }
+        }
+    }
+    if let Some(tree) = &update.tree
+        && !ids.contains(&tree.root)
+    {
+        return Err("tree root is not present in the update".to_owned());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -286,4 +314,64 @@ mod publisher_tests {
         );
         assert_eq!(publisher.publications(), 2);
     }
+}
+
+#[test]
+fn validator_rejects_dangling_children_and_duplicate_ids() {
+    let root = DomNodeId::from_index(1);
+    let child = DomNodeId::from_index(2);
+    let mut node_root = Node::new(Role::Document);
+    node_root.set_children([accesskit_id(child)]);
+    let node_child = Node::new(Role::Button);
+    let mut update = TreeUpdate {
+        nodes: vec![
+            (accesskit_id(root), node_root),
+            (accesskit_id(child), node_child),
+        ],
+        tree: Some(TreeInfo::new(accesskit_id(root))),
+        focus: accesskit_id(root),
+        tree_id: accesskit::TreeId::ROOT,
+    };
+    assert!(validate_tree_update(&update).is_ok());
+
+    update.nodes[0].1.set_children([NodeId(999)]);
+    assert!(
+        validate_tree_update(&update).is_err(),
+        "dangling child must be rejected"
+    );
+
+    update.nodes[0].1.set_children([accesskit_id(child)]);
+    update.nodes[1].0 = accesskit_id(root);
+    assert!(
+        validate_tree_update(&update).is_err(),
+        "duplicate ids must be rejected"
+    );
+}
+
+#[test]
+fn build_tree_update_focus_falls_back_to_root_for_unfocused_snapshot() {
+    let root = DomNodeId::from_index(1);
+    let absent_focus = DomNodeId::from_index(99);
+    // With no nodes the root itself is absent; use a real snapshot instead.
+    let node = crate::a11y::SnapshotNode {
+        id: root,
+        parent: None,
+        role: "document".to_owned(),
+        name: String::new(),
+        disabled: false,
+        hidden: false,
+        focusable: false,
+        checked: None,
+        pressed: None,
+        expanded: None,
+        level: None,
+        value: None,
+    };
+    let update = build_tree_update(std::slice::from_ref(&node), absent_focus);
+    assert_eq!(
+        update.focus,
+        accesskit_id(root),
+        "focus must point into the tree"
+    );
+    assert!(validate_tree_update(&update).is_ok());
 }
