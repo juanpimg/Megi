@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 56,
+    "implemented": 57,
     "partial": 3,
     "known": 70,
-    "percent": 80,
+    "percent": 81,
     "unverified": [],
     "invalid_states": []
   },
@@ -25,10 +25,10 @@
     },
     {
       "id": "F3",
-      "implemented": 6,
+      "implemented": 7,
       "partial": 0,
       "known": 8,
-      "percent": 75
+      "percent": 88
     },
     {
       "id": "F4",
@@ -67,16 +67,6 @@
     }
   ],
   "missing": [
-    {
-      "id": "F3-TABLE-CENTER",
-      "area": "F3",
-      "name": "Maquetación real de HN (<center>/<table>) sin página en blanco",
-      "source": "issue #1011",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1011,
-      "reason": "no requiere evidencia"
-    },
     {
       "id": "F3-IFC-EDGES",
       "area": "F3",

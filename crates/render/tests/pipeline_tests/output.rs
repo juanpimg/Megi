@@ -118,3 +118,35 @@ fn oversized_inline_style_in_render_pipeline_does_not_panic() {
     );
     server.join();
 }
+
+#[test]
+fn centered_nested_table_is_not_a_blank_page() {
+    // F3-TABLE-CENTER / #1011: HN-style `<center><table>` must produce real display items.
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/hn.html".to_string(),
+        RouteResponse::html(
+            "<!doctype html><html><body><center><table id='hnmain' \
+             width='85%'><tr><td><b>Story title</b><p>42 points by user</td></tr>\
+             </table></center></body></html>",
+        ),
+    );
+    let server = TestServer::spawn(routes, 1);
+    let output = render_url(&server.url("/hn.html"), &options(1024, 768)).expect("render HN page");
+    assert!(
+        output.stats.display_items > 0,
+        "a centered nested table must not collapse to a blank page"
+    );
+    // The story text must actually be painted, not just the table background.
+    let text_items = output
+        .display_list
+        .items
+        .iter()
+        .filter(|item| matches!(item, megi_display::DisplayItem::Text { .. }))
+        .count();
+    assert!(
+        text_items > 0,
+        "story text must be painted ({text_items} items)"
+    );
+    server.join();
+}
