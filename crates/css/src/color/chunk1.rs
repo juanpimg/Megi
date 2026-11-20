@@ -137,6 +137,14 @@ pub(crate) const XYZ_D65_TO_SRGB_LINEAR: [[f32; 3]; 3] = [
     [0.055_630_08, -0.203_976_96, 1.056_971_51],
 ];
 
+/// Inverse of `XYZ_D65_TO_SRGB_LINEAR` (CSS Color 4 §10). Used to interpolate in
+/// XYZ / Lab spaces (#1678).
+pub(crate) const SRGB_LINEAR_TO_XYZ_D65: [[f32; 3]; 3] = [
+    [0.412_390_8, 0.357_584_34, 0.180_480_79],
+    [0.212_639_01, 0.715_168_68, 0.072_192_32],
+    [0.019_330_82, 0.119_194_78, 0.950_532_15],
+];
+
 pub(crate) const P3_LINEAR_TO_XYZ_D65: [[f32; 3]; 3] = [
     [0.486_570_95, 0.265_667_7, 0.198_217_29],
     [0.228_974_56, 0.691_738_5, 0.079_286_914],
@@ -381,4 +389,30 @@ pub(crate) fn color_to_linear_srgb(color: Color) -> [f32; 3] {
         srgb_to_linear(f32::from(color.g) / 255.0),
         srgb_to_linear(f32::from(color.b) / 255.0),
     ]
+}
+
+/// Linear sRGB → CIE Lab (D50), the inverse of [`lab_to_xyz_d50`] (#1678).
+pub(crate) fn linear_srgb_to_lab(linear: [f32; 3]) -> [f32; 3] {
+    let xyz_d65 = mul3(SRGB_LINEAR_TO_XYZ_D65, linear);
+    // Bradford-adapt D65 → D50 (inverse of the D50_TO_D65 matrix).
+    const D65_TO_D50: [[f32; 3]; 3] = [
+        [1.047_929_72, 0.022_933_97, -0.050_243_13],
+        [-0.029_563_29, 0.990_979_18, 0.021_451_49],
+        [-0.009_216_60, 0.015_047_29, 0.752_149_11],
+    ];
+    let xyz = mul3(D65_TO_D50, xyz_d65);
+    let f = |t: f32| {
+        let delta = 6.0 / 29.0;
+        if t > delta * delta * delta {
+            t.cbrt()
+        } else {
+            t / (3.0 * delta * delta) + 4.0 / 29.0
+        }
+    };
+    let (fx, fy, fz) = (
+        f(xyz[0] / D50_WHITE[0]),
+        f(xyz[1] / D50_WHITE[1]),
+        f(xyz[2] / D50_WHITE[2]),
+    );
+    [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
 }

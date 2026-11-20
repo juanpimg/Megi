@@ -87,6 +87,25 @@ fn test_color_mix_alpha_weights() {
 }
 
 #[test]
+fn test_color_mix_css5_interpolation_spaces() {
+    // CSS Color 5 §3.2: lab, lch, oklab, oklch, srgb, srgb-linear and xyz* are all
+    // valid interpolation spaces (#1678). Only the oklab/oklch/srgb* arms existed.
+    for space in ["lab", "lch", "xyz", "xyz-d65", "xyz-d50"] {
+        let mixed = Color::parse(&format!("color-mix(in {space}, red 50%, blue)"));
+        assert!(
+            mixed.is_some(),
+            "color-mix(in {space}, ...) must be accepted"
+        );
+    }
+    // A Lab mix must produce a real in-gamut color, not the initial-value fallback.
+    let lab = Color::parse("color-mix(in lab, red 50%, blue)").expect("lab mix");
+    assert!(
+        lab.r > 40 && lab.b > 40,
+        "lab mix should be purple-ish, got {lab:?}"
+    );
+}
+
+#[test]
 fn test_color_mix_oklch_shortest_hue() {
     // Interpolating red→blue in OKLCH follows the shorter hue arc and stays purple.
     let mixed = Color::parse("color-mix(in oklch, red 50%, blue 50%)").expect("oklch mix");
