@@ -323,3 +323,40 @@ fn composition_event_constructor_and_dispatch() {
         .expect("eval");
     assert_eq!(out, "にほん:true");
 }
+
+#[test]
+fn abort_signal_cancels_signalled_listeners_and_dispatches_a_real_event() {
+    // F6: `addEventListener(type, fn, { signal })` must remove the listener on abort,
+    // and the `abort` event must be a real Event instance.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "window.__log = ''; \
+             var c = new AbortController(); var s = c.signal; \
+             s.addEventListener('abort', function (e) { __log += 'abort:' + (e instanceof Event) + ';'; }); \
+             var node = document.createElement('div'); var calls = 0; \
+             node.addEventListener('click', function () { calls += 1; }, { signal: s }); \
+             node.dispatchEvent(new Event('click')); __log += 'before:' + calls + ';'; \
+             c.abort(); \
+             node.dispatchEvent(new Event('click')); __log += 'after:' + calls; \
+             __log;",
+            "abort.js",
+        )
+        .expect("eval");
+    assert_eq!(out, "before:1;abort:true;after:1");
+}
+
+#[test]
+fn abort_signal_notifies_listeners_added_after_abort() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var c = new AbortController(); c.abort('done'); \
+             var seen = ''; \
+             c.signal.addEventListener('abort', function (e) { seen += e.type + ':' + c.signal.reason; }); \
+             seen;",
+            "abort-late.js",
+        )
+        .expect("eval");
+    assert_eq!(out, "abort:done");
+}

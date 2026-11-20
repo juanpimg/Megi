@@ -299,14 +299,26 @@
   Headers.prototype.forEach = function (callback, thisArg) { for (var i = 0; i < this._h.length; i++) { callback.call(thisArg, this._h[i][1], this._h[i][0], this); } };
   Headers.prototype.entries = function () { return this._h.slice(); };
   define("Headers", Headers);
+  var abortSignalSeq = 0;
   function AbortSignal() {
     this.aborted = false;
     this.reason = undefined;
     this._listeners = [];
     this.onabort = null;
+    // Native addEventListener(..., { signal }) tags listeners with this id so abort can
+    // remove them through the engine hook (F6).
+    this.__megi_signal_id = ++abortSignalSeq;
   }
   AbortSignal.prototype.addEventListener = function (type, callback) {
-    if (type === "abort" && typeof callback === "function") { this._listeners.push(callback); }
+    if (type !== "abort" || typeof callback !== "function") { return; }
+    if (this.aborted) {
+      // DOM: a listener registered after abort is still notified, with a real Event.
+      var event = new Event("abort");
+      event.target = this;
+      callback(event);
+      return;
+    }
+    this._listeners.push(callback);
   };
   AbortSignal.prototype.removeEventListener = function (type, callback) {
     if (type === "abort") { this._listeners = this._listeners.filter(function (item) { return item !== callback; }); }
@@ -315,8 +327,12 @@
   AbortSignal.prototype._abort = function (reason) {
     if (this.aborted) { return; }
     this.aborted = true;
-    this.reason = reason;
-    var event = { type: "abort", target: this };
+    this.reason = reason === undefined ? "AbortError" : reason;
+    if (typeof __megiRemoveSignalListeners === "function") {
+      __megiRemoveSignalListeners(this.__megi_signal_id);
+    }
+    var event = new Event("abort");
+    event.target = this;
     if (typeof this.onabort === "function") { this.onabort(event); }
     for (var i = 0; i < this._listeners.length; i++) { this._listeners[i](event); }
   };
