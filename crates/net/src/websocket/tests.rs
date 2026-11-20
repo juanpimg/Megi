@@ -299,6 +299,34 @@ fn handshake_rejects_missing_connection() {
 }
 
 #[test]
+fn handshake_rejects_wrong_server_version() {
+    // #1640 / RFC 6455 §4.1: a Sec-WebSocket-Version header in the response must be 13.
+    let key = super::handshake::handshake_key([7u8; 16]);
+    let accept = crate::websocket::accept_value(&key);
+    let head = format!(
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Version: 8\r\n\r\n"
+    );
+    assert!(
+        super::handshake::validate_handshake_response(&head, &key).is_err(),
+        "a non-13 server version must be rejected"
+    );
+}
+
+#[test]
+fn handshake_accepts_version_13_or_absent() {
+    let key = super::handshake::handshake_key([7u8; 16]);
+    let accept = crate::websocket::accept_value(&key);
+    let head_13 = format!(
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    );
+    assert!(super::handshake::validate_handshake_response(&head_13, &key).is_ok());
+    let head_absent = format!(
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"
+    );
+    assert!(super::handshake::validate_handshake_response(&head_absent, &key).is_ok());
+}
+
+#[test]
 fn handshake_accepts_rfc_valid_response() {
     let (url, server) = serve_handshake_with(|accept| {
         format!(
