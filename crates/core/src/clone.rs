@@ -237,8 +237,17 @@ impl Document {
                 continue;
             };
             to_free.push(current);
+            // #1730: bound the sibling walk against a cyclic chain in a corrupted arena.
+            // The existing `to_free.len() > nodes.len()` check fires too late: an infinite
+            // inner loop never reaches it. Cap steps at the arena size (#1109 pattern).
+            let max_steps = self.nodes.len();
+            let mut steps = 0usize;
             let mut child = self.nodes[current_slot].first_child;
             while let Some(child_id) = child {
+                steps += 1;
+                if steps > max_steps || to_free.len() + pending.len() > max_steps * 2 {
+                    break;
+                }
                 let next = self.try_node(child_id).and_then(|node| node.next_sibling);
                 pending.push(child_id);
                 child = next;
