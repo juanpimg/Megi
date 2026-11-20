@@ -240,3 +240,47 @@ fn worker_reads_dom_through_a_message_proxy() {
         "hello dom"
     );
 }
+
+#[test]
+fn worker_writes_dom_through_the_proxy() {
+    // F6-WORKERS-DOM: setAttribute / setTextContent are forwarded through __megi_dom_call
+    // and applied to the owning Document on the main side.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.setAttribute('data-from-worker', 'yes').then(function () { \
+             el.setTextContent('changed').then(function () { postMessage('done'); }); \
+           }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x>original</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "done");
+    assert_eq!(
+        runtime
+            .eval(
+                "document.getElementById('x').getAttribute('data-from-worker')",
+                "page.js",
+            )
+            .expect("attribute"),
+        "yes"
+    );
+    assert_eq!(
+        runtime
+            .eval("document.getElementById('x').textContent", "page.js")
+            .expect("text"),
+        "changed"
+    );
+}
