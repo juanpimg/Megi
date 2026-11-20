@@ -6,6 +6,9 @@
 
 use std::io::{Read, Write};
 
+mod regions;
+pub use regions::IpcLinkRegion;
+
 /// Maximum accepted IPC payload (256 MiB: a 4096×4096 RGBA frame plus metadata).
 pub const MAX_IPC_PAYLOAD: usize = 256 * 1024 * 1024;
 
@@ -101,6 +104,8 @@ pub struct IpcRenderResponse {
     pub script_timers_pending: usize,
     pub warnings: usize,
     pub script_errors: usize,
+    /// Clickable link hit regions with DOM ordinals (ADR-004 hit-region parity).
+    pub links: Vec<IpcLinkRegion>,
     /// Post-script serialized DOM, so the parent can build further patches (ADR-004 phase 3).
     pub document_html: String,
     /// Render failure text (`Some` means the other fields are defaults).
@@ -224,6 +229,11 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
                 script_timers_pending: frame.script_timers_pending,
                 warnings: frame.warnings,
                 script_errors: frame.script_errors,
+                links: frame
+                    .links
+                    .iter()
+                    .map(|region| IpcLinkRegion::from_region(region, &frame.document))
+                    .collect(),
                 document_html: crate::download::serialize_document(&frame.document),
                 error: None,
             },
@@ -237,6 +247,7 @@ pub fn run_ipc_worker() -> Result<(), IpcError> {
                 script_timers_pending: 0,
                 warnings: 0,
                 script_errors: 0,
+                links: Vec::new(),
                 document_html: String::new(),
                 error: Some(error),
             },
@@ -304,6 +315,7 @@ mod tests {
             script_timers_pending: 1,
             warnings: 2,
             script_errors: 0,
+            links: Vec::new(),
             document_html: "<!DOCTYPE html><html><head></head><body></body></html>".to_owned(),
             error: None,
         };
@@ -401,7 +413,13 @@ impl ProcessFrame {
             png_bytes: self.response.png_bytes.clone(),
             content_height: height,
             capped: false,
-            links: Vec::new(),
+            links: self
+                .response
+                .links
+                .iter()
+                .cloned()
+                .map(|region| region.into_link_region_with_document(&self.document))
+                .collect(),
             images: Vec::new(),
             title: self.response.title.clone(),
             document_url: self.response.document_url.clone(),
