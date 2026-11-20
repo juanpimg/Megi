@@ -271,3 +271,54 @@ fn border_radius_longhand_mixed_calc_is_stored() {
         }
     );
 }
+
+#[test]
+fn math_functions_clamp_min_max_resolve_lengths() {
+    // CSS Values 4 §11: min()/max()/clamp() compare resolved values.
+    // #1928: clamp(100px, 50%, 300px) at a 1024px basis -> 50% = 512 -> clamped to 300.
+    let ctx = megi_css::calc::CalcContext {
+        font_size: 16.0,
+        root_font_size: 16.0,
+        viewport_width: 1024.0,
+        viewport_height: 768.0,
+    };
+    let clamp = megi_css::calc::evaluate("clamp(100px, 50%, 300px)", &ctx).expect("clamp");
+    assert_eq!(clamp.to_length(), Some(megi_css::Length::Px(300.0)));
+
+    let min = megi_css::calc::evaluate("min(50vw, 300px)", &ctx).expect("min");
+    assert_eq!(min.to_length(), Some(megi_css::Length::Px(300.0)));
+
+    let max = megi_css::calc::evaluate("max(100px, 2em, 4rem)", &ctx).expect("max");
+    assert_eq!(max.to_length(), Some(megi_css::Length::Px(100.0)));
+
+    // A pure-percentage min() keeps its percentage semantics so layout can resolve
+    // it against the real containing block.
+    let percent = megi_css::calc::evaluate("min(50%, 80%)", &ctx).expect("percent min");
+    assert_eq!(percent.to_length(), Some(megi_css::Length::Percent(50.0)));
+
+    // Nested math functions compose.
+    let nested =
+        megi_css::calc::evaluate("clamp(10px, min(200px, 50vw), 150px)", &ctx).expect("nested");
+    assert_eq!(nested.to_length(), Some(megi_css::Length::Px(150.0)));
+}
+
+#[test]
+fn clamp_min_max_work_in_computed_width() {
+    // #1928: end-to-end through the cascade: width:clamp(...) must produce a Length,
+    // not be discarded to `auto`. The render pipeline sets the viewport thread-local,
+    // which evaluate_length() uses as the percentage basis.
+    megi_css::with_calc_viewport(1024.0, 768.0, || {
+        let (_doc, styles, target) = computed("#target { width: clamp(100px, 50vw, 300px); }");
+        let style = style_of(&styles, target);
+        // 50vw = 512px -> clamped down to the 300px max.
+        assert!(matches!(style.width, megi_css::Length::Px(px) if px == 300.0));
+
+        let (_doc, styles, target) = computed("#target { width: min(50vw, 200px); }");
+        let style = style_of(&styles, target);
+        assert!(matches!(style.width, megi_css::Length::Px(px) if px == 200.0));
+
+        let (_doc, styles, target) = computed("#target { width: max(10vw, 150px); }");
+        let style = style_of(&styles, target);
+        assert!(matches!(style.width, megi_css::Length::Px(px) if px == 150.0));
+    });
+}
