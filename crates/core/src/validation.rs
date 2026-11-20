@@ -14,9 +14,14 @@ impl Document {
     /// on a corrupted document: returns a human-readable description of the first violation
     /// found.
     ///
-    /// Cost: `O(live nodes * depth)` worst case. Call it from tests after mass removals,
+    /// Cost: `O(live nodes * depth)` worst case for the sibling/child walks, plus one O(1)
+    /// hash lookup per node for reverse-membership. Call it from tests after mass removals,
     /// not from hot paths.
     pub fn validate_invariants(&self) -> Result<(), String> {
+        // #1731: a set of (parent, child) edges gathered during the forward pass makes the
+        // reverse-membership check O(1) per node instead of rescanning each parent's whole
+        // sibling chain (which was O(n²) on wide, shallow trees).
+        let mut child_edges: HashSet<(NodeId, NodeId)> = HashSet::new();
         if self.nodes.len() != self.generations.len() {
             return Err(format!(
                 "generations table length {} != slot count {}",
@@ -173,6 +178,7 @@ impl Document {
                         child_id.index()
                     ));
                 }
+                child_edges.insert((node.id, child_id));
                 last_child = Some(child_id);
                 child = child_node.next_sibling;
             }
@@ -250,32 +256,17 @@ impl Document {
             return Err("Doctype must be a direct child of the Document".to_owned());
         }
         // Reverse membership: every live node that claims a parent must appear in that
-        // parent's child chain (issue #1114).
+        // parent's child chain (issue #1114). The edge set gathered above answers this in
+        // O(1) per node (#1731), instead of rescanning each parent's sibling chain.
         for (slot, node) in self.nodes.iter().enumerate() {
             if !self.occupied[slot] {
                 continue;
             }
             if let Some(parent_id) = node.parent {
-                let parent = match self.try_node(parent_id) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                // Walk the parent's child chain looking for this node.
-                let mut found = false;
-                let mut child = parent.first_child;
-                let mut guard = 0usize;
-                while let Some(child_id) = child {
-                    if child_id == node.id {
-                        found = true;
-                        break;
-                    }
-                    guard += 1;
-                    if guard > live {
-                        break;
-                    }
-                    child = self.try_node(child_id).and_then(|n| n.next_sibling);
+                if self.try_node(parent_id).is_none() {
+                    continue;
                 }
-                if !found {
+                if !child_edges.contains(&(parent_id, node.id)) {
                     return Err(format!(
                         "slot {slot}: claims parent {} but is not in its child chain",
                         parent_id.index()
