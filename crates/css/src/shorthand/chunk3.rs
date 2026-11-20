@@ -154,6 +154,13 @@ pub(crate) mod tests {
         assert_eq!(get(&expanded, "background-color"), Some("transparent"));
         assert_eq!(get(&expanded, "background-image"), Some("none"));
 
+        // #1840: `looks_like_length` matched `em` before `rem`, so `2rem` failed to parse
+        // and background position/size in rem were silently dropped by the shorthand.
+        let expanded = expand("background: url(x.png) 2rem 1rem / 3rem 4rem;");
+        assert_eq!(get(&expanded, "background-image"), Some("url(x.png)"));
+        assert_eq!(get(&expanded, "background-position"), Some("2rem 1rem"));
+        assert_eq!(get(&expanded, "background-size"), Some("3rem 4rem"));
+
         let expanded = expand("list-style: none inside;");
         assert_eq!(get(&expanded, "list-style-type"), Some("none"));
         assert_eq!(get(&expanded, "list-style-image"), Some("none"));

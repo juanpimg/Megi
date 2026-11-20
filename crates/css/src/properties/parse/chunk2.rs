@@ -200,7 +200,9 @@ pub(crate) fn looks_like_length(token: &str) -> bool {
     if let Some(value) = token.strip_suffix('%') {
         return value.trim().parse::<f32>().is_ok();
     }
-    const UNITS: [&str; 10] = ["px", "em", "rem", "pt", "pc", "in", "cm", "mm", "vw", "vh"];
+    // Longest suffix first: `rem` must be tried before `em`, otherwise "2rem"
+    // matches "em" and the remaining "2r" fails to parse (#1840).
+    const UNITS: [&str; 10] = ["px", "rem", "em", "pt", "pc", "in", "cm", "mm", "vw", "vh"];
     if let Some(unit) = UNITS.iter().find(|unit| token.ends_with(**unit)) {
         return token[..token.len() - unit.len()]
             .trim()
