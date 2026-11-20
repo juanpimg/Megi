@@ -264,12 +264,17 @@ impl<'a, S: Read + Write> Session<'a, S> {
         let body = body.filter(|body| !body.is_empty());
         let awaiting_continue = expect_continue && body.is_some();
         let end_stream_on_headers = body.is_none() && !awaiting_continue;
-        let (frames, fragment_count) = fragment_headers_with_end(
-            stream_id,
-            &block,
-            self.peer_max_frame_size,
-            end_stream_on_headers,
-        );
+        // #1857: a single-frame HEADERS carrying a priority section gets rebuilt with
+        // `Frame::headers_with_priority`, which prepends 5 bytes. Fragment 5 bytes short
+        // when a priority is present so the final frame never exceeds MAX_FRAME_SIZE
+        // (RFC 9113 §6.5.2). Multi-frame blocks send a separate PRIORITY frame instead.
+        let fragment_max = if priority.is_some() {
+            self.peer_max_frame_size.saturating_sub(5)
+        } else {
+            self.peer_max_frame_size
+        };
+        let (frames, fragment_count) =
+            fragment_headers_with_end(stream_id, &block, fragment_max, end_stream_on_headers);
         if fragment_count > 1 && std::env::var_os("H2_DEBUG").is_some() {
             eprintln!("DEBUG: fragmented request headers into {fragment_count} frames");
         }

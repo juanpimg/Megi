@@ -191,8 +191,8 @@ id = "F3-TABLE-CENTER"
 area = "F3"
 name = "Maquetación real de HN (<center>/<table>) sin página en blanco"
 source = "issue #1011"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/tests/pipeline_tests/output.rs::centered_nested_table_is_not_a_blank_page"
 issue = 1011
 
 [[capability]]
