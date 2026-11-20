@@ -111,20 +111,21 @@ fn corrupt_svg_is_a_warning_and_the_page_still_renders() {
 }
 
 #[test]
-fn oversized_svg_is_rejected_by_the_render_caps() {
-    // A 20000x20000 SVG exceeds the 16 Mpx render cap. Navigation is non-fatal: the cap
-    // produces a warning/placeholder instead of allocating a huge bitmap.
+fn oversized_svg_is_clamped_to_the_render_cap() {
+    // A 20000x20000 viewBox no longer exhausts the 16 Mpx cap: the raster is
+    // clamped to 1024px while layout keeps the intrinsic size, so real browser
+    // logos with huge viewBoxes still paint (#1922).
     let url = file_url(&fixture_dir().join("assets/svg_huge.svg"));
-    let output = render_url(&url, &options()).expect("oversized SVG must render a placeholder");
-    assert_eq!(output.stats.svgs_rendered, 0);
-    assert_eq!(output.stats.images_failed, 1);
+    let output = render_url(&url, &options()).expect("oversized SVG must still render");
+    assert_eq!(output.stats.svgs_rendered, 1);
+    assert_eq!(output.stats.images_failed, 0);
     assert!(
-        output
+        !output
             .stats
             .warnings
             .iter()
             .any(|warning| warning.contains("SVG render failed")),
-        "expected SVG cap warning: {:?}",
+        "unexpected SVG cap warning: {:?}",
         output.stats.warnings
     );
 }
