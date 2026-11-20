@@ -336,3 +336,47 @@ fn worker_can_traverse_elements_by_tag_name() {
     runtime.run_microtasks().expect("microtasks");
     assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "2");
 }
+
+#[test]
+fn worker_can_read_and_mutate_classlist_through_the_proxy() {
+    // F6-WORKERS-DOM: proxy element exposes classList with Promise-returning operations.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           return el.classList.contains('a').then(function (before) { \
+             return el.classList.add('b').then(function () { \
+               return el.classList.remove('a').then(function () { \
+                 return el.classList.contains('b').then(function (after) { \
+                   postMessage(before + ':' + after); \
+                 }); \
+               }); \
+             }); \
+           }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<div id=x class=\"a\">x</div>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(256).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__seen", "page.js").expect("seen"),
+        "true:true"
+    );
+    let classes = runtime
+        .eval("document.getElementById('x').className", "page.js")
+        .expect("class");
+    assert_eq!(
+        classes, "b",
+        "class mutations must reach the owning document"
+    );
+}

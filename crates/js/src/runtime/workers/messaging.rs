@@ -48,6 +48,12 @@ function __megi_make_element(nodeId) {
     },
     getComputedStyle: function (property) {
       return __megi_dom_call('getComputedStyle', [nodeId, property]);
+    },
+    classList: {
+      contains: function (name) { return __megi_dom_call('classList', [nodeId, 'contains', name]); },
+      add: function (name) { return __megi_dom_call('classList', [nodeId, 'add', name]); },
+      remove: function (name) { return __megi_dom_call('classList', [nodeId, 'remove', name]); },
+      toggle: function (name) { return __megi_dom_call('classList', [nodeId, 'toggle', name]); }
     }
   };
 }
