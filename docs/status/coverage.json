@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 58,
+    "implemented": 59,
     "partial": 3,
     "known": 70,
-    "percent": 83,
+    "percent": 84,
     "unverified": [],
     "invalid_states": []
   },
@@ -39,10 +39,10 @@
     },
     {
       "id": "F5",
-      "implemented": 8,
+      "implemented": 9,
       "partial": 0,
       "known": 10,
-      "percent": 80
+      "percent": 90
     },
     {
       "id": "F6",
@@ -102,16 +102,6 @@
       "area": "F5",
       "name": "PAC/SOCKS completo y pooling de proxies",
       "source": "PROGRESS.md next_up",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F5-IMAGE-BUDGETS",
-      "area": "F5",
-      "name": "Presupuestos de decodificado de imágenes en webs reales",
-      "source": "PROGRESS.md F5 pending",
       "state": "missing",
       "evidence": "none",
       "issue": "",

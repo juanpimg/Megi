@@ -387,8 +387,8 @@ id = "F5-IMAGE-BUDGETS"
 area = "F5"
 name = "Presupuestos de decodificado de imágenes en webs reales"
 source = "PROGRESS.md F5 pending"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/tests/images_tests.rs::image_byte_budget_counts_every_skipped_image"
 
 [[capability]]
 id = "F6-BOA"
