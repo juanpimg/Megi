@@ -11,6 +11,7 @@ fn temp_dir(name: &str) -> PathBuf {
         line!()
     ));
     let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("create download test dir");
     dir
 }
 
