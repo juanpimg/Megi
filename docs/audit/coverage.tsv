@@ -237,7 +237,7 @@ crates/css/src/properties/computed/chunk4.rs	299	src	F2	fix-rem	2026-11-20	cover
 crates/css/src/properties/computed/chunk5.rs	294	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk1.rs	355	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/parse/chunk2.rs	379	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/parse/chunk2.rs	381	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk3.rs	371	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk4.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk5.rs	277	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -264,7 +264,7 @@ crates/css/src/selector/chunk6.rs	344	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/css/src/shorthand.rs	76	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/shorthand/chunk1.rs	348	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/shorthand/chunk2.rs	392	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/shorthand/chunk3.rs	214	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/shorthand/chunk3.rs	221	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/state.rs	242	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/token.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/tokenizer.rs	40	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
