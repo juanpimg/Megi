@@ -1238,7 +1238,7 @@ deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata v
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3			pending		
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	216	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/BROTLI-STRATEGY.md	32	docs	F3			pending		
+docs/BROTLI-STRATEGY.md	32	docs	F3	merge-2035	2026-11-20	covered	#1918	re-read after upstream merge
 docs/CONTRIBUTOR-ONBOARDING.md	93	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/FUZZING.md	296	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GAPS.md	147	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
