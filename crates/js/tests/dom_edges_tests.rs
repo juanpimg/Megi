@@ -449,3 +449,39 @@ fn location_and_document_stringify_to_their_url() {
         .expect("eval");
     assert_eq!(out, "about:blank|about:blank|about:blank|about:blank");
 }
+
+#[test]
+fn element_attribute_and_adjacent_helpers_are_callable() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "var el = document.createElement('div');
+             var toggledOn = el.toggleAttribute('hidden');
+             var hidden1 = el.getAttribute('hidden');
+             var has1 = el.hasAttributes();
+             var names1 = el.getAttributeNames().join(',');
+             var toggledOff = el.toggleAttribute('hidden');
+             var has2 = el.hasAttributes();
+             // force argument: keep-off and force-on
+             el.setAttribute('data-x', '1');
+             var forcedOff = el.toggleAttribute('data-x', false);
+             var dataAfterOff = el.getAttribute('data-x');
+             var forcedOn = el.toggleAttribute('data-y', true);
+             var dataY = el.getAttribute('data-y');
+             var names2 = el.getAttributeNames().join(',');
+             // insertAdjacentElement
+             var target = document.createElement('span');
+             var inserted = el.insertAdjacentElement('beforeend', target);
+             globalThis.result = [
+               toggledOn, hidden1, has1, names1, toggledOff, has2,
+               forcedOff, dataAfterOff, forcedOn, dataY, names2,
+               inserted === target, el.innerHTML
+             ].join('|');",
+            "attrs.js",
+        )
+        .expect("element helper methods");
+    assert_eq!(
+        runtime.eval("result", "attrs.js").expect("result"),
+        "true||true|hidden|false|false|false||true||data-y|true|<span></span>"
+    );
+}

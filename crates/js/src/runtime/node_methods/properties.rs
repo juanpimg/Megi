@@ -282,3 +282,96 @@ pub(crate) fn node_has_attribute(
     .unwrap_or(false);
     Ok(JsValue::from(has))
 }
+
+// #1942: Element.toggleAttribute / getAttributeNames / hasAttributes.
+pub(crate) fn node_toggle_attribute(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let name = attribute_name(node_id, &arg_string(args, 0, context)?, context);
+    let force = args.get(1).filter(|value| !value.is_undefined());
+    let forced = force.map(JsValue::to_boolean);
+    let present_before = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.get_attribute(&name).map(str::to_owned))
+    })
+    .flatten();
+    let should_have = forced.unwrap_or(present_before.is_none());
+    let old_value = present_before.clone();
+    let new_value = if should_have {
+        let set_result = with_context_host(context, |host| {
+            let element = host
+                .document
+                .try_node_mut(node_id)
+                .and_then(|node| node.as_element_mut())
+                .ok_or_else(|| "node is not an element".to_string())?;
+            element.set_attribute(DomAttribute::new(name.clone(), String::new()), true);
+            Ok::<(), String>(())
+        });
+        match set_result {
+            Some(Ok(())) => Some(String::new()),
+            Some(Err(message)) => return Err(js_error(message)),
+            None => return Err(js_error("no active JavaScript host")),
+        }
+    } else {
+        with_context_host(context, |host| {
+            if let Some(element) = host
+                .document
+                .try_node_mut(node_id)
+                .and_then(|node| node.as_element_mut())
+            {
+                element.remove_attribute(&name);
+            }
+        });
+        None
+    };
+    note_mutation(
+        MutationKind::Attributes,
+        node_id,
+        Some(name),
+        old_value,
+        context,
+    );
+    Ok(JsValue::from(new_value.is_some()))
+}
+
+pub(crate) fn node_get_attribute_names(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let names = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .map(|element| element.attribute_names())
+    })
+    .flatten()
+    .unwrap_or_default();
+    let values: Vec<JsValue> = names
+        .into_iter()
+        .map(|name| JsValue::from(js_string!(name)))
+        .collect();
+    Ok(JsArray::from_iter(values, context).into())
+}
+
+pub(crate) fn node_has_attributes(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node_id = this_node(this, context)?;
+    let has = with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .is_some_and(|element| !element.attribute_names().is_empty())
+    })
+    .unwrap_or(false);
+    Ok(JsValue::from(has))
+}
