@@ -309,6 +309,11 @@ pub enum HostUiEventKind {
     },
     /// `FocusEvent` (`focus`, `blur`).
     Focus,
+    /// `CompositionEvent` (`compositionstart`, `compositionupdate`, `compositionend`) (#1519).
+    Composition {
+        /// Composition text (`CompositionEvent.data`).
+        data: String,
+    },
 }
 
 /// Structured host UI event queued in [`RenderOptions::host_dom_events`] (#1504).

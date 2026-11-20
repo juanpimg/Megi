@@ -36,6 +36,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         ("Event", 2usize, event_constructor as NativeFn),
         ("CustomEvent", 2, custom_event_constructor),
         ("MessageEvent", 2, message_event_constructor),
+        ("CompositionEvent", 2, composition_event_constructor),
     ] {
         // #1740: a real constructor (with a `prototype` object) is required by ECMA-262
         // §7.3.7 `instanceof`; `register_global_callable` has no prototype property.
@@ -74,7 +75,7 @@ pub(crate) fn install(context: &mut Context) -> Result<(), CrateJsError> {
         .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())
         .and_then(|value| value.as_object());
     if let Some(event_proto) = event_proto {
-        for name in ["CustomEvent", "MessageEvent"] {
+        for name in ["CustomEvent", "MessageEvent", "CompositionEvent"] {
             if let Some(proto) = context
                 .global_object()
                 .get(js_string!(name), context)

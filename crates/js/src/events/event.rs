@@ -229,6 +229,39 @@ pub(crate) fn build_message_event(
     ev_val
 }
 
+/// `new CompositionEvent(type, { data })` (UI Events §4.1.3).
+pub(crate) fn composition_event_constructor(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let event_type = arg_string(args, 0, context)?;
+    let options = args.get(1).and_then(|value| value.as_object());
+    let data = options
+        .as_ref()
+        .and_then(|options| prop(options, "data", context).ok())
+        .and_then(|value| value.to_string(context).ok())
+        .map(|text| text.to_std_string_escaped())
+        .unwrap_or_default();
+    let mut init = ObjectInitializer::new(context);
+    init.property(
+        js_string!("data"),
+        js_string!(data.clone()),
+        Attribute::all(),
+    );
+    let object = init.build();
+    init_event_object(
+        context,
+        &object,
+        &event_type,
+        false,
+        false,
+        JsValue::undefined(),
+    );
+    set_event_prototype(context, &object, "CompositionEvent");
+    Ok(JsValue::from(object))
+}
+
 pub(crate) fn message_event_constructor(
     _this: &JsValue,
     args: &[JsValue],

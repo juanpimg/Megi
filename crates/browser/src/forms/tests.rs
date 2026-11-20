@@ -447,3 +447,34 @@ fn form_ids_survive_hostile_page_values() {
     assert_eq!(unique.len(), 5, "ids are unique: {ids:?}");
     assert!(next > 0);
 }
+
+#[test]
+fn ime_state_emits_composition_event_sequence() {
+    // F7-IME: DOM compositionstart/update/end map to the OS IME lifecycle.
+    let mut ime = ImeState::new();
+    ime.enable();
+    let first = ime.preedit_events("に".to_owned());
+    assert_eq!(
+        first
+            .iter()
+            .map(|event| event.event_type())
+            .collect::<Vec<_>>(),
+        vec!["compositionstart", "compositionupdate"]
+    );
+    let second = ime.preedit_events("にほん".to_owned());
+    assert_eq!(
+        second
+            .iter()
+            .map(|event| event.event_type())
+            .collect::<Vec<_>>(),
+        vec!["compositionupdate"]
+    );
+    let end = ime.commit_events("日本語".to_owned());
+    assert_eq!(
+        end.iter()
+            .map(|event| event.event_type())
+            .collect::<Vec<_>>(),
+        vec!["compositionend"]
+    );
+    assert_eq!(end[0].data(), "日本語");
+}
