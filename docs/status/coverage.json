@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 58,
+    "implemented": 60,
     "partial": 3,
     "known": 70,
-    "percent": 83,
+    "percent": 86,
     "unverified": [],
     "invalid_states": []
   },
@@ -25,10 +25,10 @@
     },
     {
       "id": "F3",
-      "implemented": 7,
+      "implemented": 8,
       "partial": 0,
       "known": 8,
-      "percent": 88
+      "percent": 100
     },
     {
       "id": "F4",
@@ -39,10 +39,10 @@
     },
     {
       "id": "F5",
-      "implemented": 8,
+      "implemented": 9,
       "partial": 0,
       "known": 10,
-      "percent": 80
+      "percent": 90
     },
     {
       "id": "F6",
@@ -68,16 +68,6 @@
   ],
   "missing": [
     {
-      "id": "F3-IFC-EDGES",
-      "area": "F3",
-      "name": "Casos límite IFC (bidi/justify) y profundidad de tablas",
-      "source": "PROGRESS.md F3 pending",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
       "id": "F4-ARABIC-SHAPING",
       "area": "F4",
       "name": "Shaping contextual de árabe/hebreo/tailandés",
@@ -102,16 +92,6 @@
       "area": "F5",
       "name": "PAC/SOCKS completo y pooling de proxies",
       "source": "PROGRESS.md next_up",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F5-IMAGE-BUDGETS",
-      "area": "F5",
-      "name": "Presupuestos de decodificado de imágenes en webs reales",
-      "source": "PROGRESS.md F5 pending",
       "state": "missing",
       "evidence": "none",
       "issue": "",
