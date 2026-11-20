@@ -5,7 +5,7 @@
 //! This module performs no native I/O: it is a pure, testable mapping. The platform adapter is
 //! activated by the window shell behind the `a11y` feature; headless rendering is unaffected.
 
-use accesskit::{Action, Node, NodeId, Role, TreeInfo, TreeUpdate};
+use accesskit::{Action, Node, NodeId, Role, Toggled, TreeInfo, TreeUpdate};
 
 use crate::a11y::SnapshotNode;
 use megi_webview::core::NodeId as DomNodeId;
@@ -61,6 +61,29 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
         }
         if entry.focusable {
             node.add_action(Action::Focus);
+        }
+        if let Some(checked) = entry.checked {
+            node.set_toggled(if checked {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+        }
+        if let Some(pressed) = entry.pressed {
+            node.set_toggled(if pressed {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+        }
+        if let Some(expanded) = entry.expanded {
+            node.set_expanded(expanded);
+        }
+        if let Some(level) = entry.level {
+            node.set_level(usize::from(level));
+        }
+        if let Some(value) = &entry.value {
+            node.set_value(value.clone());
         }
         if matches!(
             role,
@@ -212,6 +235,11 @@ mod publisher_tests {
             disabled: false,
             hidden: false,
             focusable: false,
+            checked: None,
+            pressed: None,
+            expanded: None,
+            level: None,
+            value: None,
         }
     }
 

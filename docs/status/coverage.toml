@@ -546,7 +546,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "structured tree + AccessKit mapping + winit platform adapter wired (AT-SPI/UIA/NSAccessibility); native widgets still missing and live AT verification unavailable in CI"
+reason = "structured tree + AccessKit adapter + widget states (checked/pressed/expanded/level/value) reach AT; live AT verification and OS-rendered native widgets still unavailable in CI"
 
 [[capability]]
 id = "F7-ISOLATION"
