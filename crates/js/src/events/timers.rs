@@ -98,8 +98,15 @@ pub(crate) fn cancel_animation_frame(
             return Ok(JsValue::undefined());
         }
         let id = id as u64;
-        host_cell(context)?.timers.retain(|timer| timer.id != id);
-        release_timer_slots(context, id);
+        // #1849: animation frames are a separate timer family (WHATWG HTML §8.1.7);
+        // cancelAnimationFrame must not remove `setTimeout`/`setInterval` timers.
+        let before = host_cell(context)?.timers.len();
+        host_cell(context)?
+            .timers
+            .retain(|timer| timer.id != id || !timer.animation);
+        if host_cell(context)?.timers.len() < before {
+            release_timer_slots(context, id);
+        }
     }
     Ok(JsValue::undefined())
 }
@@ -114,8 +121,14 @@ pub(crate) fn clear_timer(
             return Ok(JsValue::undefined());
         }
         let id = id as u64;
-        host_cell(context)?.timers.retain(|timer| timer.id != id);
-        release_timer_slots(context, id);
+        // #1849: clearTimeout clears only the timeout/interval family (WHATWG HTML §8.1.6).
+        let before = host_cell(context)?.timers.len();
+        host_cell(context)?
+            .timers
+            .retain(|timer| timer.id != id || timer.animation);
+        if host_cell(context)?.timers.len() < before {
+            release_timer_slots(context, id);
+        }
     }
     Ok(JsValue::undefined())
 }
