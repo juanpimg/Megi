@@ -31,6 +31,14 @@ pub enum IpcError {
     Io(String),
 }
 
+impl IpcError {
+    /// True when this error means the renderer process is gone (EOF or broken pipe) and the
+    /// pool must drop the slot and spawn a fresh process for the next request.
+    pub fn is_fatal(&self) -> bool {
+        matches!(self, Self::Truncated | Self::Io(_))
+    }
+}
+
 impl std::fmt::Display for IpcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -211,6 +219,11 @@ impl ProcessRenderer {
     /// PID of the renderer process (diagnostics/tests).
     pub fn id(&self) -> u32 {
         self.child.id()
+    }
+
+    /// True while the child process is still running (ADR-004 crash recovery).
+    pub fn is_alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
     }
 
     /// Terminates the renderer process (best effort).
