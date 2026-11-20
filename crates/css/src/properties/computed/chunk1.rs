@@ -227,6 +227,8 @@ pub struct ComputedStyle {
     pub opacity: f32,
     /// CSS `transform` (2D, #1539). `None` means `none`/no transform. Not inherited.
     pub transform: Option<crate::transform::Transform>,
+    /// CSS `transform-origin` (#1934), relative to the border box. Not inherited.
+    pub transform_origin: crate::transform_origin::TransformOrigin,
 
     // Typography: text transformation and spacing (CSS Text 3). All inherited.
     /// `text-transform` (initial `none`); applied by layout while shaping text.

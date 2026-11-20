@@ -112,6 +112,7 @@ impl ComputedStyle {
             visibility: Visibility::Visible,
             opacity: 1.0,
             transform: None,
+            transform_origin: crate::transform_origin::TransformOrigin::INITIAL,
 
             text_transform: TextTransform::None,
             word_spacing: Length::Px(0.0),

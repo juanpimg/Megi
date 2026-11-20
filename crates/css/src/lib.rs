@@ -40,6 +40,7 @@ pub mod state;
 pub mod token;
 pub mod tokenizer;
 pub mod transform;
+pub mod transform_origin;
 pub mod user_agent;
 
 pub use calc::{
@@ -92,6 +93,7 @@ pub use shorthand::expand_declarations;
 pub use state::{StateContext, StateGuard, current as current_state, with_state};
 pub use token::{CssToken, HashType, NumberType};
 pub use tokenizer::{CssTokenizer, preprocess_css_codepoints, preprocess_css_input, tokenize};
+pub use transform_origin::TransformOrigin;
 pub use user_agent::{
     USER_AGENT_STYLESHEET, create_user_agent_style_collection, parse_user_agent_stylesheet,
 };
