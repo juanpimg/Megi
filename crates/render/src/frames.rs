@@ -204,6 +204,15 @@ pub fn collect_frames_with_context(
                 ));
                 continue;
             }
+            // #1827: script-injected (pre-scripted) frames must consume the same global
+            // budget as normal frames; otherwise N injected `<iframe>`s render N children
+            // even after `MAX_FRAMES_PER_PAGE`, bypassing the anti-DoS cap.
+            if !budget.try_consume() {
+                warnings.push(format!(
+                    "page has more than {MAX_FRAMES_PER_PAGE} iframes; remaining frames are not rendered (cap)"
+                ));
+                break;
+            }
             let parsed_url = Url::parse(child_url).unwrap_or_else(|_| base_url.clone());
             let child_ctx = FrameRenderContext {
                 sandbox_flags: Some(*child_sandbox),
@@ -343,4 +352,68 @@ fn frame_size(
         .and_then(|s| from_css(s.height, parent_viewport.height))
         .unwrap_or_else(|| parse_attr(height_attr, 150));
     (width, height)
+}
+
+#[cfg(all(test, feature = "js"))]
+mod prescripted_budget_tests {
+    use super::*;
+
+    /// #1827: pre-scripted `<iframe>` documents must consume the same global
+    /// `FrameBudget` as normal frames. Before the fix this branch did `continue`
+    /// without `try_consume()`, so N script-injected frames rendered N children
+    /// even after the cap, bypassing `MAX_FRAMES_PER_PAGE`.
+    #[test]
+    fn prescripted_iframes_consume_the_global_frame_budget() {
+        let document = megi_html::parse_document(
+            "<html><body>\
+             <iframe id='a' width='20' height='10'></iframe>\
+             <iframe id='b' width='20' height='10'></iframe>\
+             <iframe id='c' width='20' height='10'></iframe>\
+             </body></html>",
+            false,
+        );
+        let mut pre_scripted = PreScriptedFrameMap::new();
+        for node in document.get_elements_by_tag_name("iframe") {
+            let child = megi_html::parse_document("<html><body>child</body></html>", false);
+            pre_scripted.insert(
+                node,
+                (
+                    child,
+                    megi_js::SandboxFlags::default(),
+                    "data:text/html,child".to_string(),
+                ),
+            );
+        }
+        let base_url = megi_net::Url::parse("http://example.test/page.html").expect("base url");
+        let options = RenderOptions {
+            viewport: Viewport::new(200, 150).expect("viewport"),
+            ..RenderOptions::default()
+        };
+        let styles = HashMap::new();
+        let mut warnings = Vec::new();
+        // Only one slot: with the fix, exactly one child renders and the cap warns.
+        let mut budget = FrameBudget::new(1);
+        let frames = collect_frames_with_context(
+            &document,
+            &base_url,
+            &options,
+            &styles,
+            None,
+            &pre_scripted,
+            0,
+            &mut warnings,
+            &mut budget,
+        )
+        .expect("collect frames");
+        assert_eq!(
+            budget.remaining(),
+            0,
+            "pre-scripted frames must consume the budget (#1827)"
+        );
+        assert_eq!(frames.len(), 1, "only one frame may render with budget=1");
+        assert!(
+            warnings.iter().any(|w| w.contains("(cap)")),
+            "budget exhaustion must warn, got {warnings:?}"
+        );
+    }
 }
