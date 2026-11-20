@@ -555,7 +555,7 @@ source = "issue #946"
 state = "partial"
 evidence = "none"
 issue = 946
-reason = "ADR-004 phases 1-2 done: SiteKey policy and per-site renderer pool with LRU cap; OS processes with IPC still missing"
+reason = "ADR-004 phases 1-3 transport done: SiteKey, per-site renderer threads and length-prefixed IPC with opt-in --ipc-render headless mode; window mode still uses threads because live DOM is not serializable"
 
 [[capability]]
 id = "X-BENCH"
