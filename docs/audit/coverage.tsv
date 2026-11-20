@@ -130,7 +130,7 @@ crates/browser/src/session/tests_b.rs	241	src	F2	wave-max-mod	2026-11-19	covered
 crates/browser/src/tabs.rs	483	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/title.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window.rs	474	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/accessibility.rs	114	src	F2			pending		
+crates/browser/src/window/accessibility.rs	114	src	F2	juanpimg	2026-11-20	covered	upstream a11y winit adapter (#f9c4c69)	read before marking; merged from main
 crates/browser/src/window/events.rs	444	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/form_controls.rs	430	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/frontend.rs	179	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
