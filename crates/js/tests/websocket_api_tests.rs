@@ -3,20 +3,25 @@
 #![cfg(feature = "js")]
 
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use megi_js::error::JsError;
 use megi_js::host::{WebSocketEvent, WebSocketProvider, WebSocketTransport};
 use megi_js::runtime::JsRuntime;
 
+type SentLog = Arc<Mutex<Vec<String>>>;
+
 struct MockTransport {
     events: VecDeque<WebSocketEvent>,
-    sent: Vec<String>,
+    sent: SentLog,
 }
 
 impl WebSocketTransport for MockTransport {
     fn send(&mut self, text: &str) -> Result<(), JsError> {
-        self.sent.push(text.to_owned());
+        self.sent
+            .lock()
+            .expect("sent log poisoned")
+            .push(text.to_owned());
         Ok(())
     }
     fn poll(&mut self) -> Vec<WebSocketEvent> {
@@ -25,20 +30,17 @@ impl WebSocketTransport for MockTransport {
     fn close(&mut self) {}
 }
 
-fn runtime_with(
-    events: Vec<WebSocketEvent>,
-) -> (JsRuntime, std::rc::Rc<std::cell::RefCell<Vec<String>>>) {
-    let sent = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-    let seen = std::rc::Rc::clone(&sent);
+fn runtime_with(events: Vec<WebSocketEvent>) -> (JsRuntime, SentLog) {
+    let sent: SentLog = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&sent);
     let mut runtime = JsRuntime::new().expect("runtime");
     let provider: WebSocketProvider = Arc::new(move |_url| {
         Ok(Box::new(MockTransport {
             events: VecDeque::from(events.clone()),
-            sent: Vec::new(),
+            sent: Arc::clone(&seen),
         }))
     });
     runtime.set_websocket_provider(provider);
-    let _ = seen;
     (runtime, sent)
 }
 
@@ -69,7 +71,7 @@ fn websocket_class_lifecycle_and_events() {
 
 #[test]
 fn websocket_send_and_constants() {
-    let (mut runtime, _sent) = runtime_with(vec![WebSocketEvent::Open]);
+    let (mut runtime, sent) = runtime_with(vec![WebSocketEvent::Open]);
     let out = runtime
         .eval(
             "var ws = new WebSocket('ws://example.com'); \
@@ -81,6 +83,11 @@ fn websocket_send_and_constants() {
     runtime.poll_websockets(); // => OPEN
     runtime.eval("ws.send('ping')", "t").expect("send");
     runtime.eval("ws.close()", "t").expect("close");
+    assert_eq!(
+        sent.lock().expect("sent log poisoned").as_slice(),
+        ["ping"],
+        "send() must deliver its payload to the transport"
+    );
 }
 
 /// #1847: close() must keep the transport alive until poll() delivers the Close
