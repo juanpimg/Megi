@@ -3,6 +3,46 @@ use super::*;
 impl JsRuntime {
     pub(crate) fn deliver_worker_message(&mut self, json: &str) -> Result<(), JsError> {
         let data = self.parse_json_value(json)?;
+        // F6-WORKERS-DOM: a DOM event forwarded from the owning page invokes the callbacks
+        // registered on the proxied element.
+        if let Some(object) = data.as_object()
+            && let Ok(dom_event) =
+                crate::events::prop(&object, "__megi_dom_event", &mut self.context)
+            && let Some(dom_event) = dom_event.as_object()
+        {
+            let event_type = crate::events::prop(&dom_event, "type", &mut self.context)?
+                .to_string(&mut self.context)
+                .map(|text| text.to_std_string_escaped())
+                .unwrap_or_default();
+            let token = crate::events::prop(&dom_event, "token", &mut self.context)?
+                .as_number()
+                .unwrap_or(0.0) as u64;
+            self.context
+                .global_object()
+                .set(
+                    js_string!("__megi_dom_event_target"),
+                    JsValue::from(token),
+                    false,
+                    &mut self.context,
+                )
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            self.context
+                .global_object()
+                .set(
+                    js_string!("__megi_dom_event_type"),
+                    JsValue::from(js_string!(event_type)),
+                    false,
+                    &mut self.context,
+                )
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            self.context
+                .eval(Source::from_bytes(
+                    "(function () { var key = __megi_dom_event_target + '|' + __megi_dom_event_type;                      var list = __megi_dom_event_callbacks[key] || [];                      for (var i = 0; i < list.length; i++) { list[i]({ type: __megi_dom_event_type }); } })();",
+                ))
+                .map(|_| ())
+                .map_err(|error| JsError::Runtime(error.to_string()))?;
+            return Ok(());
+        }
         // F6-WORKERS-DOM: a reply to a proxied DOM call resolves its pending Promise and is
         // never delivered to the worker's `onmessage`.
         if let Some(object) = data.as_object()

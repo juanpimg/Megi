@@ -118,6 +118,22 @@ impl JsRuntime {
                         .unwrap_or_default();
                     JsValue::from(js_string!(value))
                 }
+                "listen" => {
+                    let token = first.as_number().unwrap_or(0.0) as usize;
+                    let event_type = arg(1);
+                    if let Some(node) = worker_nodes.get(token).copied()
+                        && let Ok(mut host) = host_cell(&mut self.context)
+                        && host.worker_dom_listeners.len() < MAX_WORKER_DOM_LISTENERS
+                        && !host
+                            .worker_dom_listeners
+                            .iter()
+                            .any(|(w, n, t, _)| *w == id && *n == node && t == &event_type)
+                    {
+                        host.worker_dom_listeners
+                            .push((id, node, event_type, token as u64));
+                    }
+                    return Ok(Some(JsValue::undefined()));
+                }
                 "classList" => {
                     let token = first.as_number().unwrap_or(0.0) as usize;
                     let operation = arg(1);
@@ -225,3 +241,6 @@ impl JsRuntime {
         Ok(None)
     }
 }
+
+/// Cap on worker DOM event subscriptions (anti-DoS).
+const MAX_WORKER_DOM_LISTENERS: usize = 512;
