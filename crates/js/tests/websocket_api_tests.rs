@@ -90,6 +90,39 @@ fn websocket_send_and_constants() {
     );
 }
 
+/// #1711: a Binary frame must reach the JS `message` handler as an `ArrayBuffer`
+/// (not a lossy UTF-8 string), preserving the exact bytes.
+#[test]
+fn websocket_binary_message_is_delivered_as_arraybuffer() {
+    let bytes = vec![0x00, 0xFF, 0x80, 0x41];
+    let events = vec![
+        WebSocketEvent::Open,
+        WebSocketEvent::Binary(bytes.clone()),
+        WebSocketEvent::Close(1000),
+    ];
+    let (mut runtime, _sent) = runtime_with(events);
+    runtime
+        .eval(
+            "globalThis.__log = []; \
+             var ws = new WebSocket('ws://example.com/bin'); \
+             ws.onmessage = function (e) { \
+               __log.push(e.data instanceof ArrayBuffer ? 'ab' : typeof e.data); \
+               if (e.data instanceof ArrayBuffer) { \
+                 __log.push(Array.from(new Uint8Array(e.data)).join(',')); \
+               } \
+             }; \
+             String(typeof ws.onmessage);",
+            "t",
+        )
+        .expect("construct");
+    runtime.poll_websockets();
+    let log = runtime.eval("__log.join('|')", "t").expect("log");
+    assert_eq!(
+        log, "ab|0,255,128,65",
+        "binary message must be an ArrayBuffer with exact bytes: {log}"
+    );
+}
+
 /// #1847: close() must keep the transport alive until poll() delivers the Close
 /// event, so `onclose` fires and readyState reaches CLOSED (3).
 #[test]
