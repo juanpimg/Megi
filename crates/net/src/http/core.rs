@@ -15,6 +15,25 @@ use super::streaming::read_body_dispatch;
 use super::transport::{is_route_failover_error, map_io_error, open_proxy_or_direct_transport};
 use super::*;
 
+/// #1855: validate CORS on the response head *before* any body bytes reach `on_data`.
+///
+/// Only the streaming path installs an `on_data` callback; the buffered path validates
+/// after `fetch_once` returns, which is still before the body reaches its caller. For
+/// streaming, the callback fires inside `read_body_dispatch`, so validation must happen
+/// right after `parse_head` or a cross-origin response without ACAO is fully delivered
+/// to the consumer before the `Err(Cors)` (Fetch §4.10).
+fn validate_streaming_cors(
+    url: &Url,
+    options: &FetchOptions,
+    headers: &Headers,
+    streaming: bool,
+) -> Result<(), FetchError> {
+    if streaming && let Some(origin) = options.origin.as_deref() {
+        crate::cors::validate_response(url, origin, headers, options.cookie_jar.is_some())?;
+    }
+    Ok(())
+}
+
 // The request/hop state is carried explicitly (method/headers/body/trailers/cookies/
 // redirect-stream state); grouping it would only move the parameters into a struct.
 #[allow(clippy::too_many_arguments)]
@@ -314,6 +333,7 @@ pub(super) fn fetch_once(
             {
                 return Err(crate::proxy::auth_required_error(proxy));
             }
+            validate_streaming_cors(url, options, &headers, on_data.is_some())?;
             let (body, trailers) =
                 read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
             return Ok(RawResponse {
@@ -326,6 +346,7 @@ pub(super) fn fetch_once(
             });
         }
         // The server answered without 100-continue: don't send the body.
+        validate_streaming_cors(url, options, &headers, on_data.is_some())?;
         let (body, trailers) =
             read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
         return Ok(RawResponse {
@@ -361,6 +382,7 @@ pub(super) fn fetch_once(
     {
         return Err(crate::proxy::auth_required_error(proxy));
     }
+    validate_streaming_cors(url, options, &headers, on_data.is_some())?;
     let (body, trailers) =
         read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
     Ok(RawResponse {

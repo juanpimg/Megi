@@ -134,7 +134,11 @@ pub(super) fn finish_grid_layout(
     {
         let non_fr: f32 =
             fixed_rows_total + auto_rows.iter().map(|(row, _)| heights[*row]).sum::<f32>();
-        let remaining = (container_height - row_gaps - non_fr).max(0.0);
+        // #1839: CSS Grid §12.7.1 — the `minmax(<length>, <flex>)` floor is carved out
+        // of the free space, then added back once per track below. Without subtracting
+        // it here the minimum is counted twice (mirror of the column branch in grid.rs).
+        let minimum_fr_rows: f32 = fr_rows.iter().map(|(_, _, minimum)| *minimum).sum();
+        let remaining = (container_height - row_gaps - non_fr - minimum_fr_rows).max(0.0);
         let fr_total_rows: f32 = fr_rows.iter().map(|(_, fraction, _)| *fraction).sum();
         if fr_total_rows > 0.0 {
             for (row, fraction, minimum) in &fr_rows {

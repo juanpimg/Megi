@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 60,
+    "implemented": 61,
     "partial": 3,
     "known": 70,
-    "percent": 86,
+    "percent": 87,
     "unverified": [],
     "invalid_states": []
   },
@@ -46,10 +46,10 @@
     },
     {
       "id": "F6",
-      "implemented": 8,
+      "implemented": 9,
       "partial": 0,
       "known": 11,
-      "percent": 73
+      "percent": 82
     },
     {
       "id": "F7",
@@ -112,16 +112,6 @@
       "area": "F6",
       "name": "Import-map scopes/integrity y dynamic import no literal",
       "source": "PROGRESS.md F6 pending",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F6-CONFORMANCE",
-      "area": "F6",
-      "name": "JS/DOM conformance testing y memory accounting",
-      "source": "PROGRESS.md next_up",
       "state": "missing",
       "evidence": "none",
       "issue": "",
