@@ -24,13 +24,32 @@ impl JsRuntime {
                 &mut self.context,
             )
             .map_err(|error| JsError::Internal(error.to_string()))?;
-        global
-            .set(
-                js_string!("document"),
-                JsValue::undefined(),
-                false,
-                &mut self.context,
-            )
+        // F6-WORKERS-DOM: no direct DOM in the worker realm, but a message-based proxy
+        // forwards queries to the owning document over the deterministic postMessage channel.
+        let dom_prelude = r#"
+var __megi_dom_seq = 0;
+var __megi_dom_pending = {};
+function __megi_dom_call(method, args) {
+  var seq = ++__megi_dom_seq;
+  return new Promise(function (resolve) {
+    __megi_dom_pending[seq] = resolve;
+    postMessage({ __megi_dom_call: { seq: seq, method: method, args: args } });
+  });
+}
+var document = {
+  getElementById: function (id) {
+    return __megi_dom_call('getElementById', [id]).then(function (nodeId) {
+      return {
+        __megi_node_id: nodeId,
+        textContent: __megi_dom_call('textContent', [nodeId])
+      };
+    });
+  }
+};
+"#;
+        self.context
+            .eval(Source::from_bytes(dom_prelude))
+            .map(|_| ())
             .map_err(|error| JsError::Internal(error.to_string()))?;
         global
             .set(

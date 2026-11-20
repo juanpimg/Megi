@@ -9,6 +9,8 @@ pub(crate) struct WorkerState {
     pub runtime: JsRuntime,
     pub terminated: bool,
     pub to_worker: VecDeque<String>,
+    /// Node handles exposed to this worker through the DOM proxy (F6-WORKERS-DOM).
+    pub dom_nodes: Vec<NodeId>,
     pub onmessage: Vec<u32>,
     pub onerror: Option<u32>,
     pub pending_error: Option<String>,
@@ -133,6 +135,11 @@ impl JsRuntime {
                         worker.pending_error = Some(error.to_string());
                     }
                 }
+                // F6-WORKERS-DOM: proxied DOM replies resolve Promises inside the worker;
+                // drain its microtask queue so chained `then` callbacks run deterministically.
+                if let Err(error) = worker.runtime.run_microtasks() {
+                    worker.pending_error = Some(error.to_string());
+                }
                 if worker.pending_error.is_some() {
                     progressed = true;
                 }
@@ -192,6 +199,79 @@ impl JsRuntime {
     }
 
     pub(crate) fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
+        let event = self.parse_json_value(json)?;
+        // F6-WORKERS-DOM: intercept proxied DOM calls, execute them against the owning
+        // document, and queue a reply for the worker's next deterministic pump step.
+        if let Some(object) = event.as_object()
+            && let Ok(call) = crate::events::prop(&object, "__megi_dom_call", &mut self.context)
+            && let Some(call) = call.as_object()
+        {
+            let method = crate::events::prop(&call, "method", &mut self.context)?
+                .to_string(&mut self.context)
+                .map(|text| text.to_std_string_escaped())
+                .unwrap_or_default();
+            let seq = crate::events::prop(&call, "seq", &mut self.context)?
+                .as_number()
+                .unwrap_or(0.0) as u64;
+            let args = crate::events::prop(&call, "args", &mut self.context)?;
+            let mut worker_nodes: Vec<NodeId> = if let Ok(host) = host_ref(&self.context) {
+                match host.workers.get(id as usize).and_then(|slot| slot.as_ref()) {
+                    Some(worker) => worker.dom_nodes.clone(),
+                    None => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
+            let first = args
+                .as_object()
+                .and_then(|object| object.get(0, &mut self.context).ok())
+                .unwrap_or(JsValue::null());
+            let result = match method.as_str() {
+                "getElementById" => {
+                    let id = first
+                        .to_string(&mut self.context)
+                        .map(|text| text.to_std_string_escaped())
+                        .unwrap_or_default();
+                    match host_ref(&self.context)
+                        .ok()
+                        .and_then(|host| host.document.get_element_by_id(&id))
+                    {
+                        Some(node) => {
+                            let token = worker_nodes.len();
+                            worker_nodes.push(node);
+                            JsValue::from(token as u64)
+                        }
+                        None => JsValue::null(),
+                    }
+                }
+                "textContent" => {
+                    let token = first.as_number().unwrap_or(0.0) as usize;
+                    let text = worker_nodes
+                        .get(token)
+                        .and_then(|node| {
+                            host_ref(&self.context)
+                                .ok()
+                                .map(|host| host.document.text_content(*node))
+                        })
+                        .unwrap_or_default();
+                    JsValue::from(js_string!(text))
+                }
+                _ => JsValue::null(),
+            };
+            let result_json = crate::runtime::json_state(&result, &mut self.context);
+            let reply =
+                format!("{{\"__megi_dom_reply\":{{\"seq\":{seq},\"result\":{result_json}}}}}");
+            if let Ok(mut host) = host_cell(&mut self.context)
+                && let Some(worker) = host
+                    .workers
+                    .get_mut(id as usize)
+                    .and_then(|slot| slot.as_mut())
+            {
+                worker.dom_nodes = worker_nodes;
+                worker.to_worker.push_back(reply);
+            }
+            return Ok(());
+        }
         let onmessage = {
             let host = host_ref(&self.context).expect("JavaScript host installed in context");
             match host
@@ -284,6 +364,7 @@ impl WorkerState {
             runtime,
             terminated: false,
             to_worker: VecDeque::new(),
+            dom_nodes: Vec::new(),
             onmessage: Vec::new(),
             onerror: None,
             pending_error: None,

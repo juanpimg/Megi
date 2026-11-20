@@ -2,7 +2,7 @@
   "schema": 1,
   "overall": {
     "implemented": 64,
-    "partial": 5,
+    "partial": 6,
     "known": 70,
     "percent": 91,
     "unverified": [],
@@ -47,7 +47,7 @@
     {
       "id": "F6",
       "implemented": 10,
-      "partial": 0,
+      "partial": 1,
       "known": 11,
       "percent": 91
     },
@@ -82,7 +82,7 @@
       "area": "F6",
       "name": "Web Workers con acceso a DOM",
       "source": "PROGRESS.md F6 pending",
-      "state": "missing",
+      "state": "partial",
       "evidence": "none",
       "issue": "",
       "reason": "no requiere evidencia"
