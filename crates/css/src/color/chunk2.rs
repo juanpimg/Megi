@@ -258,6 +258,63 @@ pub(crate) fn mix_colors(
                 ))
             }
         }
+        // #1678: CSS Color 5 §3.2 interpolation spaces lab/lch/xyz*. Convert both
+        // colors into the space, interpolate, then convert back to sRGB.
+        "lab" | "lch" => {
+            let lab1 = linear_srgb_to_lab(color_to_linear_srgb(color1));
+            let lab2 = linear_srgb_to_lab(color_to_linear_srgb(color2));
+            if space == "lab" {
+                let mixed = mix(lab1, lab2);
+                Some(color_from_xyz_d50(
+                    lab_to_xyz_d50(mixed[0], mixed[1], mixed[2]),
+                    alpha,
+                ))
+            } else {
+                let polar = |lab: [f32; 3]| {
+                    let chroma = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
+                    let hue = lab[2].atan2(lab[1]).to_degrees().rem_euclid(360.0);
+                    (lab[0], chroma, hue)
+                };
+                let (l1, c1, h1) = polar(lab1);
+                let (l2, c2, h2) = polar(lab2);
+                let l = (l1 * alpha1 * weight1 + l2 * alpha2 * weight2) / alpha;
+                let c = (c1 * alpha1 * weight1 + c2 * alpha2 * weight2) / alpha;
+                let mut delta = h2 - h1;
+                if delta > 180.0 {
+                    delta -= 360.0;
+                } else if delta < -180.0 {
+                    delta += 360.0;
+                }
+                let hue = (h1 + delta * weight2).rem_euclid(360.0);
+                let radians = hue.to_radians();
+                Some(color_from_xyz_d50(
+                    lab_to_xyz_d50(l, c * radians.cos(), c * radians.sin()),
+                    alpha,
+                ))
+            }
+        }
+        "xyz" | "xyz-d65" | "xyz-d50" => {
+            let xyz1 = mul3(SRGB_LINEAR_TO_XYZ_D65, color_to_linear_srgb(color1));
+            let xyz2 = mul3(SRGB_LINEAR_TO_XYZ_D65, color_to_linear_srgb(color2));
+            let (xyz1, xyz2) = if space == "xyz-d50" {
+                // Bradford-adapt D65 → D50 before interpolating (#1678).
+                const D65_TO_D50: [[f32; 3]; 3] = [
+                    [1.047_929_72, 0.022_933_97, -0.050_243_13],
+                    [-0.029_563_29, 0.990_979_18, 0.021_451_49],
+                    [-0.009_216_60, 0.015_047_29, 0.752_149_11],
+                ];
+                (mul3(D65_TO_D50, xyz1), mul3(D65_TO_D50, xyz2))
+            } else {
+                (xyz1, xyz2)
+            };
+            let mixed = mix(xyz1, xyz2);
+            let result = if space == "xyz-d50" {
+                color_from_xyz_d50(mixed, alpha)
+            } else {
+                color_from_xyz_d65(mixed, alpha)
+            };
+            Some(result)
+        }
         _ => None,
     }
 }
