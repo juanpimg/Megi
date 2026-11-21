@@ -178,7 +178,7 @@ pub(crate) fn run_event_loop(
         }
         if runtime.pending_timers() == 0 {
             if runtime.has_websockets() {
-                for _ in 0..20 {
+                for _ in 0..100 {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                     runtime.poll_websockets();
                     drain_microtasks(runtime, warnings);

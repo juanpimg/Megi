@@ -109,9 +109,9 @@ impl LiveWebSocketTransport {
                                 break;
                             }
                         }
-                        Opcode::Ping => {
-                            let _ = lock(&pump_client).pong();
-                        }
+                        // #1638: WebSocketClient::recv() already replies to Ping
+                        // with exactly one Pong — never send a second one here.
+                        Opcode::Ping => {}
                         Opcode::Pong => {}
                         Opcode::Close => {
                             let code = if frame.payload.len() >= 2 {
@@ -133,6 +133,9 @@ impl LiveWebSocketTransport {
                             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                         ) =>
                     {
+                        // #1638: release the mutex briefly so JS callbacks (e.g. a
+                        // send() from onopen) can acquire it; a bare yield starves them.
+                        std::thread::sleep(std::time::Duration::from_millis(1));
                         continue; // no frame yet; loop and re-check `stop`
                     }
                     Err(error) => {
