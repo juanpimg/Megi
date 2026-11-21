@@ -43,8 +43,11 @@ pub(super) fn connect_tcp(
     tcp_stream
         .set_read_timeout(Some(options.read_timeout))
         .map_err(FetchError::Io)?;
+    // #1635: honor dedicated write_timeout when set; fall back to read_timeout when None so
+    // existing HTTP defaults are preserved.
+    let write_timeout = options.write_timeout.unwrap_or(options.read_timeout);
     tcp_stream
-        .set_write_timeout(Some(options.read_timeout))
+        .set_write_timeout(Some(write_timeout))
         .map_err(FetchError::Io)?;
     Ok(tcp_stream)
 }

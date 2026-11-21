@@ -182,28 +182,21 @@ pub(crate) fn install_network_providers(
                     "WebSocket blocked: --no-network prevents opening {raw_url}"
                 )));
             }
-            let trimmed = raw_url.trim();
-            let (secure_ws, policy_url) = if let Some(rest) = trimmed
-                .strip_prefix("wss://")
-                .or_else(|| trimmed.strip_prefix("WSS://"))
-            {
-                let parsed = Url::parse(&format!("https://{rest}")).map_err(|error| {
-                    megi_js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
-                })?;
-                (true, parsed)
-            } else if let Some(rest) = trimmed
-                .strip_prefix("ws://")
-                .or_else(|| trimmed.strip_prefix("WS://"))
-            {
-                let parsed = Url::parse(&format!("http://{rest}")).map_err(|error| {
-                    megi_js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
-                })?;
-                (false, parsed)
-            } else {
+            // #1641 & #1644: reject whitespace explicitly and match ws:// / wss://
+            // case-insensitively without altering path/query/userinfo/fragment case.
+            if raw_url.chars().any(char::is_whitespace) {
+                return Err(megi_js::JsError::Runtime(format!(
+                    "WebSocket URL {raw_url}: surrounding or embedded whitespace"
+                )));
+            }
+            let Some((secure_ws, _)) = megi_net::websocket::strip_ws_scheme(raw_url) else {
                 return Err(megi_js::JsError::Runtime(format!(
                     "WebSocket URL {raw_url}: expected ws:// or wss://"
                 )));
             };
+            let policy_url = megi_net::websocket::parse_ws_url(raw_url).map_err(|error| {
+                megi_js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
+            })?;
             if ws_doc_url.scheme() == Scheme::Https && !secure_ws {
                 return Err(megi_js::JsError::Runtime(format!(
                     "Mixed content blocks insecure WebSocket {raw_url} from https document"
@@ -217,7 +210,7 @@ pub(crate) fn install_network_providers(
                 )));
             }
             let transport =
-                crate::ws_bridge::LiveWebSocketTransport::connect(trimmed, &ws_options)?;
+                crate::ws_bridge::LiveWebSocketTransport::connect(raw_url, &ws_options)?;
             Ok(Box::new(transport) as Box<dyn megi_js::host::WebSocketTransport>)
         }));
         let worker_allow_file = document_url.is_file();

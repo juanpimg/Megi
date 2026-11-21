@@ -20,17 +20,15 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
     let mut parts = status_line.split_whitespace();
     let version = parts.next().unwrap_or("");
     let code = parts.next().unwrap_or("");
-    let valid_status =
-        version.starts_with("HTTP/") && code.parse::<u16>().is_ok_and(|status| status == 101);
-    if !valid_status {
-        return Err(protocol(&format!(
-            "unexpected handshake status: {status_line}"
-        )));
-    }
+    let status_code = if version.starts_with("HTTP/") {
+        code.parse::<u16>().ok()
+    } else {
+        None
+    };
     let mut upgrade: Option<String> = None;
     let mut connection: Option<String> = None;
     let mut accept: Option<String> = None;
-    let mut server_version: Option<String> = None;
+    let mut ws_versions: Vec<String> = Vec::new();
     for line in lines {
         if line.trim().is_empty() {
             break;
@@ -38,27 +36,35 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
         let Some((name, value)) = line.split_once(':') else {
             continue;
         };
-        if name.trim().eq_ignore_ascii_case("upgrade") {
-            upgrade = Some(value.trim().to_owned());
-        } else if name.trim().eq_ignore_ascii_case("connection") {
+        let name = name.trim();
+        let value = value.trim();
+        if name.eq_ignore_ascii_case("upgrade") {
+            upgrade = Some(value.to_owned());
+        } else if name.eq_ignore_ascii_case("connection") {
             let entry = connection.get_or_insert_with(String::new);
             if !entry.is_empty() {
                 entry.push(',');
             }
-            entry.push_str(value.trim());
-        } else if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
-            accept = Some(value.trim().to_owned());
-        } else if name.trim().eq_ignore_ascii_case("sec-websocket-version") {
-            server_version = Some(value.trim().to_owned());
+            entry.push_str(value);
+        } else if name.eq_ignore_ascii_case("sec-websocket-accept") {
+            accept = Some(value.to_owned());
+        } else if name.eq_ignore_ascii_case("sec-websocket-version") {
+            ws_versions.push(value.to_owned());
         }
     }
-    // #1640 / RFC 6455 §4.1: if the server sends a Sec-WebSocket-Version header it must be 13;
-    // an older draft must not be silently accepted, even with a matching Accept value.
-    if let Some(version) = server_version
-        && version != "13"
-    {
+    // RFC 6455 §4.4: 426 Upgrade Required advertises the server's supported version(s).
+    if status_code == Some(426) {
+        if ws_versions.is_empty() {
+            return Err(protocol("upgrade required (426)"));
+        }
         return Err(protocol(&format!(
-            "unsupported Sec-WebSocket-Version: {version}"
+            "upgrade required (426); server supports Sec-WebSocket-Version: {}",
+            ws_versions.join(", ")
+        )));
+    }
+    if status_code != Some(101) {
+        return Err(protocol(&format!(
+            "unexpected handshake status: {status_line}"
         )));
     }
     let upgrade_ok = upgrade.is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
@@ -73,11 +79,39 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
     if !connection_ok {
         return Err(protocol("missing or invalid Connection header"));
     }
+    // RFC 6455 §4.2.2/§4.4: 101 omits Sec-WebSocket-Version normally, or if echoed must be 13.
+    for ver in &ws_versions {
+        if ver != "13" {
+            return Err(protocol(&format!(
+                "unsupported Sec-WebSocket-Version `{ver}` (expected 13)"
+            )));
+        }
+    }
     let accept = accept.ok_or_else(|| protocol("missing Sec-WebSocket-Accept"))?;
     if !constant_time_eq(&accept, &accept_value(key)) {
         return Err(protocol("Sec-WebSocket-Accept mismatch"));
     }
     Ok(())
+}
+
+/// Matches an ASCII case-insensitive `wss://` or `ws://` prefix without allocating or
+/// altering the rest of the URL, returning `(is_secure, remainder)` (#1644).
+pub fn strip_ws_scheme(input: &str) -> Option<(bool, &str)> {
+    if input
+        .as_bytes()
+        .get(..6)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"wss://"))
+    {
+        Some((true, &input[6..]))
+    } else if input
+        .as_bytes()
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"ws://"))
+    {
+        Some((false, &input[5..]))
+    } else {
+        None
+    }
 }
 
 /// Parses a WebSocket URL, normalizing it to the HTTP(S) URL the handshake is performed against.
@@ -92,16 +126,12 @@ pub fn parse_ws_url(input: &str) -> Result<Url, FetchError> {
             "invalid ws URL: surrounding or embedded whitespace".to_owned(),
         ));
     }
-    // #1644: URL schemes are ASCII case-insensitive; the gate in `WebSocket::connect` also
-    // lowercases, so both paths must agree.
-    let lower = input.to_ascii_lowercase();
-    if let Some(rest) = lower.strip_prefix("wss://") {
-        return Url::parse(&format!("https://{rest}"))
-            .map_err(|error| FetchError::InvalidResponse(format!("invalid wss URL: {error}")));
-    }
-    if let Some(rest) = lower.strip_prefix("ws://") {
-        return Url::parse(&format!("http://{rest}"))
-            .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")));
+    // #1644: URL schemes are ASCII case-insensitive; preserve the case of path/query/userinfo/fragment.
+    if let Some((secure, rest)) = strip_ws_scheme(input) {
+        let prefix = if secure { "https://" } else { "http://" };
+        let label = if secure { "wss" } else { "ws" };
+        return Url::parse(&format!("{prefix}{rest}"))
+            .map_err(|error| FetchError::InvalidResponse(format!("invalid {label} URL: {error}")));
     }
     let url = Url::parse(input)
         .map_err(|error| FetchError::InvalidResponse(format!("invalid ws URL: {error}")))?;

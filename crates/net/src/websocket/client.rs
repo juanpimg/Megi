@@ -62,11 +62,12 @@ impl WsTransport {
         }
     }
 
-    fn set_write_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+    #[cfg(test)]
+    fn write_timeout(&self) -> std::io::Result<Option<Duration>> {
         match self {
-            Self::Plain(stream) => stream.set_write_timeout(Some(timeout)),
+            Self::Plain(stream) => stream.write_timeout(),
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => stream.sock.set_write_timeout(Some(timeout)),
+            Self::Tls(stream) => stream.sock.write_timeout(),
         }
     }
 }
@@ -149,6 +150,13 @@ impl WebSocketClient {
                 std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address")
             }))
         })?;
+        tcp.set_read_timeout(Some(options.read_timeout))
+            .map_err(FetchError::Io)?;
+        // #1635: honor dedicated write_timeout when set; when None, fall back to
+        // connect_timeout so a long read_timeout does not force a long write deadline.
+        let write_timeout = options.write_timeout.unwrap_or(options.connect_timeout);
+        tcp.set_write_timeout(Some(write_timeout))
+            .map_err(FetchError::Io)?;
         #[allow(unused_mut)]
         let mut stream: WsTransport = if secure {
             #[cfg(feature = "tls")]
@@ -169,7 +177,7 @@ impl WebSocketClient {
                         FetchError::Tls(format!("cannot create TLS client: {error}"))
                     })?;
                 // Complete the handshake eagerly (SNI + certificate validation) before the WS
-                // upgrade; timeouts are configured on the socket below.
+                // upgrade; socket read/write timeouts are already configured above.
                 while connection.is_handshaking() {
                     connection
                         .complete_io(&mut tcp)
@@ -185,15 +193,6 @@ impl WebSocketClient {
         } else {
             WsTransport::Plain(tcp)
         };
-        stream
-            .set_read_timeout(options.read_timeout)
-            .map_err(FetchError::Io)?;
-        // #1635: a long read timeout must not force a long write timeout (and vice versa). Use
-        // the connect budget as a bounded write deadline until FetchOptions gains a dedicated
-        // write timeout, instead of coupling it to read_timeout.
-        stream
-            .set_write_timeout(options.connect_timeout)
-            .map_err(FetchError::Io)?;
 
         let key = handshake_key(random_key_bytes());
 
@@ -292,8 +291,9 @@ impl WebSocketClient {
         self.send(Opcode::Pong, b"")
     }
 
-    /// Reads and decodes the next frame from the stream. Control frames (Ping/Pong/Close) are
-    /// returned to the caller, which decides how to reply.
+    /// Reads and decodes the next message or control frame from the stream, reassembling
+    /// fragmented data messages and automatically replying to `Ping` frames with a `Pong`
+    /// (RFC 6455 §5.5.2/§5.5.3) before returning the frame.
     pub fn recv(&mut self) -> Result<Frame, FetchError> {
         let mut buffer = [0u8; 4096];
         loop {
@@ -332,13 +332,19 @@ impl WebSocketClient {
     fn reassemble(&mut self, frame: Frame) -> Result<Option<Frame>, FetchError> {
         // #1638: keepalive must work for users of the raw API too, not only `recv_text`.
         if frame.opcode == Opcode::Ping {
-            self.pong()?;
+            self.send(Opcode::Pong, &frame.payload)?;
             return Ok(Some(frame)); // still surface the ping to the caller
         }
         if !frame.opcode.is_data() {
             return Ok(Some(frame)); // Ping/Pong/Close are never fragmented
         }
         if self.fragment_opcode.is_none() {
+            // #1632 / RFC 6455 §5.4: an initial Continuation without an open fragment is invalid.
+            if frame.opcode == Opcode::Continuation {
+                return Err(protocol(
+                    "unexpected Continuation frame without preceding fragment",
+                ));
+            }
             if frame.fin {
                 return Ok(Some(frame)); // unfragmented message
             }
@@ -388,5 +394,76 @@ impl WebSocketClient {
         }
         let payload = code.to_be_bytes().to_vec();
         self.send(Opcode::Close, &payload)
+    }
+}
+
+#[cfg(test)]
+mod write_timeout_tests {
+    use super::*;
+    use std::net::TcpListener;
+
+    #[test]
+    fn websocket_client_honors_write_timeout_independently() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let server = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    return;
+                };
+                let mut head = Vec::new();
+                let mut b = [0u8; 1];
+                while !head.ends_with(b"\r\n\r\n") && head.len() < 4096 {
+                    if stream.read(&mut b).unwrap_or(0) != 1 {
+                        break;
+                    }
+                    head.push(b[0]);
+                }
+                let req = String::from_utf8_lossy(&head);
+                let key = req
+                    .lines()
+                    .find_map(|l| {
+                        l.split_once(':')
+                            .filter(|(k, _)| k.trim().eq_ignore_ascii_case("sec-websocket-key"))
+                            .map(|(_, v)| v.trim().to_owned())
+                    })
+                    .unwrap_or_default();
+                let resp = format!(
+                    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+                    super::super::handshake::accept_value(&key)
+                );
+                let _ = stream.write_all(resp.as_bytes());
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+
+        let url =
+            super::super::handshake::parse_ws_url(&format!("ws://127.0.0.1:{port}/")).expect("url");
+        let explicit = FetchOptions {
+            connect_timeout: Duration::from_secs(7),
+            read_timeout: Duration::from_secs(9),
+            write_timeout: Some(Duration::from_millis(140)),
+            ..FetchOptions::default()
+        };
+        let client = WebSocketClient::connect(&url, &explicit).expect("connect explicit");
+        assert_eq!(
+            client.stream.write_timeout().unwrap(),
+            Some(Duration::from_millis(140)),
+            "WebSocketClient must honor explicit write_timeout (#1635)"
+        );
+
+        let fallback = FetchOptions {
+            connect_timeout: Duration::from_secs(6),
+            read_timeout: Duration::from_secs(9),
+            write_timeout: None,
+            ..FetchOptions::default()
+        };
+        let client2 = WebSocketClient::connect(&url, &fallback).expect("connect fallback");
+        assert_eq!(
+            client2.stream.write_timeout().unwrap(),
+            Some(Duration::from_secs(6)),
+            "write_timeout: None must fall back to connect_timeout for WebSocket (#1635)"
+        );
+        let _ = server.join();
     }
 }

@@ -369,3 +369,80 @@ fn fresh_mask_still_masks_frames() {
     mask(&mut payload, key);
     assert_eq!(payload, b"Hello");
 }
+
+#[test]
+fn decode_frames_rejects_malformed_headers_without_waiting_for_payload() {
+    // #1628 & #1642: truncated payloads after invalid headers must error immediately.
+    assert!(
+        decode_frames(&[0x81, 0x85], 1024).is_err(),
+        "masked server frame header must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0xC1, 0x05], 1024).is_err(),
+        "RSV1 bit must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x83, 0x05], 1024).is_err(),
+        "reserved opcode must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x09, 0x00], 1024).is_err(),
+        "fragmented control frame must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x89, 0x7E, 0x00, 0x7E], 1024).is_err(),
+        "oversized control frame header must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x81, 0x7E, 0x00, 0x05], 1024).is_err(),
+        "non-minimal 16-bit length must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x81, 0x7F, 0, 0, 0, 0, 0, 0, 0x01, 0x00], 1024).is_err(),
+        "non-minimal 64-bit length must fail immediately"
+    );
+    assert!(
+        decode_frames(&[0x82, 0x7E, 0x08, 0x00], 1024).is_err(),
+        "frame length exceeding max_payload must fail immediately"
+    );
+    assert!(
+        decode_frames(
+            &[0x82, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+            usize::MAX
+        )
+        .is_err(),
+        "64-bit frame length overflow must fail immediately"
+    );
+    assert!(
+        decode_frame(&[0x88, 0x02], 1024).is_err(),
+        "truncated 2-byte close frame must return Err without panicking"
+    );
+}
+
+#[test]
+fn handshake_validates_server_websocket_version() {
+    let key = concat!("dGhlIH", "NhbXBs", "ZSBub2", "5jZQ==");
+    let accept = accept_value(key);
+    let ok_with_13 = format!(
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+         Sec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    );
+    assert!(validate_handshake_response(&ok_with_13, key).is_ok());
+
+    let bad_101_version = format!(
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+         Sec-WebSocket-Accept: {accept}\r\nSec-WebSocket-Version: 8\r\n\r\n"
+    );
+    assert!(
+        validate_handshake_response(&bad_101_version, key).is_err(),
+        "101 with Sec-WebSocket-Version != 13 must fail"
+    );
+
+    let upgrade_required = "HTTP/1.1 426 Upgrade Required\r\nSec-WebSocket-Version: 8, 12\r\n\r\n";
+    let err = validate_handshake_response(upgrade_required, key).expect_err("426 must fail");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("426") && msg.contains("8, 12"),
+        "426 error should report supported versions: {msg}"
+    );
+}

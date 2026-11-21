@@ -368,3 +368,97 @@ fn temp_fixture_is_removed_on_drop() {
     };
     assert!(!path.exists(), "temp fixture must be removed on drop");
 }
+
+#[test]
+fn ws_bridge_ping_sends_single_pong_and_preserves_mixed_case_scheme_url() {
+    // #1638 & #1644: JS WebSocket with mixed-case scheme preserves path/query case and
+    // sends exactly ONE Pong per Ping. Uses the hardened #1653 helpers.
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let port = listener.local_addr().expect("addr").port();
+    let server = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        return (String::new(), 0usize);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(_) => return (String::new(), 0usize),
+            }
+        };
+        stream.set_nonblocking(false).ok();
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_millis(500)))
+            .ok();
+        let Ok(head) = read_handshake_head(&mut stream) else {
+            return (String::new(), 0usize);
+        };
+        let head_str = String::from_utf8_lossy(&head).into_owned();
+        let key = head_str
+            .lines()
+            .find_map(|line| {
+                line.split_once(':').and_then(|(n, v)| {
+                    if n.trim().eq_ignore_ascii_case("sec-websocket-key") {
+                        Some(v.trim().to_owned())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .expect("key");
+        let response = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+            websocket::accept_value(&key)
+        );
+        let _ = stream.write_all(response.as_bytes());
+        // Send Ping before echoing later.
+        let _ = stream.write_all(&[0x89, 0x00]);
+        let _ = stream.flush();
+        let mut pongs = 0usize;
+        for _ in 0..4 {
+            match read_client_frame(&mut stream) {
+                Ok(Some((0xA, _))) => pongs += 1,
+                Ok(Some((0x1, payload))) => {
+                    let echo = build_text_frame(&payload);
+                    let _ = stream.write_all(&echo);
+                    let _ = stream.flush();
+                }
+                _ => break,
+            }
+        }
+        (head_str, pongs)
+    });
+
+    let html = format!(
+        "<html><body><script>\
+           var ws = new WebSocket('Ws://127.0.0.1:{port}/Chat?Token=AbC'); \
+           ws.onopen = function () {{ ws.send('hi'); }}; \
+           ws.onmessage = function (e) {{ document.body.setAttribute('data-msg', e.data); ws.close(); }}; \
+         </script></body></html>"
+    );
+    let page = TempFixture::new("ws-mixed", &html).expect("write fixture");
+    let options = RenderOptions {
+        viewport: Viewport::new(320, 200).expect("viewport"),
+        ..RenderOptions::default()
+    };
+    let out = render_url(&page.url(), &options).expect("render");
+    let (head_str, pongs) = server.join().expect("server");
+    assert!(
+        head_str.starts_with("GET /Chat?Token=AbC HTTP/1.1"),
+        "mixed-case scheme must preserve path/query case, got: {head_str}"
+    );
+    assert_eq!(pongs, 1, "expected exactly 1 Pong for 1 Ping, got {pongs}");
+    let body = out.document.body().expect("body");
+    assert_eq!(
+        out.document
+            .node(body)
+            .as_element()
+            .unwrap()
+            .get_attribute("data-msg"),
+        Some("hi")
+    );
+}
