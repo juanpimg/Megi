@@ -108,6 +108,12 @@ pub struct FetchOptions {
     pub connect_timeout: Duration,
     /// Read timeout applied to every blocking socket read.
     pub read_timeout: Duration,
+    /// Optional write timeout applied to blocking socket writes (#1635).
+    ///
+    /// When `None` (the default), HTTP transport falls back to [`Self::read_timeout`]
+    /// and WebSocket transport falls back to [`Self::connect_timeout`] so existing
+    /// defaults are preserved.
+    pub write_timeout: Option<Duration>,
     /// Maximum number of `3xx` redirects followed before returning
     /// [`FetchError::TooManyRedirects`].
     pub max_redirects: usize,
@@ -205,6 +211,7 @@ impl Default for FetchOptions {
         Self {
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
             read_timeout: DEFAULT_READ_TIMEOUT,
+            write_timeout: None,
             max_redirects: DEFAULT_MAX_REDIRECTS,
             redirect_mode: RedirectMode::Follow,
             allow_https_downgrade: false,

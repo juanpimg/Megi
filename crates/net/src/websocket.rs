@@ -18,5 +18,7 @@ pub use frame::{
     DecodedFrame, Frame, Opcode, client_mask, close_code, decode_frame, decode_frames,
     encode_frame, mask,
 };
-pub use handshake::{accept_value, handshake_key, parse_ws_url, validate_handshake_response};
+pub use handshake::{
+    accept_value, handshake_key, parse_ws_url, strip_ws_scheme, validate_handshake_response,
+};
 pub use wrapper::{WebSocket, WebSocketError, accept_guid};

@@ -5,7 +5,7 @@ use crate::http::FetchOptions;
 
 use super::client::WebSocketClient;
 use super::frame::{Opcode, close_code};
-use super::handshake::parse_ws_url;
+use super::handshake::{parse_ws_url, strip_ws_scheme};
 
 /// The RFC 6455 GUID appended to a handshake key before hashing.
 pub fn accept_guid() -> &'static str {
@@ -69,8 +69,13 @@ pub struct WebSocket {
 
 impl WebSocket {
     pub fn connect(url: &str) -> Result<Self, WebSocketError> {
-        let lower = url.trim().to_ascii_lowercase();
-        if !lower.starts_with("ws://") && !lower.starts_with("wss://") {
+        // #1641: reject whitespace explicitly before scheme matching instead of trimming.
+        if url.chars().any(char::is_whitespace) {
+            return Err(WebSocketError::InvalidUrl(
+                "invalid ws URL: surrounding or embedded whitespace".to_owned(),
+            ));
+        }
+        if strip_ws_scheme(url).is_none() {
             return Err(WebSocketError::UnsupportedScheme);
         }
         let parsed =
@@ -83,21 +88,26 @@ impl WebSocket {
         self.inner.send_text(text).map_err(WebSocketError::from)
     }
 
-    /// Reads the next text frame, replying to pings and skipping pongs. Returns `Closed` when
-    /// the peer sends a close frame or drops the connection.
+    /// Reads the next text message, skipping pongs and already-ponged pings. Returns `Closed`
+    /// when the peer sends a close frame or drops the connection.
     pub fn recv_text(&mut self) -> Result<String, WebSocketError> {
         loop {
             let frame = self.inner.recv()?;
             match frame.opcode {
-                Opcode::Text | Opcode::Continuation => {
+                Opcode::Text => {
                     // #1626: never fabricate U+FFFD with a lossy decode — fail with a typed
                     // error instead (decode_frame already rejects invalid UTF-8 Text frames).
                     return String::from_utf8(frame.payload).map_err(|_| {
                         WebSocketError::InvalidFrame("text payload is not UTF-8".into())
                     });
                 }
-                Opcode::Ping => self.inner.pong()?,
-                Opcode::Pong => {}
+                Opcode::Continuation => {
+                    return Err(WebSocketError::InvalidFrame(
+                        "unexpected continuation frame".into(),
+                    ));
+                }
+                // #1638: `WebSocketClient::recv` already sent the single Pong reply.
+                Opcode::Ping | Opcode::Pong => {}
                 Opcode::Close => return Err(WebSocketError::Closed),
                 Opcode::Binary => return Err(WebSocketError::UnsupportedOpcode(0x2)),
             }
@@ -109,12 +119,17 @@ impl WebSocket {
         loop {
             let frame = self.inner.recv()?;
             match frame.opcode {
-                Opcode::Binary | Opcode::Continuation => return Ok(frame.payload),
+                Opcode::Binary => return Ok(frame.payload),
+                Opcode::Continuation => {
+                    return Err(WebSocketError::InvalidFrame(
+                        "unexpected continuation frame".into(),
+                    ));
+                }
                 Opcode::Text => {
                     return Err(WebSocketError::InvalidFrame("expected binary frame".into()));
                 }
-                Opcode::Ping => self.inner.pong()?,
-                Opcode::Pong => {}
+                // #1638: `WebSocketClient::recv` already sent the single Pong reply.
+                Opcode::Ping | Opcode::Pong => {}
                 Opcode::Close => return Err(WebSocketError::Closed),
             }
         }

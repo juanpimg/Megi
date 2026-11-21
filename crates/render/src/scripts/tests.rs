@@ -308,6 +308,51 @@ mod websocket_policy_tests {
             elem.get_attribute("data-msg")
         );
     }
+
+    #[test]
+    fn websocket_url_with_surrounding_whitespace_is_rejected() {
+        let script_text = "var ws = new WebSocket('  ws://127.0.0.1:9/chat  ');\
+            document.body.setAttribute('data-state', String(ws.readyState));\
+            ws.onerror = function (e) { document.body.setAttribute('data-msg', e.message || ''); };";
+        let html = format!("<!DOCTYPE html><body><script>{script_text}</script></body>");
+        let document = megi_html::parse_document(&html, true);
+        let http_url = Url::parse("http://example.test/app.html").expect("url");
+        let scripts = vec![LoadedScript {
+            element: document.root(),
+            text: script_text.to_owned(),
+            source_name: "inline-script-0".to_owned(),
+            bytes: script_text.len(),
+            is_module: false,
+            module_url: None,
+        }];
+        let host = ScriptingHostContext::new(
+            None,
+            megi_css::MediaContext::with_viewport(320.0, 200.0),
+            (320, 200),
+        );
+        let mut warnings = Vec::new();
+        let execution = execute_scripts(
+            document,
+            &http_url,
+            scripts,
+            ScriptingLimits::default(),
+            &host,
+            &mut warnings,
+        );
+        let body = execution.document.body().expect("body");
+        let elem = execution
+            .document
+            .try_node(body)
+            .and_then(|node| node.as_element())
+            .expect("element");
+        assert_eq!(elem.get_attribute("data-state"), Some("3"));
+        assert!(
+            elem.get_attribute("data-msg")
+                .is_some_and(|msg| msg.contains("whitespace")),
+            "expected whitespace rejection, got {:?}",
+            elem.get_attribute("data-msg")
+        );
+    }
 }
 
 #[cfg(all(test, feature = "js"))]
