@@ -40,12 +40,20 @@ fuzz_target!(|data: &[u8]| {
                 "unexpected charset label: {}",
                 decoded.charset
             );
-            // A valid UTF-8 BOM wins and is stripped from the decoded text.
-            if data.starts_with(b"\xEF\xBB\xBF") {
+            // A valid UTF-8 BOM wins and is stripped from the decoded text (#1647).
+            if let Some(rest) = data.strip_prefix(b"\xEF\xBB\xBF") {
                 assert!(
-                    !decoded.text.starts_with('\u{FFFD}'),
-                    "a UTF-8 BOM must not decode to a replacement character"
+                    !decoded.text.starts_with('\u{FEFF}'),
+                    "a UTF-8 BOM must be stripped from the decoded text"
                 );
+                // Lossy decoding of invalid bytes after the BOM legitimately yields U+FFFD;
+                // only demand a clean decode when the post-BOM bytes are valid UTF-8.
+                if std::str::from_utf8(rest).is_ok() {
+                    assert!(
+                        !decoded.text.starts_with('\u{FFFD}'),
+                        "valid UTF-8 after a BOM must not decode to a replacement character"
+                    );
+                }
             }
             // `String` is always valid UTF-8; touch it so the invariant is observed.
             let _ = decoded.text.chars().count();
