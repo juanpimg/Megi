@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 67,
-    "partial": 3,
+    "implemented": 68,
+    "partial": 2,
     "known": 70,
-    "percent": 96,
+    "percent": 97,
     "unverified": [],
     "invalid_states": []
   },
@@ -60,10 +60,10 @@
     },
     {
       "id": "X",
-      "implemented": 2,
-      "partial": 1,
+      "implemented": 3,
+      "partial": 0,
       "known": 3,
-      "percent": 67
+      "percent": 100
     }
   ],
   "missing": [
@@ -85,16 +85,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 946,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "X-FUZZ-LONG",
-      "area": "X",
-      "name": "Campañas largas de fuzzing (16 targets)",
-      "source": "PROGRESS.md cross-cutting",
-      "state": "partial",
-      "evidence": "none",
-      "issue": "",
       "reason": "no requiere evidencia"
     }
   ]

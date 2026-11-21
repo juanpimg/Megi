@@ -245,6 +245,44 @@ class ValidatorHardeningTests(unittest.TestCase):
             update_coverage.verify_evidence({"state": "don", "evidence": "none"}, self.root, GATE_PASS)[0]
         )
 
+    def test_python_test_evidence_accepts_real_unittest_method(self) -> None:
+        # X-FUZZ-LONG is verified by a Python regression test, not a Rust #[test].
+        self.root.joinpath("tools").mkdir(exist_ok=True)
+        (self.root / "tools/test_soak.py").write_text(
+            "import unittest\n\n"
+            "class SoakTests(unittest.TestCase):\n"
+            "    def test_rotation_fits(self):\n"
+            "        self.assertEqual(1, 1)\n",
+            encoding="utf-8",
+        )
+        ok, reason = update_coverage.verify_evidence(
+            {
+                "state": "done",
+                "evidence": "python_test:tools/test_soak.py::test_rotation_fits",
+            },
+            self.root,
+            GATE_PASS,
+        )
+        self.assertTrue(ok, reason)
+
+    def test_python_test_evidence_rejects_missing_or_assertion_free_method(self) -> None:
+        self.root.joinpath("tools").mkdir(exist_ok=True)
+        (self.root / "tools/test_soak.py").write_text(
+            "import unittest\n\n"
+            "class SoakTests(unittest.TestCase):\n"
+            "    def helper(self):\n"
+            "        return 1\n",
+            encoding="utf-8",
+        )
+        for evidence in (
+            "python_test:tools/test_soak.py::test_missing",
+            "python_test:tools/test_soak.py::helper",
+        ):
+            ok, reason = update_coverage.verify_evidence(
+                {"state": "done", "evidence": evidence}, self.root, GATE_PASS
+            )
+            self.assertFalse(ok, f"{evidence} must not verify a capability: {reason}")
+
     def test_build_fails_on_unknown_state(self) -> None:
         self._write_status()
         (self.root / "docs/status/coverage.toml").write_text(

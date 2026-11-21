@@ -17,9 +17,21 @@ on:
   workflow_dispatch:
     inputs:
       hours:
-        description: "Campaign length in hours (bounded by the runner's 6 h limit on hosted runners)"
+        description: "Campaign length in hours (24 h is supported on the self-hosted soak runner)"
         required: false
         default: "5"
+      slice_seconds:
+        description: "Seconds per target per rotation (2400 with 4 shards gives 40 min/target)"
+        required: false
+        default: "2400"
+      runner:
+        description: "Runner label ('hosted' for the 5 h CI matrix, 'self-hosted' for a 24 h deep run)"
+        required: false
+        default: "hosted"
+        type: choice
+        options:
+          - hosted
+          - self-hosted
       targets:
         description: "Space-separated target subset (empty = all harnesses)"
         required: false
@@ -34,9 +46,17 @@ concurrency:
 
 jobs:
   soak:
-    name: Soak campaign
-    runs-on: ubuntu-24.04
-    timeout-minutes: 355
+    name: Soak campaign (shard ${{ matrix.shard }})
+    # Hosted runners cap jobs at 6 h, so the default 5 h campaign ends via the
+    # script's own deadline; the self-hosted dispatch path may run a full 24 h.
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted') && 'self-hosted' || 'ubuntu-24.04' }}
+    timeout-minutes: 1500
+    strategy:
+      fail-fast: false
+      matrix:
+        # X-FUZZ-LONG: four shards run in parallel, each fuzzing ~7 targets for
+        # 2400 s per rotation (40 min/target) instead of 600 s sequentially.
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -70,10 +90,12 @@ jobs:
       - name: Run the campaign
         env:
           HOURS: ${{ github.event.inputs.hours || '5' }}
+          SLICE_SECONDS: ${{ github.event.inputs.slice_seconds || '2400' }}
           TARGETS: ${{ github.event.inputs.targets }}
         run: |
           set -euo pipefail
-          args=(--hours "$HOURS")
+          args=(--hours "$HOURS" --slice-seconds "$SLICE_SECONDS" \
+                --shard-index ${{ matrix.shard }} --shard-count 4)
           if [[ -n "${TARGETS// /}" ]]; then
             args+=(--targets "$TARGETS")
           fi
@@ -83,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: soak-campaign
+          name: soak-campaign-shard-${{ matrix.shard }}
           path: |
             target/soak/logs
             target/soak/crashes
