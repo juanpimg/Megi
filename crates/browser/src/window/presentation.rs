@@ -86,6 +86,18 @@ impl WindowApp {
         let chrome_scale = self.metrics.scale as f32;
         let chrome_history = self.address_history();
         let chrome_completion = self.address.autocomplete(&chrome_history);
+        // F7-A11Y: snapshot the focused widget's visual before borrowing the surface mutably.
+        let focus_widget = self.focused_control().map(|control| {
+            let visual = crate::forms::widget_visual(
+                control.kind,
+                control.checked,
+                true,
+                self.hover_form == Some(control.form_id as usize),
+                false,
+                control.disabled,
+            );
+            (control.rect, visual)
+        });
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -201,6 +213,18 @@ impl WindowApp {
                 chrome_scale,
                 &lines,
                 self.download_panel.selected,
+            );
+        }
+        // F7-A11Y: paint a deterministic native-style frame for the focused form control.
+        if let Some((rect, visual)) = focus_widget {
+            chrome::draw_native_widget(
+                &mut buffer,
+                width,
+                height,
+                chrome_scale,
+                self.scroll.offset(),
+                rect,
+                visual,
             );
         }
         if let Some(dialog) = &self.save_dialog {
