@@ -69,6 +69,27 @@ fn websocket_class_lifecycle_and_events() {
     assert_eq!(log, "open:1|msg:hello|close:1000:3", "lifecycle: {log}");
 }
 
+/// #1747 follow-up: `on<event>` handlers must fire in registration order relative
+/// to `addEventListener` listeners, just like XHR (HTML §6.1.6.2).
+#[test]
+fn websocket_on_handler_fires_in_registration_order() {
+    let (mut runtime, _sent) = runtime_with(vec![WebSocketEvent::Open]);
+    runtime
+        .eval(
+            "globalThis.__order = []; \
+             var ws = new WebSocket('ws://example.com/order'); \
+             ws.addEventListener('open', function () { __order.push('listener'); }); \
+             ws.onopen = function () { __order.push('property'); };",
+            "t",
+        )
+        .expect("construct");
+    runtime.poll_websockets();
+    assert_eq!(
+        runtime.eval("__order.join(',')", "t").expect("order"),
+        "listener,property"
+    );
+}
+
 #[test]
 fn websocket_send_and_constants() {
     let (mut runtime, sent) = runtime_with(vec![WebSocketEvent::Open]);
