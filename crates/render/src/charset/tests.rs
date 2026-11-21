@@ -49,6 +49,23 @@ mod unit_tests {
     }
 
     #[test]
+    fn invalid_bytes_after_bom_decode_lossily_without_the_bom() {
+        // #1647: the charset fuzz oracle used to assert that a BOM input never starts
+        // with U+FFFD, but lossy decoding of invalid bytes *after* a stripped BOM must
+        // legitimately produce U+FFFD. The BOM itself must still be gone (U+FEFF).
+        let decoded = decode_html(b"\xEF\xBB\xBF\xFF\xFE<p>hi</p>", "text/html").expect("decode");
+        assert_eq!(decoded.charset, "utf-8");
+        assert!(
+            !decoded.text.starts_with('\u{FEFF}'),
+            "the UTF-8 BOM must be stripped"
+        );
+        assert!(
+            decoded.text.starts_with('\u{FFFD}'),
+            "invalid bytes after the BOM must decode to the replacement character"
+        );
+    }
+
+    #[test]
     fn unterminated_meta_tag_does_not_panic() {
         // A truncated `<meta` used to slice one byte past the prescan window (#1212).
         let decoded = decode_html(b"<!DOCTYPE html><meta charset=utf-8", "text/html")
