@@ -8,6 +8,15 @@ pub enum Length {
     Auto,
 }
 
+fn scaled_px(raw: &str, mul: f32, div: f32) -> Option<Length> {
+    let value: f32 = raw.trim().parse().ok()?;
+    if !value.is_finite() || value.abs() > crate::calc::MAX_LENGTH_MAGNITUDE {
+        return None;
+    }
+    let px = value * mul / div;
+    (px.is_finite() && px.abs() <= crate::calc::MAX_LENGTH_MAGNITUDE).then_some(Length::Px(px))
+}
+
 impl Length {
     pub const ZERO: Self = Self::Px(0.0);
 
@@ -29,61 +38,32 @@ impl Length {
         // Non-finite numbers (`1e400` parses as `inf`) are invalid CSS values: accept them
         // would poison percentage resolution (`0 * inf / 100 = NaN`) and the layout math.
         if let Some(val) = s.strip_suffix("px") {
-            let px: f32 = val.trim().parse().ok()?;
-            if !px.is_finite() || px.abs() > 1e6 {
-                return None;
-            }
-            return Some(Self::Px(px));
+            return scaled_px(val, 1.0, 1.0);
         }
         if let Some(val) = s.strip_suffix("rem") {
-            let rem: f32 = val.trim().parse().ok()?;
-            if !rem.is_finite() || rem.abs() > 1e6 {
-                return None;
-            }
-            let px = rem * root_font_size;
-            return px.is_finite().then_some(Self::Px(px));
+            return scaled_px(val, root_font_size, 1.0);
         }
         if let Some(val) = s.strip_suffix("em") {
-            let em: f32 = val.trim().parse().ok()?;
-            if !em.is_finite() || em.abs() > 1e6 {
-                return None;
-            }
-            let px = em * font_size;
-            return px.is_finite().then_some(Self::Px(px));
+            return scaled_px(val, font_size, 1.0);
         }
         if let Some(val) = s.strip_suffix("pt") {
-            let pt: f32 = val.trim().parse().ok()?;
-            if !pt.is_finite() || pt.abs() > 1e6 {
-                return None;
-            }
-            let px = pt * 96.0 / 72.0;
-            return px.is_finite().then_some(Self::Px(px));
+            return scaled_px(val, 96.0, 72.0);
         }
         // CSS Values 4 §5.1.2: viewport-percentage lengths are <length> units and must be
         // accepted standalone, not only inside calc(). #1927: width:50vw used to fall back
         // to `auto` (full width) because only calc() resolved these units. calc.rs already
         // resolves vw/vh against the same thread-local viewport set by the render pipeline.
         if let Some(val) = s.strip_suffix("vw") {
-            let vw: f32 = val.trim().parse().ok()?;
-            if !vw.is_finite() || vw.abs() > 1e6 {
-                return None;
-            }
             let (width, _) = crate::calc::viewport();
-            let px = vw * width / 100.0;
-            return px.is_finite().then_some(Self::Px(px));
+            return scaled_px(val, width, 100.0);
         }
         if let Some(val) = s.strip_suffix("vh") {
-            let vh: f32 = val.trim().parse().ok()?;
-            if !vh.is_finite() || vh.abs() > 1e6 {
-                return None;
-            }
             let (_, height) = crate::calc::viewport();
-            let px = vh * height / 100.0;
-            return px.is_finite().then_some(Self::Px(px));
+            return scaled_px(val, height, 100.0);
         }
         if let Some(val) = s.strip_suffix('%') {
             let pct: f32 = val.trim().parse().ok()?;
-            if !pct.is_finite() || pct.abs() > 1e6 {
+            if !pct.is_finite() || pct.abs() > crate::calc::MAX_LENGTH_MAGNITUDE {
                 return None;
             }
             return Some(Self::Percent(pct));

@@ -36,8 +36,18 @@ fn opacity_rejects_non_finite_values() {
 
 #[test]
 fn line_height_rejects_non_finite_and_negative() {
-    // #1671: NaN/infinity/negative numbers must be ignored.
-    for value in ["NaN", "1e999", "-5"] {
+    // #1671: NaN/infinity/negative numbers and negative lengths/percentages/calc() must be ignored.
+    for value in [
+        "NaN",
+        "1e999",
+        "1e38",
+        "-5",
+        "-10px",
+        "-2em",
+        "-50%",
+        "calc(-10px)",
+        "calc(10px - 30px)",
+    ] {
         let style = computed(&format!("p {{ font-size: 16px; line-height: {value} }}"));
         // Invalid values are dropped (None => initial used) or resolve to a finite, non-negative
         // value; NaN/infinity/negative must never be stored.
@@ -48,9 +58,19 @@ fn line_height_rejects_non_finite_and_negative() {
             "line-height {value} produced {:?}",
             style.line_height
         );
+        let shorthand = computed(&format!("p {{ font: 16px/{value} sans-serif }}"));
+        assert!(
+            shorthand
+                .line_height
+                .is_none_or(|px| px.is_finite() && px >= 0.0),
+            "font shorthand line-height {value} produced {:?}",
+            shorthand.line_height
+        );
     }
     let valid = computed("p { font-size: 16px; line-height: 2 }");
     assert!((valid.line_height.unwrap() - 32.0).abs() < 1e-6);
+    let valid_zero = computed("p { font-size: 16px; line-height: 0px }");
+    assert_eq!(valid_zero.line_height, Some(0.0));
 }
 
 #[test]
@@ -89,6 +109,48 @@ fn calc_and_length_share_the_magnitude_cap() {
         megi_css::Length::Auto,
         "calc oversized em must be rejected"
     );
+
+    // #1669: arithmetic results exceeding 1e6 must also be rejected, not just single literals.
+    for expr in [
+        "calc(1000000px * 1000)",
+        "calc(999999px + 999999px)",
+        "calc(999999% + 999999%)",
+        "calc(1000000em * 10)",
+        "calc(999999em)",
+        "max(999999em, 10px)",
+    ] {
+        let style = computed(&format!("p {{ font-size: 16px; width: {expr} }}"));
+        assert_eq!(
+            style.width,
+            megi_css::Length::Auto,
+            "{expr} should exceed 1e6 cap and fall back to auto"
+        );
+        assert!(
+            style.calc_lengths.width.is_none(),
+            "{expr} should not populate calc_lengths"
+        );
+    }
+
+    let oversized_mixed = computed("p { width: calc(999999% + 999999px + 999999px) }");
+    assert_eq!(oversized_mixed.width, megi_css::Length::Auto);
+    assert!(oversized_mixed.calc_lengths.width.is_none());
+
+    let ctx = megi_css::CalcContext::default();
+    assert_eq!(
+        megi_css::evaluate_calc("calc(1000000px * 1000)", &ctx),
+        None
+    );
+    assert_eq!(
+        megi_css::CalcValue {
+            percent: 0.0,
+            px: 2_000_000.0
+        }
+        .to_length(),
+        None
+    );
+    assert_eq!(megi_css::Length::parse("999999em", 16.0, 16.0), None);
+    assert_eq!(megi_css::Length::parse("999999vw", 16.0, 16.0), None);
+    assert_eq!(megi_css::Length::parse("999999vh", 16.0, 16.0), None);
 }
 
 #[test]
