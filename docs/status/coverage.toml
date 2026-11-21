@@ -306,8 +306,8 @@ id = "F4-PERF-BUDGETS"
 area = "F4"
 name = "Presupuestos de rendimiento de rasterizado/decoders en webs reales"
 source = "issue #1014 / PROGRESS.md F4 pending"
-state = "partial"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/src/pipeline/budget.rs::budget_reports_only_exceeded_stages"
 issue = 1014
 
 [[capability]]
