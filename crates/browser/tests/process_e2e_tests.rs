@@ -121,10 +121,11 @@ fn real_pool_isolates_distinct_sites_and_recovers_a_killed_child() {
             "child must return its DOM"
         );
     }
-    assert_eq!(
-        responses.iter().map(|r| r.generation).collect::<Vec<_>>(),
-        vec![1, 2]
-    );
+    // Responses come from two independent reader threads, so their arrival order is
+    // intentionally unspecified; each tab must still paint exactly once.
+    let mut generations: Vec<u64> = responses.iter().map(|r| r.generation).collect();
+    generations.sort_unstable();
+    assert_eq!(generations, vec![1, 2]);
 
     // A third tab on site A reuses the same process (no new child spawned).
     pool.send(tab(3, site_a, "TabA2"))
