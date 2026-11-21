@@ -495,5 +495,89 @@ class ProgressGateCommandTest(unittest.TestCase):
         self.assertNotIn('"-p", "test_harness"', source)
 
 
+class GateFreshnessTests(unittest.TestCase):
+    """#1835: gate: evidence must reject verified_commit when gate-relevant paths changed."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self._git("init")
+        self._git("config", "user.email", "test@megi.local")
+        self._git("config", "user.name", "Megi Test")
+        (self.root / "crates/html/src").mkdir(parents=True)
+        (self.root / "crates/html/src/lib.rs").write_text("// html v1\n", encoding="utf-8")
+        (self.root / "docs").mkdir(parents=True)
+        (self.root / "docs/notes.md").write_text("notes v1\n", encoding="utf-8")
+        self._git("add", ".")
+        self._git("commit", "-m", "initial")
+        self.initial_sha = self._git("rev-parse", "HEAD")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _git(self, *args: str) -> str:
+        import subprocess
+
+        res = subprocess.run(
+            ["git", *args], cwd=self.root, capture_output=True, text=True, check=True
+        )
+        return res.stdout.strip()
+
+    def _gate(self, verified_commit: str) -> dict[str, str]:
+        return dict(GATE_PASS, verified_commit=verified_commit)
+
+    def test_gate_accepts_ancestor_when_only_non_gate_files_changed(self) -> None:
+        # Committing generated status/docs after measuring the gate must keep the stamp valid.
+        (self.root / "docs/notes.md").write_text("notes v2\n", encoding="utf-8")
+        self._git("add", "docs/notes.md")
+        self._git("commit", "-m", "docs only")
+
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "gate:tokenizer"},
+            self.root,
+            self._gate(self.initial_sha),
+        )
+        self.assertTrue(ok, reason)
+
+    def test_gate_rejects_ancestor_when_gate_relevant_paths_changed(self) -> None:
+        for rel_path in (
+            "crates/html/src/lib.rs",
+            "crates/css/src/lib.rs",
+            "crates/test_harness/src/lib.rs",
+            "tests/html5lib-tests/tree.dat",
+            "tests/wpt/css/syntax.html",
+        ):
+            with self.subTest(rel_path=rel_path):
+                verified = self._git("rev-parse", "HEAD")
+                target = self.root / rel_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(f"// updated {rel_path}\n", encoding="utf-8")
+                self._git("add", rel_path)
+                self._git("commit", "-m", f"touch {rel_path}")
+
+                ok, reason = update_coverage.verify_evidence(
+                    {"state": "done", "evidence": "gate:tokenizer"},
+                    self.root,
+                    self._gate(verified),
+                )
+                self.assertFalse(
+                    ok,
+                    f"gate evidence must reject verified_commit predating {rel_path}: {reason}",
+                )
+
+    def test_gate_accepts_head_commit(self) -> None:
+        (self.root / "crates/html/src/lib.rs").write_text("// html v2\n", encoding="utf-8")
+        self._git("add", "crates/html/src/lib.rs")
+        self._git("commit", "-m", "html v2")
+        head_sha = self._git("rev-parse", "HEAD")
+
+        ok, reason = update_coverage.verify_evidence(
+            {"state": "done", "evidence": "gate:tokenizer"},
+            self.root,
+            self._gate(head_sha),
+        )
+        self.assertTrue(ok, reason)
+
+
 if __name__ == "__main__":
     unittest.main()

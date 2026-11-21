@@ -93,12 +93,14 @@ pub fn parse_document_with_options_and_executor(
         doc,
         limit_violations,
         script_errors,
+        parse_errors,
         ..
     } = tb;
     ParseOutcome {
         document: doc,
         limit_violations,
         script_errors,
+        parse_errors,
     }
 }
 
@@ -158,12 +160,14 @@ pub fn parse_fragment_with_options(
         doc,
         limit_violations,
         script_errors,
+        parse_errors,
         ..
     } = tb;
     ParseOutcome {
         document: doc,
         limit_violations,
         script_errors,
+        parse_errors,
     }
 }
 

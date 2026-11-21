@@ -270,15 +270,18 @@ pub(crate) fn is_font_line_height(component: &str) -> bool {
     if lower == "normal" {
         return true;
     }
-    if lower.parse::<f32>().is_ok_and(|value| value >= 0.0) {
+    if lower
+        .parse::<f32>()
+        .is_ok_and(|value| value.is_finite() && value >= 0.0)
+    {
         return true;
     }
     matches!(
         Length::parse(component, 16.0, 16.0),
-        Some(Length::Px(px)) if px >= 0.0
+        Some(Length::Px(px)) if px.is_finite() && px >= 0.0
     ) || matches!(
         Length::parse(component, 16.0, 16.0),
-        Some(Length::Percent(pct)) if pct >= 0.0
+        Some(Length::Percent(pct)) if pct.is_finite() && pct >= 0.0
     )
 }
 

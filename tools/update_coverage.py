@@ -4,7 +4,7 @@
 The manifest `docs/status/coverage.toml` declares *known* capabilities. A capability
 counts as implemented only when its `evidence` can be checked in this repository:
 
-    gate:<suite>                     suite in [gate] of progress.toml, gate PASS, counts equal
+    gate:<suite>                     suite in [gate] of progress.toml, gate PASS, fresh verified_commit, counts equal
     test:<path>::<fn>                the source file exists and contains `fn <fn>`
     fixture:<path>                   the golden/fixture file exists
     none                             only for partial/missing
@@ -50,6 +50,15 @@ AREA_LABELS = {
 }
 FONT = "DejaVu Sans, Verdana, sans-serif"
 ISSUE_BASE = "https://github.com/juanpimg/Megi/issues/"
+# #1835: any change under these paths invalidates an older conformance gate stamp until
+# `tools/update_progress.py --write` refreshes `gate.verified_commit`.
+GATE_RELEVANT_PATHS = (
+    "crates/html/",
+    "crates/css/",
+    "crates/test_harness/",
+    "tests/html5lib-tests/",
+    "tests/wpt/",
+)
 
 
 def run(root: Path, args: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
@@ -70,21 +79,32 @@ def read_gate(root: Path) -> dict[str, str]:
     return dict(progress.get("gate", {}))
 
 
-def _commit_is_ancestor(root: Path, commit: str) -> bool:
-    """True when `commit` resolves to HEAD or an ancestor of HEAD in `root`'s git repo."""
-    import re as _re
-
-    if not _re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
-        return False
+def _git_repo(root: Path) -> Path:
     # Use the repository that owns these tools when `root` is not a git work tree
     # (unit tests pass a temp dir).
-    repo = root if (root / ".git").exists() else Path(__file__).resolve().parent.parent
+    return root if (root / ".git").exists() else Path(__file__).resolve().parent.parent
+
+
+def _commit_is_ancestor(root: Path, commit: str) -> bool:
+    """True when `commit` resolves to HEAD or an ancestor of HEAD in `root`'s git repo."""
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):
+        return False
+    repo = _git_repo(root)
     head = run(repo, ["git", "rev-parse", "HEAD"])
     if head.returncode != 0 or not head.stdout.strip():
         return False
     # `git merge-base --is-ancestor <commit> HEAD` exits 0 iff commit is an ancestor (or HEAD).
     check = run(repo, ["git", "merge-base", "--is-ancestor", commit, "HEAD"])
     return check.returncode == 0
+
+
+def _gate_changed_paths_since(root: Path, commit: str) -> list[str] | None:
+    """Return gate-relevant paths changed between `commit` and HEAD, or None on git failure."""
+    repo = _git_repo(root)
+    diff = run(repo, ["git", "diff", "--name-only", commit, "HEAD", "--", *GATE_RELEVANT_PATHS])
+    if diff.returncode != 0:
+        return None
+    return [line.strip() for line in diff.stdout.splitlines() if line.strip()]
 
 
 def _strip_rust_comments_and_strings(source: str) -> str:
@@ -220,6 +240,13 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
         verified = str(gate.get("verified_commit", "") or "").strip()
         if not verified or not _commit_is_ancestor(root, verified):
             return False, f"verified_commit `{verified}` no es HEAD ni ancestro"
+        changed = _gate_changed_paths_since(root, verified)
+        if changed is None:
+            return False, f"no se pudo verificar cambios desde verified_commit `{verified}`"
+        if changed:
+            preview = ", ".join(changed[:3])
+            suffix = f" (+{len(changed) - 3} más)" if len(changed) > 3 else ""
+            return False, f"verified_commit `{verified}` anterior a cambios en {preview}{suffix}"
         counts = str(gate.get(detail, ""))
         match = re.fullmatch(r"(\d+)\s*/\s*(\d+)", counts)
         if not match:

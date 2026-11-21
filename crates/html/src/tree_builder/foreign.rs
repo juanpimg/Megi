@@ -169,6 +169,18 @@ impl TreeBuilder {
             }
             Token::EndTag { ref name, .. } => {
                 let name_lower = name.to_ascii_lowercase();
+                // WHATWG HTML §13.2.6.5 ("An end tag, if the current node is not an
+                // element in the HTML namespace", steps 1-2): check the current node
+                // before entering the loop.
+                if let Some(current_id) = self.current_node()
+                    && let Some(current_el) = self.doc.node(current_id).as_element()
+                    && !current_el.local_name.eq_ignore_ascii_case(&name_lower)
+                {
+                    let expected = current_el.local_name.clone();
+                    self.record_error(format!(
+                        "foreign-end-tag-mismatch: expected </{expected}>, got </{name_lower}>"
+                    ));
+                }
                 let mut current_idx = self.open_elements.len().saturating_sub(1);
                 loop {
                     if current_idx == 0 {
