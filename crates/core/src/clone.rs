@@ -67,6 +67,13 @@ impl Document {
     ) -> Option<NodeId> {
         // Guard against stale/foreign handles (issue #676).
         self.try_node(node_id)?;
+        // WHATWG DOM §4.4: a Document is the root of its own tree. Cloning one into the
+        // arena that already owns it would allocate a second NodeKind::Document and
+        // break the "exactly one Document" invariant (nightly fuzz artifact
+        // crash-aa6559fdfc451a1ed5e27b7fce033d17250bc9a2). Reject instead.
+        if matches!(self.node(node_id).kind, NodeKind::Document) {
+            return None;
+        }
         // Bound clone amplification (issue #678 / #1111): if the subtree (including any
         // `<template>` contents) is too large to safely clone, fall back to a shallow
         // clone instead of risking arena exhaustion / panic.
