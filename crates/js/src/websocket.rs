@@ -24,11 +24,34 @@ const WEBSOCKET_PRELUDE: &str = r####"
     this.url = target;
     this.readyState = 0; // CONNECTING
     this.bufferedAmount = 0;
-    this.onopen = null;
-    this.onmessage = null;
-    this.onclose = null;
-    this.onerror = null;
     this._listeners = {};
+
+    // #1747: register `on<event>` handlers as listeners at assignment time
+    // (HTML §6.1.6.2), so they fire in registration order relative to
+    // addEventListener and participate in the same listener dispatch.
+    var WS_HANDLER_TYPES = ['open', 'message', 'close', 'error'];
+    (function (obj) {
+      for (var i = 0; i < WS_HANDLER_TYPES.length; i++) (function (type) {
+        var stored = null;
+        Object.defineProperty(obj, 'on' + type, {
+          configurable: true,
+          enumerable: true,
+          get: function () { return stored; },
+          set: function (fn) {
+            // Replace the previous property handler in the listener list.
+            if (stored !== null) {
+              obj._listeners[type] = (obj._listeners[type] || []).filter(function (f) {
+                return f !== stored;
+              });
+            }
+            stored = typeof fn === 'function' ? fn : null;
+            if (stored === null) { return; }
+            if (!obj._listeners[type]) { obj._listeners[type] = []; }
+            if (obj._listeners[type].indexOf(stored) < 0) { obj._listeners[type].push(stored); }
+          }
+        });
+      })(WS_HANDLER_TYPES[i]);
+    })(this);
 
     this.addEventListener = function (type, fn) {
       if (typeof fn !== "function") { return; }
@@ -40,8 +63,8 @@ const WEBSOCKET_PRELUDE: &str = r####"
       self._listeners[type] = list.filter(function (f) { return f !== fn; });
     };
     this._fire = function (type, event) {
-      var handler = self["on" + type];
-      if (typeof handler === "function") { try { handler(event); } catch (e) {} }
+      // #1747: `on<event>` handlers are registered as listeners above, so they
+      // fire here in registration order; do not invoke the property handler first.
       var list = (self._listeners[type] || []).slice();
       for (var i = 0; i < list.length; i++) { try { list[i](event); } catch (e) {} }
     };
