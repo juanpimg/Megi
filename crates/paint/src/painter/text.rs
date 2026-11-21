@@ -47,6 +47,7 @@ pub(super) fn paint_text_run(
     resources: &PaintResources<'_>,
     owner: Option<megi_core::NodeId>,
     alpha_scale: f32,
+    container_width: f32,
 ) {
     let style = layout_box.style.as_ref();
     let (color, font_size, font_family) = if let Some(style) = style {
@@ -109,6 +110,49 @@ pub(super) fn paint_text_run(
                 font_italic,
                 advance: font_size,
                 baseline,
+            });
+        }
+        return;
+    }
+
+    // CSS Multi-column Layout §5 (#1932): balance the characters into N columns.
+    // The IFC keeps one line for the run, so paint splits it into equal character
+    // groups and places each at its own x — a deterministic subset that keeps the
+    // text inside the box instead of overflowing it.
+    let columns = style.map_or(1, |s| s.column_count.max(1)) as usize;
+    if columns > 1 {
+        let gap = match style.map(|s| s.column_gap) {
+            Some(megi_css::Length::Px(px)) => px.max(0.0),
+            _ => 0.0,
+        };
+        let full = if container_width > 0.0 {
+            container_width
+        } else {
+            layout_box.dimensions.content.width
+        };
+        let col_width = ((full - gap * (columns as f32 - 1.0)) / columns as f32).max(1.0);
+        let chars: Vec<char> = text
+            .chars()
+            .take(megi_display::MAX_TEXT_RUN_CHARS)
+            .collect();
+        let per_col = chars.len().div_ceil(columns).max(1);
+        for (col, chunk) in chars.chunks(per_col).enumerate() {
+            let rect = Rect::new(
+                layout_box.dimensions.content.x + col as f32 * (col_width + gap),
+                layout_box.dimensions.content.y,
+                col_width,
+                layout_box.dimensions.content.height.max(font_size),
+            );
+            list.push(DisplayItem::Text {
+                text: chunk.iter().collect(),
+                rect,
+                color,
+                font_size,
+                font_family: font_family.clone(),
+                font_weight,
+                font_italic,
+                advance: col_width / chunk.len() as f32,
+                baseline: layout_box.baseline,
             });
         }
         return;
@@ -348,7 +392,7 @@ mod tests {
             effects_present: false,
         };
         let mut list = DisplayList::new();
-        paint_text_run(&layout_box, "Hi", &mut list, &resources, None, 0.5);
+        paint_text_run(&layout_box, "Hi", &mut list, &resources, None, 0.5, 100.0);
         let color = list
             .items
             .iter()
