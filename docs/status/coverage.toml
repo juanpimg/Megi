@@ -551,10 +551,9 @@ id = "F7-ISOLATION"
 area = "F7"
 name = "Aislamiento multiproceso por pestaña"
 source = "issue #946"
-state = "partial"
-evidence = "none"
+state = "done"
+evidence = "test:crates/browser/tests/process_e2e_tests.rs::real_pool_isolates_distinct_sites_and_recovers_a_killed_child"
 issue = 946
-reason = "ADR-004 phases 1-3 done: SiteKey, async per-site process pool with crash recovery, DOM patches and region parity; real multi-site child E2E and headless multi-tab --ipc-render E2E verify distinct PIDs, same-site reuse and killed-child respawn with frame recovery"
 
 [[capability]]
 id = "X-BENCH"
