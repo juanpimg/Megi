@@ -11,7 +11,7 @@ use megi_net::http::FetchOptions;
 use megi_net::websocket::{self, Opcode, WebSocketClient};
 
 /// How long the pump thread blocks on each socket read before checking for stop/shutdown.
-const POLL_TIMEOUT: Duration = Duration::from_millis(20);
+const POLL_TIMEOUT: Duration = Duration::from_millis(10);
 
 /// A live WebSocket transport backed by a real TCP connection.
 pub struct LiveWebSocketTransport {
@@ -63,10 +63,8 @@ impl LiveWebSocketTransport {
                                 break;
                             }
                         }
-                        Opcode::Ping => {
-                            let _ = lock(&pump_client).pong();
-                        }
-                        Opcode::Pong => {}
+                        // #1638: `WebSocketClient::recv` already sent the single Pong reply.
+                        Opcode::Ping | Opcode::Pong => {}
                         Opcode::Close => {
                             let code = if frame.payload.len() >= 2 {
                                 u16::from_be_bytes([frame.payload[0], frame.payload[1]])
@@ -87,7 +85,10 @@ impl LiveWebSocketTransport {
                             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                         ) =>
                     {
-                        continue; // no frame yet; loop and re-check `stop`
+                        // Yield briefly outside the mutex so send()/close() on the JS thread
+                        // cannot be starved by the pump re-acquiring the lock immediately.
+                        std::thread::sleep(Duration::from_millis(2));
+                        continue;
                     }
                     Err(error) => {
                         // #1825: a transport error also ends the pump; mark stop so the
