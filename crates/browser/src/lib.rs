@@ -292,6 +292,11 @@ mod a11y_adapter_tests {
             disabled: false,
             hidden: false,
             focusable: false,
+            checked: None,
+            pressed: None,
+            expanded: None,
+            level: None,
+            value: None,
         }
     }
 

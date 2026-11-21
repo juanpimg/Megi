@@ -181,15 +181,18 @@ fn resolve_query_length(length: Length, _style: &ComputedStyle, parent_width: f3
 /// Evaluates a query against a container size.
 pub fn evaluate(query: &ContainerQuery, size: &ContainerSize, style: &ComputedStyle) -> bool {
     query.conditions.iter().all(|(feature, length)| {
-        let Some(length) = resolve_query_length(*length, style, size.inline_size.unwrap_or(0.0))
-        else {
-            return false;
-        };
-        let actual = if feature.is_block_axis() {
+        // #1843: a percentage resolves against the size of the axis the feature queries
+        // (CSS Containment 3). Block-axis features (height/block-size, including min/max)
+        // use block_size; inline-axis features use inline_size.
+        let reference = if feature.is_block_axis() {
             size.block_size
         } else {
             size.inline_size
         };
+        let Some(length) = resolve_query_length(*length, style, reference.unwrap_or(0.0)) else {
+            return false;
+        };
+        let actual = reference;
         let Some(actual) = actual else {
             return false;
         };

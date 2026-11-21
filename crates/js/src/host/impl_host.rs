@@ -12,6 +12,7 @@ impl Host {
             node_index: HashMap::new(),
             max_handles: 1_000_000,
             listeners: Vec::new(),
+            worker_dom_listeners: Vec::new(),
             free_listener_slots: Vec::new(),
             timers: Vec::new(),
             next_timer_id: 1,

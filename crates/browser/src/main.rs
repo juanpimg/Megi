@@ -67,13 +67,24 @@ fn run() -> Result<(), ShellError> {
         return Ok(());
     }
     let args = finish_args(raw)?;
+    // ADR-004: the process backend returns only the child's PNG, so overlays that need the
+    // parent's display list cannot be composed. Reject the combination clearly instead of
+    // silently returning an image without the requested chrome/find highlights.
+    if args.ipc_render && (args.chrome || args.chrome_menu || args.find.is_some()) {
+        return Err(ShellError::Usage(
+            "--ipc-render cannot be combined with --chrome, --chrome-menu or --find: \
+             those overlays require the in-process renderer"
+                .to_owned(),
+        ));
+    }
     let options = render_options(&args);
     let view = WindowViewOptions::new(
         args.zoom,
         args.refresh_ms
             .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
     )
-    .with_tabs(args.tabs.clone());
+    .with_tabs(args.tabs.clone())
+    .with_process_render(args.ipc_render);
     let mut view = view;
     view.session_path = if args.no_session {
         None

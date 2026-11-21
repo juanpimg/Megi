@@ -8,8 +8,8 @@
 //! ## What it decodes
 //!
 //! - **JPEG baseline** (ITU-T T.81, `SOF0` Huffman): 4:4:4/4:2:2/4:2:0 sampling,
-//!   grayscale/YCbCr/RGB, restart intervals, typed errors for progressive/CMYK/truncated
-//!   input. See [`jpeg`] for the documented subset and limits.
+//!   grayscale/YCbCr/RGB, restart intervals, progressive DCT (SOF2), and typed errors for
+//!   unsupported CMYK/truncated input. See [`jpeg`] for the documented subset and limits.
 //! - **GIF** (87a/89a, first frame): LZW, global/local palettes, transparency,
 //!   interlacing; animated GIFs decode their first frame. See [`gif`].
 //! - **WebP lossless** (`VP8L`): RIFF container, all four transforms (predictor,
@@ -20,8 +20,9 @@
 //! - **WebP lossy** (`VP8 ` keyframe): VP8 boolean entropy decoder, segmentation,
 //!   normal/simple loop filter, 1/2/4/8 token partitions, Y16/UV and B_PRED intra
 //!   prediction, dequantization, IDCT/WHT and YUV420→RGB with libwebp-compatible
-//!   fancy upsampling. Only keyframes (all WebP lossy files) are accepted; VP8X
-//!   alpha/animation containers stay unsupported. See [`vp8`] and [`webp`].
+//!   fancy upsampling. Only keyframes (all WebP lossy files) are accepted; static
+//!   VP8X containers with alpha decode, while animation needs [`decode_animated`].
+//!   See [`vp8`] and [`webp`].
 //! - **PNG** (W3C PNG 1.2 / ISO 15948), decoded to 8-bit RGBA with straight
 //!   (non-premultiplied) alpha:
 //!   - colour types 0 (grayscale), 2 (RGB), 3 (indexed), 4 (grayscale+alpha)
@@ -37,8 +38,8 @@
 //! - **zlib/DEFLATE** (RFC 1950/1951) via [`inflate_zlib`] /
 //!   [`inflate_deflate`], used by the PNG decoder and reusable elsewhere.
 //!
-//! Detected-but-not-decoded formats/modes return a typed error: animation/alpha-only
-//! WebP containers (VP8X) and unsupported JPEG modes are
+//! Detected-but-not-decoded formats/modes return a typed error: animated WebP passed to
+//! [`decode`] (use [`decode_animated`]) and unsupported JPEG modes are
 //! [`ImageError::UnsupportedFeature`] with a clear description; unknown signatures are
 //! [`ImageError::UnsupportedFormat`]/[`ImageError::InvalidSignature`].
 //!
@@ -126,7 +127,7 @@ pub enum ImageFormat {
     Png,
     /// Graphics Interchange Format — first frame decoded by this crate.
     Gif,
-    /// JPEG/JFIF baseline — decoded by this crate (progressive is a typed error).
+    /// JPEG/JFIF baseline and progressive — decoded by this crate.
     Jpeg,
     /// Google WebP — lossless `VP8L` and lossy `VP8 ` keyframes are decoded.
     WebP,

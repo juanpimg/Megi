@@ -81,15 +81,17 @@ fn worker_without_loader_throws_typed_error() {
 }
 
 #[test]
-fn worker_has_no_dom_globals() {
+fn worker_has_no_direct_dom_globals() {
+    // F6-WORKERS-DOM: `document` is now a message-based proxy (not the real DOM), while
+    // `window` stays absent and `self` is still the worker global.
     let mut runtime = runtime_with_worker(
-        "postMessage(typeof document + ':' + typeof window + ':' + (self === globalThis));",
+        "postMessage(typeof document + ':' + typeof document.getElementById + ':' + typeof window + ':' + (self === globalThis));",
     );
     runtime.eval("window.__info = ''; var w = new Worker('worker.js'); w.onmessage = function (e) { __info = e.data; };", "t").expect("script");
     runtime.run_worker_tasks(16).expect("tasks");
     assert_eq!(
         runtime.eval("__info", "t").unwrap(),
-        "undefined:undefined:true"
+        "object:function:undefined:true"
     );
 }
 
@@ -207,4 +209,212 @@ fn terminated_worker_id_is_not_reused_by_a_new_worker() {
         .expect("script");
     runtime.run_worker_tasks(16).expect("tasks");
     assert_eq!(runtime.eval("__info", "t").unwrap(), "0:1");
+}
+
+#[test]
+fn worker_reads_dom_through_a_message_proxy() {
+    // F6-WORKERS-DOM: workers have no direct DOM, but a proxy forwards queries to the
+    // owning document over the existing deterministic postMessage channel.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.textContent.then(function (text) { postMessage(text); }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x>hello dom</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(64).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__seen", "page.js").expect("seen"),
+        "hello dom"
+    );
+}
+
+#[test]
+fn worker_writes_dom_through_the_proxy() {
+    // F6-WORKERS-DOM: setAttribute / setTextContent are forwarded through __megi_dom_call
+    // and applied to the owning Document on the main side.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.setAttribute('data-from-worker', 'yes').then(function () { \
+             el.setTextContent('changed').then(function () { postMessage('done'); }); \
+           }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x>original</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "done");
+    assert_eq!(
+        runtime
+            .eval(
+                "document.getElementById('x').getAttribute('data-from-worker')",
+                "page.js",
+            )
+            .expect("attribute"),
+        "yes"
+    );
+    assert_eq!(
+        runtime
+            .eval("document.getElementById('x').textContent", "page.js")
+            .expect("text"),
+        "changed"
+    );
+}
+
+#[test]
+fn worker_can_query_computed_style_through_the_proxy() {
+    // F6-WORKERS-DOM: proxy supports getComputedStyle(property) against the owning document.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.getComputedStyle('color').then(function (value) { postMessage(value); }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<span id=x style=\"color:red\">x</span>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "red");
+}
+
+#[test]
+fn worker_can_traverse_elements_by_tag_name() {
+    // F6-WORKERS-DOM: proxy supports document.getElementsByTagName() returning element proxies.
+    let mut runtime = runtime_with_worker(
+        "document.getElementsByTagName('p').then(function (els) { \
+           postMessage(els.length); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<p id=a>one</p><div>x</div><p id=b>two</p>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__seen", "page.js").expect("seen"), "2");
+}
+
+#[test]
+fn worker_can_read_and_mutate_classlist_through_the_proxy() {
+    // F6-WORKERS-DOM: proxy element exposes classList with Promise-returning operations.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           return el.classList.contains('a').then(function (before) { \
+             return el.classList.add('b').then(function () { \
+               return el.classList.remove('a').then(function () { \
+                 return el.classList.contains('b').then(function (after) { \
+                   postMessage(before + ':' + after); \
+                 }); \
+               }); \
+             }); \
+           }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<div id=x class=\"a\">x</div>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__seen = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(256).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__seen", "page.js").expect("seen"),
+        "true:true"
+    );
+    let classes = runtime
+        .eval("document.getElementById('x').className", "page.js")
+        .expect("class");
+    assert_eq!(
+        classes, "b",
+        "class mutations must reach the owning document"
+    );
+}
+
+#[test]
+fn worker_receives_dom_events_from_a_proxied_element() {
+    // F6-WORKERS-DOM: a worker can listen for events on a proxied element and receives them
+    // through the deterministic message pump when the page dispatches them.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.addEventListener('click', function (event) { postMessage('clicked:' + event.type); }); \
+           postMessage('listening'); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<button id=x>x</button>';",
+            "page.js",
+        )
+        .expect("setup");
+    runtime
+        .eval(
+            "window.__log = ''; var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __log += e.data + ';'; };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(128).expect("setup tasks");
+    runtime
+        .eval(
+            "document.getElementById('x').dispatchEvent(new Event('click'));",
+            "page.js",
+        )
+        .expect("dispatch click");
+    runtime.run_worker_tasks(128).expect("delivery tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__log", "page.js").expect("log"),
+        "listening;clicked:click;"
+    );
 }

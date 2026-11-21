@@ -190,6 +190,7 @@ fn dom_key_and_code(key: &Key) -> Option<(String, String)> {
 
 #[cfg(feature = "a11y")]
 mod accessibility;
+mod downloads;
 mod events;
 mod form_controls;
 mod frontend;
@@ -235,6 +236,8 @@ pub struct WindowViewOptions {
     pub session_path: Option<std::path::PathBuf>,
     /// Download directory (`None` = `$HOME/Downloads`/temp fallback).
     pub download_dir: Option<std::path::PathBuf>,
+    /// Use OS renderer processes with DOM-patching IPC instead of per-site threads.
+    pub process_render: bool,
 }
 
 impl Default for WindowViewOptions {
@@ -245,6 +248,7 @@ impl Default for WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
+            process_render: true,
         }
     }
 }
@@ -258,7 +262,14 @@ impl WindowViewOptions {
             tabs: Vec::new(),
             session_path: None,
             download_dir: None,
+            process_render: true,
         }
+    }
+
+    /// Enables OS renderer processes with DOM-patching IPC (ADR-004).
+    pub fn with_process_render(mut self, enabled: bool) -> Self {
+        self.process_render = enabled;
+        self
     }
 
     /// Adds the initial tab list (`--tabs`, repeatable).
@@ -326,15 +337,6 @@ pub fn run_window_with_view_options(
         .map_err(|error| ShellError::Window(format!("event loop failed: {error}")))
 }
 
-/// State of the visual Save-as dialog (F7-SAVE-AS / #988).
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct SaveDialogState {
-    /// Editable file name (without the directory); sanitized on confirmation.
-    name: String,
-    /// `true` for an HTML snapshot, `false` for the rendered PNG.
-    html: bool,
-}
-
 /// One keyboard-focusable element, in document order (#1517).
 ///
 /// Tab/Shift+Tab walk [`WindowApp::focus_targets`] instead of the form-control list alone,
@@ -384,8 +386,12 @@ struct WindowApp {
     scale_factor: f64,
     scroll: ScrollState,
     store: FrameStore,
-    /// Per-site renderer pool (ADR-004 phase 2). Workers spawn on first request per site.
+    /// Per-site renderer pool (ADR-004 phase 2).
     render_pool: Option<RendererPool>,
+    /// OS renderer process and its queued replies (ADR-004 phase 3).
+    process_pool: Option<crate::ipc::ProcessRenderPool>,
+    use_process_render: bool,
+    process_messages: std::collections::VecDeque<crate::worker::WorkerMessage>,
     debounce: Debounce,
     pending_metrics: Option<WindowMetrics>,
     error: Option<String>,
@@ -424,7 +430,7 @@ struct WindowApp {
     /// Active IME composition state (#1519).
     ime: crate::forms::ImeState,
     /// Visual Save-as dialog (F7-SAVE-AS), open when `Some`.
-    save_dialog: Option<SaveDialogState>,
+    save_dialog: Option<save_as::SaveDialogState>,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
     document: Option<Arc<megi_webview::core::Document>>,
     /// Pending button id whose pressed state must be released after the next frame.
@@ -472,6 +478,9 @@ struct WindowApp {
     history_menu: Option<HistoryMenu>,
     /// Download progress/last-download state shown in the status bar.
     download: crate::download::DownloadProgress,
+    /// Download manager + panel UI state (F7-SAVE-AS).
+    download_manager: crate::download::DownloadManager,
+    download_panel: downloads::DownloadPanelState,
     /// Last clicked option of a multi-select list (Shift range anchor).
     multi_anchor: Option<(u32, usize)>,
     /// Form control under the mouse (native hover visual).

@@ -52,6 +52,11 @@ impl Document {
         if !self.can_have_children(parent_id) {
             return Err(DomError::CannotHaveChildren(parent_id));
         }
+        // #1728 / DOM §4.2.3: "If referenceChild is node, then set referenceChild to node's
+        // next sibling". Inserting a node before itself is a successful no-op, not an error.
+        if reference == Some(new_child_id) {
+            return Ok(new_child_id);
+        }
         let inserted = match reference {
             Some(reference_id) => {
                 if self.slot_of(reference_id).is_none() {
@@ -116,6 +121,74 @@ impl Document {
         Ok(())
     }
 
+    /// DOM §4.2.3 "ensure pre-insert validity" for a `Document` parent (#1727):
+    /// no Text children, at most one element and one doctype, and a doctype must precede
+    /// the element. `inserted` is the list of nodes about to become children (a single node,
+    /// or the expanded children of a DocumentFragment). Other parent kinds are unaffected.
+    fn ensure_document_pre_insert_validity(
+        &self,
+        parent_id: NodeId,
+        reference: Option<NodeId>,
+        inserted: &[NodeId],
+    ) -> Result<(), DomError> {
+        if !matches!(self.node(parent_id).kind, NodeKind::Document) {
+            return Ok(());
+        }
+        let err = || DomError::HierarchyRequest {
+            parent: parent_id,
+            child: inserted.first().copied().unwrap_or(parent_id),
+        };
+        // A Text node can never be a child of a Document.
+        if inserted
+            .iter()
+            .any(|id| matches!(self.node(*id).kind, NodeKind::Text(_)))
+        {
+            return Err(err());
+        }
+        // Consider the final child order: existing children except the ones being moved,
+        // with `inserted` spliced at the reference position.
+        let base: Vec<NodeId> = self
+            .children(parent_id)
+            .filter(|id| !inserted.contains(id))
+            .collect();
+        let position = match reference {
+            Some(reference_id) => base
+                .iter()
+                .position(|id| *id == reference_id)
+                .ok_or_else(err)?,
+            None => base.len(),
+        };
+        let mut final_order = Vec::with_capacity(base.len() + inserted.len());
+        final_order.extend_from_slice(&base[..position]);
+        final_order.extend_from_slice(inserted);
+        final_order.extend_from_slice(&base[position..]);
+
+        let element_count = final_order
+            .iter()
+            .filter(|id| matches!(self.node(**id).kind, NodeKind::Element(_)))
+            .count();
+        let doctype_count = final_order
+            .iter()
+            .filter(|id| matches!(self.node(**id).kind, NodeKind::Doctype { .. }))
+            .count();
+        if element_count > 1 || doctype_count > 1 {
+            return Err(err());
+        }
+        // A doctype must precede the element child.
+        let element_position = final_order
+            .iter()
+            .position(|id| matches!(self.node(*id).kind, NodeKind::Element(_)));
+        let doctype_position = final_order
+            .iter()
+            .position(|id| matches!(self.node(*id).kind, NodeKind::Doctype { .. }));
+        if let (Some(element), Some(doctype)) = (element_position, doctype_position)
+            && element < doctype
+        {
+            return Err(err());
+        }
+        Ok(())
+    }
+
     pub(super) fn insert_one(
         &mut self,
         parent_id: NodeId,
@@ -137,6 +210,7 @@ impl Document {
         if !parent_kind_ok {
             return Err(DomError::CannotHaveChildren(parent_id));
         }
+        self.ensure_document_pre_insert_validity(parent_id, reference, &[node_id])?;
         let inserted = match reference {
             Some(reference_id) => {
                 if self.slot_of(reference_id).is_none() {
@@ -177,7 +251,10 @@ impl Document {
         if self.slot_of(node_id).is_none() {
             return Err(DomError::UnknownNode(node_id));
         }
-        // DOM spec: inserting a node before itself is a no-op.
+        // #1728 / DOM §4.2.3: run "ensure pre-insert validity" (parent exists and accepts
+        // children) BEFORE the "referenceChild is node" no-op shortcut.
+        self.precheck_insert(parent_id, reference)?;
+        // DOM spec: inserting a node before itself is a successful no-op.
         if reference == Some(node_id) {
             return Ok(Vec::new());
         }
@@ -191,6 +268,7 @@ impl Document {
         // move (cycle through the new parent), the fragment must stay untouched instead of
         // being split between the source and the destination.
         self.precheck_insert(parent_id, reference)?;
+        self.ensure_document_pre_insert_validity(parent_id, reference, &children)?;
         for &child in &children {
             if child == parent_id || self.is_ancestor_of(child, parent_id) {
                 return Err(DomError::HierarchyRequest {

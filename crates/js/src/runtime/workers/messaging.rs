@@ -24,13 +24,67 @@ impl JsRuntime {
                 &mut self.context,
             )
             .map_err(|error| JsError::Internal(error.to_string()))?;
-        global
-            .set(
-                js_string!("document"),
-                JsValue::undefined(),
-                false,
-                &mut self.context,
-            )
+        // F6-WORKERS-DOM: no direct DOM in the worker realm, but a message-based proxy
+        // forwards queries to the owning document over the deterministic postMessage channel.
+        let dom_prelude = r#"
+var __megi_dom_seq = 0;
+var __megi_dom_pending = {};
+var __megi_dom_event_callbacks = {};
+function __megi_dom_on(type, nodeId, callback) {
+  var key = nodeId + '|' + type;
+  if (!__megi_dom_event_callbacks[key]) { __megi_dom_event_callbacks[key] = []; }
+  if (__megi_dom_event_callbacks[key].length < 32) { __megi_dom_event_callbacks[key].push(callback); }
+}
+function __megi_dom_call(method, args) {
+  var seq = ++__megi_dom_seq;
+  return new Promise(function (resolve) {
+    __megi_dom_pending[seq] = resolve;
+    postMessage({ __megi_dom_call: { seq: seq, method: method, args: args } });
+  });
+}
+function __megi_make_element(nodeId) {
+  return {
+    __megi_node_id: nodeId,
+    textContent: __megi_dom_call('textContent', [nodeId]),
+    setAttribute: function (name, value) {
+      return __megi_dom_call('setAttribute', [nodeId, name, value]);
+    },
+    setTextContent: function (text) {
+      return __megi_dom_call('setTextContent', [nodeId, text]);
+    },
+    getComputedStyle: function (property) {
+      return __megi_dom_call('getComputedStyle', [nodeId, property]);
+    },
+    addEventListener: function (type, callback) {
+      if (typeof callback === 'function') {
+        __megi_dom_on(type, nodeId, callback);
+        __megi_dom_call('listen', [nodeId, type]);
+      }
+    },
+    classList: {
+      contains: function (name) { return __megi_dom_call('classList', [nodeId, 'contains', name]); },
+      add: function (name) { return __megi_dom_call('classList', [nodeId, 'add', name]); },
+      remove: function (name) { return __megi_dom_call('classList', [nodeId, 'remove', name]); },
+      toggle: function (name) { return __megi_dom_call('classList', [nodeId, 'toggle', name]); }
+    }
+  };
+}
+var document = {
+  getElementById: function (id) {
+    return __megi_dom_call('getElementById', [id]).then(function (nodeId) {
+      return nodeId === null ? null : __megi_make_element(nodeId);
+    });
+  },
+  getElementsByTagName: function (tag) {
+    return __megi_dom_call('getElementsByTagName', [tag]).then(function (ids) {
+      return ids.map(__megi_make_element);
+    });
+  }
+};
+"#;
+        self.context
+            .eval(Source::from_bytes(dom_prelude))
+            .map(|_| ())
             .map_err(|error| JsError::Internal(error.to_string()))?;
         global
             .set(

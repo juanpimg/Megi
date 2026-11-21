@@ -216,6 +216,9 @@ pub mod webfonts;
 pub mod ws_bridge;
 
 // Pipeline stages: sources live in `src/pipeline/`.
+/// Real-page performance budgets (F4).
+#[path = "pipeline/budget.rs"]
+mod budget;
 /// Layout/paint/raster and stage orchestration.
 #[path = "pipeline/final_stage.rs"]
 mod final_stage;
@@ -225,6 +228,7 @@ mod imports;
 /// Public configuration types and resource caps.
 #[path = "pipeline/options.rs"]
 mod options;
+pub use budget::*;
 /// Observability and result types.
 #[path = "pipeline/output.rs"]
 mod output;

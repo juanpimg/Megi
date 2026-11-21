@@ -113,6 +113,19 @@ fn size_container_supports_height_queries() {
 }
 
 #[test]
+fn block_axis_percentage_resolves_against_block_size() {
+    // #1843: a percentage in a block-axis query (min-height) must resolve against the
+    // container's block size (100px), not its inline size (1000px). 50% => 50px, so a
+    // 100px-tall container matches; against inline size it would demand 500px and fail.
+    let page = page(
+        ".box { width: 1000px; height: 100px; container-type: size; }
+         @container (min-height: 50%) { .child { width: 66px; } }",
+        800.0,
+    );
+    assert_eq!(style(&page, page.child).width, Length::Px(66.0));
+}
+
+#[test]
 fn inline_size_container_rejects_height_queries() {
     let page = page(
         ".box { width: 300px; height: 200px; container-type: inline-size; }

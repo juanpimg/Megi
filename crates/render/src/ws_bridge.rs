@@ -50,9 +50,16 @@ impl LiveWebSocketTransport {
                 let result = lock(&pump_client).recv();
                 match result {
                     Ok(frame) => match frame.opcode {
-                        Opcode::Text | Opcode::Binary => {
+                        // #1711: binary frames must keep their exact bytes; only Text frames
+                        // are decoded as UTF-8 strings.
+                        Opcode::Text => {
                             let text = String::from_utf8_lossy(&frame.payload).into_owned();
                             if tx.send(WebSocketEvent::Message(text)).is_err() {
+                                break;
+                            }
+                        }
+                        Opcode::Binary => {
+                            if tx.send(WebSocketEvent::Binary(frame.payload)).is_err() {
                                 break;
                             }
                         }
@@ -66,6 +73,9 @@ impl LiveWebSocketTransport {
                             } else {
                                 websocket::close_code::NO_STATUS
                             };
+                            // #1825: a remote close ends the connection; stop the pump so
+                            // is_open() reports the truth and the socket can be released.
+                            pump_stop.store(true, Ordering::Relaxed);
                             let _ = tx.send(WebSocketEvent::Close(code));
                             break;
                         }
@@ -80,6 +90,9 @@ impl LiveWebSocketTransport {
                         continue; // no frame yet; loop and re-check `stop`
                     }
                     Err(error) => {
+                        // #1825: a transport error also ends the pump; mark stop so the
+                        // transport no longer reports itself as open.
+                        pump_stop.store(true, Ordering::Relaxed);
                         let _ = tx.send(WebSocketEvent::Error(error.to_string()));
                         break;
                     }
@@ -113,5 +126,97 @@ impl WebSocketTransport for LiveWebSocketTransport {
     fn close(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         let _ = lock(&self.client).close(websocket::close_code::NORMAL);
+    }
+}
+
+// #1825: dropping a live transport must stop its receive pump, otherwise a render
+// with an open WebSocket leaks the pump thread and the socket.
+impl Drop for LiveWebSocketTransport {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        let _ = lock(&self.client).close(websocket::close_code::NORMAL);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+
+    /// Completes a WS handshake on a loopback socket, then sends a Close frame. The pump
+    /// must observe the remote Close, set `stop`, and make `is_open()` return false (#1825).
+    #[test]
+    fn remote_close_stops_the_pump() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("timeout");
+            let mut bytes = Vec::new();
+            let mut byte = [0u8; 1];
+            while !bytes.ends_with(b"\r\n\r\n") && bytes.len() < 16 * 1024 {
+                match stream.read(&mut byte) {
+                    Ok(1) => bytes.push(byte[0]),
+                    _ => break,
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes).into_owned();
+            let key = request
+                .lines()
+                .find_map(|line| {
+                    line.split_once(':').and_then(|(name, value)| {
+                        if name.trim().eq_ignore_ascii_case("sec-websocket-key") {
+                            Some(value.trim().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .unwrap_or_default();
+            let response = format!(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n\r\n",
+                websocket::accept_value(&key)
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write handshake");
+            stream.flush().expect("flush");
+            std::thread::sleep(Duration::from_millis(50));
+            // Server-to-client Close frame (unmasked), code 1000.
+            let frame = websocket::Frame {
+                fin: true,
+                opcode: Opcode::Close,
+                masked: false,
+                payload: websocket::close_code::NORMAL.to_be_bytes().to_vec(),
+            };
+            let bytes = websocket::encode_frame(&frame, [0; 4]);
+            stream.write_all(&bytes).expect("write close");
+            let _ = stream.flush();
+            std::thread::sleep(Duration::from_millis(200));
+        });
+
+        let url = format!("ws://127.0.0.1:{port}/chat");
+        let options = FetchOptions {
+            connect_timeout: Duration::from_secs(2),
+            read_timeout: Duration::from_secs(2),
+            ..FetchOptions::default()
+        };
+        let transport = LiveWebSocketTransport::connect(&url, &options).expect("connect");
+        assert!(
+            transport.is_open(),
+            "pump must be running right after connect"
+        );
+        // Wait for the pump to observe the remote Close frame and set `stop`.
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while transport.is_open() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            !transport.is_open(),
+            "a remote Close must stop the pump (#1825)"
+        );
+        let _ = server.join();
     }
 }

@@ -148,6 +148,42 @@
     });
   }
 
+  // #1747: HTML §6.1.6.2 registers `on<event>` handler attributes as event
+  // listeners at assignment time. Represent each one as a marked entry in
+  // `_listeners` so invocation follows registration order and the property
+  // handler participates in stopImmediatePropagation like any other listener.
+  var XHR_HANDLER_TYPES = [
+    'readystatechange', 'loadstart', 'progress', 'abort',
+    'error', 'load', 'timeout', 'loadend'
+  ];
+  function defineHandlerProperty(proto, type) {
+    Object.defineProperty(proto, 'on' + type, {
+      configurable: true,
+      enumerable: true,
+      get: function () {
+        var entry = this._onHandlerEntries && this._onHandlerEntries[type];
+        return entry ? entry.fn : null;
+      },
+      set: function (fn) {
+        if (!this._onHandlerEntries) { this._onHandlerEntries = {}; }
+        var prev = this._onHandlerEntries[type];
+        if (prev) {
+          var old = this._listeners[type];
+          if (old) {
+            this._listeners[type] = old.filter(function (e) { return e !== prev; });
+          }
+          delete this._onHandlerEntries[type];
+        }
+        if (typeof fn === 'function') {
+          var entry = { fn: fn, capture: false, once: false, isOnProperty: true };
+          var list = this._listeners[type] || (this._listeners[type] = []);
+          list.push(entry);
+          this._onHandlerEntries[type] = entry;
+        }
+      }
+    });
+  }
+
   function dispatchTargetEvent(target, event) {
     if (!event || typeof event.type !== "string") {
       throw new TypeError("Failed to execute 'dispatchEvent': parameter 1 is not of type 'Event'.");
@@ -162,11 +198,9 @@
       if (typeof origStopImm === "function") { origStopImm.call(this); }
     };
 
-    var propHandler = target["on" + event.type];
-    if (typeof propHandler === "function") {
-      propHandler.call(target, event);
-    }
-
+    // #1747: `on<event>` handlers are registered as listeners (see
+    // defineHandlerProperty), so they fire here in registration order; do not
+    // invoke the property handler ahead of the listener list.
     var list = target._listeners[event.type];
     if (list && list.length > 0 && !stopped) {
       var snapshot = list.slice();

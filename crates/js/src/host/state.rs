@@ -158,4 +158,6 @@ pub(crate) struct Host {
     pub idl_values: HashMap<NodeId, String>,
     /// IDL (dirty) `checked` state of a control, distinct from its attribute (#1953).
     pub idl_checked: HashMap<NodeId, bool>,
+    /// Worker DOM-proxy event subscriptions: (worker id, NodeId, event type, proxy token).
+    pub(crate) worker_dom_listeners: Vec<(u32, megi_core::NodeId, String, u64)>,
 }

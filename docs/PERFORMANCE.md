@@ -387,6 +387,17 @@ Filas nuevas de r33–r36 (19) que no tienen par en r32: matriz completa
 
 ## 14. Limitaciones
 
+- **Medición de texto en `layout/*` y `pipeline/*` (#1686)**: estas filas componen
+  el layout con `megi_layout::layout_document`, que usa el **measurer fallback**
+  determinista (ratio CSS, `DefaultTextMeasurer`) en lugar del
+  `FontTextMeasurer` de producción que mide OpenType real vía `megi-fonts`. Por
+  tanto los números de `layout/*` y `pipeline/*` (p. ej. `layout/realistic-1mb`
+  35,76 ms y `pipeline/html-to-png` 110,12 ms) **no incluyen el coste de
+  shaping/medición de fuentes real**; una regresión en `FontTextMeasurer` no se
+  ve en estas filas. Solo la fila `render/html-to-png` (crate `render`
+  end-to-end) exercise el measurer de producción. Los presupuestos de §11 para
+  `layout/*`/`pipeline/*` están calibrados contra el measurer barato; no los
+  leas como medida de shaping.
 - **`pipeline/html-to-png` no usa render**: se mantiene por compatibilidad;
   `render/html-to-png` (nuevo) es la medida correcta del pipeline real.
 - **La ventana r36 no fue limpia**: load 8,1–13,0 por el navegador/editor del

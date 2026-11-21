@@ -349,5 +349,11 @@
     });
   };
 
+  // #1747: install `on<event>` accessors that register as listeners at assignment.
+  for (var _i = 0; _i < XHR_HANDLER_TYPES.length; _i++) {
+    defineHandlerProperty(XMLHttpRequest.prototype, XHR_HANDLER_TYPES[_i]);
+    defineHandlerProperty(XMLHttpRequestUpload.prototype, XHR_HANDLER_TYPES[_i]);
+  }
+
   globalObj.XMLHttpRequest = XMLHttpRequest;
 })();

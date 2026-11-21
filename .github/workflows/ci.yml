@@ -108,6 +108,7 @@ jobs:
           tools.test_png_check
           tools.test_real_site_check
           tools.test_check_arch
+          tools.test_soak_fuzz
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)

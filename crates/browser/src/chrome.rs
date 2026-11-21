@@ -37,6 +37,7 @@ mod drawing;
 mod dropdown;
 mod history_menu;
 mod menus;
+mod native_widgets;
 mod navigation;
 mod status_bar;
 mod tab_strip;
@@ -368,6 +369,7 @@ pub fn draw_save_as_dialog(
     dest_height: u32,
     scale: f32,
     name: &str,
+    format: &str,
 ) {
     if dest_width == 0 || dest_height == 0 {
         return;
@@ -403,13 +405,58 @@ pub fn draw_save_as_dialog(
     );
     drawing::draw_text(
         &mut pixmap,
-        &format!("{name}|  (Enter save, Esc cancel)"),
+        &format!("{name}  [{format}]  (Tab format, Enter save, Esc cancel)"),
         x + 14.0,
         y + 58.0,
         scale,
         14.0,
         Color::WHITE,
     );
+    for (index, color) in pixmap.pixels.iter().enumerate() {
+        if color.a == 0 || index >= dest.len() {
+            continue;
+        }
+        if color.a == 255 {
+            dest[index] = u32::from(color.r) << 24
+                | u32::from(color.g) << 16
+                | u32::from(color.b) << 8
+                | 0xFF;
+        }
+    }
+}
+
+#[path = "chrome/downloads_panel.rs"]
+mod downloads_panel;
+pub use downloads_panel::draw_downloads_panel;
+
+/// Draws a native-style widget overlay (focus/selection frame) at a page-CSS rectangle.
+/// The rectangle is mapped to physical pixels using the chrome offset and scroll, matching
+/// the hit-testing path, so the overlay lines up with the painted control.
+pub fn draw_native_widget(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    scroll_y: u32,
+    rect: crate::links::CssRect,
+    visual: crate::forms::WidgetVisual,
+) {
+    if dest_width == 0 || dest_height == 0 {
+        return;
+    }
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let mut pixmap = Pixmap::new(dest_width, dest_height);
+    let screen_rect = crate::links::CssRect::new(
+        rect.x,
+        rect.y + CHROME_HEIGHT - scroll_y as f32,
+        rect.width,
+        rect.height,
+    );
+    native_widgets::paint_native_widget(&mut pixmap, screen_rect, scale, visual);
     for (index, color) in pixmap.pixels.iter().enumerate() {
         if color.a == 0 || index >= dest.len() {
             continue;

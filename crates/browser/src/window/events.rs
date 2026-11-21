@@ -309,6 +309,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     self.request_repaint();
                     return;
                 }
+                if self.handle_download_panel_key(&event.logical_key, ctrl_pressed) {
+                    return;
+                }
                 if self.save_dialog.is_some()
                     && self.handle_save_dialog_key(
                         &event.logical_key,
@@ -448,6 +451,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         self.save_session();
         // Dropping the pool's senders stops every per-site worker; join cleanly.
         if let Some(pool) = self.render_pool.take() {
+            pool.join();
+        }
+        if let Some(pool) = self.process_pool.take() {
             pool.join();
         }
     }

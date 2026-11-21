@@ -23,6 +23,16 @@ pub(crate) struct PlacedFloat {
     pub(crate) side: Float,
     pub(crate) margin_box: Rect,
 }
+
+/// Horizontal anchor for a float of width `margin_box_w` between `left` and `right` (CSS 2.2
+/// §9.5.1): left floats hug the left edge, right floats hug the right edge (#1710).
+fn float_anchor_x(side: Float, left: f32, right: f32, margin_box_w: f32) -> f32 {
+    if side == Float::Left {
+        left
+    } else {
+        right - margin_box_w
+    }
+}
 /// Places a float and returns its margin box bottom edge (absolute y).
 pub(crate) fn place_float(
     child: &mut LayoutBox,
@@ -57,11 +67,7 @@ pub(crate) fn place_float(
             .iter()
             .map(|placed| placed.margin_box.y + placed.margin_box.height)
             .fold(top, f32::max);
-        let x = if side == Float::Left {
-            cb.x
-        } else {
-            cb.x + cb.width - margin_box_w
-        };
+        let x = float_anchor_x(side, cb.x, cb.x + cb.width, margin_box_w);
         return position_float(
             child,
             x,
@@ -74,11 +80,7 @@ pub(crate) fn place_float(
         );
     }
     if !margin_box_h.is_finite() {
-        let x = if side == Float::Left {
-            cb.x
-        } else {
-            cb.x + cb.width - margin_box_w
-        };
+        let x = float_anchor_x(side, cb.x, cb.x + cb.width, margin_box_w);
         return position_float(
             child,
             x,
@@ -116,11 +118,7 @@ pub(crate) fn place_float(
             }
         }
 
-        let x = if side == Float::Left {
-            left_limit
-        } else {
-            right_limit - margin_box_w
-        };
+        let x = float_anchor_x(side, left_limit, right_limit, margin_box_w);
         if x >= cb.x && x + margin_box_w <= right_limit + 0.001 {
             return position_float(
                 child,
@@ -140,9 +138,12 @@ pub(crate) fn place_float(
         }
         top = next_top;
     }
+    // #1710: even after moving below the blocking floats, a right float must hug the
+    // containing block's right edge — not fall back to cb.x (its left edge).
+    let x = float_anchor_x(side, cb.x, cb.x + cb.width, margin_box_w);
     position_float(
         child,
-        cb.x,
+        x,
         top,
         side,
         margin_box_w,
@@ -221,4 +222,34 @@ pub(crate) fn float_exclusions(
         }
     }
     (left, right)
+}
+
+#[cfg(test)]
+mod anchor_tests {
+    use super::*;
+
+    #[test]
+    fn right_float_anchors_to_the_right_edge_at_every_fallback() {
+        // #1710: the final "move below the floats" fallback used to place a right float at
+        // the containing block's *left* edge (cb.x) instead of against its right edge.
+        let cb = Rect::new(50.0, 0.0, 200.0, 600.0);
+        let width = 40.0;
+        assert_close(
+            float_anchor_x(Float::Left, cb.x, cb.x + cb.width, width),
+            50.0,
+            "left float hugs the left edge",
+        );
+        assert_close(
+            float_anchor_x(Float::Right, cb.x, cb.x + cb.width, width),
+            210.0, // cb.x + cb.width - width
+            "right float hugs the right edge",
+        );
+    }
+
+    fn assert_close(actual: f32, expected: f32, what: &str) {
+        assert!(
+            (actual - expected).abs() <= 0.001,
+            "{what}: expected {expected}, got {actual}"
+        );
+    }
 }

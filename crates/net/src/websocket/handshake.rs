@@ -30,6 +30,7 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
     let mut upgrade: Option<String> = None;
     let mut connection: Option<String> = None;
     let mut accept: Option<String> = None;
+    let mut server_version: Option<String> = None;
     for line in lines {
         if line.trim().is_empty() {
             break;
@@ -47,7 +48,18 @@ pub fn validate_handshake_response(head: &str, key: &str) -> Result<(), FetchErr
             entry.push_str(value.trim());
         } else if name.trim().eq_ignore_ascii_case("sec-websocket-accept") {
             accept = Some(value.trim().to_owned());
+        } else if name.trim().eq_ignore_ascii_case("sec-websocket-version") {
+            server_version = Some(value.trim().to_owned());
         }
+    }
+    // #1640 / RFC 6455 §4.1: if the server sends a Sec-WebSocket-Version header it must be 13;
+    // an older draft must not be silently accepted, even with a matching Accept value.
+    if let Some(version) = server_version
+        && version != "13"
+    {
+        return Err(protocol(&format!(
+            "unsupported Sec-WebSocket-Version: {version}"
+        )));
     }
     let upgrade_ok = upgrade.is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
     if !upgrade_ok {

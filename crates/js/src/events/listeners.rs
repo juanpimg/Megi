@@ -211,6 +211,45 @@ pub(crate) fn dispatch_submit_event(
     Ok(result.to_boolean())
 }
 
+/// Forwards a dispatched DOM event to workers subscribed through the DOM proxy
+/// (F6-WORKERS-DOM), using the existing deterministic worker message pump.
+pub(crate) fn forward_dom_event_to_workers(
+    target: TargetKey,
+    event_type: &str,
+    context: &mut Context,
+) {
+    let node = match target {
+        TargetKey::Node(handle) => host_ref(context)
+            .ok()
+            .and_then(|host| host.nodes.get(handle as usize).copied()),
+        _ => None,
+    };
+    let Some(node) = node else { return };
+    let mut deliveries: Vec<u64> = Vec::new();
+    if let Ok(host) = host_ref(context) {
+        for (_worker_id, registered_node, registered_type, token) in &host.worker_dom_listeners {
+            if *registered_node == node && registered_type == event_type {
+                deliveries.push(*token);
+            }
+        }
+    }
+    if deliveries.is_empty() {
+        return;
+    }
+    if let Ok(mut host) = host_cell(context) {
+        for worker in host.workers.iter_mut().flatten() {
+            for token in &deliveries {
+                let message = format!(
+                    "{{\"__megi_dom_event\":{{\"type\":\"{}\",\"token\":{}}}}}",
+                    event_type.replace('\\', "\\\\").replace('"', "\\\""),
+                    token
+                );
+                worker.to_worker.push_back(message);
+            }
+        }
+    }
+}
+
 pub(crate) fn dispatch_event(
     this: &JsValue,
     args: &[JsValue],
@@ -232,6 +271,7 @@ pub(crate) fn dispatch_event(
         .to_string(context)
         .map(|text| text.to_std_string_escaped())
         .map_err(|error| js_error(error.to_string()))?;
+    forward_dom_event_to_workers(target, &event_type, context);
     let bubbles = prop(&event, "bubbles", context)
         .ok()
         .and_then(|value| value.as_boolean())

@@ -52,7 +52,7 @@ fn rgb(color: Color) -> u32 {
 fn save_as_dialog_paints_a_centered_panel() {
     // F7-SAVE-AS / #988: the dialog must be a visible overlay, not an invisible state.
     let mut dest = vec![0u32; 400 * 200];
-    draw_save_as_dialog(&mut dest, 400, 200, 1.0, "report.html");
+    draw_save_as_dialog(&mut dest, 400, 200, 1.0, "report.html", "HTML");
     let painted = dest.iter().filter(|&&pixel| pixel != 0).count();
     assert!(
         painted > 1000,

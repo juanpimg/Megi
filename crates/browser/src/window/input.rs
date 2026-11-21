@@ -200,6 +200,7 @@ impl WindowApp {
             MenuAction::Reload => self.reload(),
             MenuAction::SavePagePng => self.save_frame_png(),
             MenuAction::SavePageHtml => self.save_frame_html(),
+            MenuAction::SavePageResources => self.save_page_resources(),
         }
         self.request_repaint();
     }
@@ -211,6 +212,18 @@ impl WindowApp {
             Ok(resource) => {
                 let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
                 self.download.begin("imagen del menú contextual");
+                // F7-SAVE-AS: track the resource through the bounded manager so progress,
+                // caps and pause/resume/cancel are available to the shell.
+                let size = resource.bytes.len() as u64;
+                if let Ok(id) = self.download_manager.enqueue(
+                    resource.url.as_str(),
+                    crate::download::DownloadKind::Image,
+                    Some(size),
+                ) && self.download_manager.start(id).is_ok()
+                {
+                    let _ = self.download_manager.progress(id, size);
+                    let _ = self.download_manager.complete(id);
+                }
                 let result = crate::download::save_image(&dir, &resource.url, &resource.bytes);
                 self.finish_download(result);
             }

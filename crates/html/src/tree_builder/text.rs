@@ -37,8 +37,6 @@ impl TreeBuilder {
         let Some(s) = self.take_text_budget(s) else {
             return;
         };
-        let s = s.to_owned();
-        let s = s.as_str();
         // Fast path: outside foster-parenting the appropriate insertion location is simply
         // the current node, unless it is an HTML `<template>` (whose characters are
         // redirected into its inert contents fragment). Avoids the full location
@@ -109,8 +107,6 @@ impl TreeBuilder {
         let Some(text) = self.take_text_budget(text) else {
             return;
         };
-        let text = text.to_owned();
-        let text = text.as_str();
         if !self.foster_parenting
             && let Some(current) = self.current_node()
             && let Some(element) = self.doc.node(current).as_element()

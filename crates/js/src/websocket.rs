@@ -24,11 +24,34 @@ const WEBSOCKET_PRELUDE: &str = r####"
     this.url = target;
     this.readyState = 0; // CONNECTING
     this.bufferedAmount = 0;
-    this.onopen = null;
-    this.onmessage = null;
-    this.onclose = null;
-    this.onerror = null;
     this._listeners = {};
+
+    // #1747: register `on<event>` handlers as listeners at assignment time
+    // (HTML §6.1.6.2), so they fire in registration order relative to
+    // addEventListener and participate in the same listener dispatch.
+    var WS_HANDLER_TYPES = ['open', 'message', 'close', 'error'];
+    (function (obj) {
+      for (var i = 0; i < WS_HANDLER_TYPES.length; i++) (function (type) {
+        var stored = null;
+        Object.defineProperty(obj, 'on' + type, {
+          configurable: true,
+          enumerable: true,
+          get: function () { return stored; },
+          set: function (fn) {
+            // Replace the previous property handler in the listener list.
+            if (stored !== null) {
+              obj._listeners[type] = (obj._listeners[type] || []).filter(function (f) {
+                return f !== stored;
+              });
+            }
+            stored = typeof fn === 'function' ? fn : null;
+            if (stored === null) { return; }
+            if (!obj._listeners[type]) { obj._listeners[type] = []; }
+            if (obj._listeners[type].indexOf(stored) < 0) { obj._listeners[type].push(stored); }
+          }
+        });
+      })(WS_HANDLER_TYPES[i]);
+    })(this);
 
     this.addEventListener = function (type, fn) {
       if (typeof fn !== "function") { return; }
@@ -40,8 +63,8 @@ const WEBSOCKET_PRELUDE: &str = r####"
       self._listeners[type] = list.filter(function (f) { return f !== fn; });
     };
     this._fire = function (type, event) {
-      var handler = self["on" + type];
-      if (typeof handler === "function") { try { handler(event); } catch (e) {} }
+      // #1747: `on<event>` handlers are registered as listeners above, so they
+      // fire here in registration order; do not invoke the property handler first.
       var list = (self._listeners[type] || []).slice();
       for (var i = 0; i < list.length; i++) { try { list[i](event); } catch (e) {} }
     };
@@ -228,11 +251,37 @@ pub fn poll(context: &mut Context) -> usize {
             .any(|event| matches!(event, WebSocketEvent::Close(_)));
         let args: Vec<JsValue> = events
             .into_iter()
-            .map(|event| match event {
-                WebSocketEvent::Open => vector(context, &["open"]),
-                WebSocketEvent::Message(text) => vector(context, &["message", &text]),
-                WebSocketEvent::Close(code) => vector(context, &["close", &code.to_string()]),
-                WebSocketEvent::Error(message) => vector(context, &["error", &message]),
+            .map(|event| {
+                use boa_engine::object::builtins::{AlignedVec, JsArray, JsArrayBuffer};
+                let parts: Vec<JsValue> = match event {
+                    WebSocketEvent::Open => vec![js_string!("open").into()],
+                    WebSocketEvent::Message(text) => vec![
+                        js_string!("message").into(),
+                        js_string!(text.as_str()).into(),
+                        js_string!("text").into(),
+                    ],
+                    // #1711: deliver the exact bytes as an ArrayBuffer, never a lossy string.
+                    WebSocketEvent::Binary(bytes) => {
+                        let block = AlignedVec::from_iter(0, bytes.iter().copied());
+                        let Ok(buffer) = JsArrayBuffer::from_byte_block(block, context) else {
+                            return vector(context, &["error", "binary message too large"]);
+                        };
+                        vec![
+                            js_string!("message").into(),
+                            JsValue::from(buffer),
+                            js_string!("binary").into(),
+                        ]
+                    }
+                    WebSocketEvent::Close(code) => vec![
+                        js_string!("close").into(),
+                        js_string!(code.to_string().as_str()).into(),
+                    ],
+                    WebSocketEvent::Error(message) => vec![
+                        js_string!("error").into(),
+                        js_string!(message.as_str()).into(),
+                    ],
+                };
+                JsValue::from(JsArray::from_iter(parts, context))
             })
             .collect();
         let array = boa_engine::object::builtins::JsArray::from_iter(args, context);

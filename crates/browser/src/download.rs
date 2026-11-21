@@ -21,5 +21,9 @@ mod save;
 pub use save::*;
 mod progress;
 pub use progress::*;
+mod batch;
+pub use batch::*;
+mod manager;
+pub use manager::*;
 #[cfg(test)]
 mod tests;

@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 63,
-    "partial": 5,
+    "implemented": 69,
+    "partial": 1,
     "known": 70,
-    "percent": 90,
+    "percent": 99,
     "unverified": [],
     "invalid_states": []
   },
@@ -32,10 +32,10 @@
     },
     {
       "id": "F4",
-      "implemented": 11,
-      "partial": 1,
+      "implemented": 13,
+      "partial": 0,
       "known": 13,
-      "percent": 85
+      "percent": 100
     },
     {
       "id": "F5",
@@ -46,67 +46,27 @@
     },
     {
       "id": "F6",
-      "implemented": 10,
+      "implemented": 11,
       "partial": 0,
       "known": 11,
-      "percent": 91
+      "percent": 100
     },
     {
       "id": "F7",
-      "implemented": 6,
-      "partial": 3,
+      "implemented": 8,
+      "partial": 1,
       "known": 9,
-      "percent": 67
+      "percent": 89
     },
     {
       "id": "X",
-      "implemented": 2,
-      "partial": 1,
+      "implemented": 3,
+      "partial": 0,
       "known": 3,
-      "percent": 67
+      "percent": 100
     }
   ],
   "missing": [
-    {
-      "id": "F4-ARABIC-SHAPING",
-      "area": "F4",
-      "name": "Shaping contextual de árabe/hebreo/tailandés",
-      "source": "issue #987",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 987,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F4-PERF-BUDGETS",
-      "area": "F4",
-      "name": "Presupuestos de rendimiento de rasterizado/decoders en webs reales",
-      "source": "issue #1014 / PROGRESS.md F4 pending",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 1014,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F6-WORKERS-DOM",
-      "area": "F6",
-      "name": "Web Workers con acceso a DOM",
-      "source": "PROGRESS.md F6 pending",
-      "state": "missing",
-      "evidence": "none",
-      "issue": "",
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F7-SAVE-AS",
-      "area": "F7",
-      "name": "Diálogo visual de guardado y descarga de recursos",
-      "source": "issue #988",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 988,
-      "reason": "no requiere evidencia"
-    },
     {
       "id": "F7-A11Y",
       "area": "F7",
@@ -115,26 +75,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 989,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F7-ISOLATION",
-      "area": "F7",
-      "name": "Aislamiento multiproceso por pestaña",
-      "source": "issue #946",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 946,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "X-FUZZ-LONG",
-      "area": "X",
-      "name": "Campañas largas de fuzzing (16 targets)",
-      "source": "PROGRESS.md cross-cutting",
-      "state": "partial",
-      "evidence": "none",
-      "issue": "",
       "reason": "no requiere evidencia"
     }
   ]

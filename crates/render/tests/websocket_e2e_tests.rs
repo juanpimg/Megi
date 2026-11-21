@@ -1,13 +1,129 @@
 //! #1534: end-to-end — a page script opens a real WebSocket, sends a message and receives the
 //! echo, with the JS handler mutating the DOM (verified via the document title).
+//!
+//! #1653: the test helper is hardened to the same limits as the code it exercises —
+//! bounded handshake reads, 16/64-bit frame lengths, unique temp names and RAII cleanup.
 #![cfg(feature = "js")]
-#![cfg(feature = "js")]
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::TcpListener;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::JoinHandle;
 
 use megi_net::websocket;
 use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
+
+/// #1653(a): a peer that never terminates the handshake header must not grow the
+/// buffer without limit. Mirrors the 64 KiB cap used by the net auth tests.
+const MAX_HANDSHAKE_HEAD_BYTES: usize = 64 * 1024;
+
+fn read_handshake_head(stream: &mut impl Read) -> io::Result<Vec<u8>> {
+    let mut head = Vec::new();
+    let mut byte = [0u8; 1];
+    while !head.ends_with(b"\r\n\r\n") {
+        if head.len() >= MAX_HANDSHAKE_HEAD_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "WebSocket handshake header exceeds 64 KiB",
+            ));
+        }
+        if stream.read(&mut byte)? == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "WebSocket handshake header incomplete",
+            ));
+        }
+        head.push(byte[0]);
+    }
+    Ok(head)
+}
+
+/// #1653(b): build an unmasked server text frame with the correct 7/16/64-bit
+/// length encoding. The old helper always wrote a single length byte, truncating
+/// payloads of 126 bytes or more.
+fn build_text_frame(payload: &[u8]) -> Vec<u8> {
+    let mut frame = vec![0x81];
+    if payload.len() <= 125 {
+        frame.push(payload.len() as u8);
+    } else if payload.len() <= u16::MAX as usize {
+        frame.push(126);
+        frame.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+    } else {
+        frame.push(127);
+        frame.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+    }
+    frame.extend_from_slice(payload);
+    frame
+}
+
+/// #1653(b): read one masked client frame, including extended length encodings,
+/// and return its opcode and unmasked payload.
+fn read_client_frame(stream: &mut impl Read) -> io::Result<Option<(u8, Vec<u8>)>> {
+    let mut header = [0u8; 2];
+    if stream.read_exact(&mut header).is_err() {
+        return Ok(None);
+    }
+    let opcode = header[0] & 0x0F;
+    let len7 = (header[1] & 0x7F) as usize;
+    let len = if len7 < 126 {
+        len7
+    } else if len7 == 126 {
+        let mut bytes = [0u8; 2];
+        stream.read_exact(&mut bytes)?;
+        u16::from_be_bytes(bytes) as usize
+    } else {
+        let mut bytes = [0u8; 8];
+        stream.read_exact(&mut bytes)?;
+        u64::from_be_bytes(bytes) as usize
+    };
+    // A length this large cannot come from a browser test message; reject it
+    // instead of allocating an unbounded buffer (#1653(a)).
+    if len > MAX_HANDSHAKE_HEAD_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "WebSocket frame payload too large",
+        ));
+    }
+    let mut rest = vec![0u8; 4 + len];
+    stream.read_exact(&mut rest)?;
+    let mut payload = rest[4..].to_vec();
+    websocket::mask(&mut payload, [rest[0], rest[1], rest[2], rest[3]]);
+    Ok(Some((opcode, payload)))
+}
+
+/// #1653(c): a process-wide counter so repeated tests never reuse a temp name.
+static E2E_FIXTURE_SEQ: AtomicUsize = AtomicUsize::new(0);
+
+fn next_fixture_path(prefix: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "megi-{}-{}-{}.html",
+        prefix,
+        std::process::id(),
+        E2E_FIXTURE_SEQ.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+/// #1653(d): remove the temp fixture on every exit path, including a failing
+/// assertion or panic, instead of only after the happy-path asserts.
+struct TempFixture(PathBuf);
+
+impl TempFixture {
+    fn new(prefix: &str, contents: &str) -> io::Result<Self> {
+        let path = next_fixture_path(prefix);
+        std::fs::write(&path, contents)?;
+        Ok(Self(path))
+    }
+
+    fn url(&self) -> String {
+        format!("file://{}", self.0.display())
+    }
+}
+
+impl Drop for TempFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
 
 fn spawn_echo_server() -> (u16, JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -16,14 +132,10 @@ fn spawn_echo_server() -> (u16, JoinHandle<()>) {
         let Ok((mut stream, _)) = listener.accept() else {
             return;
         };
-        let mut head = Vec::new();
-        let mut byte = [0u8; 1];
-        while !head.ends_with(b"\r\n\r\n") {
-            if stream.read(&mut byte).unwrap_or(0) == 0 {
-                return;
-            }
-            head.push(byte[0]);
-        }
+        let head = match read_handshake_head(&mut stream) {
+            Ok(head) => head,
+            Err(_) => return,
+        };
         let key = String::from_utf8_lossy(&head)
             .lines()
             .find_map(|line| {
@@ -44,30 +156,18 @@ fn spawn_echo_server() -> (u16, JoinHandle<()>) {
         let _ = stream.flush();
 
         // Echo the first text frame, then exit (the test joins this thread).
-        for _ in 0..1 {
-            let mut header = [0u8; 2];
-            if stream.read_exact(&mut header).is_err() {
-                break;
-            }
-            let len = (header[1] & 0x7F) as usize;
-            let mut rest = vec![0u8; 4 + len];
-            if stream.read_exact(&mut rest).is_err() {
-                break;
-            }
-            let mut payload = rest[4..].to_vec();
-            websocket::mask(&mut payload, [rest[0], rest[1], rest[2], rest[3]]);
-            let opcode = header[0] & 0x0F;
-            if opcode == 0x1 {
-                // text -> echo
-                let mut echo = vec![0x81, len as u8];
-                echo.extend_from_slice(&payload);
-                if stream.write_all(&echo).is_err() {
+        loop {
+            match read_client_frame(&mut stream) {
+                Ok(Some((0x1, payload))) => {
+                    let echo = build_text_frame(&payload);
+                    if stream.write_all(&echo).is_err() {
+                        break;
+                    }
+                    let _ = stream.flush();
                     break;
                 }
-                let _ = stream.flush();
-            } else if opcode == 0x8 {
-                // close
-                break;
+                Ok(Some((0x8, _))) | Ok(None) | Err(_) => break,
+                Ok(Some(_)) => continue,
             }
         }
     });
@@ -107,18 +207,12 @@ fn page_script_exchanges_messages_over_real_websocket() {
            ws.onmessage = function (e) {{ var p = document.createElement('p'); p.id = 'wsresult'; p.textContent = e.data; document.body.appendChild(p); }}; \
          </script></body></html>"
     );
-    let path = std::env::temp_dir().join(format!(
-        "megi-ws-e2e-{}-{}.html",
-        std::process::id(),
-        std::sync::atomic::AtomicUsize::new(0).fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::write(&path, html).expect("write fixture");
+    let page = TempFixture::new("ws-e2e", &html).expect("write fixture");
     let options = RenderOptions {
         viewport: Viewport::new(400, 300).expect("viewport"),
         ..RenderOptions::default()
     };
-    let url = format!("file://{}", path.display());
-    let output = render_url(&url, &options).expect("render");
+    let output = render_url(&page.url(), &options).expect("render");
     let result = output
         .document
         .get_element_by_id("wsresult")
@@ -128,8 +222,7 @@ fn page_script_exchanges_messages_over_real_websocket() {
         result, "hello-from-page",
         "WebSocket echo must reach the DOM: {result:?}"
     );
-    let _ = std::fs::remove_file(&path);
-    let _ = server.join();
+    server.join().expect("ws server");
 }
 
 #[test]
@@ -139,15 +232,14 @@ fn websocket_is_blocked_when_no_network_is_enabled() {
         document.body.setAttribute('data-state', String(ws.readyState));\
         ws.onerror = function (e) { document.body.setAttribute('data-error', e.message || 'err'); };\
     </script></body></html>";
-    let path = std::env::temp_dir().join(format!("megi-ws-nonet-{}.html", std::process::id()));
-    std::fs::write(&path, html).expect("write fixture");
+    let page = TempFixture::new("ws-nonet", html).expect("write fixture");
     let options = RenderOptions {
         viewport: Viewport::new(320, 200).expect("viewport"),
         scripting: ScriptingMode::Enabled,
         no_network: true,
         ..RenderOptions::default()
     };
-    let output = render_url(&format!("file://{}", path.display()), &options).expect("render");
+    let output = render_url(&page.url(), &options).expect("render");
     let body = output.document.body().expect("body");
     let elem = output
         .document
@@ -161,7 +253,6 @@ fn websocket_is_blocked_when_no_network_is_enabled() {
         "expected --no-network error, got {:?}",
         elem.get_attribute("data-error")
     );
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
@@ -216,4 +307,64 @@ fn websocket_enforces_csp_connect_src() {
     assert_eq!(elem.get_attribute("data-echo"), Some("csp-ok"));
     allowed_http.join().expect("allowed http");
     ws_server.join().expect("ws server");
+}
+
+#[test]
+fn handshake_head_read_is_bounded() {
+    // #1653(a): a peer that never terminates the header must not grow the buffer.
+    let never_ends = vec![b'x'; MAX_HANDSHAKE_HEAD_BYTES + 1];
+    let error = read_handshake_head(&mut never_ends.as_slice()).expect_err("must be bounded");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+}
+
+#[test]
+fn echo_frames_support_extended_lengths() {
+    // #1653(b): 7/16/64-bit length encoding for outgoing echo frames.
+    let small = build_text_frame(b"hi");
+    assert_eq!(&small[..2], &[0x81, 2]);
+    let medium = build_text_frame(&[b'a'; 200]);
+    assert_eq!(medium[1], 126);
+    assert_eq!(u16::from_be_bytes([medium[2], medium[3]]), 200);
+    let large = build_text_frame(&[b'b'; 70_000]);
+    assert_eq!(large[1], 127);
+    assert_eq!(
+        u64::from_be_bytes(large[2..10].try_into().expect("8 length bytes")),
+        70_000
+    );
+}
+
+#[test]
+fn client_frame_reader_handles_extended_masked_lengths() {
+    // #1653(b): incoming masked frames with 16-bit lengths must unmask correctly.
+    let payload = vec![b'z'; 200];
+    let mut frame = vec![0x81, 126];
+    frame.extend_from_slice(&200u16.to_be_bytes());
+    frame.extend_from_slice(&[1, 2, 3, 4]);
+    let mut masked = payload.clone();
+    websocket::mask(&mut masked, [1, 2, 3, 4]);
+    frame.extend_from_slice(&masked);
+    let (opcode, decoded) = read_client_frame(&mut frame.as_slice())
+        .expect("read")
+        .expect("frame");
+    assert_eq!(opcode, 0x1);
+    assert_eq!(decoded, payload);
+}
+
+#[test]
+fn e2e_fixture_names_are_unique() {
+    // #1653(c): repeated calls must never return the same path in one process.
+    let first = next_fixture_path("unique");
+    let second = next_fixture_path("unique");
+    assert_ne!(first, second);
+}
+
+#[test]
+fn temp_fixture_is_removed_on_drop() {
+    // #1653(d): cleanup happens on drop, even when the enclosing scope exits early.
+    let path = {
+        let fixture = TempFixture::new("drop", "<html></html>").expect("write fixture");
+        assert!(fixture.0.exists());
+        fixture.0.clone()
+    };
+    assert!(!path.exists(), "temp fixture must be removed on drop");
 }

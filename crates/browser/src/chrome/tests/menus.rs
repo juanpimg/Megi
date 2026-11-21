@@ -3,9 +3,9 @@ use super::*;
 #[test]
 fn context_menu_items_depend_on_targets() {
     let page = ContextMenu::new(None, None, 10.0, 10.0);
-    assert_eq!(page.items.len(), 3, "page actions");
+    assert_eq!(page.items.len(), 4, "page actions");
     let link = ContextMenu::new(Some("https://example.com/a".to_string()), None, 10.0, 10.0);
-    assert_eq!(link.items.len(), 5);
+    assert_eq!(link.items.len(), 6);
     assert_eq!(link.items[0].action, MenuAction::OpenLinkInNewTab);
     assert_eq!(link.items[1].action, MenuAction::CopyLinkAddress);
     let image = crate::images::ImageRegion {
@@ -19,7 +19,7 @@ fn context_menu_items_depend_on_targets() {
         10.0,
         10.0,
     );
-    assert_eq!(both.items.len(), 7);
+    assert_eq!(both.items.len(), 8);
     assert_eq!(both.items[2].action, MenuAction::SaveImage);
     assert_eq!(both.items[3].action, MenuAction::CopyImage);
     assert!(!MenuAction::CopyImage.is_implemented());

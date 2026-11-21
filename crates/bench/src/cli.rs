@@ -10,7 +10,7 @@ usage: bench [options]
   --json              emit machine-readable JSON instead of the human table
   --scale <factor>    scale every synthetic workload (default 1.0; e.g. 0.25)
   --iterations <n>    timed runs per benchmark (default 5; heavy cases cap at 3)
-  --warmup <n>        untimed warm-up runs per benchmark (default 1)
+  --warmup <n>        untimed warm-up runs per benchmark (default 1; heavy cases cap at 1)
   --filter <text>     only run benchmarks whose `group/name` contains <text>
   --list              list the registered benchmark names and exit
   -h, --help          show this help
@@ -108,8 +108,12 @@ impl Options {
                     let value = raw
                         .parse::<usize>()
                         .map_err(|_| format!("invalid --warmup value: {raw}"))?;
-                    if value > MAX_WARMUP {
-                        return Err(format!("--warmup must be <= {MAX_WARMUP}, got {raw}"));
+                    // #1685: --warmup 0 would let cold-start noise into measurements;
+                    // require at least one untimed run, mirroring --iterations.
+                    if value == 0 || value > MAX_WARMUP {
+                        return Err(format!(
+                            "--warmup must be between 1 and {MAX_WARMUP}, got {raw}"
+                        ));
                     }
                     opts.warmup = value;
                 }
@@ -128,7 +132,7 @@ impl Options {
 
 #[cfg(test)]
 mod tests {
-    use super::{Options, Parsed};
+    use super::{Options, Parsed, USAGE};
 
     fn parse(args: &[&str]) -> Result<Parsed, String> {
         Options::parse(args.iter().map(|arg| (*arg).to_string()))
@@ -171,6 +175,16 @@ mod tests {
         assert!(parse(&["--scale", "nope"]).is_err());
         assert!(parse(&["--scale", "0"]).is_err());
         assert!(parse(&["--iterations", "0"]).is_err());
+        // #1685: --warmup 0 silently produced cold measurements; reject it like
+        // --iterations 0 so comparisons are never polluted by first-run noise.
+        assert!(parse(&["--warmup", "0"]).is_err());
+    }
+
+    #[test]
+    fn help_documents_both_heavy_caps() {
+        // #1685: both the iterations and warm-up heavy caps must be visible in --help.
+        assert!(USAGE.contains("warm-up runs per benchmark (default 1; heavy cases cap at 1)"));
+        assert!(USAGE.contains("timed runs per benchmark (default 5; heavy cases cap at 3)"));
     }
 
     #[test]

@@ -224,7 +224,7 @@ pub(crate) fn decode_png_impl(
         });
     }
 
-    // Scaled path: accumulate per-output-pixel RGBA sums (4 channels + count).
+    // Scaled path: nearest-neighbour sampling, one source pixel per output pixel.
     let out_width = header.width.div_ceil(factor);
     let out_height = header.height.div_ceil(factor);
     let out_pixels =

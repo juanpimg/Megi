@@ -36,6 +36,8 @@ pub(crate) use chunk1::PROPHOTO_LINEAR_TO_XYZ_D50;
 #[allow(unused_imports)]
 pub(crate) use chunk1::REC2020_LINEAR_TO_XYZ_D65;
 #[allow(unused_imports)]
+pub(crate) use chunk1::SRGB_LINEAR_TO_XYZ_D65;
+#[allow(unused_imports)]
 pub(crate) use chunk1::XYZ_D65_TO_SRGB_LINEAR;
 #[allow(unused_imports)]
 pub(crate) use chunk1::clamp_channel;
@@ -49,6 +51,8 @@ pub(crate) use chunk1::color_from_xyz_d65;
 pub(crate) use chunk1::color_to_linear_srgb;
 #[allow(unused_imports)]
 pub(crate) use chunk1::lab_to_xyz_d50;
+#[allow(unused_imports)]
+pub(crate) use chunk1::linear_srgb_to_lab;
 #[allow(unused_imports)]
 pub(crate) use chunk1::linear_srgb_to_oklab;
 #[allow(unused_imports)]

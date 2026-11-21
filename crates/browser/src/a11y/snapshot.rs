@@ -13,6 +13,16 @@ pub struct SnapshotNode {
     pub hidden: bool,
     /// Whether the node is reachable by keyboard Tab traversal.
     pub focusable: bool,
+    /// Checkbox/radio state from `checked` or `aria-checked`.
+    pub checked: Option<bool>,
+    /// Toggle-button state from `aria-pressed`.
+    pub pressed: Option<bool>,
+    /// Disclosure state from `aria-expanded`.
+    pub expanded: Option<bool>,
+    /// Heading level (h1..h6) or `aria-level`.
+    pub level: Option<u8>,
+    /// Current control value (`value` attribute or `aria-valuetext`).
+    pub value: Option<String>,
 }
 
 /// Builds a complete accessibility snapshot: visible, role-bearing nodes in document order with
@@ -50,9 +60,46 @@ pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
             disabled: is_disabled(document, node),
             hidden: false,
             focusable: focusable.contains(&node),
+            checked: bool_attr(document, node, &["aria-checked", "checked"]),
+            pressed: bool_attr(document, node, &["aria-pressed"]),
+            expanded: bool_attr(document, node, &["aria-expanded"]),
+            level: heading_level(document, node),
+            value: attribute(document, node, "value")
+                .or_else(|| attribute(document, node, "aria-valuetext")),
         });
     }
     out
+}
+
+fn bool_attr(document: &Document, node: NodeId, names: &[&str]) -> Option<bool> {
+    for name in names {
+        if let Some(value) = attribute(document, node, name) {
+            // A bare boolean attribute (`<input checked>`) has an empty value and means true.
+            return Some(value.is_empty() || value.eq_ignore_ascii_case("true"));
+        }
+    }
+    None
+}
+
+fn heading_level(document: &Document, node: NodeId) -> Option<u8> {
+    if let Some(value) = attribute(document, node, "aria-level")
+        && let Ok(level) = value.parse::<u8>()
+    {
+        return Some(level);
+    }
+    let tag = document
+        .try_node(node)
+        .and_then(|node| node.as_element())
+        .map(|element| element.local_name.as_str())?;
+    match tag {
+        "h1" => Some(1),
+        "h2" => Some(2),
+        "h3" => Some(3),
+        "h4" => Some(4),
+        "h5" => Some(5),
+        "h6" => Some(6),
+        _ => None,
+    }
 }
 
 /// Serializes a snapshot to JSON (no external crate): an array of nodes with their identity,

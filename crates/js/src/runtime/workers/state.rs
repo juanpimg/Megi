@@ -9,6 +9,8 @@ pub(crate) struct WorkerState {
     pub runtime: JsRuntime,
     pub terminated: bool,
     pub to_worker: VecDeque<String>,
+    /// Node handles exposed to this worker through the DOM proxy (F6-WORKERS-DOM).
+    pub dom_nodes: Vec<NodeId>,
     pub onmessage: Vec<u32>,
     pub onerror: Option<u32>,
     pub pending_error: Option<String>,
@@ -133,6 +135,11 @@ impl JsRuntime {
                         worker.pending_error = Some(error.to_string());
                     }
                 }
+                // F6-WORKERS-DOM: proxied DOM replies resolve Promises inside the worker;
+                // drain its microtask queue so chained `then` callbacks run deterministically.
+                if let Err(error) = worker.runtime.run_microtasks() {
+                    worker.pending_error = Some(error.to_string());
+                }
                 if worker.pending_error.is_some() {
                     progressed = true;
                 }
@@ -192,6 +199,10 @@ impl JsRuntime {
     }
 
     pub(crate) fn deliver_worker_reply(&mut self, id: u32, json: &str) -> Result<(), JsError> {
+        let event = self.parse_json_value(json)?;
+        if self.handle_dom_proxy_call(id, &event)?.is_some() {
+            return Ok(());
+        }
         let onmessage = {
             let host = host_ref(&self.context).expect("JavaScript host installed in context");
             match host
@@ -284,6 +295,7 @@ impl WorkerState {
             runtime,
             terminated: false,
             to_worker: VecDeque::new(),
+            dom_nodes: Vec::new(),
             onmessage: Vec::new(),
             onerror: None,
             pending_error: None,

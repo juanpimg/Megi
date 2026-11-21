@@ -18,9 +18,37 @@ impl WindowApp {
         )
     }
 
+    /// Queues a render to the per-site process pool (ADR-004 phase 3). Responses arrive
+    /// asynchronously through the pool's reader threads and are drained like worker messages.
+    fn send_process_render(&mut self, request: RenderRequest) -> bool {
+        let wire = crate::ipc::IpcRenderRequest {
+            generation: request.generation,
+            input: request.input.clone(),
+            css_width: request.css_width,
+            css_height: request.css_height,
+            base_override: request.base_override.clone(),
+            scripting: request.scripting,
+            find_query: request.find_query.clone(),
+        };
+        let pool = self.process_pool.get_or_insert_with(|| {
+            crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
+        });
+        match pool.send(wire) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(format!("renderer process failed: {error}"));
+                self.update_title();
+                false
+            }
+        }
+    }
+
     /// Routes a render request to the worker for its effective site (ADR-004 phase 2),
     /// spawning a new one on first use. Returns `false` on a channel failure.
     pub(super) fn send_render(&mut self, request: RenderRequest) -> bool {
+        if self.use_process_render {
+            return self.send_process_render(request);
+        }
         let site = crate::worker::request_site(&request);
         let needs_new = self
             .render_pool
@@ -77,9 +105,26 @@ impl WindowApp {
     pub(super) fn start_navigation(&mut self, url: &megi_webview::net::Url) {
         self.session_autosave.mark_dirty(Instant::now());
         self.input = url.as_str();
-        if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
-            self.zoom = stored;
-            self.tabs.active_mut().zoom = stored;
+        if let Some((stored_zoom, zoom_changed)) =
+            zoom::zoom_after_navigation(&self.site_zooms, &url.as_str(), self.zoom)
+        {
+            self.zoom = stored_zoom;
+            self.tabs.active_mut().zoom = stored_zoom;
+            if zoom_changed {
+                // #1721: a persisted site zoom that differs from the current one must also
+                // update the CSS viewport metrics — otherwise the frame is laid out at the
+                // old zoom and page_coordinates() divides by a stale scale until the next
+                // resize.
+                let (width, height) = self
+                    .window
+                    .as_ref()
+                    .map(|window| {
+                        let size = window.inner_size();
+                        (size.width, size.height)
+                    })
+                    .unwrap_or((self.requested_width, self.requested_height));
+                self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
+            }
         }
         self.reader_html = None;
         self.error = None;
@@ -200,6 +245,31 @@ impl WindowApp {
         let mut messages = Vec::new();
         if let Some(pool) = &self.render_pool {
             messages.extend(pool.drain_messages());
+        }
+        while let Some(message) = self.process_messages.pop_front() {
+            messages.push(message);
+        }
+        if let Some(pool) = &mut self.process_pool {
+            for response in pool.drain() {
+                match response {
+                    Ok(response) => {
+                        let frame = crate::ipc::ProcessFrame::from_response(response);
+                        match frame.to_render_frame(0) {
+                            Ok(rendered) => {
+                                messages.push(crate::worker::WorkerMessage::Frame(rendered))
+                            }
+                            Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
+                                generation: frame.response.generation,
+                                message: error.to_string(),
+                            }),
+                        }
+                    }
+                    Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
+                        generation: 0,
+                        message: error.to_string(),
+                    }),
+                }
+            }
         }
         let mut sync_find = false;
         let mut rebuild_focus = false;

@@ -5,10 +5,10 @@
 //! - **Baseline sequential DCT** (`SOF0`) and **progressive DCT (`SOF2`)**:
 //!   DC-first/DC-refinement, AC-first and AC-refinement scans; spectral selection
 //!   and successive approximation are decoded into coefficient buffers and IDCT'd
-//!   once at EOI. Multi-component progressive images are supported up to their
-//!   first/refinement scan split: colour refinement scans (`Ah > 0` with more than
-//!   one component) return a clear [`ImageError::UnsupportedFeature`]; grayscale
-//!   progressive (including refinement) and colour DC/AC-first scans decode fully;
+//!   once at EOI. Multi-component (colour) progressive images decode fully, including
+//!   interleaved DC-refinement scans (`Ss == 0`, `Ah > 0`, `Ns > 1`) (#1661); only
+//!   interleaved **AC** scans (`Ss > 0` with more than one component) are rejected
+//!   with a clear [`ImageError::UnsupportedFeature`]; grayscale progressive decodes fully;
 //! - Huffman entropy coding (`DHT`/`SOS`);
 //! - quantization tables (`DQT`, 8- and 16-bit precision), 1-4 components;
 //! - sampling factors **4:4:4, 4:2:2 and 4:2:0** (any `H/V` 1-4 within the MCU limits);
@@ -23,8 +23,8 @@
 //!
 //! ## Rejected with a clear error (never a panic)
 //!
-//! - progressive **refinement scans for multi-component** images (subset documented
-//!   above), arithmetic/lossless/hierarchical DCT modes;
+//! - progressive **interleaved AC scans** (`Ss > 0`, `Ns > 1`, documented above),
+//!   arithmetic/lossless/hierarchical DCT modes;
 //! - multiple scans: only the first `SOS` scan is decoded (baseline files encode
 //!   everything in one interleaved scan; extra scans are ignored, documented);
 //! - `CMYK`/`YCCK` (4-component Adobe) and 12-bit sample precision.

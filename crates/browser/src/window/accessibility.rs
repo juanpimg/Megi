@@ -68,47 +68,179 @@ impl WindowApp {
         }
     }
 
-    /// Routes an AccessKit action to the existing focus/navigation model.
+    /// Routes an AccessKit action to the existing focus/navigation model through the pure
+    /// resolver, so AT behaviour is the same code path the headless tests exercise.
     fn handle_accessibility_action(&mut self, request: accesskit::ActionRequest) {
         let dom_id = DomNodeId::from_index(request.target_node.0 as usize);
-        let target_index = self.focus_targets.iter().position(|target| match target {
-            FocusTarget::Control(form_id) => self
-                .forms
-                .iter()
-                .find(|control| control.form_id == *form_id)
-                .is_some_and(|control| control.node_id == dom_id),
-            FocusTarget::Link(node) => *node == dom_id,
-        });
-        match request.action {
-            accesskit::Action::Focus => {
-                if let Some(index) = target_index {
-                    self.focus.focus(index, self.focus_targets.len());
-                    self.request_repaint();
-                }
-            }
-            accesskit::Action::Click => {
-                if let Some(index) = target_index {
-                    self.focus.focus(index, self.focus_targets.len());
-                }
-                // Activate links exactly like Enter on a focused link (keyboard.rs).
-                let target = self
-                    .links
-                    .iter()
-                    .find(|region| region.node == Some(dom_id))
-                    .cloned();
-                if let Some(region) = target {
-                    let url = self
-                        .nav
-                        .current()
-                        .cloned()
-                        .and_then(|base| resolve_href(&base, &region.href).ok());
-                    if let Some(url) = url {
-                        self.navigate_to(url);
-                    }
-                }
+        let base = self.nav.current().cloned();
+        let plan = resolve_accessibility_action(
+            request.action,
+            dom_id,
+            &self.focus_targets,
+            &self.forms,
+            &self.links,
+            base.as_ref(),
+        );
+        match plan {
+            AtActionPlan::Focus(index) => {
+                self.focus.focus(index, self.focus_targets.len());
                 self.request_repaint();
             }
-            _ => {}
+            AtActionPlan::ActivateLink { focus_index, url } => {
+                if let Some(index) = focus_index {
+                    self.focus.focus(index, self.focus_targets.len());
+                }
+                self.navigate_to(url);
+                self.request_repaint();
+            }
+            AtActionPlan::Noop => {}
         }
+    }
+}
+
+/// A resolved AT action, ready for the window to apply. Keeping this pure makes the
+/// accessibility action path verifiable without a display or a live AT bus (F7-A11Y).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum AtActionPlan {
+    /// Move keyboard focus to this index in the unified focus list.
+    Focus(usize),
+    /// Focus (when the link is focusable) and navigate to the resolved absolute URL.
+    ActivateLink {
+        focus_index: Option<usize>,
+        url: megi_webview::net::Url,
+    },
+    /// The action targets no exposed node or is unsupported.
+    Noop,
+}
+
+/// Resolves an AccessKit action against the shell's focus model, from the same data the
+/// window uses, so AT focus/click behaviour can be tested headlessly.
+pub(crate) fn resolve_accessibility_action(
+    action: accesskit::Action,
+    target: DomNodeId,
+    focus_targets: &[FocusTarget],
+    forms: &[FormControl],
+    links: &[LinkRegion],
+    base: Option<&megi_webview::net::Url>,
+) -> AtActionPlan {
+    let focus_index = focus_targets.iter().position(|focus| match focus {
+        FocusTarget::Control(form_id) => forms
+            .iter()
+            .find(|control| control.form_id == *form_id)
+            .is_some_and(|control| control.node_id == target),
+        FocusTarget::Link(node) => *node == target,
+    });
+    match action {
+        accesskit::Action::Focus => focus_index.map_or(AtActionPlan::Noop, AtActionPlan::Focus),
+        accesskit::Action::Click => {
+            let url = links
+                .iter()
+                .find(|region| region.node == Some(target))
+                .and_then(|region| base.and_then(|base| resolve_href(base, &region.href).ok()));
+            match url {
+                Some(url) => AtActionPlan::ActivateLink { focus_index, url },
+                None => focus_index.map_or(AtActionPlan::Noop, AtActionPlan::Focus),
+            }
+        }
+        _ => AtActionPlan::Noop,
+    }
+}
+
+#[cfg(test)]
+mod at_action_tests {
+    use super::*;
+    use accesskit::Action;
+    use megi_webview::core::{Document, Namespace, NodeId};
+    use megi_webview::net::Url;
+
+    fn fixture() -> (
+        Document,
+        NodeId,
+        NodeId,
+        Vec<FocusTarget>,
+        Vec<FormControl>,
+        Vec<LinkRegion>,
+    ) {
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let body = doc.create_element(Namespace::Html, "body", vec![]);
+        let button = doc.create_element(Namespace::Html, "button", vec![]);
+        let link = doc.create_element(
+            Namespace::Html,
+            "a",
+            vec![megi_webview::core::Attribute::new("href", "/dest")],
+        );
+        assert!(doc.append_child(doc.root(), html));
+        assert!(doc.append_child(html, body));
+        assert!(doc.append_child(body, button));
+        assert!(doc.append_child(body, link));
+        let forms = vec![FormControl {
+            form_id: 7,
+            name: String::new(),
+            node_id: button,
+            kind: crate::forms::FormControlKind::Button,
+            rect: crate::links::CssRect::new(0.0, 0.0, 10.0, 10.0),
+            value: String::new(),
+            checked: false,
+            disabled: false,
+            options: Vec::new(),
+            multiple: false,
+        }];
+        let links = vec![LinkRegion {
+            rect: crate::links::CssRect::new(0.0, 20.0, 10.0, 10.0),
+            href: "/dest".to_owned(),
+            node: Some(link),
+            is_blocker: false,
+        }];
+        let targets = build_focus_targets(&doc, &forms, &links);
+        (doc, button, link, targets, forms, links)
+    }
+
+    #[test]
+    fn at_focus_action_resolves_to_the_control_index() {
+        let (_doc, button, _link, targets, forms, links) = fixture();
+        let plan = resolve_accessibility_action(
+            Action::Focus,
+            button,
+            &targets,
+            &forms,
+            &links,
+            Some(&Url::parse("https://example.test/page").expect("base")),
+        );
+        assert_eq!(plan, AtActionPlan::Focus(0));
+    }
+
+    #[test]
+    fn at_click_action_resolves_the_link_and_absolute_url() {
+        let (_doc, _button, link, targets, forms, links) = fixture();
+        let plan = resolve_accessibility_action(
+            Action::Click,
+            link,
+            &targets,
+            &forms,
+            &links,
+            Some(&Url::parse("https://example.test/page").expect("base")),
+        );
+        assert_eq!(
+            plan,
+            AtActionPlan::ActivateLink {
+                focus_index: Some(1),
+                url: Url::parse("https://example.test/dest").expect("url"),
+            }
+        );
+    }
+
+    #[test]
+    fn at_actions_on_unexposed_nodes_are_noops() {
+        let (_doc, _button, _link, targets, forms, links) = fixture();
+        let plan = resolve_accessibility_action(
+            Action::Focus,
+            NodeId::from_index(9999),
+            &targets,
+            &forms,
+            &links,
+            None,
+        );
+        assert_eq!(plan, AtActionPlan::Noop);
     }
 }

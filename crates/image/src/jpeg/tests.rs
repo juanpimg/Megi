@@ -24,6 +24,17 @@ mod dequantize_overflow_tests {
     }
 }
 
+/// Interleaved DC-refinement scans (multi-component, `Ss == 0`, `Ah > 0`) are decoded,
+/// not rejected. The module docs claimed the opposite (#1661): only interleaved **AC**
+/// scans (`Ss > 0`) are unsupported. This fixture is a colour progressive JPEG whose
+/// scans include `(Ns=3, Ss=0, Se=0, Ah=1, Al=0)`.
+#[test]
+fn interlaced_multi_component_dc_refinement_is_decoded() {
+    let bytes = include_bytes!("../../tests/fixtures/jpeg/progressive.jpg") as &[u8];
+    let image = decode_jpeg(bytes, &PngLimits::default()).expect("colour refinement scan decodes");
+    assert!(image.width > 0 && image.height > 0);
+}
+
 /// Real-world progressive JPEGs (GNU/Debian sites) must decode (#1888).
 ///
 /// Both files contain AC successive-approximation refinement scans whose EOB
