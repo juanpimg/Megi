@@ -94,3 +94,20 @@ fn writing_mode_parses_and_inherits() {
     );
     assert_eq!(WritingMode::parse("bogus"), None);
 }
+
+/// CSS Multi-column Layout §5: column-count parses into ComputedStyle (#1932).
+#[test]
+fn column_count_parses() {
+    use megi_core::{Document, Namespace};
+    use megi_css::resolve_document_styles;
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let div = doc.create_element(Namespace::Html, "div".to_owned(), vec![]);
+    doc.append_child(body, div);
+    let styles = resolve_document_styles(&doc, Some("div { column-count: 3; column-gap: 20px }"));
+    let style = styles.get(&div).expect("div style");
+    assert_eq!(style.column_count, 3);
+}
