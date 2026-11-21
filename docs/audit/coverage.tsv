@@ -258,7 +258,7 @@ crates/css/src/properties/computed/chunk5.rs	294	src	F2	wave-max-mod	2026-11-19	
 crates/css/src/properties/parse.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk1.rs	355	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk2.rs	381	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/parse/chunk3.rs	371	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/parse/chunk3.rs	372	src	F2	juanpimg	2026-11-21	covered	#2209	w3-css-001: bound check moved before lengths[count] indexing; read, safe no-unsafe.
 crates/css/src/properties/parse/chunk4.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk5.rs	277	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values.rs	41	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -297,6 +297,7 @@ crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/user_agent/chunk1.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk2.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/tests/border_spacing_panic.rs	29	test	F1	juanpimg	2026-11-21	covered	#2209	w3-css-001: TDD regression test rejecting 3rd border-spacing length without panic; read, safe test code.
 crates/css/tests/calc_lengths.rs	346	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/cascade_core.rs	174	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/cascade_layers.rs	251	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -839,8 +840,8 @@ crates/net/src/compression/codec.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/net/src/compression/tests.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cookies.rs	56	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cookies/jar.rs	376	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/cookies/parse.rs	216	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/cookies/tests.rs	468	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/cookies/parse.rs	224	src	F2	juanpimg	2026-11-21	covered	#2211	w3-net-001: ignore Domain on IP request host per RFC 6265 5.3; read, safe no-unsafe.
+crates/net/src/cookies/tests.rs	493	src	F2	juanpimg	2026-11-21	covered	#2211	w3-net-001: TDD regression tests for IP/IPv6 Domain leaking; read, safe test code.
 crates/net/src/cookies/types.rs	186	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cors.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/cors/tests.rs	344	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
