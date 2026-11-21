@@ -95,14 +95,10 @@ impl ComputedStyle {
         let (line_height, line_height_factor) =
             if let Some(decl) = find_declaration(&entries, "line-height") {
                 match Self::parse_line_height_factor(&decl.raw_value) {
-                    Some(factor) => {
-                        let px = factor * font_size;
-                        if px.is_finite() && px >= 0.0 {
-                            (Some(px), Some(factor))
-                        } else {
-                            (None, None)
-                        }
+                    Some(factor) if (factor * font_size).is_finite() => {
+                        (Some(factor * font_size), Some(factor))
                     }
+                    Some(_) => (None, None),
                     None => (
                         Self::parse_line_height(&decl.raw_value, font_size, root_font_size),
                         None,
@@ -117,19 +113,16 @@ impl ComputedStyle {
                 )
             };
 
-        let text_overflow = TextOverflow::parse(
-            find_declaration(&entries, "text-overflow").map_or("", |decl| &decl.raw_value),
-        )
-        .unwrap_or_else(|| parent.map_or(TextOverflow::Clip, |p| p.text_overflow));
+        let text_overflow = find_declaration(&entries, "text-overflow")
+            .and_then(|d| TextOverflow::parse(&d.raw_value))
+            .unwrap_or_else(|| parent.map_or(TextOverflow::Clip, |p| p.text_overflow));
 
         let white_space = find_declaration(&entries, "white-space")
             .and_then(|d| WhiteSpace::parse(&d.raw_value))
             .unwrap_or_else(|| parent.map_or(WhiteSpace::Normal, |p| p.white_space));
-
         let writing_mode = find_declaration(&entries, "writing-mode")
-            .and_then(|decl| WritingMode::parse(&decl.raw_value))
+            .and_then(|d| WritingMode::parse(&d.raw_value))
             .unwrap_or_else(|| parent.map_or(WritingMode::HorizontalTb, |p| p.writing_mode));
-
         // CSS Multi-column §5 (#1932): positive integer.
         let column_count = find_declaration(&entries, "column-count")
             .and_then(|d| d.raw_value.trim().parse::<u32>().ok().filter(|n| *n > 0))
