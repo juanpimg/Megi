@@ -438,6 +438,33 @@ pub(crate) fn record_console(
     Ok(JsValue::undefined())
 }
 
+/// DOM `DOMImplementation.createHTMLDocument(title)` — returns a minimal
+/// document whose `body` is a real element wrapper (with `innerHTML`/`childNodes`),
+/// enough for library feature detection such as jQuery 3.5.1 (#1880).
+fn document_impl_create_html_document(
+    _this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let body = with_context_host(context, |host| {
+        host.document
+            .create_element(Namespace::Html, "body".to_owned(), Vec::new())
+    })
+    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let body = wrap_node(context, body)?;
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("body"), body, Attribute::all());
+    Ok(JsValue::from(init.build()))
+}
+
+/// Builds the `document.implementation` host object (DOMImplementation).
+fn build_document_implementation(context: &mut Context) -> JsObject {
+    let create = accessor_fn(context, document_impl_create_html_document);
+    let mut init = ObjectInitializer::new(context);
+    init.property(js_string!("createHTMLDocument"), create, Attribute::all());
+    init.build()
+}
+
 /// Builds the `document` host object.
 pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
     let pick = |context: &mut Context,
@@ -461,6 +488,14 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         .map(|(name, get, set)| (name, accessor_fn(context, get), accessor_fn(context, set)))
         .collect();
     let active_element = pick(context, document_active_element);
+    // DOM: `document` is a Node, so it exposes `childNodes` (#1880). jQuery's
+    // Sizzle initialization calls `Array.prototype.slice.call(document.childNodes)`;
+    // without this accessor the value is undefined and the whole library aborts.
+    let child_nodes = pick(context, node_child_nodes);
+    // WHATWG DOM: `document.nodeType` is 9 (DOCUMENT_NODE). jQuery's setDocument()
+    // gates initialization on `9 === a.nodeType`, so omitting it aborts the library (#1880).
+    let node_type = pick(context, node_node_type);
+    let implementation = build_document_implementation(context);
     let cookie_get = pick(context, document_cookie_get);
     let cookie_set = pick(context, document_cookie_set);
     // WHATWG DOM: `document` is itself a Node. Expose the root's handle so
@@ -544,6 +579,23 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         js_string!("activeElement"),
         Some(active_element),
         None,
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("childNodes"),
+        Some(child_nodes),
+        None,
+        Attribute::all(),
+    );
+    init.accessor(
+        js_string!("nodeType"),
+        Some(node_type),
+        None,
+        Attribute::all(),
+    );
+    init.property(
+        js_string!("implementation"),
+        JsValue::from(implementation),
         Attribute::all(),
     );
     init.accessor(
