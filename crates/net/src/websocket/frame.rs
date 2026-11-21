@@ -141,13 +141,24 @@ pub struct DecodedFrame {
     pub consumed: usize,
 }
 
-/// Decodes one server-to-client frame from the start of `bytes`.
+/// Parsed and validated WebSocket frame header ready for payload slicing.
+struct FrameHeader {
+    fin: bool,
+    opcode: Opcode,
+    offset: usize,
+    end: usize,
+}
+
+/// Validates and parses the WebSocket frame header at the start of `bytes`.
 ///
-/// Rejects masked server frames, reserved opcodes, control frames with FIN=0 or length > 125,
-/// and payloads that need more bytes than available. `max_payload` bounds application frames.
-pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, FetchError> {
-    if bytes.len() < 2 {
-        return Err(protocol("truncated frame header"));
+/// Returns `Ok(None)` ONLY when more header bytes are needed (incomplete 2-byte, 16-bit, or
+/// 64-bit header). Any protocol violation in the header fields (RSV bits, reserved opcode,
+/// masked server frame, fragmented/oversized control frame, non-minimal length, payload >
+/// `max_payload`, or length overflow) immediately returns `Err` without waiting for payload
+/// bytes (#1628, #1642).
+fn parse_frame_header(bytes: &[u8], max_payload: usize) -> Result<Option<FrameHeader>, FetchError> {
+    if bytes.is_empty() {
+        return Ok(None);
     }
     // #1625: RSV1/2/3 must be zero unless an extension negotiated them (none here).
     if bytes[0] & 0x70 != 0 {
@@ -157,54 +168,49 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
     }
     let fin = bytes[0] & 0x80 != 0;
     let opcode = Opcode::from_nibble(bytes[0] & 0x0F).ok_or_else(|| protocol("reserved opcode"))?;
+    if !fin && !opcode.is_data() {
+        return Err(protocol("fragmented control frame"));
+    }
+    if bytes.len() < 2 {
+        return Ok(None);
+    }
     let masked = bytes[1] & 0x80 != 0;
     if masked {
         return Err(protocol("server frame must not be masked"));
     }
-    let mut length = (bytes[1] & 0x7F) as u64;
-    let mut offset: usize = 2;
-    match bytes[1] & 0x7F {
+    let len_code = bytes[1] & 0x7F;
+    if !opcode.is_data() && len_code > 125 {
+        return Err(protocol("control frame too large"));
+    }
+    let (length, offset): (u64, usize) = match len_code {
         126 => {
             if bytes.len() < 4 {
-                return Err(protocol("truncated 16-bit length"));
+                return Ok(None);
             }
-            length = u16::from_be_bytes([bytes[2], bytes[3]]) as u64;
+            let len = u16::from_be_bytes([bytes[2], bytes[3]]) as u64;
             // RFC 6455 §5.2: extended length encodings MUST use the shortest form (#1642).
-            if length < 126 {
+            if len < 126 {
                 return Err(protocol("non-minimal 16-bit length"));
             }
-            offset = 4;
+            (len, 4)
         }
         127 => {
             if bytes.len() < 10 {
-                return Err(protocol("truncated 64-bit length"));
+                return Ok(None);
             }
             let mut array = [0u8; 8];
             array.copy_from_slice(&bytes[2..10]);
-            length = u64::from_be_bytes(array);
-            if length <= u16::MAX as u64 {
+            let len = u64::from_be_bytes(array);
+            if len <= u16::MAX as u64 {
                 return Err(protocol("non-minimal 64-bit length"));
             }
-            offset = 10;
+            (len, 10)
         }
-        _ => {}
-    }
-    if !fin && !opcode.is_data() {
-        return Err(protocol("fragmented control frame"));
-    }
+        n => (n as u64, 2),
+    };
     // #1630: a Close frame carries either no payload or a 2-byte status code.
-    // #1631: validate the incoming code — reserved codes (1005/1006/1015, ...) are illegal on
-    // the wire and must not propagate to callers as legitimate.
-    if opcode == Opcode::Close {
-        if length != 0 && length != 2 {
-            return Err(protocol("Close frame payload must be 0 or 2 bytes"));
-        }
-        if length == 2 {
-            let code = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]);
-            if !close_code::is_valid_outgoing(code) {
-                return Err(protocol("reserved WebSocket close code from peer"));
-            }
-        }
+    if opcode == Opcode::Close && length != 0 && length != 2 {
+        return Err(protocol("Close frame payload must be 0 or 2 bytes"));
     }
     if opcode.is_data() && length > max_payload as u64 {
         return Err(protocol("frame payload exceeds cap"));
@@ -212,84 +218,85 @@ pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, Fe
     if !opcode.is_data() && length > 125 {
         return Err(protocol("control frame too large"));
     }
+    // #1643: reject lengths that cannot fit `usize` (e.g. on 32-bit) instead of wrapping.
+    let len_usize = usize::try_from(length).map_err(|_| protocol("frame length overflow"))?;
     let end = offset
-        .checked_add(length as usize)
+        .checked_add(len_usize)
         .ok_or_else(|| protocol("frame length overflow"))?;
-    if bytes.len() < end {
-        return Err(protocol("truncated frame payload"));
+    Ok(Some(FrameHeader {
+        fin,
+        opcode,
+        offset,
+        end,
+    }))
+}
+
+/// Completes decoding of a frame once `bytes.len() >= hdr.end` has been verified.
+fn decode_frame_with_header(bytes: &[u8], hdr: FrameHeader) -> Result<DecodedFrame, FetchError> {
+    // #1631: validate the incoming Close code — reserved codes (1005/1006/1015, ...) are
+    // illegal on the wire and must not propagate to callers as legitimate.
+    if hdr.opcode == Opcode::Close && hdr.end - hdr.offset == 2 {
+        let code = u16::from_be_bytes([bytes[hdr.offset], bytes[hdr.offset + 1]]);
+        if !close_code::is_valid_outgoing(code) {
+            return Err(protocol("reserved WebSocket close code from peer"));
+        }
     }
     // #1626: RFC 6455 §5.6 — a Text frame's payload MUST be valid UTF-8. #1858: when
     // FIN=0 the message is fragmented and a UTF-8 sequence may span frames (RFC 6455 §8.1),
     // so validation is deferred to the reassembled message in `client.rs`. Only a complete
     // (FIN=1) Text frame is checked here; Binary and Continuation carry arbitrary bytes.
-    if fin && opcode == Opcode::Text && std::str::from_utf8(&bytes[offset..end]).is_err() {
+    if hdr.fin
+        && hdr.opcode == Opcode::Text
+        && std::str::from_utf8(&bytes[hdr.offset..hdr.end]).is_err()
+    {
         return Err(protocol("text frame payload is not valid UTF-8"));
     }
     Ok(DecodedFrame {
         frame: Frame {
-            fin,
-            opcode,
+            fin: hdr.fin,
+            opcode: hdr.opcode,
             masked: false,
-            payload: bytes[offset..end].to_vec(),
+            payload: bytes[hdr.offset..hdr.end].to_vec(),
         },
-        consumed: end,
+        consumed: hdr.end,
     })
 }
 
-/// Total bytes needed for the frame at the start of `bytes`, or `None` if the header itself is
-/// incomplete. Lets stream decoders stop cleanly at a partial frame.
-fn frame_total_len(bytes: &[u8]) -> Option<usize> {
+/// Decodes one server-to-client frame from the start of `bytes`.
+///
+/// Rejects masked server frames, reserved opcodes, control frames with FIN=0 or length > 125,
+/// and payloads that need more bytes than available. `max_payload` bounds application frames.
+pub fn decode_frame(bytes: &[u8], max_payload: usize) -> Result<DecodedFrame, FetchError> {
     if bytes.len() < 2 {
-        return None;
+        return Err(protocol("truncated frame header"));
     }
-    let mask_bit = bytes[1] & 0x80 != 0; // server frames: false
-    let mut length = (bytes[1] & 0x7F) as usize;
-    let mut offset: usize = 2;
-    match bytes[1] & 0x7F {
-        126 => {
-            if bytes.len() < 4 {
-                return None;
-            }
-            length = u16::from_be_bytes([bytes[2], bytes[3]]) as usize;
-            if length < 126 {
-                return None;
-            } // non-minimal encoding (#1642)
-            offset = 4;
-        }
-        127 => {
-            if bytes.len() < 10 {
-                return None;
-            }
-            let mut array = [0u8; 8];
-            array.copy_from_slice(&bytes[2..10]);
-            let wide = u64::from_be_bytes(array);
-            if wide <= u16::MAX as u64 {
-                return None;
-            } // non-minimal encoding (#1642)
-            // #1643: reject lengths that cannot fit `usize` (e.g. on 32-bit) instead of wrapping.
-            length = usize::try_from(wide).ok()?;
-            offset = 10;
-        }
-        _ => {}
+    let Some(hdr) = parse_frame_header(bytes, max_payload)? else {
+        return Err(protocol(if bytes[1] & 0x7F == 126 {
+            "truncated 16-bit length"
+        } else {
+            "truncated 64-bit length"
+        }));
+    };
+    if bytes.len() < hdr.end {
+        return Err(protocol("truncated frame payload"));
     }
-    if mask_bit {
-        offset += 4;
-    }
-    offset.checked_add(length)
+    decode_frame_with_header(bytes, hdr)
 }
 
 /// Splits a stream of bytes into all complete frames at its start, returning the remainder.
+///
+/// Malformed frame headers immediately return `Err` without waiting for remaining payload bytes.
 pub fn decode_frames(bytes: &[u8], max_payload: usize) -> Result<(Vec<Frame>, &[u8]), FetchError> {
     let mut frames = Vec::new();
     let mut rest = bytes;
     while !rest.is_empty() {
-        let Some(total) = frame_total_len(rest) else {
-            break;
-        }; // partial header
-        if rest.len() < total {
-            break;
-        } // partial payload — wait for more bytes
-        let decoded = decode_frame(rest, max_payload)?;
+        let Some(hdr) = parse_frame_header(rest, max_payload)? else {
+            break; // genuine partial header — wait for more bytes
+        };
+        if rest.len() < hdr.end {
+            break; // partial payload — wait for more bytes
+        }
+        let decoded = decode_frame_with_header(rest, hdr)?;
         frames.push(decoded.frame);
         rest = &rest[decoded.consumed..];
     }

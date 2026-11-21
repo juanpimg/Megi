@@ -19,11 +19,13 @@
 //!   table/transform length), the reconstructed sfnt is capped at [`MAX_SFNT_BYTES`], and
 //!   the third-party conversion runs under `catch_unwind`: malformed input returns
 //!   [`FontError::InvalidWebFont`] and never panics.
-//! - Residual: the dependency decompresses Brotli into an unbounded `Vec`, so a stream that
-//!   inflates past the validated lengths is not stopped before allocation. Bounding it
-//!   requires patching or vendoring the decoder.
+//! - The Brotli stream is inflation-checked with a bounded `take(MAX_SFNT_BYTES + 1)` before
+//!   the decoder runs: it must inflate to at least the declared table total (otherwise the
+//!   decoder's unchecked slice ranges panic) and no more than [`MAX_SFNT_BYTES`].
 //! - No subsetting, color-font (`COLR`/`CBDT`) or variation-specific handling beyond
 //!   what the WOFF2 container itself requires.
+
+use std::io::Read;
 
 use crate::error::FontError;
 
@@ -153,6 +155,27 @@ fn validate_woff2_header(bytes: &[u8]) -> Result<(), FontError> {
     if position.saturating_add(total_compressed) > bytes.len() {
         return Err(invalid("WOFF2 compressed data exceeds the input"));
     }
+    // The table-directory lengths above are only *declared*. `woff2-patched` reserves
+    // `Vec::with_capacity(Σ src_length)` and then slices it with those same ranges
+    // (`decompressed_tables[table.get_source_range()]`), so a malformed Brotli stream that
+    // inflates to fewer than `source_total` bytes panics on a slice range. `catch_unwind`
+    // cannot save us under libFuzzer (its hook aborts before unwinding), so verify here that
+    // the stream actually inflates to at least the declared total. Cap the output at
+    // MAX_SFNT_BYTES + 1 to also reject inflation bombs before they allocate.
+    let compressed = &bytes[position..position + total_compressed];
+    let mut decompressed = std::io::sink();
+    let mut limited =
+        brotli::Decompressor::new(compressed, 4096).take(MAX_SFNT_BYTES.saturating_add(1) as u64);
+    let produced = std::io::copy(&mut limited, &mut decompressed)
+        .map_err(|_| invalid("invalid WOFF2 Brotli stream"))?;
+    if produced < source_total as u64 {
+        return Err(invalid(
+            "WOFF2 Brotli stream shorter than declared table lengths",
+        ));
+    }
+    if produced > MAX_SFNT_BYTES as u64 {
+        return Err(invalid("WOFF2 Brotli stream inflates past the cap"));
+    }
     Ok(())
 }
 
@@ -198,4 +221,27 @@ pub fn decode_web_font(bytes: &[u8]) -> Result<Vec<u8>, FontError> {
         });
     }
     Ok(sfnt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Nightly fuzz crash `crash-d563b70ce69992cf6b6a1d99395593439c0b8eb1`: a table
+    /// directory declaring a length the 1-byte Brotli stream cannot produce. The decoder
+    /// slices `decompressed_tables[0..63]` on an empty buffer and panics; libFuzzer's panic
+    /// hook aborts before `catch_unwind` can convert it. Validation must reject it up front.
+    #[test]
+    fn rejects_a_brotli_stream_shorter_than_the_declared_tables() {
+        let fixture = include_bytes!("../tests/fixtures/woff2-table-dir-oob.woff2");
+        assert!(
+            validate_woff2_header(fixture).is_err(),
+            "the short Brotli stream must be rejected before the decoder slices it"
+        );
+        // The real font must still validate.
+        validate_woff2_header(include_bytes!(
+            "../tests/fixtures/OpenSans-Regular-latin.woff2"
+        ))
+        .expect("valid WOFF2 fixture must pass validation");
+    }
 }

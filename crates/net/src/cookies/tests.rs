@@ -466,3 +466,28 @@ fn document_cookie_hides_http_only_and_enforces_scope() {
     assert!(!jar.store_from_document(&file_origin, "a=1"));
     assert_eq!(jar.document_cookie_string(&file_origin), "");
 }
+
+#[test]
+fn domain_attribute_on_an_ip_host_is_ignored_w3net001() {
+    // RFC 6265 §5.3 step 5: if the request-host is an IP address, the Domain
+    // attribute must be ignored (cookie becomes host-only). Otherwise a cookie
+    // set by 127.0.0.1 with `Domain=0.0.1` leaks to 10.0.0.1, 1.0.0.1, etc.
+    let mut jar = CookieJar::new();
+    let origin = url("http://127.0.0.1/");
+    assert!(jar.store_set_cookie(&origin, "sid=secret; Domain=0.0.1"));
+    // The cookie is scoped to the originating IP only.
+    assert!(jar.header_for_url(&origin).unwrap().contains("sid=secret"));
+    for victim in ["http://10.0.0.1/", "http://1.0.0.1/", "http://foo.0.0.1/"] {
+        assert_eq!(
+            jar.header_for_url(&url(victim)),
+            None,
+            "cookie must not leak to {victim}"
+        );
+    }
+    // IPv6 literal hosts: Domain must be ignored too (host stays bracketed).
+    let mut jar6 = CookieJar::new();
+    let origin6 = url("http://[::1]/");
+    assert!(jar6.store_set_cookie(&origin6, "v6=1; Domain=0.0.1"));
+    assert_eq!(jar6.header_for_url(&url("http://10.0.0.1/")), None);
+    assert!(jar6.header_for_url(&origin6).unwrap().contains("v6=1"));
+}
