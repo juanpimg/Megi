@@ -109,6 +109,48 @@ fn calc_and_length_share_the_magnitude_cap() {
         megi_css::Length::Auto,
         "calc oversized em must be rejected"
     );
+
+    // #1669: arithmetic results exceeding 1e6 must also be rejected, not just single literals.
+    for expr in [
+        "calc(1000000px * 1000)",
+        "calc(999999px + 999999px)",
+        "calc(999999% + 999999%)",
+        "calc(1000000em * 10)",
+        "calc(999999em)",
+        "max(999999em, 10px)",
+    ] {
+        let style = computed(&format!("p {{ font-size: 16px; width: {expr} }}"));
+        assert_eq!(
+            style.width,
+            megi_css::Length::Auto,
+            "{expr} should exceed 1e6 cap and fall back to auto"
+        );
+        assert!(
+            style.calc_lengths.width.is_none(),
+            "{expr} should not populate calc_lengths"
+        );
+    }
+
+    let oversized_mixed = computed("p { width: calc(999999% + 999999px + 999999px) }");
+    assert_eq!(oversized_mixed.width, megi_css::Length::Auto);
+    assert!(oversized_mixed.calc_lengths.width.is_none());
+
+    let ctx = megi_css::CalcContext::default();
+    assert_eq!(
+        megi_css::evaluate_calc("calc(1000000px * 1000)", &ctx),
+        None
+    );
+    assert_eq!(
+        megi_css::CalcValue {
+            percent: 0.0,
+            px: 2_000_000.0
+        }
+        .to_length(),
+        None
+    );
+    assert_eq!(megi_css::Length::parse("999999em", 16.0, 16.0), None);
+    assert_eq!(megi_css::Length::parse("999999vw", 16.0, 16.0), None);
+    assert_eq!(megi_css::Length::parse("999999vh", 16.0, 16.0), None);
 }
 
 #[test]
