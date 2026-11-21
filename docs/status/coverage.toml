@@ -544,7 +544,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "structured tree + AccessKit adapter + widget states + tree validator with focus fallback + AT Focus/Click routing + accesskit_consumer walk + native-style widget overlays + AtBus surrogate applying incremental TreeUpdates with announcement log; real AT-SPI/UIA bus and OS-native widgets still unavailable in CI"
+reason = "structured tree + AccessKit adapter + widget states + tree validator with focus fallback + AT Focus/Click routing + accesskit_consumer walk + local-patch native-style widget overlays + AtBus surrogate with announcement log; real AT-SPI/UIA bus and OS-native widgets still unavailable in CI"
 
 [[capability]]
 id = "F7-ISOLATION"

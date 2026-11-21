@@ -117,6 +117,37 @@ fn clone_node_invalid_handle_returns_none() {
 }
 
 #[test]
+fn clone_document_root_preserves_single_document_invariant() {
+    // Nightly fuzz artifact crash-aa6559fdfc451a1ed5e27b7fce033d17250bc9a2:
+    // clone_node(root) allocated a second NodeKind::Document in the same arena.
+    // WHATWG DOM §4.4: a Document is the root of its own tree and cannot be cloned
+    // into the arena that already owns it.
+    let mut doc = Document::new();
+    let root = doc.root();
+    let clone = doc.clone_node(root, false);
+    assert!(
+        doc.validate_invariants().is_ok(),
+        "cloning the Document root violated invariants: {:?}",
+        doc.validate_invariants().err()
+    );
+    assert_eq!(clone, None, "clone_node(Document) must be rejected");
+}
+
+#[test]
+fn clone_node_into_rejects_document_source() {
+    // WHATWG DOM §4.4 `importNode`: a Document cannot be imported into another Document.
+    // In this arena model it would create a second Document node and break the root invariant.
+    let source = Document::new();
+    let mut target = Document::new();
+    let result = target.clone_node_into(&source, source.root(), false);
+    assert!(
+        matches!(result, Err(DomError::HierarchyRequest { .. })),
+        "importing a Document must be rejected, got {result:?}"
+    );
+    assert!(target.validate_invariants().is_ok());
+}
+
+#[test]
 fn test_template_text_content_routes_to_contents_fragment() {
     let mut doc = Document::new();
     let template = doc.create_element(Namespace::Html, "template", vec![]);

@@ -18,6 +18,15 @@ impl Document {
         if source.slot_of(node_id).is_none() {
             return Err(DomError::UnknownNode(node_id));
         }
+        // WHATWG DOM §4.4 `importNode`: a Document is the root of its own tree and cannot
+        // be imported into another Document. The destination arena already owns its root,
+        // so cloning this node would create a forbidden second Document node.
+        if matches!(source.node(node_id).kind, NodeKind::Document) {
+            return Err(DomError::HierarchyRequest {
+                parent: self.root(),
+                child: node_id,
+            });
+        }
         // #1726: a cross-arena import must not exhaust the destination arena and panic.
         let available = self.free_slots() + MAX_SLOTS.saturating_sub(self.allocated());
         if source.subtree_size(node_id) > available {
