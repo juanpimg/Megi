@@ -255,6 +255,38 @@ def verify_evidence(cap: dict, root: Path, gate: dict[str, str]) -> tuple[bool, 
             return False, f"{fn} no contiene ninguna aserción en {path_text}"
         return True, f"test {path_text}::{fn}"
 
+    if kind == "python_test":
+        path_text, _, method = detail.partition("::")
+        path = root / path_text
+        if not path.is_file():
+            return False, f"no existe el fichero de test {path_text}"
+        if not method.startswith("test_"):
+            return False, f"el método de evidencia debe empezar por test_: {method}"
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        # Only real unittest.TestCase methods count; a helper or a bare function does not.
+        if "unittest.TestCase" not in source:
+            return False, f"{path_text} no define unittest.TestCase"
+        match = re.search(
+            r"^[ \t]*def\s+" + re.escape(method) + r"\s*\(", source, re.M
+        )
+        if not match:
+            return False, f"no aparece def {method} en {path_text}"
+        indent = len(match.group(0)) - len(match.group(0).lstrip())
+        line_end = source.find("\n", match.end())
+        body_start = line_end + 1 if line_end != -1 else len(source)
+        body: list[str] = []
+        for line in source[body_start:].splitlines():
+            if not line.strip():
+                body.append(line)
+                continue
+            current_indent = len(line) - len(line.lstrip())
+            if current_indent <= indent:
+                break
+            body.append(line)
+        if not re.search(r"self\.assert\w*\s*\(", "\n".join(body)):
+            return False, f"{method} no contiene ninguna aserción unittest"
+        return True, f"python test {path_text}::{method}"
+
     if kind == "fixture":
         path = root / detail
         if not path.is_file():
