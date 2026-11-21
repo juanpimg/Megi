@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 68,
-    "partial": 2,
+    "implemented": 69,
+    "partial": 1,
     "known": 70,
-    "percent": 97,
+    "percent": 99,
     "unverified": [],
     "invalid_states": []
   },
@@ -53,10 +53,10 @@
     },
     {
       "id": "F7",
-      "implemented": 7,
-      "partial": 2,
+      "implemented": 8,
+      "partial": 1,
       "known": 9,
-      "percent": 78
+      "percent": 89
     },
     {
       "id": "X",
@@ -75,16 +75,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 989,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F7-ISOLATION",
-      "area": "F7",
-      "name": "Aislamiento multiproceso por pestaña",
-      "source": "issue #946",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 946,
       "reason": "no requiere evidencia"
     }
   ]
