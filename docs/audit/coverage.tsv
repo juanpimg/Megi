@@ -13,7 +13,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/coverage.yml	76	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/fuzz-nightly.yml	356	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-nightly.yml	363	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/fuzz-soak.yml	112	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -1010,6 +1010,7 @@ crates/paint/tests/replaced_backdrop.rs	474	test	F1	wave-max-mod	2026-11-19	cove
 crates/paint/tests/robustness.rs	241	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/stacking_order.rs	282	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/transform.rs	59	test	F1	juanpimg	2026-11-20	covered	#1933,#1934	paint transform tests from PR 2052
+crates/paint/tests/writing_mode.rs	39	test	F1	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 crates/raster/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate.rs	45	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate/lz77.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1268,7 +1269,7 @@ docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	d
 docs/ARCHITECTURE.md	217	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	93	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/FUZZING.md	297	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/FUZZING.md	302	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GAPS.md	147	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/HANDOFF.md	127	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -2076,7 +2077,7 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	158	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_audit_coverage.py	314	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
+tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	68	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	141	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
