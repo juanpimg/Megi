@@ -1783,6 +1783,7 @@ name = "megi-fonts"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "brotli 9.1.3",
  "fontdb",
  "miniz_oxide",
  "rustybuzz",
