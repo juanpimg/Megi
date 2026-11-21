@@ -185,6 +185,21 @@ pub fn site_zoom(entries: &[(String, f64)], url: &str) -> Option<f64> {
         .map(|(_, zoom)| sanitize_zoom(*zoom))
 }
 
+/// Persisted zoom to apply after navigating to `url`, and whether it differs from `current`.
+///
+/// Returns `None` when the origin has no persisted zoom (the current zoom is kept).
+/// #1721: `start_navigation` applies a persisted per-site zoom. Returning whether the
+/// value changed lets the caller recompute the CSS viewport metrics (via
+/// [`crate::scale::window_metrics_zoomed`]); otherwise the new page would be laid out at
+/// the previous zoom with stale, offset hit-testing.
+pub fn zoom_after_navigation(
+    entries: &[(String, f64)],
+    url: &str,
+    current: f64,
+) -> Option<(f64, bool)> {
+    site_zoom(entries, url).map(|stored| (stored, (stored - current).abs() >= f64::EPSILON))
+}
+
 /// Records/updates the zoom for `url`'s origin (newest first, capped, deduplicated).
 pub fn record_site_zoom(entries: &mut Vec<(String, f64)>, url: &str, zoom: f64) {
     let Some(origin) = site_origin(url) else {
@@ -264,5 +279,31 @@ mod site_zoom_tests {
         }
         assert_eq!(entries.len(), MAX_SITE_ZOOMS);
         assert_eq!(normalize_site_zooms(entries).len(), MAX_SITE_ZOOMS);
+    }
+
+    #[test]
+    fn navigation_site_zoom_change_recomputes_the_css_viewport() {
+        // #1721: navigating to an origin with a persisted zoom must change both the
+        // effective zoom AND the CSS viewport used for rendering — otherwise the frame
+        // is laid out at the old zoom and hit-testing (page_coordinates) is offset.
+        let entries = vec![("https://example.com".to_string(), 2.0)];
+        let (zoom, changed) = zoom_after_navigation(&entries, "https://example.com/page", 1.0)
+            .expect("origin has a persisted zoom");
+        assert!(
+            changed,
+            "a persisted site zoom must be applied on navigation"
+        );
+        assert_eq!(zoom, 2.0);
+
+        let at_old = crate::scale::window_metrics_zoomed(1600, 1200, 1.0, 1.0);
+        let at_new = crate::scale::window_metrics_zoomed(1600, 1200, 1.0, zoom);
+        assert_eq!(at_old.css_width, 1600);
+        assert_eq!(at_new.css_width, 800); // 200% zoom shows half as many CSS px
+
+        // No persisted zoom for the origin → nothing to apply.
+        assert_eq!(
+            zoom_after_navigation(&entries, "https://other.example/", 1.0),
+            None
+        );
     }
 }
