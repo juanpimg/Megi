@@ -174,7 +174,7 @@ fn stacked_modal_dialogs_focus_topmost_modal() {
 fn snapshot_exposes_widget_states() {
     let document = doc("<input type=checkbox checked id=cb> \
          <button aria-pressed=true id=toggle>x</button> \
-         <div aria-expanded=false id=tree>x</div> \
+         <div role=button aria-expanded=false id=tree>x</div> \
          <h2 id=title>Title</h2> \
          <input type=text value=hello id=field>");
     let snap = crate::a11y::snapshot(&document, document.root());
