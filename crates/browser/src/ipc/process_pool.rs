@@ -30,16 +30,39 @@ pub struct ProcessRenderPool {
     clock: u64,
     evictions: usize,
     recoveries: usize,
+    /// Explicit renderer executable (integration tests); `None` uses `current_exe()`.
+    executable: Option<std::path::PathBuf>,
 }
 
 impl ProcessRenderPool {
     pub fn new(max: usize) -> Self {
+        Self::with_executable(max, None)
+    }
+
+    /// Pool whose renderers are spawned from `executable` (real-binary E2E tests).
+    pub fn with_executable(max: usize, executable: Option<std::path::PathBuf>) -> Self {
         Self {
             slots: Vec::new(),
             max: max.clamp(1, MAX_PROCESS_RENDERERS),
             clock: 0,
             evictions: 0,
             recoveries: 0,
+            executable,
+        }
+    }
+
+    fn spawn_renderer(
+        &self,
+    ) -> Result<
+        (
+            ProcessRenderer,
+            Receiver<Result<IpcRenderResponse, IpcError>>,
+        ),
+        IpcError,
+    > {
+        match &self.executable {
+            Some(path) => ProcessRenderer::spawn_with_reader_from(path),
+            None => ProcessRenderer::spawn_with_reader(),
         }
     }
 
@@ -59,7 +82,7 @@ impl ProcessRenderPool {
         let index = match self.slots.iter().position(|slot| slot.site == site) {
             Some(index) => index,
             None if self.slots.len() < self.max => {
-                let (renderer, responses) = ProcessRenderer::spawn_with_reader()?;
+                let (renderer, responses) = self.spawn_renderer()?;
                 self.slots.push(Slot {
                     site: site.clone(),
                     renderer,
@@ -79,7 +102,7 @@ impl ProcessRenderPool {
                 let old = self.slots.remove(index);
                 drop(old.renderer);
                 self.evictions = self.evictions.saturating_add(1);
-                let (renderer, responses) = ProcessRenderer::spawn_with_reader()?;
+                let (renderer, responses) = self.spawn_renderer()?;
                 self.slots.insert(
                     index,
                     Slot {
@@ -135,6 +158,22 @@ impl ProcessRenderPool {
     /// Number of crashed renderers replaced so far (diagnostics/tests).
     pub fn recoveries(&self) -> usize {
         self.recoveries
+    }
+
+    /// PIDs of the live renderer children, in site insertion order (E2E diagnostics).
+    pub fn pids(&self) -> Vec<u32> {
+        self.slots.iter().map(|slot| slot.renderer.id()).collect()
+    }
+
+    /// Kills the renderer serving `site` without dropping its slot, so the next `send()`
+    /// exercises the crash-recovery path (E2E).
+    pub fn kill_child(&mut self, site: &SiteKey) -> bool {
+        if let Some(slot) = self.slots.iter_mut().find(|slot| &slot.site == site) {
+            slot.renderer.kill();
+            true
+        } else {
+            false
+        }
     }
 
     /// Terminates every process (called on shutdown).
