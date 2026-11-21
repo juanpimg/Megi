@@ -16,6 +16,7 @@ impl ComputedStyle {
         self.text_align = parent.text_align;
         self.text_overflow = parent.text_overflow;
         self.white_space = parent.white_space;
+        self.writing_mode = parent.writing_mode;
         self.text_transform = parent.text_transform;
         self.word_spacing = parent.word_spacing;
         self.letter_spacing = parent.letter_spacing;

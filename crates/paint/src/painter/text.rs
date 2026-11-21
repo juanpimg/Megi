@@ -81,6 +81,39 @@ pub(super) fn paint_text_run(
     if color.a > 0 {
         resources.record(layout_box.dimensions.content, owner, HitKind::Text);
     }
+    // CSS Writing Modes 3 §3 (#1931): in a vertical flow the inline axis runs
+    // top-to-bottom, so a run becomes a column of stacked glyphs. Emit one text
+    // item per character at successive rows; this deterministic subset covers
+    // CJK upright text and keeps Latin text inside the box without a rotated
+    // glyph rasterizer (the raster crate owns no font shaping).
+    if style.is_some_and(|s| s.writing_mode != megi_css::WritingMode::HorizontalTb) {
+        let baseline = font_size * 0.8;
+        for (index, ch) in text
+            .chars()
+            .take(megi_display::MAX_TEXT_RUN_CHARS)
+            .enumerate()
+        {
+            let rect = Rect::new(
+                layout_box.dimensions.content.x,
+                layout_box.dimensions.content.y + index as f32 * font_size,
+                layout_box.dimensions.content.width,
+                font_size,
+            );
+            list.push(DisplayItem::Text {
+                text: ch.to_string(),
+                rect,
+                color,
+                font_size,
+                font_family: font_family.clone(),
+                font_weight,
+                font_italic,
+                advance: font_size,
+                baseline,
+            });
+        }
+        return;
+    }
+
     push_text_shadows(
         style.map(|style| style.as_ref()),
         list,

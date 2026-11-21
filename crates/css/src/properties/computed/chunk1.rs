@@ -214,6 +214,8 @@ pub struct ComputedStyle {
     pub direction: Direction,
     pub unicode_bidi: UnicodeBidi,
     pub white_space: WhiteSpace,
+    /// CSS Writing Modes 3 §3: inline advance direction (#1931). Inherited.
+    pub writing_mode: WritingMode,
     pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
     pub list_style_type: ListStyleType,

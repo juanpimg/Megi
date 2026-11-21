@@ -122,6 +122,10 @@ impl ComputedStyle {
             parent.map_or(WhiteSpace::Normal, |p| p.white_space)
         };
 
+        let writing_mode = find_declaration(&entries, "writing-mode")
+            .and_then(|decl| WritingMode::parse(&decl.raw_value))
+            .unwrap_or_else(|| parent.map_or(WritingMode::HorizontalTb, |p| p.writing_mode));
+
         let text_transform = if let Some(decl) = find_declaration(&entries, "text-transform") {
             TextTransform::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(TextTransform::None, |p| p.text_transform))
@@ -465,6 +469,7 @@ impl ComputedStyle {
             direction,
             unicode_bidi,
             white_space,
+            writing_mode,
             vertical_align,
             text_decoration,
             list_style_type,
