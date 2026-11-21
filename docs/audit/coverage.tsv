@@ -455,10 +455,10 @@ crates/image/src/tests.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mod
 crates/image/src/vp8.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/bool_decoder.rs	114	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/constants.rs	30	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/vp8_decoder/dequant.rs	133	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/image/src/vp8_decoder/dequant.rs	136	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/frame.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/headers.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/vp8_decoder/idct.rs	94	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/image/src/vp8_decoder/idct.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/keyframe.rs	132	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/loop_filter.rs	390	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/vp8_decoder/mod.rs	63	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
