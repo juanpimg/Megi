@@ -205,10 +205,13 @@ When libFuzzer finds a crash it writes the reproducer to
 - **ASan (AddressSanitizer):** enabled by default in the nightly scheduled matrix via
   `cargo +nightly fuzz run` on supported hosts.
 - **UBSan (UndefinedBehaviorSanitizer):** a dedicated `fuzz-ubsan` smoke matrix runs
-  `--sanitizer undefined` (120 s) on representative parser/decoder targets
+  UB checks (120 s) on representative parser/decoder targets
   (`html_parse, css_parse, selectors, net_url, image_decode, hpack_decode, svg_parse,
   webp, container_queries`), excluding Boa-embedding JS targets with known
-  third-party leak/compat constraints under sanitizers.
+  third-party leak/compat constraints under sanitizers. cargo-fuzz 0.13.2 has no
+  `undefined` sanitizer value, so the jobs pass `--sanitizer none` and enable UB checks
+  with `RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on"` (the `fuzz-nightly.yml`
+  matrix is the single source of truth).
 - **UTF-8-valid-only text targets:** `html_parse`, `css_parse`, `selectors`, `container_queries`,
   `net_url`, `js_eval` and `js_module` decode with `String::from_utf8_lossy` by design — their
   parsers take `&str`. The raw byte → code-point layer (lone surrogates encoded as `u32`,
@@ -218,9 +221,10 @@ When libFuzzer finds a crash it writes the reproducer to
 - **LSan/leaks:** `js_eval` and `js_module` pass `-detect_leaks=0` for the constant Boa
   one-time allocation noted above; this does not suppress ASan/UBSan bug signals.
 - **Triage:** sanitizer failures upload `fuzz/artifacts/` and corpus snapshots as workflow
-  artifacts. Reproduce locally with `cargo +nightly fuzz run <target> <artifact>` (add
-  `--sanitizer undefined` for UBSan), minimise with `cargo +nightly fuzz tmin`, and follow
-  the policy above.
+  artifacts. Reproduce locally with `cargo +nightly fuzz run <target> <artifact>` (for UB
+  checks build/run with `RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on" cargo +nightly
+  fuzz run --sanitizer none <target> <artifact>`), minimise with `cargo +nightly fuzz tmin`,
+  and follow the policy above.
 
 Fuzz work is **report-only** for crates outside its scope: do not fix `dom`, `html`, `css`,
 `layout`, `paint`, `fonts`, `net` from a fuzzing-only change set — file the minimised
@@ -237,7 +241,8 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - **ASan matrix** (`fuzz`): per-target budgets and flags are defined in the `strategy.matrix`
   of `.github/workflows/fuzz-nightly.yml` (the single source of truth); all targets use
   `-rss_limit_mb=2048 -timeout=25`, with `-detect_leaks=0` for the Boa-embedding targets;
-- **UBSan smoke** (`fuzz-ubsan`, 9 targets): 120 s with `--sanitizer undefined` on
+- **UBSan smoke** (`fuzz-ubsan`, 9 targets): 120 s with UB checks enabled via
+  `RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on"` and `--sanitizer none` on
   representative targets (see Sanitizers above);
 - **PR job** (`build`): `cargo +nightly fuzz build` compiles all `[[bin]]` targets in
   `fuzz/` (fast harness-compile gate; no libFuzzer run);

@@ -67,6 +67,7 @@ impl ComputedStyle {
             align_items: crate::flex::AlignItems::Stretch,
             align_self: crate::flex::AlignSelf::Auto,
             row_gap: Length::ZERO,
+            column_count: 1,
             column_gap: Length::ZERO,
             flex_grow: 0.0,
             flex_shrink: 1.0,
@@ -104,6 +105,7 @@ impl ComputedStyle {
             direction: Direction::Ltr,
             unicode_bidi: UnicodeBidi::Normal,
             white_space: WhiteSpace::Normal,
+            writing_mode: WritingMode::HorizontalTb,
             vertical_align: VerticalAlign::Baseline,
             text_decoration: TextDecoration::NONE,
             list_style_type: ListStyleType::Disc,
@@ -236,6 +238,7 @@ impl ComputedStyle {
         mix(&mut hash, self.text_align as u64);
         mix(&mut hash, self.text_overflow as u64);
         mix(&mut hash, self.white_space as u64);
+        mix(&mut hash, self.writing_mode as u64);
         mix(&mut hash, self.text_transform as u64);
         mix_len(&mut hash, self.letter_spacing);
         mix_len(&mut hash, self.word_spacing);

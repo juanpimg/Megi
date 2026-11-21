@@ -24,10 +24,13 @@ pub(crate) fn idct4x4_add(
         let temp1 = ip(1) + ((ip(1) * COSPI8SQRT2MINUS1) >> 16);
         let temp2 = (ip(3) * SINPI8SQRT2) >> 16;
         let d1 = temp1 + temp2;
-        tmp[column] = a1 + d1;
-        tmp[12 + column] = a1 - d1;
-        tmp[4 + column] = b1 + c1;
-        tmp[8 + column] = b1 - c1;
+        // libvpx vp8/common/idctllm.c `vp8_short_idct4x4llm_c` stores the
+        // first pass in `short output[16]`, so these sums wrap to i16 before
+        // the second pass multiplies them by SINPI8SQRT2.
+        tmp[column] = (a1 + d1) as i16 as i32;
+        tmp[12 + column] = (a1 - d1) as i16 as i32;
+        tmp[4 + column] = (b1 + c1) as i16 as i32;
+        tmp[8 + column] = (b1 - c1) as i16 as i32;
     }
     for row in 0..4 {
         let a1 = tmp[row * 4] + tmp[row * 4 + 2];
@@ -91,4 +94,94 @@ pub(crate) fn iwht4x4(coefficients: &[i32; 16]) -> [i32; 16] {
 
 pub(crate) fn iwht4x4_dc(coefficients: &[i32; 16]) -> i32 {
     (coefficients[0] + 3) >> 3
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mirrors libvpx: `vp8_dequantize_b_c` stores into `short` and
+    /// `vp8_short_idct4x4llm_c` stores the first pass into `short output[16]`.
+    /// i64 intermediates keep the reference itself free of overflow.
+    fn libvpx_reference(q: &[i32; 16], dc: i32, ac: i32) -> [u8; 16] {
+        let mut dq = [0i64; 16];
+        dq[0] = (i64::from(q[0]) * i64::from(dc)) as i16 as i64;
+        for index in 1..16 {
+            dq[index] = (i64::from(q[index]) * i64::from(ac)) as i16 as i64;
+        }
+        let mut tmp = [0i64; 16];
+        for column in 0..4 {
+            let ip = |row: usize| dq[row * 4 + column];
+            let a1 = ip(0) + ip(2);
+            let b1 = ip(0) - ip(2);
+            let temp1 = (ip(1) * i64::from(SINPI8SQRT2)) >> 16;
+            let temp2 = ip(3) + ((ip(3) * i64::from(COSPI8SQRT2MINUS1)) >> 16);
+            let c1 = temp1 - temp2;
+            let temp1 = ip(1) + ((ip(1) * i64::from(COSPI8SQRT2MINUS1)) >> 16);
+            let temp2 = (ip(3) * i64::from(SINPI8SQRT2)) >> 16;
+            let d1 = temp1 + temp2;
+            tmp[column] = (a1 + d1) as i16 as i64;
+            tmp[12 + column] = (a1 - d1) as i16 as i64;
+            tmp[4 + column] = (b1 + c1) as i16 as i64;
+            tmp[8 + column] = (b1 - c1) as i16 as i64;
+        }
+        let mut out = [0u8; 16];
+        for row in 0..4 {
+            let a1 = tmp[row * 4] + tmp[row * 4 + 2];
+            let b1 = tmp[row * 4] - tmp[row * 4 + 2];
+            let temp1 = (tmp[row * 4 + 1] * i64::from(SINPI8SQRT2)) >> 16;
+            let temp2 =
+                tmp[row * 4 + 3] + ((tmp[row * 4 + 3] * i64::from(COSPI8SQRT2MINUS1)) >> 16);
+            let c1 = temp1 - temp2;
+            let temp1 =
+                tmp[row * 4 + 1] + ((tmp[row * 4 + 1] * i64::from(COSPI8SQRT2MINUS1)) >> 16);
+            let temp2 = (tmp[row * 4 + 3] * i64::from(SINPI8SQRT2)) >> 16;
+            let d1 = temp1 + temp2;
+            for (column, value) in [
+                (a1 + d1 + 4) >> 3,
+                (b1 + c1 + 4) >> 3,
+                (b1 - c1 + 4) >> 3,
+                (a1 - d1 + 4) >> 3,
+            ]
+            .iter()
+            .enumerate()
+            {
+                out[row * 4 + column] = (i64::from(128u8) + value).clamp(0, 255) as u8;
+            }
+        }
+        out
+    }
+
+    fn block_pixels(plane: &[u8], stride: usize) -> [u8; 16] {
+        let mut out = [0u8; 16];
+        for row in 0..4 {
+            out[row * 4..row * 4 + 4].copy_from_slice(&plane[(row + 1) * stride + 1..][..4]);
+        }
+        out
+    }
+
+    #[test]
+    fn idct4x4_add_max_vp8_token_does_not_overflow() {
+        // VP8 CAT6 token: 3 + (8 << 3) + (2^11 - 1) = 2114; AC_QLOOKUP[127] = 284.
+        let mut q = [0i32; 16];
+        q[4] = 2114;
+        let dq = dequant_block(&q, 1, 284);
+        let mut plane = [128u8; 6 * 6];
+        idct4x4_add(&dq, &mut plane, 6, 0, 0);
+        assert_eq!(block_pixels(&plane, 6), libvpx_reference(&q, 1, 284));
+    }
+
+    #[test]
+    fn idct4x4_add_wraps_first_pass_intermediates() {
+        // All inputs are already within libvpx's i16 coefficient range; the
+        // first-pass sum (93312) still exceeds i16 before the mandatory wrap.
+        let mut q = [0i32; 16];
+        q[1] = i16::MAX as i32;
+        q[5] = i16::MAX as i32;
+        q[13] = i16::MAX as i32;
+        let dq = dequant_block(&q, 1, 1);
+        let mut plane = [128u8; 6 * 6];
+        idct4x4_add(&dq, &mut plane, 6, 0, 0);
+        assert_eq!(block_pixels(&plane, 6), libvpx_reference(&q, 1, 1));
+    }
 }

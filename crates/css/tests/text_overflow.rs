@@ -65,3 +65,49 @@ fn text_overflow_is_inherited_and_can_be_overridden() {
     assert_eq!(styles[&span].text_overflow, TextOverflow::Clip);
     assert_eq!(styles[&div].display, Display::Block);
 }
+
+/// CSS Writing Modes 3 §3: writing-mode must parse and inherit (#1931).
+#[test]
+fn writing_mode_parses_and_inherits() {
+    use megi_css::WritingMode;
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let p = doc.create_element(Namespace::Html, "p".to_owned(), vec![]);
+    doc.append_child(body, p);
+
+    let styles = resolve_document_styles(
+        &doc,
+        Some("html { writing-mode: vertical-rl } p { color: red }"),
+    );
+    let style = styles.get(&p).expect("p style");
+    assert_eq!(style.writing_mode, WritingMode::VerticalRl, "inherited");
+    assert_eq!(
+        WritingMode::parse("vertical-lr"),
+        Some(WritingMode::VerticalLr)
+    );
+    assert_eq!(
+        WritingMode::parse("horizontal-tb"),
+        Some(WritingMode::HorizontalTb)
+    );
+    assert_eq!(WritingMode::parse("bogus"), None);
+}
+
+/// CSS Multi-column Layout §5: column-count parses into ComputedStyle (#1932).
+#[test]
+fn column_count_parses() {
+    use megi_core::{Document, Namespace};
+    use megi_css::resolve_document_styles;
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let div = doc.create_element(Namespace::Html, "div".to_owned(), vec![]);
+    doc.append_child(body, div);
+    let styles = resolve_document_styles(&doc, Some("div { column-count: 3; column-gap: 20px }"));
+    let style = styles.get(&div).expect("div style");
+    assert_eq!(style.column_count, 3);
+}

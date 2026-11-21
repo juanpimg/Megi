@@ -78,6 +78,7 @@ pub use properties::{
     MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow, Position, RadialExtent,
     RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign, TextDecoration,
     TextOverflow, TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
+    WritingMode,
 };
 pub use query::{
     SelectorParseError, matches, matches_with_state, query_selector, query_selector_all,

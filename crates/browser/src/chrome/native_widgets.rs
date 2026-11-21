@@ -6,8 +6,30 @@
 
 use super::*;
 
-/// Paints one widget frame into `pixmap` using a deterministic UA-style visual state.
-/// Returns the number of opaque pixels written (diagnostics/tests).
+/// Padding in CSS pixels reserved for the focus ring.
+pub(crate) const FOCUS_RING_PAD: f32 = 2.0;
+
+/// Size of the small local pixmap needed for one widget (plus focus ring), in pixels.
+/// This is independent of the window/framebuffer size (#2197).
+pub(crate) fn widget_patch_size(
+    rect: crate::links::CssRect,
+    scale: f32,
+    focus_ring: bool,
+) -> (u32, u32) {
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let pad = if focus_ring { FOCUS_RING_PAD } else { 0.0 };
+    let w = ((rect.width + 2.0 * pad) * scale).ceil().max(1.0) as u32;
+    let h = ((rect.height + 2.0 * pad) * scale).ceil().max(1.0) as u32;
+    (w, h)
+}
+
+/// Paints one widget frame into a *local* pixmap using a deterministic UA-style visual state.
+/// `rect` is in CSS pixels relative to the pixmap origin (which already includes the focus
+/// ring padding). Returns the number of opaque pixels written (tests only).
 pub(crate) fn paint_native_widget(
     pixmap: &mut megi_webview::paint::Pixmap,
     rect: crate::links::CssRect,
@@ -73,7 +95,14 @@ pub(crate) fn paint_native_widget(
             pixmap.fill_rect(edge, Color::new(0x1F, 0x6F, 0xEB, 0xFF));
         }
     }
-    pixmap.pixels.iter().filter(|pixel| pixel.a == 0xFF).count()
+    #[cfg(test)]
+    {
+        pixmap.pixels.iter().filter(|pixel| pixel.a == 0xFF).count()
+    }
+    #[cfg(not(test))]
+    {
+        0
+    }
 }
 
 #[cfg(test)]
@@ -105,5 +134,24 @@ mod tests {
             "focus ring must look different"
         );
         assert!(focused_written > normal_written, "focus ring adds pixels");
+    }
+}
+
+#[cfg(test)]
+mod patch_size_tests {
+    use super::*;
+
+    #[test]
+    fn widget_patch_is_bounded_by_the_widget_not_the_framebuffer() {
+        let rect = crate::links::CssRect::new(4.0, 4.0, 20.0, 20.0);
+        let (w, h) = widget_patch_size(rect, 1.0, true);
+        // A 20x20 widget with a 2px focus ring needs ~28x28 px, not 1920x1080.
+        assert!(w <= 32 && h <= 32, "patch must be local: {w}x{h}");
+        assert!(
+            w > 20 && h > 20,
+            "patch must include the focus ring: {w}x{h}"
+        );
+        let (w2, h2) = widget_patch_size(rect, 2.0, false);
+        assert_eq!((w2, h2), (40, 40), "no focus ring: exactly the widget box");
     }
 }

@@ -124,10 +124,13 @@ pub(crate) fn decode_coeffs(
 }
 
 pub(crate) fn dequant_block(coefficients: &[i32; 16], dc: i32, ac: i32) -> [i32; 16] {
+    // libvpx vp8/common/dequantize.c `vp8_dequantize_b_c` stores into
+    // `short *dqcoeff`: `DQ[i] = (short)(Q[i] * DQC[i])`. Wrap to i16 so the
+    // IDCT receives the same bounded coefficients as libvpx (VP8 8-bit spec).
     let mut out = [0i32; 16];
-    out[0] = coefficients[0] * dc;
+    out[0] = (coefficients[0] * dc) as i16 as i32;
     for index in 1..16 {
-        out[index] = coefficients[index] * ac;
+        out[index] = (coefficients[index] * ac) as i16 as i32;
     }
     out
 }

@@ -122,13 +122,18 @@ impl ComputedStyle {
         )
         .unwrap_or_else(|| parent.map_or(TextOverflow::Clip, |p| p.text_overflow));
 
-        let white_space = if let Some(decl) = find_declaration(&entries, "white-space") {
-            WhiteSpace::parse(&decl.raw_value)
-                .unwrap_or_else(|| parent.map_or(WhiteSpace::Normal, |p| p.white_space))
-        } else {
-            parent.map_or(WhiteSpace::Normal, |p| p.white_space)
-        };
+        let white_space = find_declaration(&entries, "white-space")
+            .and_then(|d| WhiteSpace::parse(&d.raw_value))
+            .unwrap_or_else(|| parent.map_or(WhiteSpace::Normal, |p| p.white_space));
 
+        let writing_mode = find_declaration(&entries, "writing-mode")
+            .and_then(|decl| WritingMode::parse(&decl.raw_value))
+            .unwrap_or_else(|| parent.map_or(WritingMode::HorizontalTb, |p| p.writing_mode));
+
+        // CSS Multi-column §5 (#1932): positive integer.
+        let column_count = find_declaration(&entries, "column-count")
+            .and_then(|d| d.raw_value.trim().parse::<u32>().ok().filter(|n| *n > 0))
+            .unwrap_or_else(|| parent.map_or(1, |p| p.column_count));
         let text_transform = if let Some(decl) = find_declaration(&entries, "text-transform") {
             TextTransform::parse(&decl.raw_value)
                 .unwrap_or_else(|| parent.map_or(TextTransform::None, |p| p.text_transform))
@@ -436,6 +441,7 @@ impl ComputedStyle {
             align_items: computed_flex.align_items,
             align_self: computed_flex.align_self,
             row_gap: computed_flex.row_gap,
+            column_count,
             column_gap: computed_flex.column_gap,
             flex_grow: computed_flex.flex_grow,
             flex_shrink: computed_flex.flex_shrink,
@@ -472,6 +478,7 @@ impl ComputedStyle {
             direction,
             unicode_bidi,
             white_space,
+            writing_mode,
             vertical_align,
             text_decoration,
             list_style_type,

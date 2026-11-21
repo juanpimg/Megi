@@ -136,6 +136,8 @@ pub struct ComputedStyle {
     pub align_self: crate::flex::AlignSelf,
     /// `row-gap` (initial `0`).
     pub row_gap: Length,
+    /// `column-count` (initial `auto` = 1); CSS Multi-column Layout §5 (#1932).
+    pub column_count: u32,
     /// `column-gap` (initial `0`).
     pub column_gap: Length,
     /// `flex-grow` (initial `0`).
@@ -214,6 +216,8 @@ pub struct ComputedStyle {
     pub direction: Direction,
     pub unicode_bidi: UnicodeBidi,
     pub white_space: WhiteSpace,
+    /// CSS Writing Modes 3 §3: inline advance direction (#1931). Inherited.
+    pub writing_mode: WritingMode,
     pub vertical_align: VerticalAlign,
     pub text_decoration: TextDecoration,
     pub list_style_type: ListStyleType,
