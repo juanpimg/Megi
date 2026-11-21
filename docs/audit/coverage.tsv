@@ -56,7 +56,7 @@ crates/browser/src/a11y.rs	17	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mo
 crates/browser/src/a11y/nodes.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/a11y/snapshot.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/a11y/tests.rs	221	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/a11y_at_bus.rs	104	src	F2	columns-fix	2026-11-21	covered	#1932	re-read
+crates/browser/src/a11y_at_bus.rs	104	src	F2	juanpimg	2026-11-21	covered	F7-A11Y #2137	AT-bus surrogate from upstream main
 crates/browser/src/a11y_backend.rs	489	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/chrome.rs	434	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -66,7 +66,7 @@ crates/browser/src/chrome/drawing.rs	191	src	F2	wave-max-mod	2026-11-19	covered	
 crates/browser/src/chrome/dropdown.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/history_menu.rs	104	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/menus.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/native_widget_overlay.rs	75	src	F2	columns-merge	2026-11-21	covered	#upstream	re-read
+crates/browser/src/chrome/native_widget_overlay.rs	75	src	F2	juanpimg	2026-11-21	covered	#2197	Read file: bounded local-patch framebuffer compositing for native widget overlays; safe dest bounds checks, no unsafe/Rc. Upstream merge.
 crates/browser/src/chrome/native_widgets.rs	157	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/chrome/navigation.rs	90	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/status_bar.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -179,20 +179,20 @@ crates/browser/tests/shell_tests/saves.rs	140	test	F1	wave-max-mod	2026-11-19	co
 crates/browser/tests/shell_tests/tabs.rs	362	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/worker.rs	211	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/Cargo.toml	14	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/clone.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/clone.rs	312	src	F2	juanpimg	2026-11-21	covered	#nightly-fuzz-dom	Reject NodeKind::Document in clone_node_with_budget to keep the single-Document arena invariant (WHATWG DOM §4.4).
 crates/core/src/document.rs	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/geometry.rs	155	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/iter.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/lib.rs	285	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/mutation.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/node.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/query/clone.rs	113	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/query/clone.rs	113	src	F2	juanpimg	2026-11-21	covered	#nightly-fuzz-dom	Reject Document source in clone_node_into/importNode path (WHATWG DOM §4.4).
 crates/core/src/query/lookup.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mod.rs	12	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mutation.rs	398	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/text.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_core.rs	446	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/unit_tests/arena_mutations.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/unit_tests/arena_mutations.rs	350	src	F2	juanpimg	2026-11-21	covered	#nightly-fuzz-dom	Added TDD regressions for clone_node(Document) and cross-arena import of a Document.
 crates/core/src/unit_tests/arena_traversal.rs	475	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/document_insert.rs	81	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/core/src/unit_tests/fragment_insertion.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -332,7 +332,7 @@ crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maxima
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/lib.rs	474	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/tests/contract.rs	16	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/Cargo.toml	22	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/fonts/Cargo.toml	25	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by line: binary
 crates/fonts/assets/DejaVuSans.ttf	0	binary	-			exempt		not read line by line: binary
 crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -346,11 +346,12 @@ crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mod
 crates/fonts/src/font.rs	393	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/types.rs	183	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/web.rs	201	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/fonts/src/web.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/woff1.rs	170	src	F2	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 crates/fonts/tests/fixtures/DejaVuSans-woff1.woff	1337	test	F1	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 crates/fonts/tests/fixtures/OFL-OpenSans.txt	92	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/fixtures/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
+crates/fonts/tests/fixtures/woff2-table-dir-oob.woff2	0	binary	-			exempt		not read line by line: binary
 crates/fonts/tests/font_engine/common.rs	15	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/font_engine/database.rs	218	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/font_engine/main.rs	11	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -982,7 +983,7 @@ crates/paint/tests/background_geometry/tiling.rs	174	test	F1	wave-max-mod	2026-1
 crates/paint/tests/background_images.rs	388	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/clipping.rs	486	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/color4.rs	115	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/columns.rs	47	test	F1	columns-merge	2026-11-21	covered	#upstream	re-read
+crates/paint/tests/columns.rs	47	test	F1	juanpimg	2026-11-21	covered	#1932	Read file: column-count multi-column layout paint tests from upstream merge, safe test-only code.
 crates/paint/tests/common/mod.rs	192	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/decorations.rs	263	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/dialog_top_layer.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1013,7 +1014,7 @@ crates/paint/tests/replaced_backdrop.rs	474	test	F1	wave-max-mod	2026-11-19	cove
 crates/paint/tests/robustness.rs	241	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/stacking_order.rs	282	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/transform.rs	59	test	F1	juanpimg	2026-11-20	covered	#1933,#1934	paint transform tests from PR 2052
-crates/paint/tests/writing_mode.rs	39	test	F1	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
+crates/paint/tests/writing_mode.rs	39	test	F1	juanpimg	2026-11-21	covered	#1931	vertical writing-mode test from upstream main
 crates/raster/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate.rs	45	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate/lz77.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2080,7 +2081,7 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/real_site_check.py	240	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	158	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
+tools/test_audit_coverage.py	331	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/test_bench_compare.py	68	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	141	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)

@@ -126,6 +126,14 @@ pub fn parse_set_cookie(
                 }
             }
             "domain" => {
+                // w3-net-001 / RFC 6265 §5.3 step 5: if the request-host is an IP
+                // address, ignore the Domain attribute entirely — the cookie is
+                // host-only. Without this, a cookie served by 127.0.0.1 with
+                // `Domain=0.0.1` domain-matches (suffix "127.") and leaks to
+                // unrelated hosts like 10.0.0.1 / 1.0.0.1 / foo.0.0.1.
+                if psl::is_ip_host(&request_url.host_for_dns().to_ascii_lowercase()) {
+                    continue;
+                }
                 let domain = raw_attribute_value
                     .trim_start_matches('.')
                     .to_ascii_lowercase();
