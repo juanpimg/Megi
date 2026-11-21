@@ -86,7 +86,8 @@ impl ComputedStyle {
     pub(crate) fn parse_line_height(val: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
         let val = val.trim().to_ascii_lowercase();
         if val == "normal" {
-            return Some(font_size * 1.2);
+            let px = font_size * 1.2;
+            return (px.is_finite() && px >= 0.0).then_some(px);
         }
         // #1671: a numeric line-height must be finite and non-negative; otherwise CSS falls
         // through to Length::parse, and an invalid value yields None (initial used).
@@ -94,14 +95,19 @@ impl ComputedStyle {
             && factor.is_finite()
             && factor >= 0.0
         {
-            return Some(factor * font_size);
+            let px = factor * font_size;
+            return (px.is_finite() && px >= 0.0).then_some(px);
         }
         // CSS Values 3 §5.1.2: `rem` is always the root element's font-size,
         // not the current element's (#1884: Wikipedia's `line-height: 3.3rem`).
+        // CSS 2.2 §10.8.1 / CSS Inline §3: negative lengths and percentages are invalid.
         match Length::parse(&val, font_size, root_font_size) {
-            Some(Length::Px(px)) => Some(px),
+            Some(Length::Px(px)) if px.is_finite() && px >= 0.0 => Some(px),
             // CSS 2.2 §10.8.1: percentage line-height computes against the element font-size.
-            Some(Length::Percent(pct)) => Some(font_size * pct / 100.0),
+            Some(Length::Percent(pct)) if pct.is_finite() && pct >= 0.0 => {
+                let px = font_size * pct / 100.0;
+                (px.is_finite() && px >= 0.0).then_some(px)
+            }
             _ => None,
         }
     }

@@ -36,8 +36,18 @@ fn opacity_rejects_non_finite_values() {
 
 #[test]
 fn line_height_rejects_non_finite_and_negative() {
-    // #1671: NaN/infinity/negative numbers must be ignored.
-    for value in ["NaN", "1e999", "-5"] {
+    // #1671: NaN/infinity/negative numbers and negative lengths/percentages/calc() must be ignored.
+    for value in [
+        "NaN",
+        "1e999",
+        "1e38",
+        "-5",
+        "-10px",
+        "-2em",
+        "-50%",
+        "calc(-10px)",
+        "calc(10px - 30px)",
+    ] {
         let style = computed(&format!("p {{ font-size: 16px; line-height: {value} }}"));
         // Invalid values are dropped (None => initial used) or resolve to a finite, non-negative
         // value; NaN/infinity/negative must never be stored.
@@ -48,9 +58,19 @@ fn line_height_rejects_non_finite_and_negative() {
             "line-height {value} produced {:?}",
             style.line_height
         );
+        let shorthand = computed(&format!("p {{ font: 16px/{value} sans-serif }}"));
+        assert!(
+            shorthand
+                .line_height
+                .is_none_or(|px| px.is_finite() && px >= 0.0),
+            "font shorthand line-height {value} produced {:?}",
+            shorthand.line_height
+        );
     }
     let valid = computed("p { font-size: 16px; line-height: 2 }");
     assert!((valid.line_height.unwrap() - 32.0).abs() < 1e-6);
+    let valid_zero = computed("p { font-size: 16px; line-height: 0px }");
+    assert_eq!(valid_zero.line_height, Some(0.0));
 }
 
 #[test]
