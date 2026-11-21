@@ -25,14 +25,19 @@ fn dom_patch_carries_a_data_url_and_base() {
 #[test]
 fn restore_document_recovers_the_serialized_dom() {
     let mut document = megi_webview::core::Document::new();
-    let element = document.create_element(megi_webview::core::Namespace::Html, "p", vec![]);
+    let element = document.create_element(
+        megi_webview::core::Namespace::Html,
+        "p",
+        vec![megi_webview::core::Attribute::new("id", "target")],
+    );
     document
         .set_text_content(element, "round trip")
         .expect("text");
     assert!(document.append_child(document.root(), element));
     let html = crate::download::serialize_document(&document);
     let restored = DomPatch::restore_document(&html);
-    let text = restored.text_content(restored.root());
+    let paragraph = restored.get_element_by_id("target").expect("restored <p>");
+    let text = restored.text_content(paragraph);
     assert!(
         text.contains("round trip"),
         "restore lost the text: {text:?}"

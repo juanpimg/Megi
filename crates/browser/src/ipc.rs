@@ -72,15 +72,34 @@ pub fn write_message<W: Write, T: serde::Serialize>(
 pub fn read_message<R: Read, T: serde::de::DeserializeOwned>(
     reader: &mut R,
 ) -> Result<T, IpcError> {
+    read_message_checked(reader)?.ok_or(IpcError::Truncated)
+}
+
+/// Reads a message, distinguishing a clean EOF (`Ok(None)`) from a peer that died
+/// mid-frame (`Err(Truncated)`). The worker loop needs that distinction to report a
+/// crashed renderer instead of treating it as a normal shutdown.
+pub fn read_message_checked<R: Read, T: serde::de::DeserializeOwned>(
+    reader: &mut R,
+) -> Result<Option<T>, IpcError> {
     let mut header = [0u8; 4];
-    read_exact_or(reader, &mut header)?;
+    // Read the first byte separately: zero bytes means the peer closed cleanly, while
+    // 1-3 bytes means a frame was cut short by a crash.
+    let first = reader
+        .read(&mut header[..1])
+        .map_err(|error| IpcError::Io(error.to_string()))?;
+    if first == 0 {
+        return Ok(None);
+    }
+    read_exact_or(reader, &mut header[1..])?;
     let length = u32::from_be_bytes(header) as usize;
     if length > MAX_IPC_PAYLOAD {
         return Err(IpcError::TooLarge(length as u32));
     }
     let mut payload = vec![0u8; length];
     read_exact_or(reader, &mut payload)?;
-    serde_json::from_slice(&payload).map_err(|error| IpcError::InvalidPayload(error.to_string()))
+    let value = serde_json::from_slice(&payload)
+        .map_err(|error| IpcError::InvalidPayload(error.to_string()))?;
+    Ok(Some(value))
 }
 
 fn read_exact_or<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<(), IpcError> {
@@ -152,10 +171,9 @@ pub fn run_ipc_worker_stream<R: Read, W: Write>(
     writer: &mut W,
 ) -> Result<(), IpcError> {
     loop {
-        let request: IpcRenderRequest = match read_message(reader) {
-            Ok(request) => request,
-            Err(IpcError::Truncated) => return Ok(()),
-            Err(error) => return Err(error),
+        let request: IpcRenderRequest = match read_message_checked(reader)? {
+            Some(request) => request,
+            None => return Ok(()), // parent closed stdin: clean shutdown
         };
         let render_request = crate::worker::RenderRequest {
             generation: request.generation,

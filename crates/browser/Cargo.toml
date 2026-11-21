@@ -28,3 +28,6 @@ path = "src/main.rs"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+accesskit_consumer = "0.39"

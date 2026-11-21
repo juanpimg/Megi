@@ -1748,6 +1748,7 @@ name = "megi-browser"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "accesskit_consumer",
  "accesskit_winit",
  "megi-webview",
  "serde",

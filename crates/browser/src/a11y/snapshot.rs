@@ -74,7 +74,8 @@ pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
 fn bool_attr(document: &Document, node: NodeId, names: &[&str]) -> Option<bool> {
     for name in names {
         if let Some(value) = attribute(document, node, name) {
-            return Some(value.eq_ignore_ascii_case("true") || value == "true");
+            // A bare boolean attribute (`<input checked>`) has an empty value and means true.
+            return Some(value.is_empty() || value.eq_ignore_ascii_case("true"));
         }
     }
     None

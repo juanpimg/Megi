@@ -375,3 +375,54 @@ fn build_tree_update_focus_falls_back_to_root_for_unfocused_snapshot() {
     );
     assert!(validate_tree_update(&update).is_ok());
 }
+
+#[test]
+fn an_accesskit_consumer_walks_the_published_tree_and_reads_widget_states() {
+    // A real AT walks the tree through accesskit_consumer, not our own validator. Feed it
+    // the exact TreeUpdate we publish and verify role, label, toggled state and actions.
+    use accesskit_consumer::{FilterResult, Tree};
+    let root = DomNodeId::from_index(1);
+    let node =
+        |id: usize, role: &str, name: &str, checked: Option<bool>, parent: Option<DomNodeId>| {
+            SnapshotNode {
+                id: DomNodeId::from_index(id),
+                parent,
+                role: role.to_owned(),
+                name: name.to_owned(),
+                disabled: false,
+                hidden: false,
+                focusable: true,
+                checked,
+                pressed: None,
+                expanded: None,
+                level: None,
+                value: None,
+            }
+        };
+    let snapshot = [
+        node(1, "document", "", None, None),
+        node(2, "checkbox", "Remember", Some(true), Some(root)),
+        node(3, "button", "Save", None, Some(root)),
+    ];
+    let update = build_tree_update(&snapshot, root);
+    let tree = Tree::new(update, true);
+    let tree_root = tree.state().root();
+    let children: Vec<_> = tree_root.children().collect();
+    assert_eq!(children.len(), 2, "consumer must see both exposed widgets");
+
+    let checkbox = children
+        .iter()
+        .find(|n| n.role() == accesskit::Role::CheckBox)
+        .expect("checkbox exposed to AT");
+    assert_eq!(checkbox.label().as_deref(), Some("Remember"));
+    assert_eq!(checkbox.toggled(), Some(accesskit::Toggled::True));
+    let include = |_n: &accesskit_consumer::NodeRef<'_>| FilterResult::Include;
+    assert!(checkbox.supports_action(accesskit::Action::Click, &include));
+
+    let button = children
+        .iter()
+        .find(|n| n.role() == accesskit::Role::Button)
+        .expect("button exposed to AT");
+    assert_eq!(button.label().as_deref(), Some("Save"));
+    assert!(button.supports_action(accesskit::Action::Click, &include));
+}
