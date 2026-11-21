@@ -331,14 +331,21 @@ jobs:
         if: steps.cargo-fuzz-bin.outputs.cache-hit != 'true'
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
+      # cargo-fuzz 0.13.2 accepts only address|leak|memory|thread|none; asking it for the
+      # `undefined` sanitizer made every UBSan job fail instantly. Enable UB checks through
+      # rustc flags instead, with `none` so cargo-fuzz adds no ASan of its own.
       - name: Build ${{ matrix.target }} (UBSan)
         working-directory: fuzz
-        run: cargo +nightly fuzz build --sanitizer undefined ${{ matrix.target }}
+        env:
+          RUSTFLAGS: "-Zub-checks=yes -Cdebug-assertions=on"
+        run: cargo +nightly fuzz build --sanitizer none ${{ matrix.target }}
 
       - name: Run ${{ matrix.target }} (UBSan)
         working-directory: fuzz
+        env:
+          RUSTFLAGS: "-Zub-checks=yes -Cdebug-assertions=on"
         run: >-
-          cargo +nightly fuzz run --sanitizer undefined ${{ matrix.target }} --
+          cargo +nightly fuzz run --sanitizer none ${{ matrix.target }} --
           -max_total_time=${{ matrix.seconds }}
           -rss_limit_mb=2048
           -timeout=25

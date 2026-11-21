@@ -268,6 +268,23 @@ class FuzzCorpusTest(unittest.TestCase):
         missing = sorted(targets - scheduled - {"charset"})
         self.assertEqual(missing, [], f"fuzz targets absent from the nightly matrix: {missing}")
 
+    def test_no_invalid_cargo_fuzz_sanitizer_flag(self) -> None:
+        # cargo-fuzz 0.13.2 accepts only address|leak|memory|thread|none for
+        # `--sanitizer`; `undefined` makes every UBSan matrix job fail instantly
+        # with "invalid value 'undefined'". UBSan checks must be enabled through
+        # RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on" with --sanitizer none.
+        root = Path(__file__).resolve().parent.parent
+        workflow = (root / ".github" / "workflows" / "fuzz-nightly.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn(
+            "--sanitizer undefined",
+            workflow,
+            "cargo-fuzz has no `undefined` sanitizer; use -Zub-checks via RUSTFLAGS",
+        )
+        self.assertIn("-Zub-checks=yes", workflow)
+        self.assertIn("--sanitizer none", workflow)
+
 
 class CiToolTestsCoverageTest(unittest.TestCase):
     """CI must execute every tools test module, not just the audit-ledger one (#1402)."""
