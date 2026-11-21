@@ -544,7 +544,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "structured tree + AccessKit adapter + widget states + tree-update validator (dangling refs/duplicates/root) with focus fallback; live AT bus verification and OS-rendered native widgets still unavailable in CI"
+reason = "structured tree + AccessKit adapter + widget states + tree validator with focus fallback + headlessly verified AT Focus/Click action routing; live AT bus verification and OS-rendered native widgets still unavailable in CI"
 
 [[capability]]
 id = "F7-ISOLATION"
