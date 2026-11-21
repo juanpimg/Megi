@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::PerformanceBudget;
+
 #[cfg(feature = "js")]
 use megi_core::Document;
 #[cfg(feature = "js")]
@@ -255,6 +257,24 @@ fn finish_render(
     let total = total_start.elapsed();
     let location_action_count = location_actions.len();
     let history_action_count = history_actions.len();
+    let measured = RenderTimings {
+        fetch: fetch_time,
+        decode_parse: decode_parse_time,
+        styles: styles_time,
+        styles_pre_script,
+        fonts: fonts_time,
+        images: images_time,
+        backgrounds: backgrounds_time,
+        scripting: scripting_time
+            .checked_sub(event_loop_time)
+            .unwrap_or_default(),
+        event_loop: event_loop_time,
+        layout: layout_time,
+        paint: paint_time,
+        raster: raster_time,
+        total,
+    };
+
     Ok(RenderOutput {
         png,
         pixmap,
@@ -310,24 +330,12 @@ fn finish_render(
             referrer_policy: referrer_policy_name,
             limit_violations,
             cache_layout_hit,
-            timings: RenderTimings {
-                fetch: fetch_time,
-                decode_parse: decode_parse_time,
-                styles: styles_time,
-                styles_pre_script,
-                fonts: fonts_time,
-                images: images_time,
-                backgrounds: backgrounds_time,
-                scripting: scripting_time
-                    .checked_sub(event_loop_time)
-                    .unwrap_or_default(),
-                event_loop: event_loop_time,
-                layout: layout_time,
-                paint: paint_time,
-                raster: raster_time,
-                total,
+            timings: measured,
+            warnings: {
+                let mut all = warnings;
+                all.extend(PerformanceBudget::default().check(&measured));
+                all
             },
-            warnings,
         },
     })
 }

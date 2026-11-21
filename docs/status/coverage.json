@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 66,
-    "partial": 4,
+    "implemented": 67,
+    "partial": 3,
     "known": 70,
-    "percent": 94,
+    "percent": 96,
     "unverified": [],
     "invalid_states": []
   },
@@ -32,10 +32,10 @@
     },
     {
       "id": "F4",
-      "implemented": 12,
-      "partial": 1,
+      "implemented": 13,
+      "partial": 0,
       "known": 13,
-      "percent": 92
+      "percent": 100
     },
     {
       "id": "F5",
@@ -67,16 +67,6 @@
     }
   ],
   "missing": [
-    {
-      "id": "F4-PERF-BUDGETS",
-      "area": "F4",
-      "name": "Presupuestos de rendimiento de rasterizado/decoders en webs reales",
-      "source": "issue #1014 / PROGRESS.md F4 pending",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 1014,
-      "reason": "no requiere evidencia"
-    },
     {
       "id": "F7-A11Y",
       "area": "F7",
