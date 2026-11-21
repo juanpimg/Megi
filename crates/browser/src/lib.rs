@@ -176,6 +176,7 @@
 
 /// Generated `file://` directory listings and load-error pages.
 pub mod a11y;
+pub mod a11y_at_bus;
 #[cfg(feature = "a11y")]
 pub mod a11y_backend;
 pub mod chrome;
