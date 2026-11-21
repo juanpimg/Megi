@@ -64,3 +64,41 @@ fn save_as_dialog_paints_a_centered_panel() {
         "dialog must not overwrite the whole framebuffer"
     );
 }
+
+#[test]
+fn native_widget_overlay_only_touches_its_patch_region() {
+    // The overlay must not allocate or scan a full-framebuffer pixmap: pixels outside the
+    // widget's expanded box must remain exactly as they were.
+    let (width, height) = (400u32, 300u32);
+    let mut dest = vec![0xDEAD_BEEFu32; (width * height) as usize];
+    let rect = crate::links::CssRect::new(10.0, 10.0, 20.0, 20.0);
+    let visual = crate::forms::widget_visual(
+        crate::forms::FormControlKind::Checkbox,
+        true,
+        true,
+        false,
+        false,
+        false,
+    );
+    super::draw_native_widget(&mut dest, width, height, 1.0, 0, rect, visual);
+    let mut touched = 0usize;
+    for (i, pixel) in dest.iter().enumerate() {
+        if *pixel != 0xDEAD_BEEF {
+            touched += 1;
+            let x = (i as u32) % width;
+            let y = (i as u32) / width;
+            assert!(
+                (6..34).contains(&x)
+                    && (6 + crate::chrome::CHROME_HEIGHT as u32
+                        ..34 + crate::chrome::CHROME_HEIGHT as u32)
+                        .contains(&y),
+                "overlay touched pixel outside its patch: ({x},{y})"
+            );
+        }
+    }
+    assert!(touched > 0, "overlay must paint something");
+    assert!(
+        touched < 2000,
+        "a single widget must not touch thousands of pixels: {touched}"
+    );
+}
