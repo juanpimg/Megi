@@ -23,6 +23,7 @@ pub use values::{
     MAX_GRADIENT_STOPS, MAX_GRADIENTS, MixBlendMode, ObjectFit, Overflow, Position, RadialExtent,
     RadialGradient, RadialShape, Radius, RectEdges, TableLayout, TextAlign, TextDecoration,
     TextOverflow, TextShadow, TextTransform, UnicodeBidi, VerticalAlign, Visibility, WhiteSpace,
+    WritingMode,
 };
 
 // Crate-internal helpers other modules rely on.

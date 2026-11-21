@@ -177,6 +177,29 @@ impl WhiteSpace {
     }
 }
 
+/// CSS Writing Modes 3 §3: the block flow / inline advance direction.
+///
+/// Megi rasterizes the deterministic subset by stacking characters vertically;
+/// glyph rotation is not in the rasterizer contract (DAG: raster owns no fonts).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum WritingMode {
+    #[default]
+    HorizontalTb,
+    VerticalRl,
+    VerticalLr,
+}
+
+impl WritingMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "horizontal-tb" => Some(Self::HorizontalTb),
+            "vertical-rl" => Some(Self::VerticalRl),
+            "vertical-lr" => Some(Self::VerticalLr),
+            _ => None,
+        }
+    }
+}
+
 /// CSS `overflow` property values (CSS 2.2 §11.1.1, CSS Overflow Level 3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Overflow {
