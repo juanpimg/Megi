@@ -16,6 +16,7 @@ use megi_html::{
 };
 
 mod deep_tree;
+mod foreign;
 mod parse_limits;
 mod scripting;
 mod tokenizer;

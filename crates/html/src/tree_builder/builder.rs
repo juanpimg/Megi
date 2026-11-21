@@ -58,6 +58,7 @@ impl TreeBuilder {
             written_bytes: 0,
             script_executions: 0,
             script_errors: Vec::new(),
+            parse_errors: Vec::new(),
             html_element_seen: false,
         }
     }
@@ -70,6 +71,13 @@ impl TreeBuilder {
     pub fn with_script_executor(mut self, executor: Box<dyn ScriptExecutor>) -> Self {
         self.script_executor = Some(executor);
         self
+    }
+
+    /// Records a tree-construction parse error up to [`crate::tokenizer::MAX_PARSE_ERRORS`].
+    pub(crate) fn record_error(&mut self, message: impl Into<String>) {
+        if self.parse_errors.len() < crate::tokenizer::MAX_PARSE_ERRORS {
+            self.parse_errors.push(message.into());
+        }
     }
 
     /// Takes the HTML written by `document.write` while handling the token just processed.

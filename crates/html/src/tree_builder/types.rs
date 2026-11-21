@@ -204,6 +204,9 @@ pub struct ParseOutcome {
     /// Non-fatal errors from parser-inserted scripts (WP-6.4). Empty when no executor is
     /// installed, scripting is off, or every script ran successfully.
     pub script_errors: Vec<String>,
+    /// Non-fatal tree-construction parse errors (e.g. §13.2.6.5 foreign-content
+    /// mismatched end tags), capped at [`crate::tokenizer::MAX_PARSE_ERRORS`].
+    pub parse_errors: Vec<String>,
 }
 
 /// WHATWG HTML §13.2.6 Tree Builder state machine.
@@ -258,6 +261,8 @@ pub struct TreeBuilder {
     pub(crate) script_executions: usize,
     /// Non-fatal parser-inserted script errors, exposed through [`ParseOutcome::script_errors`].
     pub(crate) script_errors: Vec<String>,
+    /// Non-fatal tree-construction parse errors, bounded by [`crate::tokenizer::MAX_PARSE_ERRORS`].
+    pub parse_errors: Vec<String>,
     /// Whether this parse ever created an `<html>` element. A script may detach it
     /// (`document.documentElement.remove()`); the end-of-parse synthetic html/head/body fixup
     /// must then be skipped, or it would resurrect a detached skeleton (`scripted_foster01`).
