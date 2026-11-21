@@ -136,6 +136,8 @@ pub struct ComputedStyle {
     pub align_self: crate::flex::AlignSelf,
     /// `row-gap` (initial `0`).
     pub row_gap: Length,
+    /// `column-count` (initial `auto` = 1); CSS Multi-column Layout §5 (#1932).
+    pub column_count: u32,
     /// `column-gap` (initial `0`).
     pub column_gap: Length,
     /// `flex-grow` (initial `0`).

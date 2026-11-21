@@ -84,7 +84,15 @@ pub(super) fn paint_inline_content(
                 match &child.box_type {
                     BoxType::TextNode(text) if !text.trim().is_empty() => {
                         if !hidden {
-                            paint_text_run(child, text, list, resources, own_owner, alpha);
+                            paint_text_run(
+                                child,
+                                text,
+                                list,
+                                resources,
+                                own_owner,
+                                alpha,
+                                layout_box.dimensions.content.width,
+                            );
                             // `text-decoration` is empty for the vast majority of
                             // runs; skip the decoration helper entirely (R129).
                             let decoration = parent_decoration

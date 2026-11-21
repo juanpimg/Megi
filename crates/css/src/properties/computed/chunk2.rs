@@ -67,6 +67,7 @@ impl ComputedStyle {
             align_items: crate::flex::AlignItems::Stretch,
             align_self: crate::flex::AlignSelf::Auto,
             row_gap: Length::ZERO,
+            column_count: 1,
             column_gap: Length::ZERO,
             flex_grow: 0.0,
             flex_shrink: 1.0,
