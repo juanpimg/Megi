@@ -68,17 +68,18 @@ pub(crate) fn parse_border_spacing(
     let mut lengths = [0.0f32; 2];
     let mut count = 0usize;
     for component in &components {
-        match Length::parse(component, font_size, root_font_size) {
-            Some(Length::Px(px)) if px >= 0.0 => {}
-            _ => return None,
-        }
-        if let Some(Length::Px(px)) = Length::parse(component, font_size, root_font_size) {
-            lengths[count] = px;
-        }
-        count += 1;
-        if count > 2 {
+        // w3-css-001: reject a third length BEFORE indexing `lengths` (len 2).
+        // The old code wrote `lengths[count]` first and only then checked
+        // `count > 2`, so `border-spacing: 1px 2px 3px` panicked from an
+        // untrusted stylesheet. Invalid declarations must be ignored instead.
+        if count >= 2 {
             return None;
         }
+        match Length::parse(component, font_size, root_font_size) {
+            Some(Length::Px(px)) if px >= 0.0 => lengths[count] = px,
+            _ => return None,
+        }
+        count += 1;
     }
     match count {
         0 => None,
