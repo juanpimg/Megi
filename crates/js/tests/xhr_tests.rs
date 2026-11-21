@@ -277,6 +277,38 @@ fn xhr_rejects_synchronous_and_invalid_state_operations() {
 }
 
 #[test]
+fn xhr_on_handler_fires_in_registration_order() {
+    // #1747: HTML §6.1.6.2 registers `on<event>` handlers as listeners at
+    // assignment time, so invocation follows registration order. A listener
+    // added before `onload` must run before the property handler.
+    let (mut runtime, _calls) = mock_runtime(FetchResult {
+        status: 200,
+        status_text: "OK".into(),
+        url: "https://example.test/order".into(),
+        headers: vec![],
+        body: b"ok".to_vec(),
+    });
+    runtime
+        .eval(
+            r#"
+            window.__order = [];
+            var x = new XMLHttpRequest();
+            x.addEventListener('load', function () { __order.push('listener'); });
+            x.onload = function () { __order.push('property'); };
+            x.open('GET', 'https://example.test/order');
+            x.send();
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__order.join(',')", "xhr").unwrap(),
+        "listener,property"
+    );
+}
+
+#[test]
 fn xhr_open_validates_method_token_and_forbidden_methods() {
     // #1854: WHATWG XHR §3.5.1 steps 2-3. A method must be an HTTP token
     // (RFC 9110 §5.6.2). Tokens are NOT trimmed: surrounding whitespace makes
