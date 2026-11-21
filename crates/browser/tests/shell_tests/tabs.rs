@@ -283,3 +283,80 @@ fn chrome_geometry_scales_with_the_device_scale() {
         "page below chrome intact"
     );
 }
+
+#[test]
+fn ipc_render_renders_the_selected_tab_from_the_process_backend() {
+    // F7-ISOLATION E2E: a multi-tab headless render through the real renderer child must
+    // select the same tab as the in-process path.
+    let first = "data:text/html,%3Ch1%3EFirst%20tab%3C%2Fh1%3E";
+    let second = "data:text/html,%3Ch1%3ESecond%20tab%3C%2Fh1%3E";
+    let process_png = temp_path("tabs-ipc.png");
+    let direct_png = temp_path("tabs-ipc-direct.png");
+
+    let process_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            first,
+            "--tabs",
+            second,
+            "--active-tab",
+            "1",
+            "--ipc-render",
+            "--screenshot",
+            process_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(process_run.success(), "process render must succeed");
+    let direct_run = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            second,
+            "--screenshot",
+            direct_png.to_str().expect("path"),
+            "--width",
+            "240",
+            "--height",
+            "160",
+        ])
+        .status()
+        .expect("shell binary runs");
+    assert!(direct_run.success());
+
+    let process_bytes = std::fs::read(&process_png).expect("process PNG");
+    let direct_bytes = std::fs::read(&direct_png).expect("direct PNG");
+    assert_eq!(
+        process_bytes, direct_bytes,
+        "the process backend must render the selected (second) tab"
+    );
+    assert_eq!(png_dimensions(&process_bytes), (240, 160));
+    let _ = std::fs::remove_file(&process_png);
+    let _ = std::fs::remove_file(&direct_png);
+}
+
+#[test]
+fn ipc_render_rejects_flags_that_need_the_in_process_renderer() {
+    // The process backend cannot compose chrome/find overlays (they need the parent's
+    // display list); it must say so instead of silently returning a different image.
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args([
+            "data:text/html,%3Ch1%3Ehi%3C%2Fh1%3E",
+            "--screenshot",
+            temp_path("ipc-chrome.png").to_str().expect("path"),
+            "--ipc-render",
+            "--chrome",
+        ])
+        .output()
+        .expect("shell binary runs");
+    assert!(
+        !output.status.success(),
+        "--ipc-render --chrome must fail with a clear error"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("ipc-render") && stderr.contains("chrome"),
+        "error must explain the incompatible flags: {stderr}"
+    );
+}
