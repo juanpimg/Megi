@@ -105,9 +105,26 @@ impl WindowApp {
     pub(super) fn start_navigation(&mut self, url: &megi_webview::net::Url) {
         self.session_autosave.mark_dirty(Instant::now());
         self.input = url.as_str();
-        if let Some(stored) = zoom::site_zoom(&self.site_zooms, &url.as_str()) {
-            self.zoom = stored;
-            self.tabs.active_mut().zoom = stored;
+        if let Some((stored_zoom, zoom_changed)) =
+            zoom::zoom_after_navigation(&self.site_zooms, &url.as_str(), self.zoom)
+        {
+            self.zoom = stored_zoom;
+            self.tabs.active_mut().zoom = stored_zoom;
+            if zoom_changed {
+                // #1721: a persisted site zoom that differs from the current one must also
+                // update the CSS viewport metrics — otherwise the frame is laid out at the
+                // old zoom and page_coordinates() divides by a stale scale until the next
+                // resize.
+                let (width, height) = self
+                    .window
+                    .as_ref()
+                    .map(|window| {
+                        let size = window.inner_size();
+                        (size.width, size.height)
+                    })
+                    .unwrap_or((self.requested_width, self.requested_height));
+                self.metrics = window_metrics_zoomed(width, height, self.scale_factor, self.zoom);
+            }
         }
         self.reader_html = None;
         self.error = None;
