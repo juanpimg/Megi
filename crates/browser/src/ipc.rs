@@ -26,7 +26,7 @@ pub enum IpcError {
     /// The peer closed before a complete header/payload arrived.
     Truncated,
     /// The declared length is larger than [`MAX_IPC_PAYLOAD`].
-    TooLarge(u32),
+    TooLarge(usize),
     /// The payload is not valid UTF-8 or not valid JSON.
     InvalidPayload(String),
     /// An underlying I/O error.
@@ -59,8 +59,10 @@ pub fn write_message<W: Write, T: serde::Serialize>(
 ) -> Result<(), IpcError> {
     let payload =
         serde_json::to_vec(value).map_err(|error| IpcError::InvalidPayload(error.to_string()))?;
-    let length =
-        u32::try_from(payload.len()).map_err(|_| IpcError::TooLarge(payload.len() as u32))?;
+    if payload.len() > MAX_IPC_PAYLOAD {
+        return Err(IpcError::TooLarge(payload.len()));
+    }
+    let length = u32::try_from(payload.len()).map_err(|_| IpcError::TooLarge(payload.len()))?;
     writer
         .write_all(&length.to_be_bytes())
         .and_then(|()| writer.write_all(&payload))
@@ -93,7 +95,7 @@ pub fn read_message_checked<R: Read, T: serde::de::DeserializeOwned>(
     read_exact_or(reader, &mut header[1..])?;
     let length = u32::from_be_bytes(header) as usize;
     if length > MAX_IPC_PAYLOAD {
-        return Err(IpcError::TooLarge(length as u32));
+        return Err(IpcError::TooLarge(length));
     }
     let mut payload = vec![0u8; length];
     read_exact_or(reader, &mut payload)?;
@@ -355,8 +357,18 @@ mod tests {
         let header = (MAX_IPC_PAYLOAD as u32 + 1).to_be_bytes();
         assert_eq!(
             read_message::<_, u32>(&mut &header[..]),
-            Err(IpcError::TooLarge(MAX_IPC_PAYLOAD as u32 + 1))
+            Err(IpcError::TooLarge(MAX_IPC_PAYLOAD + 1))
         );
+    }
+
+    #[test]
+    fn oversized_write_is_rejected() {
+        let payload = "a".repeat(MAX_IPC_PAYLOAD + 1);
+        let mut sink = Vec::new();
+        assert!(matches!(
+            write_message(&mut sink, &payload),
+            Err(IpcError::TooLarge(_))
+        ));
     }
 }
 
