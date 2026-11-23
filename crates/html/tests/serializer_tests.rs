@@ -123,3 +123,26 @@ fn an_unknown_element_serializes_with_its_children() {
         "unknown element: {out}"
     );
 }
+
+#[test]
+fn leaf_root_respects_max_output_bytes() {
+    let mut doc = megi_core::Document::new();
+    let big = "a".repeat(2048);
+    let text_id = doc.create_text_node(&big);
+    let comment_id = doc.create_comment(&big);
+    let void_id = doc.create_element(
+        megi_core::Namespace::Html,
+        "img",
+        vec![megi_core::Attribute::new("alt", &big)],
+    );
+    let opts = megi_html::HtmlSerializeOptions::scripting_disabled().with_max_output_bytes(128);
+    for id in [text_id, comment_id, void_id] {
+        let out = megi_html::serialize_outer_html_with_options(&doc, id, opts);
+        assert!(
+            out.contains("<!-- output truncated -->"),
+            "missing truncation marker for {id:?}: len={}",
+            out.len()
+        );
+        assert!(out.len() <= 128 + "<!-- output truncated -->".len());
+    }
+}

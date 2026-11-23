@@ -273,6 +273,10 @@ fn run_serialization(
             } => serialize_node_into(doc, node_id, rawtext_context, options, out, &mut stack),
         }
     }
+    if out.len() >= options.max_output_bytes {
+        truncate_to_limit(out, options.max_output_bytes);
+        out.push_str("<!-- output truncated -->");
+    }
 }
 
 /// Serializes the full document (doctype + root element), equivalent to serializing the children
