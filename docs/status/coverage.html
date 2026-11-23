@@ -5,14 +5,14 @@ body{font:14px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f23
 h1{font-size:28px;margin-bottom:0} h2{font-size:20px;margin-top:2rem}
 table{border-collapse:collapse;width:100%;margin:1rem 0} th,td{border:1px solid #d0d7de;padding:6px 10px;text-align:left}
 th{background:#f6f8fa} code{font-family:ui-monospace,monospace}
-.meta{color:#57606a} .big{font-size:44px;font-weight:700;color:#2ea043}
+.meta{color:#57606a} .big{font-size:44px;font-weight:700;color:#1f6feb}
 .note{background:#fff8c5;border-left:4px solid #d29922;padding:10px 14px;margin:1rem 0}
 </style></head><body>
 <h1>Megi — cobertura de capacidades</h1>
 <p class="meta">Generado desde <code>docs/status/coverage.toml</code> por <code>tools/update_coverage.py</code>.
 Actualizado por: docs (honest coverage, round 36)</p>
-<p><span class="big">99%</span> &nbsp; <b>69/70</b>
-capacidades implementadas · 1 parciales · 1 pendientes</p>
+<p><span class="big">92%</span> &nbsp; <b>69/75</b>
+capacidades implementadas · 1 parciales · 6 pendientes</p>
 <p><img src="coverage.svg" alt="Gráfica de cobertura" style="max-width:100%"></p>
 <div class="note">El denominador son las capacidades <b>declaradas</b> en el inventario. Una capacidad
 solo cuenta como implementada si su evidencia (gate, test o fixture) es verificable. Añadir capacidades
@@ -20,10 +20,10 @@ conocidas aumenta el denominador y puede bajar el porcentaje: significa que esta
 no que el código haya empeorado. Los parciales cuentan como no implementados.</p>
 <h2>Por área</h2>
 <table><tr><th>Área</th><th>Impl.</th><th>Conocidas</th><th>%</th><th>Barra</th></tr>
-<tr><td><b>F1</b> HTML, DOM y serialización</td><td>7</td><td>7</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F2</b> CSS, cascada y selectores</td><td>9</td><td>9</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F3</b> Layout (BFC/IFC, grid, flex, tablas)</td><td>8</td><td>8</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F4</b> Paint, raster, fuentes y SVG</td><td>13</td><td>13</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F5</b> Red y fetch</td><td>10</td><td>10</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F6</b> JavaScript y APIs DOM</td><td>11</td><td>11</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F7</b> Shell de escritorio</td><td>8</td><td>9</td><td style='color:#1f6feb'><b>89%</b></td><td><code>█████████████████░░░</code></td></tr><tr><td><b>X</b> Transversal (bench, fuzz, CI)</td><td>3</td><td>3</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr></table>
+<tr><td><b>F1</b> HTML, DOM y serialización</td><td>7</td><td>7</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F2</b> CSS, cascada y selectores</td><td>9</td><td>9</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F3</b> Layout (BFC/IFC, grid, flex, tablas)</td><td>8</td><td>8</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F4</b> Paint, raster, fuentes y SVG</td><td>13</td><td>13</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F5</b> Red y fetch</td><td>10</td><td>10</td><td style='color:#2ea043'><b>100%</b></td><td><code>████████████████████</code></td></tr><tr><td><b>F6</b> JavaScript y APIs DOM</td><td>11</td><td>13</td><td style='color:#1f6feb'><b>85%</b></td><td><code>█████████████████░░░</code></td></tr><tr><td><b>F7</b> Shell de escritorio</td><td>8</td><td>10</td><td style='color:#d29922'><b>80%</b></td><td><code>████████████████░░░░</code></td></tr><tr><td><b>X</b> Transversal (bench, fuzz, CI)</td><td>3</td><td>5</td><td style='color:#da3633'><b>60%</b></td><td><code>████████████░░░░░░░░</code></td></tr></table>
 <h2>Aún faltan (o no son verificables)</h2>
 <table><tr><th>Área</th><th>Id</th><th>Capacidad</th><th>Estado</th><th>Issue</th><th>Detalle</th></tr>
-<tr><td>F7</td><td><code>F7-A11Y</code></td><td>Accesibilidad y widgets nativos</td><td>partial</td><td><a href="https://github.com/juanpimg/Megi/issues/989">#989</a></td><td>no requiere evidencia</td></tr></table>
+<tr><td>F7</td><td><code>F7-A11Y</code></td><td>Accesibilidad y widgets nativos</td><td>partial</td><td><a href="https://github.com/juanpimg/Megi/issues/989">#989</a></td><td>no requiere evidencia</td></tr><tr><td>X</td><td><code>X-AVIF</code></td><td>Decodificación de imágenes AVIF</td><td>missing</td><td><a href="https://github.com/juanpimg/Megi/issues/1895">#1895</a></td><td>no requiere evidencia</td></tr><tr><td>X</td><td><code>X-PERF-REALSITES</code></td><td>Rendimiento acceptable en sitios reales complejos</td><td>missing</td><td><a href="https://github.com/juanpimg/Megi/issues/1899">#1899</a></td><td>no requiere evidencia</td></tr><tr><td>F6</td><td><code>F6-JS-BUDGET-REAL</code></td><td>Presupuesto JS suficiente para sitios reales</td><td>missing</td><td><a href="https://github.com/juanpimg/Megi/issues/1881">#1881</a></td><td>no requiere evidencia</td></tr><tr><td>F6</td><td><code>F6-GETCOMPUTEDSTYLE-PERF</code></td><td>getComputedStyle eficiente (sin re-serializar 42 propiedades por llamada)</td><td>missing</td><td><a href="https://github.com/juanpimg/Megi/issues/1868">#1868</a></td><td>no requiere evidencia</td></tr><tr><td>F7</td><td><code>F7-FIND-IN-PAGE-PERF</code></td><td>Find-in-page sin doble render por carácter</td><td>missing</td><td><a href="https://github.com/juanpimg/Megi/issues/1830">#1830</a></td><td>no requiere evidencia</td></tr></table>
 <p class="meta">Datos crudos: <a href="coverage.json">coverage.json</a> ·
 Reglas: <a href="COVERAGE.md">COVERAGE.md</a> ·
 Comprobación visual en webs reales: <a href="real-sites.html">real-sites.html</a></p>
