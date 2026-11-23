@@ -254,8 +254,10 @@
       // synchronous NetworkError.
       var raw = __megi_fetch_native(url, method, headerText, payload);
       this._readyState = 4;
-      this.status = raw.status;
-      this.statusText = raw.statusText;
+      // #2134: `status`/`statusText` are getter-only accessors reading these
+      // internal slots; assigning the accessors is a silent no-op in sloppy mode.
+      this._status = typeof raw.status === "number" ? raw.status : 0;
+      this._statusText = raw.statusText || "";
       this._responseText = raw.bodyText;
       this._responseBytes = raw.bodyBytes;
       this._responseBuffer = raw.bodyBytes ? raw.bodyBytes.slice().buffer : new ArrayBuffer(0);
