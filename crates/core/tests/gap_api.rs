@@ -51,3 +51,21 @@ fn compare_document_position_disconnected() {
     assert_eq!((position & (PRECEDING | FOLLOWING)).count_ones(), 1);
     assert!(matches!(document.node(first).kind, NodeKind::Element(_)));
 }
+
+/// DOM textContent is capped at 16 MiB even for a single Text node (#2141).
+#[test]
+fn text_content_caps_single_text_node() {
+    use megi_core::{Document, Namespace};
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let big = "x".repeat(17 * 1024 * 1024);
+    let text = doc.create_text_node(&big);
+    doc.append_child(html, text);
+    let result = doc.text_content(text);
+    assert!(
+        result.len() <= 16 * 1024 * 1024,
+        "text_content exceeded cap: {}",
+        result.len()
+    );
+}
