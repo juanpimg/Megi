@@ -175,7 +175,10 @@ mod unit_tests {
         // reports the real content height.
         let restored_offset = 450u32;
         let viewport = 800u32;
-        let session = ScrollState::new(restored_offset + 1, 1);
+        let mut session = ScrollState::new(restored_offset + 1, 1);
+        // WindowApp::new restores the saved offset with `scroll_to` after building
+        // the synthetic state; `new()` alone always starts at offset 0.
+        session.scroll_to(restored_offset);
         assert_eq!(session.offset(), restored_offset);
 
         // ensure_window rebuild pattern (frontend.rs).
