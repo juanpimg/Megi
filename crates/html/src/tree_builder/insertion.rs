@@ -202,6 +202,10 @@ impl TreeBuilder {
         if let Some(error) = error {
             script_errors.push(error);
         }
+        // #2133: the host executor may have removed an ancestor that is still on
+        // the open-elements stack. Prune stale handles before the parser touches
+        // the stack again (scope checks, end tags, adoption agency, counters).
+        self.prune_stale_open_elements();
     }
 
     pub(super) fn insert_node_at_adjusted_location(&mut self, node_id: NodeId) {

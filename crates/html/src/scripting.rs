@@ -227,6 +227,46 @@ mod parser_script_executor_tests {
         assert!(dump.contains("\"after\""), "{dump}");
     }
 
+    /// #2133: a host script may remove an ancestor that is still on the parser's
+    /// open-elements stack (via the public `Document::remove_subtree`). The parser
+    /// must not panic when it later pops that stale NodeId.
+    #[derive(Default)]
+    struct RemovingAncestorExecutor {
+        removed: bool,
+    }
+
+    impl ScriptExecutor for RemovingAncestorExecutor {
+        fn execute(
+            &mut self,
+            document: &mut Document,
+            script_text: &str,
+            _source_name: &str,
+        ) -> ScriptExecution {
+            if !self.removed
+                && let Some(p) = document.get_element_by_id("x")
+            {
+                document.remove_subtree(p);
+                self.removed = true;
+            }
+            let _ = script_text;
+            ScriptExecution::default()
+        }
+    }
+
+    #[test]
+    fn test_script_removing_an_open_ancestor_does_not_panic() {
+        // `<p id=x>` is open when the `<script>` runs; the executor removes it.
+        // The parser then pops the stale id; adjust_open_html_count must tolerate it.
+        let outcome = crate::tree_builder::parse_document_with_options_and_executor(
+            "<body><p id=x><script>free()</script></p><p>after</p></body>",
+            true,
+            &ParseOptions::default(),
+            Some(Box::new(RemovingAncestorExecutor::default())),
+        );
+        let dump = serialize_dom_for_test(&outcome.document);
+        assert!(dump.contains("\"after\""), "parser must continue: {dump}");
+    }
+
     #[test]
     fn test_detached_document_element_is_not_resurrected() {
         let executor = RecordingExecutor {
