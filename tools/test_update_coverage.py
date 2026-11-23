@@ -579,5 +579,43 @@ class GateFreshnessTests(unittest.TestCase):
         self.assertTrue(ok, reason)
 
 
+class MalformedLcovTests(unittest.TestCase):
+    """#2203: a corrupt LCOV record must give a diagnostic + rc=2, not a traceback."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _run(self, text: str):
+        import subprocess
+
+        tracefile = self.root / "bad.info"
+        tracefile.write_text(text, encoding="utf-8")
+        script = Path(__file__).with_name("coverage_report.py")
+        return subprocess.run(
+            [sys.executable, str(script), str(tracefile), "--min", "60"],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_malformed_count_exits_2_with_diagnostic(self) -> None:
+        result = self._run("SF:src/lib.rs\nLF:oops\nLH:0\nend_of_record\n")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("error:", result.stderr)
+        self.assertIn("LF:oops", result.stderr)
+        self.assertIn("bad.info:2", result.stderr, "diagnostic must include the line number")
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_malformed_function_count_exits_2(self) -> None:
+        result = self._run("SF:src/lib.rs\nLF:10\nLH:5\nFNF:x\nFNH:0\nend_of_record\n")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("error:", result.stderr)
+        self.assertIn("FNF:x", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

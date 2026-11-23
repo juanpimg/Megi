@@ -45,15 +45,20 @@ class Totals:
 
 def parse_lcov(path: Path) -> Totals:
     totals = Totals()
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        if raw.startswith("LF:"):
-            totals.lines_found += int(raw[3:])
-        elif raw.startswith("LH:"):
-            totals.lines_hit += int(raw[3:])
-        elif raw.startswith("FNF:"):
-            totals.functions_found += int(raw[4:])
-        elif raw.startswith("FNH:"):
-            totals.functions_hit += int(raw[4:])
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        for prefix, field in (("LF:", "lines_found"), ("LH:", "lines_hit"),
+                              ("FNF:", "functions_found"), ("FNH:", "functions_hit")):
+            if raw.startswith(prefix):
+                value = raw[len(prefix):]
+                try:
+                    parsed = int(value)
+                except ValueError as exc:
+                    # #2203: a corrupt record must give a located diagnostic, not a traceback.
+                    raise ValueError(
+                        f"{path}:{lineno}: invalid numeric record {raw!r}"
+                    ) from exc
+                setattr(totals, field, getattr(totals, field) + parsed)
+                break
     return totals
 
 
@@ -98,6 +103,10 @@ def main() -> int:
         totals = parse_lcov(args.lcov)
     except OSError as exc:
         print(f"error: cannot read {args.lcov}: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        # #2203: malformed counts are a bad input, so report and exit with code 2.
+        print(f"error: malformed LCOV tracefile: {exc}", file=sys.stderr)
         return 2
     if not totals.lines_found:
         print(f"error: {args.lcov} has no LF/LH records", file=sys.stderr)
