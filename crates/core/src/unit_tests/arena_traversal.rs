@@ -473,3 +473,34 @@ fn reparent_children_returns_on_cyclic_parent_chain() {
     // Before the fix is_ancestor_of(d, a) looped forever here (#1110).
     assert!(!doc.reparent_children(c, a));
 }
+
+#[test]
+fn append_text_and_insert_text_before_cap_coalescing() {
+    let mut doc = Document::new();
+    let div = doc.create_element(Namespace::Html, "div", vec![]);
+    doc.append_child(doc.root(), div);
+    let chunk = "a".repeat(1024 * 1024); // 1 MiB
+    let mut last_id = None;
+    for _ in 0..20 {
+        last_id = doc.append_text(div, &chunk);
+    }
+    let last_id = last_id.expect("text node");
+    if let NodeKind::Text(ref data) = doc.node(last_id).kind {
+        assert!(data.len() <= Document::MAX_TEXT_CONTENT_BYTES);
+    } else {
+        panic!("expected text node");
+    }
+
+    let marker = doc.create_element(Namespace::Html, "span", vec![]);
+    doc.append_child(div, marker);
+    let mut prev_id = None;
+    for _ in 0..20 {
+        prev_id = doc.insert_text_before(marker, &chunk);
+    }
+    let prev_id = prev_id.expect("text node");
+    if let NodeKind::Text(ref data) = doc.node(prev_id).kind {
+        assert!(data.len() <= Document::MAX_TEXT_CONTENT_BYTES);
+    } else {
+        panic!("expected text node");
+    }
+}

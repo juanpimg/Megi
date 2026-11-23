@@ -227,6 +227,7 @@ impl Document {
         }
         if let Some(last_id) = self.node(parent_id).last_child
             && let NodeKind::Text(ref mut existing) = self.node_mut(last_id).kind
+            && existing.len().saturating_add(text.len()) <= Self::MAX_TEXT_CONTENT_BYTES
         {
             existing.push_str(text);
             return Some(last_id);
@@ -251,6 +252,7 @@ impl Document {
         self.try_node(reference_sibling_id)?;
         if let Some(prev_id) = self.node(reference_sibling_id).prev_sibling
             && let NodeKind::Text(ref mut existing) = self.node_mut(prev_id).kind
+            && existing.len().saturating_add(text.len()) <= Self::MAX_TEXT_CONTENT_BYTES
         {
             existing.push_str(text);
             return Some(prev_id);
