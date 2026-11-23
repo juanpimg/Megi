@@ -117,8 +117,10 @@ fn run() -> Result<(), ShellError> {
             // returns only the serializable PNG payload; chrome/find overlays are a parent
             // concern and are therefore incompatible with this mode (documented limitation).
             if args.ipc_render {
-                let png = megi_browser::ipc::render_png_in_process(&input, css_width, css_height)
-                    .map_err(|error| ShellError::Io {
+                let png = megi_browser::ipc::render_png_in_process_with_options(
+                    &input, css_width, css_height, &options,
+                )
+                .map_err(|error| ShellError::Io {
                     path: "ipc-render".to_owned(),
                     reason: error.to_string(),
                 })?;

@@ -64,6 +64,7 @@ fn process_frame_restores_dom_from_wire_response() {
         find_rects: Vec::new(),
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
+        cookies: Vec::new(),
         error: None,
     };
     let frame = ProcessFrame::from_response(response);
@@ -94,6 +95,7 @@ fn failed_response_uses_an_empty_document() {
         find_matches: Vec::new(),
         find_rects: Vec::new(),
         document_html: String::new(),
+        cookies: Vec::new(),
         error: Some("boom".to_owned()),
     };
     let frame = ProcessFrame::from_response(response);
@@ -203,6 +205,7 @@ fn process_requests_route_to_their_effective_site() {
         base_override: Some("https://real.example/page".to_owned()),
         scripting: true,
         find_query: None,
+        options: IpcRenderOptions::default(),
     };
     assert_eq!(
         crate::ipc::request_process_site(&request),
@@ -245,6 +248,7 @@ fn worker_stream_serves_requests_from_distinct_sites() {
             base_override: None,
             scripting: false,
             find_query: None,
+            options: IpcRenderOptions::default(),
         };
         write_message(&mut input, &request).expect("write request");
     }
@@ -397,6 +401,7 @@ fn worker_stream_and_process_frame_preserve_many_link_and_form_nodes() {
         base_override: None,
         scripting: false,
         find_query: None,
+        options: IpcRenderOptions::default(),
     };
     let mut input = Vec::new();
     write_message(&mut input, &request).expect("write request");

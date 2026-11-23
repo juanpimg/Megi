@@ -142,6 +142,22 @@ pub fn render_png_in_process(
     css_width: u32,
     css_height: u32,
 ) -> Result<Vec<u8>, IpcError> {
+    render_png_in_process_with_options(
+        input,
+        css_width,
+        css_height,
+        &megi_webview::render::RenderOptions::default(),
+    )
+}
+
+/// [`render_png_in_process`] forwarding `options` (time, cookies, origin, resource caps)
+/// across the process boundary (#2165).
+pub fn render_png_in_process_with_options(
+    input: &str,
+    css_width: u32,
+    css_height: u32,
+    options: &megi_webview::render::RenderOptions,
+) -> Result<Vec<u8>, IpcError> {
     let mut renderer = ProcessRenderer::spawn()?;
     let request = IpcRenderRequest {
         generation: 1,
@@ -151,6 +167,7 @@ pub fn render_png_in_process(
         base_override: None,
         scripting: true,
         find_query: None,
+        options: IpcRenderOptions::from_render_options(options),
     };
     let response = renderer.render(request)?;
     renderer.kill();

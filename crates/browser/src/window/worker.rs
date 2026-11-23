@@ -29,6 +29,7 @@ impl WindowApp {
             base_override: request.base_override.clone(),
             scripting: request.scripting,
             find_query: request.find_query.clone(),
+            options: crate::ipc::IpcRenderOptions::from_render_options(&self.render_options),
         };
         let pool = self.process_pool.get_or_insert_with(|| {
             crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
@@ -253,6 +254,12 @@ impl WindowApp {
             for response in pool.drain() {
                 match response {
                     Ok(response) => {
+                        if !response.cookies.is_empty()
+                            && let Some(jar) = &self.render_options.cookie_jar
+                            && let Ok(mut guard) = jar.lock()
+                        {
+                            crate::ipc::IpcCookie::apply_to_jar(&response.cookies, &mut guard);
+                        }
                         let frame = crate::ipc::ProcessFrame::from_response(response);
                         match frame.to_render_frame(0) {
                             Ok(rendered) => {

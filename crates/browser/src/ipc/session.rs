@@ -111,6 +111,7 @@ pub struct ProcessRenderSession {
     renderer: ProcessRenderer,
     document: Option<megi_webview::core::Document>,
     last_viewport: Option<(u32, u32)>,
+    last_options: Option<IpcRenderOptions>,
 }
 
 impl ProcessRenderSession {
@@ -119,14 +120,17 @@ impl ProcessRenderSession {
             renderer: ProcessRenderer::spawn()?,
             document: None,
             last_viewport: None,
+            last_options: None,
         })
     }
 
     /// Renders a fresh request and caches the returned DOM.
     pub fn render(&mut self, request: IpcRenderRequest) -> Result<ProcessFrame, IpcError> {
         let viewport = (request.css_width, request.css_height);
+        let options = request.options.clone();
         let response = self.renderer.render(request)?;
         self.last_viewport = Some(viewport);
+        self.last_options = Some(options);
         self.apply_response(response)
     }
 
@@ -153,6 +157,7 @@ impl ProcessRenderSession {
             base_override: patch.base_override,
             scripting: true,
             find_query: None,
+            options: self.last_options.clone().unwrap_or_default(),
         })
     }
 
@@ -183,6 +188,7 @@ mod tests {
             renderer: ProcessRenderer::spawn().expect("spawn"),
             document: Some(doc),
             last_viewport: Some((800, 600)),
+            last_options: None,
         };
         let req = session.build_patch_request("https://example.com/").unwrap();
         assert_eq!((req.css_width, req.css_height), (800, 600));
@@ -205,6 +211,7 @@ mod tests {
             find_matches: Vec::new(),
             find_rects: Vec::new(),
             document_html: String::new(),
+            cookies: Vec::new(),
             error: Some("render failed".to_owned()),
         };
         assert!(session.apply_response(err_resp).is_err());
