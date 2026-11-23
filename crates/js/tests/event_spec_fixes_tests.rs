@@ -360,3 +360,50 @@ fn abort_signal_notifies_listeners_added_after_abort() {
         .expect("eval");
     assert_eq!(out, "abort:done");
 }
+
+#[test]
+fn derived_event_constructors_require_type_argument() {
+    // #2150: CustomEvent, MessageEvent, and CompositionEvent require `type`.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    for ctor in ["CustomEvent", "MessageEvent", "CompositionEvent"] {
+        let code = format!(
+            "try {{ new {ctor}(); 'no-error'; }} catch (e) {{ e.name + ':' + e.message; }}"
+        );
+        let out = runtime.eval(&code, "ctor-type.js").expect("eval");
+        assert!(
+            out.starts_with("TypeError:") || out.contains("1 argument required"),
+            "{ctor}() should throw TypeError: {out}"
+        );
+    }
+}
+
+#[test]
+fn dispatch_event_handles_parent_cycle_without_hanging() {
+    // #2149: A cycle in `parent` pointers must not hang `propagation_path`.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "var a = document.createElement('div'); a.id = 'cycle-a'; \
+             var b = document.createElement('div'); b.id = 'cycle-b'; \
+             document.body.appendChild(a); document.body.appendChild(b);",
+            "setup-cycle.js",
+        )
+        .expect("setup");
+    {
+        let mut doc = runtime.document_mut();
+        let a = doc.get_element_by_id("cycle-a").expect("a");
+        let b = doc.get_element_by_id("cycle-b").expect("b");
+        doc.try_node_mut(a).unwrap().parent = Some(b);
+        doc.try_node_mut(b).unwrap().parent = Some(a);
+    }
+    let out = runtime
+        .eval(
+            "var fired = 0; \
+             a.addEventListener('ping', function() { fired += 1; }); \
+             a.dispatchEvent(new Event('ping')); \
+             String(fired);",
+            "cycle.js",
+        )
+        .expect("eval");
+    assert_eq!(out, "1");
+}

@@ -54,8 +54,9 @@ pub(crate) fn propagation_path(
             let host = host_ref(context)?;
             let root = host.document.root();
             let mut ids = Vec::new();
+            let mut visited = std::collections::HashSet::new();
             let mut current = Some(node);
-            while let Some(id) = current {
+            while let Some(id) = current.filter(|id| visited.insert(*id)) {
                 ids.push(id);
                 current = host.document.try_node(id).and_then(|node| node.parent);
             }
