@@ -423,9 +423,7 @@ fn worker_receives_dom_events_from_a_proxied_element() {
 fn worker_onmessage_setter_preserves_add_event_listener() {
     // #2156: Assigning `worker.onmessage` must not clear `addEventListener('message', ...)` listeners.
     let mut runtime = JsRuntime::new().expect("runtime");
-    runtime.set_worker_loader(Arc::new(|_url| {
-        Ok("self.postMessage('hi');".to_string())
-    }));
+    runtime.set_worker_loader(Arc::new(|_url| Ok("self.postMessage('hi');".to_string())));
     runtime
         .eval(
             "window.__log = []; \
