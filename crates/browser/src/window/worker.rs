@@ -251,7 +251,7 @@ impl WindowApp {
             messages.push(message);
         }
         if let Some(pool) = &mut self.process_pool {
-            for response in pool.drain() {
+            for (pending_gen, response) in pool.drain_tagged() {
                 match response {
                     Ok(response) => {
                         if !response.cookies.is_empty()
@@ -271,10 +271,16 @@ impl WindowApp {
                             }),
                         }
                     }
-                    Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
-                        generation: 0,
-                        message: error.to_string(),
-                    }),
+                    Err(error) => {
+                        if let Some(generation) = pending_gen {
+                            messages.push(crate::worker::WorkerMessage::Failed {
+                                generation,
+                                message: error.to_string(),
+                            });
+                        } else {
+                            self.error = Some(error.to_string());
+                        }
+                    }
                 }
             }
         }

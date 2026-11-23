@@ -85,13 +85,13 @@ impl ProcessRenderer {
         std::thread::spawn(move || {
             let mut stdout = stdout;
             loop {
-                match read_message::<_, IpcRenderResponse>(&mut stdout) {
-                    Ok(response) => {
+                match read_message_checked::<_, IpcRenderResponse>(&mut stdout) {
+                    Ok(Some(response)) => {
                         if sender.send(Ok(response)).is_err() {
                             break;
                         }
                     }
-                    Err(IpcError::Truncated) => break,
+                    Ok(None) => break,
                     Err(error) => {
                         let _ = sender.send(Err(error));
                         break;
