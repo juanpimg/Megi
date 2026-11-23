@@ -109,13 +109,25 @@ impl Document {
         let Some(effective_node) = self.try_node(effective_id) else {
             return String::new();
         };
+        // #2141: the 16 MiB cap promised by this API must also apply to a
+        // CharacterData root (Text/Comment/PI), not only to descendant walks.
+        let capped = |data: &str| -> String {
+            if data.len() <= Self::MAX_TEXT_CONTENT_BYTES {
+                return data.to_owned();
+            }
+            let mut end = Self::MAX_TEXT_CONTENT_BYTES;
+            while end > 0 && !data.is_char_boundary(end) {
+                end -= 1;
+            }
+            data[..end].to_owned()
+        };
         if let Some(text) = effective_node.as_text() {
-            return text.to_owned();
+            return capped(text);
         }
         // #1729 / DOM §4.4: textContent is `data` for any CharacterData node, not just Text.
         match &effective_node.kind {
-            NodeKind::Comment(data) => return data.clone(),
-            NodeKind::ProcessingInstruction { data, .. } => return data.clone(),
+            NodeKind::Comment(data) => return capped(data),
+            NodeKind::ProcessingInstruction { data, .. } => return capped(data),
             _ => {}
         }
         if matches!(effective_node.kind, NodeKind::Document) {

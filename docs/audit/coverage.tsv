@@ -190,7 +190,7 @@ crates/core/src/query/clone.rs	113	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/core/src/query/lookup.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mod.rs	12	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mutation.rs	398	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/query/text.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/query/text.rs	234	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_core.rs	446	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_mutations.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_traversal.rs	498	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -202,7 +202,7 @@ crates/core/src/unit_tests/validate_perf.rs	44	src	F2	jquery-fix	2026-11-21	cove
 crates/core/src/validation.rs	335	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/tests/conformance_r226.rs	75	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/tests/conformance_r233.rs	138	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/tests/gap_api.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/tests/gap_api.rs	71	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/Cargo.toml	18	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation/chunk1.rs	400	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
