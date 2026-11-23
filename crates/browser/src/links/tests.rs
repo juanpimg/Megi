@@ -207,8 +207,12 @@ fn collect_link_regions_finds_anchors_in_a_rendered_page() {
     // #1723: regions now also contain opaque non-link blockers; the links are
     // the ones with a non-empty href.
     let links: Vec<&LinkRegion> = regions.iter().filter(|r| !r.is_blocker).collect();
-    assert_eq!(links.len(), 1, "regions: {regions:?}");
-    assert_eq!(links[0].href, "next.html");
+    // One anchor can paint several primitives (e.g. its text run and the UA underline);
+    // they all share the href. What matters for hit-testing is the distinct target.
+    let mut hrefs: Vec<&str> = links.iter().map(|r| r.href.as_str()).collect();
+    hrefs.sort();
+    hrefs.dedup();
+    assert_eq!(hrefs, vec!["next.html"], "regions: {regions:?}");
     assert!(links[0].rect.width > 0.0);
     assert!(links[0].rect.height > 0.0);
     let center_x = links[0].rect.x + links[0].rect.width / 2.0;
@@ -285,6 +289,12 @@ fn collect_link_regions_skips_anchors_without_href() {
     .expect("data URL renders");
     let regions = collect_link_regions(&output);
     let links: Vec<&LinkRegion> = regions.iter().filter(|r| !r.is_blocker).collect();
-    assert_eq!(links.len(), 1, "regions: {regions:?}");
-    assert_eq!(links[0].href, "#frag");
+    let mut hrefs: Vec<&str> = links.iter().map(|r| r.href.as_str()).collect();
+    hrefs.sort();
+    hrefs.dedup();
+    assert_eq!(hrefs, vec!["#frag"], "regions: {regions:?}");
+    assert!(
+        links.iter().all(|r| !r.href.is_empty()),
+        "anchors without href must not produce link regions"
+    );
 }

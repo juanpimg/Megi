@@ -224,6 +224,12 @@ legend {
     font-weight: bold;
 }
 
+/* WHATWG HTML §15.3.2: unvisited links get the UA link colour and an underline. */
+a:link {
+    color: #0000ee;
+    text-decoration: underline;
+}
+
 label {
     display: inline;
 }

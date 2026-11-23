@@ -55,8 +55,12 @@ fn worker_render_document_exposes_links_title_and_final_url() {
     );
     let links: Vec<&megi_browser::LinkRegion> =
         frame.links.iter().filter(|l| !l.is_blocker).collect();
-    assert_eq!(links.len(), 1, "links: {:?}", frame.links);
-    assert_eq!(links[0].href, "next.html");
+    // An anchor can paint multiple primitives (text run + UA underline): assert on the
+    // distinct target rather than the primitive count.
+    let mut hrefs: Vec<&str> = links.iter().map(|l| l.href.as_str()).collect();
+    hrefs.sort();
+    hrefs.dedup();
+    assert_eq!(hrefs, vec!["next.html"], "links: {:?}", frame.links);
     assert!(links[0].rect.width > 0.0);
     // The stored hit map answers the same question the window asks on click.
     let page =
