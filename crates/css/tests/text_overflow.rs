@@ -111,3 +111,56 @@ fn column_count_parses() {
     let style = styles.get(&div).expect("div style");
     assert_eq!(style.column_count, 3);
 }
+
+/// CSS Grid §7: minmax() fractions must be finite (#2139).
+#[test]
+fn minmax_rejects_infinite_fraction() {
+    use megi_core::{Document, Namespace};
+    use megi_css::resolve_document_styles;
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let div = doc.create_element(Namespace::Html, "div".to_owned(), vec![]);
+    doc.append_child(body, div);
+    let styles = resolve_document_styles(
+        &doc,
+        Some("div { display:grid; grid-template-columns: minmax(10px, 1e400fr) }"),
+    );
+    let style = styles.get(&div).expect("div style");
+    let has_infinite = format!("{:?}", style.grid_template_columns).contains("inf");
+    assert!(
+        !has_infinite,
+        "infinite fraction reached style: {:?}",
+        style.grid_template_columns
+    );
+}
+
+/// CSS Images: conic-gradient stops reject non-finite percentages (#2140).
+#[test]
+fn conic_gradient_rejects_infinite_stop() {
+    use megi_core::{Document, Namespace};
+    use megi_css::resolve_document_styles;
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let div = doc.create_element(Namespace::Html, "div".to_owned(), vec![]);
+    doc.append_child(body, div);
+    let styles = resolve_document_styles(
+        &doc,
+        Some("div { background: conic-gradient(red 1e400%, blue) }"),
+    );
+    let style = styles.get(&div).expect("div style");
+    let has_infinite = style.background_image.iter().any(|layer| {
+        let debug = format!("{layer:?}");
+        debug.contains("inf") || debug.contains("NaN")
+    });
+    assert!(
+        !has_infinite,
+        "non-finite stop reached style: {:?}",
+        style.background_image
+    );
+}
