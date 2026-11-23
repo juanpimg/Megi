@@ -322,11 +322,16 @@ jobs:
       - name: cargo geiger (forbid-only check)
         run: |
           set -e
-          : > /tmp/geiger.json
+          # #2171: one JSON document per crate would concatenate into invalid
+          # JSON. Write each to its own file, then combine into a single array.
+          rm -rf /tmp/geiger-parts && mkdir -p /tmp/geiger-parts
+          i=0
           for manifest in crates/*/Cargo.toml; do
             echo "=== cargo geiger --manifest-path $manifest ==="
-            cargo geiger --manifest-path "$PWD/$manifest" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
+            cargo geiger --manifest-path "$PWD/$manifest" --all-features --all-targets --forbid-only --output-format Json > "/tmp/geiger-parts/$i.json"
+            i=$((i + 1))
           done
+          python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob("/tmp/geiger-parts/*.json"), key=lambda p:int(p.rsplit("/",1)[1][:-5]))], open("/tmp/geiger.json","w"))'
       - name: Upload geiger report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
