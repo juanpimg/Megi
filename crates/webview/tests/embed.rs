@@ -47,3 +47,13 @@ fn webview_navigation_history_is_platform_independent() {
     assert!(view.back().is_some());
     assert!(view.can_forward());
 }
+
+#[test]
+fn webview_event_queue_is_bounded() {
+    let mut view = WebView::new(WebViewOptions::new(320, 240).expect("viewport")).expect("webview");
+    for _ in 0..(megi_webview::MAX_QUEUED_EVENTS + 500) {
+        view.enqueue_event(megi_webview::WebEvent::Wheel { dx: 0.0, dy: 1.0 });
+    }
+    let drained = view.drain_events();
+    assert_eq!(drained.len(), megi_webview::MAX_QUEUED_EVENTS);
+}

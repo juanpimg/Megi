@@ -102,6 +102,10 @@ pub struct WebView {
     events: VecDeque<WebEvent>,
 }
 
+/// Maximum number of host events retained in [`WebView`] before the oldest
+/// un-drained events are dropped.
+pub const MAX_QUEUED_EVENTS: usize = 4096;
+
 impl WebView {
     /// Creates a WebView with no loaded document.
     pub fn new(options: WebViewOptions) -> Result<Self, WebError> {
@@ -158,12 +162,18 @@ impl WebView {
         megi_display::find_link_at(&frame.document, &frame.hit_regions, x, y)
     }
 
-    /// Enqueues a host-translated event for the next `tick()`.
+        /// Enqueues a host-translated event for the next `tick()`.
+    ///
+    /// The queue is bounded to [`MAX_QUEUED_EVENTS`]; if the host does not call
+    /// [`WebView::drain_events`], the oldest queued event is dropped.
     pub fn enqueue_event(&mut self, event: WebEvent) {
         if let WebEvent::Resize { width, height } = event
             && let Ok(viewport) = Viewport::new(width, height)
         {
             self.options.viewport = viewport;
+        }
+        if self.events.len() >= MAX_QUEUED_EVENTS {
+            self.events.pop_front();
         }
         self.events.push_back(event);
     }
