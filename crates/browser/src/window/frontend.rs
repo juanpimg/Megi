@@ -70,6 +70,7 @@ impl WindowApp {
             use_process_render: view.process_render,
             process_messages: std::collections::VecDeque::new(),
             debounce: Debounce::new(RENDER_DEBOUNCE),
+            find_render: crate::worker::FindRenderCoalescer::new(RENDER_DEBOUNCE),
             pending_metrics: None,
             error: None,
             content_capped: false,

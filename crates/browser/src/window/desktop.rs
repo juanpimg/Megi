@@ -233,6 +233,8 @@ pub(super) struct WindowApp {
     pub(super) use_process_render: bool,
     pub(super) process_messages: std::collections::VecDeque<crate::worker::WorkerMessage>,
     pub(super) debounce: Debounce,
+    /// Coalesces find-in-page query changes into one render (#1830).
+    pub(super) find_render: crate::worker::FindRenderCoalescer,
     pub(super) pending_metrics: Option<WindowMetrics>,
     pub(super) error: Option<String>,
     pub(super) content_capped: bool,
