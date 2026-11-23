@@ -230,6 +230,13 @@ impl Host {
             let without_hash = base.split('#').next().unwrap_or(&base);
             return format!("{without_hash}{url}");
         }
+        // #2151: WHATWG URL §4.3 — scheme-relative URLs (`//host/path`) inherit the base scheme.
+        if url.starts_with("//") {
+            if let Some(scheme) = base.find("://") {
+                return format!("{}:{}", &base[..scheme], url);
+            }
+            return format!("https:{url}");
+        }
         if url.starts_with('/') {
             if let Some(scheme) = base.find("://") {
                 let rest = &base[scheme + 3..];

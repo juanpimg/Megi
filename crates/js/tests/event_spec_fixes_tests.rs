@@ -407,3 +407,20 @@ fn dispatch_event_handles_parent_cycle_without_hanging() {
         .expect("eval");
     assert_eq!(out, "1");
 }
+
+#[test]
+fn resolve_url_handles_scheme_relative_urls() {
+    // #2151: `//host/path` must inherit the base scheme, not become `https://example.com//host/path`.
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen_clone = std::sync::Arc::clone(&seen);
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_worker_loader(std::sync::Arc::new(move |url| {
+        seen_clone.lock().unwrap().push(url.to_string());
+        Ok(String::new())
+    }));
+    runtime
+        .eval("new Worker('//evil.test/x');", "scheme-rel.js")
+        .expect("eval");
+    let urls = seen.lock().unwrap().clone();
+    assert_eq!(urls, vec!["https://evil.test/x".to_string()]);
+}
