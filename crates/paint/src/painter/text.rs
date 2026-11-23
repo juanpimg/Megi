@@ -348,7 +348,7 @@ pub(super) fn paint_marker(
                     style.font_style,
                     megi_css::FontStyle::Italic | megi_css::FontStyle::Oblique
                 ),
-                advance: width / 2.0,
+                advance: font_size * 0.5,
                 baseline: font_size * 0.8,
             });
         }
