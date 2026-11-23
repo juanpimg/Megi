@@ -217,6 +217,21 @@
       this.signal = init.signal || null;
       this.redirect = normalizeRedirect(init.redirect);
     }
+    // #2135: binary bodies must reach the native bridge byte-for-byte. Encode
+    // ArrayBuffer / typed-array bodies as a Latin-1 string (one char per byte)
+    // and record the flag so the bridge reinterprets each char as a byte rather
+    // than UTF-8-encoding it.
+    this._isBinaryBody = false;
+    if (this.body !== null && typeof ArrayBuffer !== "undefined"
+        && (this.body instanceof ArrayBuffer || (ArrayBuffer.isView && ArrayBuffer.isView(this.body)))) {
+      var view = this.body instanceof ArrayBuffer
+        ? new Uint8Array(this.body)
+        : new Uint8Array(this.body.buffer, this.body.byteOffset, this.body.byteLength);
+      var latin = "";
+      for (var bi = 0; bi < view.length; bi++) { latin += String.fromCharCode(view[bi]); }
+      this.body = latin;
+      this._isBinaryBody = true;
+    }
     if (this.body !== null && typeof this.body === "object") {
       if (this.body instanceof FormData) {
         if (!this.headers.has("Content-Type")) {
@@ -244,7 +259,7 @@
       try {
         var headerText = "";
         request.headers.forEach(function (value, name) { headerText += name + ":" + value + "\n"; });
-        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body, request.redirect);
+        var raw = __megi_fetch_native(request.url, request.method, headerText, request.body === null ? "" : request.body, request.redirect, request._isBinaryBody === true);
         Promise.resolve().then(function () {
           if (settled) { return; }
           settled = true;

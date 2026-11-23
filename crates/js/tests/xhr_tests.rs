@@ -368,3 +368,32 @@ fn xhr_open_validates_method_token_and_forbidden_methods() {
         "ok:GET|SyntaxError|SyntaxError|SyntaxError|SyntaxError|SecurityError|SecurityError|SecurityError|ok:X-CUSTOM"
     );
 }
+
+#[test]
+fn binary_request_body_reaches_the_provider_byte_for_byte_2135() {
+    // #2135: XHR/fetch must send Uint8Array/ArrayBuffer bytes unchanged. The old
+    // path turned them into a JS string via String.fromCharCode and the native
+    // side re-encoded it as UTF-8, corrupting every byte >= 0x80.
+    let (mut runtime, calls) = mock_runtime(FetchResult {
+        status: 200,
+        status_text: "OK".into(),
+        url: "https://example.test/upload".into(),
+        headers: vec![],
+        body: b"".to_vec(),
+    });
+    runtime
+        .eval(
+            r#"
+            var x = new XMLHttpRequest();
+            x.open('POST', 'https://example.test/upload');
+            x.send(new Uint8Array([0xff, 0x80, 0x00, 0x41]));
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    runtime.run_microtasks().expect("microtasks");
+    let seen = calls.lock().expect("lock");
+    let body = seen[0].body.clone().unwrap_or_default();
+    let hex: String = body.iter().map(|b| format!("{b:02x} ")).collect();
+    assert_eq!(hex.trim(), "ff 80 00 41");
+}

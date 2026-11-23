@@ -27,7 +27,8 @@ pub(crate) fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
 
     let fetch_fn = FunctionObjectBuilder::new(context.realm(), native(fetch_native))
         .name(js_string!("__megi_fetch_native"))
-        .length(4)
+        // #2135: 6 args (url, method, headers, body, redirect, isBinary)
+        .length(6)
         .build();
     context
         .global_object()
