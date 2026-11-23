@@ -101,7 +101,7 @@ impl TreeBuilder {
                     break;
                 }
                 while let Some(child) = self.doc.node(sc_id).first_child {
-                    self.doc.detach(child);
+                    self.doc.remove_subtree(child);
                 }
                 let mut curr = self.doc.node(selected_option).first_child;
                 while let Some(child_id) = curr {
