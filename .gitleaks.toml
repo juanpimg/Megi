@@ -22,7 +22,7 @@ rules = ["generic-api-key"]
 
 [[allowlists]]
 description = "RFC 6455 sample Sec-WebSocket-Key in WebSocket tests is a public constant, not a credential"
-paths = ["^crates/net/src/websocket\\.rs$"]
+paths = ["^crates/net/src/websocket\\.rs$", "^crates/net/src/websocket/tests\\.rs$"]
 rules = ["generic-api-key"]
 
 [[allowlists]]
