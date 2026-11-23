@@ -429,4 +429,28 @@ pub(crate) mod tests {
             Color::new(7, 89, 10, 255)
         );
     }
+
+    /// CSS 2.2 §11.2: `visibility` is inherited, and the style-resolution cache key
+    /// must preserve all 128 bits of the parent key. Folding the two halves with XOR
+    /// (and deriving `high` from `low`) let two distinct parents with the same
+    /// `lo ^ hi` alias to one cached `ComputedStyle`, which is why Wikipedia rendered
+    /// blank: a hidden dropdown's style leaked into unrelated article containers.
+    #[test]
+    fn test_style_cache_key_must_not_alias_distinct_parent_keys() {
+        // Same XOR of halves, different 128-bit parent keys: these currently alias.
+        let p1 = 0x1111_1111_1111_1111_2222_2222_2222_2222u128;
+        let p2 = 0x2222_2222_2222_2222_1111_1111_1111_1111u128;
+        assert_ne!(p1, p2);
+        assert_eq!(p1 as u64 ^ (p1 >> 64) as u64, p2 as u64 ^ (p2 >> 64) as u64);
+
+        let decls = parse_inline_style("display:block");
+        let cascaded: std::collections::HashMap<String, &crate::rule::Declaration> =
+            decls.iter().map(|d| (d.name.clone(), d)).collect();
+
+        assert_ne!(
+            style_cache_key(p1, &cascaded),
+            style_cache_key(p2, &cascaded),
+            "distinct parent keys must never produce the same style-cache key"
+        );
+    }
 }
