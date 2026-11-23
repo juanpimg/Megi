@@ -13,7 +13,7 @@
 //!
 //! ## Limits (fixed, non-fatal warnings)
 //!
-//! - at most **32** font faces attempted per render;
+//! - at most **128** font faces attempted per render;
 //! - at most **8 MiB** per decoded source;
 //! - at most **32 MiB** of accepted encoded bytes in total;
 //! - `--no-network` skips `http(s)` sources with a warning and falls back to the bundled
@@ -290,5 +290,26 @@ mod supported_format_tests {
         assert!(is_supported_format("woff2"));
         assert!(is_supported_format("truetype"));
         assert!(!is_supported_format("unknown-format"));
+    }
+
+    #[test]
+    fn docs_match_max_web_fonts_constant() {
+        let webfonts_src = include_str!("webfonts.rs");
+        let expected_line = format!(
+            "//! - at most **{}** font faces attempted per render;",
+            super::MAX_WEB_FONTS
+        );
+        assert!(
+            webfonts_src.contains(&expected_line),
+            "webfonts.rs doc comment must match MAX_WEB_FONTS={}",
+            super::MAX_WEB_FONTS
+        );
+        let lib_src = include_str!("lib.rs");
+        let expected_caps = format!("Caps: {} fonts,", super::MAX_WEB_FONTS);
+        assert!(
+            lib_src.contains(&expected_caps),
+            "lib.rs doc comment must match MAX_WEB_FONTS={}",
+            super::MAX_WEB_FONTS
+        );
     }
 }

@@ -169,7 +169,7 @@
 //!   sfnt with pure-Rust `woff2` (Apache-2.0). Faces are registered under their CSS family
 //!   alias in a per-render [`megi_fonts::FontDatabase`] (bundled faces + web faces) that is used
 //!   by **both** layout ([`megi_layout::FontTextMeasurer`]) and paint
-//!   ([`megi_raster::rasterize_display_list_with_font_database`]). Caps: 8 fonts, 8 MiB each,
+//!   ([`megi_raster::rasterize_display_list_with_font_database`]). Caps: 128 fonts, 8 MiB each,
 //!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
 //!   plus `timings.fonts` are reported (`--json` includes them).
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
