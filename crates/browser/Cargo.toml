@@ -11,7 +11,7 @@ description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer 
 [features]
 default = ["a11y"]
 # ADR-002: platform accessibility backend (AT-SPI/UIA/NSAccessibility via AccessKit).
-a11y = ["dep:accesskit", "dep:accesskit_winit"]
+a11y = ["dep:accesskit", "dep:accesskit_winit", "dep:accesskit_consumer"]
 
 [dependencies]
 megi-webview = { workspace = true, features = ["full"] }
@@ -19,7 +19,7 @@ winit.workspace = true
 softbuffer.workspace = true
 accesskit = { version = "0.25", optional = true }
 accesskit_winit = { version = "0.34", optional = true }
-accesskit_consumer = "0.39"
+accesskit_consumer = { version = "0.39", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
