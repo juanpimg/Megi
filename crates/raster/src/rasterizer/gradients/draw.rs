@@ -6,7 +6,11 @@ use super::*;
 impl Pixmap {
     /// Rasterizes one CSS gradient tile with analytic edge antialiasing.
     ///
+<<<<<<< HEAD
     /// Colors are interpolated in the gradient's configured `InterpolationSpace`
+=======
+    /// Colors are interpolated in the gradient's configured CSS `InterpolationSpace`
+>>>>>>> 01dd0661 (docs(raster): fix broken InterpolationSpace intra-doc link (#2206))
     /// (`Srgb`, `SrgbLinear`, or `Oklab`), `repeating-*` gradients wrap between their
     /// first and last resolved stop, and the active clip stack is honoured.
     pub fn draw_gradient(&mut self, rect: Rect, gradient: &megi_display::Gradient) {
