@@ -256,3 +256,38 @@ fn fill_arc_with_huge_radius_clips_to_surface() {
         .expect("canvas script");
     assert_eq!(out, "255,255");
 }
+
+#[test]
+fn put_image_data_copies_typed_array_bytes_in_linear_time() {
+    // #2183: `putImageData` on a 512x512 Uint8ClampedArray previously ran >1M
+    // JS string property lookups (~1.7 s+ on desktop, ~27 s on audit runner). Copying
+    // directly from the backing ArrayBuffer reduces it to a few milliseconds, and
+    // must also honor subarray byteOffset.
+    let mut runtime = runtime();
+    let start = std::time::Instant::now();
+    let out = runtime
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 512; c.height = 512; \
+             document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); \
+             var buf = new Uint8ClampedArray(512 * 512 * 4); \
+             buf[0] = 12; buf[1] = 34; buf[2] = 56; buf[3] = 255; \
+             var last = buf.length - 4; \
+             buf[last] = 200; buf[last + 1] = 150; buf[last + 2] = 100; buf[last + 3] = 250; \
+             ctx.putImageData({ width: 512, height: 512, data: buf }, 0, 0); \
+             var sub = new Uint8Array([99, 1, 2, 3, 4, 88]).subarray(1, 5); \
+             ctx.putImageData({ width: 1, height: 1, data: sub }, 10, 10); \
+             var d0 = ctx.getImageData(0, 0, 1, 1).data; \
+             var d1 = ctx.getImageData(511, 511, 1, 1).data; \
+             var d2 = ctx.getImageData(10, 10, 1, 1).data; \
+             [d0[0],d0[1],d0[2],d0[3], d1[0],d1[1],d1[2],d1[3], d2[0],d2[1],d2[2],d2[3]].join(',');",
+            "put_image_data_fast",
+        )
+        .expect("putImageData");
+    let elapsed = start.elapsed();
+    assert_eq!(out, "12,34,56,255,200,150,100,250,1,2,3,4");
+    assert!(
+        elapsed < std::time::Duration::from_millis(250),
+        "512x512 putImageData took {elapsed:?} (expected linear ArrayBuffer copy < 250ms)"
+    );
+}

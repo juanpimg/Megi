@@ -312,13 +312,13 @@ impl CanvasSurface {
         }
         // #1848: WHATWG HTML §4.12.5.1.3 — putImageData replaces the target pixels
         // verbatim (including alpha), unlike source-over drawing operations.
-        let mut index = 0;
-        for py in y..y + h as i64 {
-            for px in x..x + w as i64 {
-                let offset = ((py as usize) * self.width as usize + px as usize) * 4;
-                self.pixels[offset..offset + 4].copy_from_slice(&data[index..index + 4]);
-                index += 4;
-            }
+        let row_bytes = (w as usize) * 4;
+        let stride = (self.width as usize) * 4;
+        let x_bytes = (x as usize) * 4;
+        for row in 0..h as usize {
+            let src = row * row_bytes;
+            let dst = (y as usize + row) * stride + x_bytes;
+            self.pixels[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
         }
         true
     }

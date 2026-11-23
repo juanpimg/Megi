@@ -6,9 +6,7 @@
 //! handlers. Events are delivered when the host calls `JsRuntime::poll_websockets()`.
 
 use boa_engine::{
-    Context, JsObject, JsResult, JsValue, NativeFunction, Source, js_string,
-    object::FunctionObjectBuilder,
-    object::builtins::{JsArrayBuffer, JsDataView, JsSharedArrayBuffer, JsTypedArray},
+    Context, JsResult, JsValue, NativeFunction, Source, js_string, object::FunctionObjectBuilder,
 };
 
 use crate::error::JsError;
@@ -141,49 +139,6 @@ enum WsSendPayload {
     Binary(Vec<u8>),
 }
 
-fn slice_backing_buffer(buffer: &JsValue, offset: usize, len: usize) -> Option<Vec<u8>> {
-    let buffer_obj = buffer.as_object()?;
-    let end = offset.saturating_add(len);
-    if let Ok(ab) = JsArrayBuffer::from_object(buffer_obj.clone()) {
-        return Some(
-            ab.data()
-                .and_then(|bytes| bytes.get(offset..end).map(|s| s.to_vec()))
-                .unwrap_or_default(),
-        );
-    }
-    if let Ok(sab) = JsSharedArrayBuffer::from_object(buffer_obj) {
-        let all = sab.to_vec();
-        return Some(all.get(offset..end).map(|s| s.to_vec()).unwrap_or_default());
-    }
-    None
-}
-
-/// Extracts raw bytes when `object` is an `ArrayBuffer` or `ArrayBufferView`
-/// (WHATWG WebSockets §9.3 / WebIDL `BufferSource`, #2153).
-fn extract_binary_payload(object: &JsObject, context: &mut Context) -> JsResult<Option<Vec<u8>>> {
-    if let Ok(ab) = JsArrayBuffer::from_object(object.clone()) {
-        return Ok(Some(
-            ab.data().map(|bytes| bytes.to_vec()).unwrap_or_default(),
-        ));
-    }
-    if let Ok(sab) = JsSharedArrayBuffer::from_object(object.clone()) {
-        return Ok(Some(sab.to_vec()));
-    }
-    if let Ok(ta) = JsTypedArray::from_object(object.clone()) {
-        let buffer = ta.buffer(context)?;
-        let offset = ta.byte_offset(context)?;
-        let len = ta.byte_length(context)?;
-        return Ok(slice_backing_buffer(&buffer, offset, len));
-    }
-    if let Ok(dv) = JsDataView::from_object(object.clone()) {
-        let buffer = dv.buffer(context)?;
-        let offset = dv.byte_offset(context)? as usize;
-        let len = dv.byte_length(context)? as usize;
-        return Ok(slice_backing_buffer(&buffer, offset, len));
-    }
-    Ok(None)
-}
-
 fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let string = |index: usize| -> String {
         args.get(index)
@@ -231,7 +186,8 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
     let send_payload = if command == "send" {
         let raw = args.get(2).cloned().unwrap_or_else(JsValue::undefined);
         if let Some(obj) = raw.as_object()
-            && let Some(bytes) = extract_binary_payload(&obj, context)?
+            && let Some(bytes) =
+                crate::runtime::buffer_source::extract_buffer_source_bytes(&obj, context)?
         {
             Some(WsSendPayload::Binary(bytes))
         } else {
