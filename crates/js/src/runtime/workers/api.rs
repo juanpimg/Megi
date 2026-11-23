@@ -308,7 +308,7 @@ pub(crate) fn worker_onmessage_get(
         host.workers
             .get(id as usize)
             .and_then(|worker| worker.as_ref())
-            .and_then(|worker| worker.onmessage.first().copied())
+            .and_then(|worker| worker.onmessage_handler)
     })
     .flatten();
     match slot {
@@ -322,13 +322,18 @@ pub(crate) fn worker_onmessage_set(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
+    // #2156: WHATWG HTML §8.1.7.2 — `worker.onmessage` is an event handler IDL attribute
+    // and must not clear `addEventListener('message', ...)` listeners.
     let id = worker_handle(this, context)?;
     let callback = args.first().cloned().unwrap_or_else(JsValue::undefined);
-    let slot = root_push(context, "__megi_worker_callbacks", callback)?;
+    let slot = if callback.is_callable() {
+        Some(root_push(context, "__megi_worker_callbacks", callback)?)
+    } else {
+        None
+    };
     with_context_host(context, |host| {
         if let Some(Some(worker)) = host.workers.get_mut(id as usize) {
-            worker.onmessage.clear();
-            worker.onmessage.push(slot);
+            worker.onmessage_handler = slot;
         }
     });
     Ok(JsValue::undefined())

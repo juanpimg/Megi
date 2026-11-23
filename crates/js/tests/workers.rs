@@ -418,3 +418,25 @@ fn worker_receives_dom_events_from_a_proxied_element() {
         "listening;clicked:click;"
     );
 }
+
+#[test]
+fn worker_onmessage_setter_preserves_add_event_listener() {
+    // #2156: Assigning `worker.onmessage` must not clear `addEventListener('message', ...)` listeners.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_worker_loader(Arc::new(|_url| {
+        Ok("self.postMessage('hi');".to_string())
+    }));
+    runtime
+        .eval(
+            "window.__log = []; \
+             var w = new Worker('worker.js'); \
+             w.addEventListener('message', function(e) { __log.push('listener:' + e.data); }); \
+             w.onmessage = function(e) { __log.push('prop:' + e.data); };",
+            "page.js",
+        )
+        .expect("worker");
+    runtime.run_worker_tasks(64).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    let out = runtime.eval("__log.join('|')", "page.js").expect("log");
+    assert_eq!(out, "prop:hi|listener:hi");
+}

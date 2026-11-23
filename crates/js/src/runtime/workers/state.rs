@@ -12,6 +12,7 @@ pub(crate) struct WorkerState {
     /// Node handles exposed to this worker through the DOM proxy (F6-WORKERS-DOM).
     pub dom_nodes: Vec<NodeId>,
     pub onmessage: Vec<u32>,
+    pub onmessage_handler: Option<u32>,
     pub onerror: Option<u32>,
     pub pending_error: Option<String>,
 }
@@ -210,7 +211,14 @@ impl JsRuntime {
                 .get(id as usize)
                 .and_then(|worker| worker.as_ref())
             {
-                Some(worker) => worker.onmessage.clone(),
+                Some(worker) => {
+                    let mut slots = Vec::with_capacity(worker.onmessage.len() + 1);
+                    if let Some(handler) = worker.onmessage_handler {
+                        slots.push(handler);
+                    }
+                    slots.extend_from_slice(&worker.onmessage);
+                    slots
+                }
                 None => return Ok(()),
             }
         };
@@ -297,6 +305,7 @@ impl WorkerState {
             to_worker: VecDeque::new(),
             dom_nodes: Vec::new(),
             onmessage: Vec::new(),
+            onmessage_handler: None,
             onerror: None,
             pending_error: None,
         }
