@@ -109,22 +109,11 @@ impl LiveWebSocketTransport {
                                 break;
                             }
                         }
-<<<<<<< HEAD
-                        // #1638: WebSocketClient::recv() already replies to Ping
-                        // with exactly one Pong — never send a second one here.
-                        Opcode::Ping => {}
-                        Opcode::Pong => {}
-||||||| 3c7b17f
-                        Opcode::Ping => {
-                            let _ = lock(&pump_client).pong();
-                        }
-                        Opcode::Pong => {}
-=======
                         // #1638 / RFC 6455 §5.5.2: WebSocketClient::reassemble() already
                         // sends exactly one Pong for every Ping it surfaces via recv().
                         // Sending another one here produced duplicate Pongs on the wire.
                         Opcode::Ping | Opcode::Pong => {}
->>>>>>> origin/main
+
                         Opcode::Close => {
                             let code = if frame.payload.len() >= 2 {
                                 u16::from_be_bytes([frame.payload[0], frame.payload[1]])
