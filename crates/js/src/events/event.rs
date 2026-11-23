@@ -123,19 +123,25 @@ pub(crate) fn init_event_object(
     );
 }
 
-pub(crate) fn event_constructor(
-    this: &JsValue,
-    args: &[JsValue],
-    context: &mut Context,
-) -> JsResult<JsValue> {
-    // #1621: the type argument is required; `undefined` must not be coerced to "undefined".
+/// DOM §2.2: `Event` and derived constructors require a `type` argument;
+/// `undefined` and `null` must not be coerced to `"undefined"` / `"null"`.
+fn require_event_type(args: &[JsValue], context: &mut Context) -> JsResult<String> {
     if args
         .first()
         .is_none_or(|value| value.is_undefined() || value.is_null())
     {
         return Err(js_error("1 argument required, but only 0 present"));
     }
-    let event_type = arg_string(args, 0, context)?;
+    arg_string(args, 0, context)
+}
+
+pub(crate) fn event_constructor(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    // #1621: the type argument is required; `undefined` must not be coerced to "undefined".
+    let event_type = require_event_type(args, context)?;
     let options = args.get(1).and_then(|value| value.as_object());
     let bubbles = options
         .as_ref()
@@ -181,7 +187,8 @@ pub(crate) fn custom_event_constructor(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let event_type = arg_string(args, 0, context)?;
+    // #2150: DOM §2.3 — `CustomEvent(type)` requires `type`.
+    let event_type = require_event_type(args, context)?;
     let options = args.get(1).and_then(|value| value.as_object());
     let detail = options
         .as_ref()
@@ -235,7 +242,8 @@ pub(crate) fn composition_event_constructor(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let event_type = arg_string(args, 0, context)?;
+    // #2150: UI Events §4.1.3 — `CompositionEvent(type)` requires `type`.
+    let event_type = require_event_type(args, context)?;
     let options = args.get(1).and_then(|value| value.as_object());
     let data = options
         .as_ref()
@@ -267,7 +275,8 @@ pub(crate) fn message_event_constructor(
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    let event_type = arg_string(args, 0, context)?;
+    // #2150: WHATWG HTML §9.2.2 — `MessageEvent(type)` requires `type`.
+    let event_type = require_event_type(args, context)?;
     let options = args.get(1).and_then(|value| value.as_object());
     let data = options
         .as_ref()
