@@ -16,7 +16,7 @@ ttf-parser.workspace = true
 # Pure-Rust WOFF2 (web font) decompression; Apache-2.0 (see crate rustdoc).
 woff2 = { package = "woff2-patched", version = "0.4" }
 # Pure-Rust DEFLATE (RFC 1950) for WOFF1 table inflation; no C/FFI (§7 typography).
-miniz_oxide = "0.8"
+miniz_oxide = "0.9"
 # Pure-Rust Brotli (RFC 7932) to bound-check the WOFF2 compressed stream before the
 # third-party decoder slices it; same crate/version already used by `net` (ADR-003, §7).
 brotli = "9"
