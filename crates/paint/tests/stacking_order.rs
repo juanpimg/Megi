@@ -204,6 +204,56 @@ fn test_replaced_image_respects_opacity() {
     assert_eq!(pixel, Color::new(255, 127, 127, 255));
 }
 
+fn count_image_opacity_depth(items: &[DisplayItem], depth: usize, out: &mut Vec<usize>) {
+    for item in items {
+        match item {
+            DisplayItem::OpacityGroup { items, .. } => {
+                count_image_opacity_depth(items, depth + 1, out);
+            }
+            DisplayItem::EffectGroup { items, .. } => {
+                count_image_opacity_depth(items, depth, out);
+            }
+            DisplayItem::Image { .. } => out.push(depth),
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn test_stacking_context_replaced_image_applies_opacity_once() {
+    let (document, ids) = node_ids(2);
+    let mut root = empty_box(&document, ids[0], block_style(Color::WHITE));
+    set_rect(&mut root, 0.0, 0.0, 100.0, 100.0);
+
+    let mut img_box = empty_box(&document, ids[1], style_with_transparent_background());
+    img_box.box_type = megi_layout::BoxType::Replaced(ids[1]);
+    set_rect(&mut img_box, 0.0, 0.0, 20.0, 20.0);
+    img_box.position = Position::Absolute;
+    img_box.opacity = 0.5;
+    img_box.establishes_stacking_context = true;
+    root.children.push(img_box);
+
+    let mut images = std::collections::HashMap::new();
+    let red_pixel = vec![255, 0, 0, 255];
+    let image =
+        std::sync::Arc::new(megi_image::RgbaImage::new(1, 1, red_pixel).expect("valid image"));
+    images.insert(ids[1], image);
+
+    let viewport = Rect::new(0.0, 0.0, WIDTH as f32, HEIGHT as f32);
+    let display_list = megi_paint::build_display_list_with_images(&root, viewport, &images);
+
+    let mut depths = Vec::new();
+    count_image_opacity_depth(&display_list.items, 0, &mut depths);
+    assert_eq!(
+        depths,
+        vec![1],
+        "image in an opacity stacking context must be wrapped by exactly one OpacityGroup"
+    );
+
+    let pixmap = render(&display_list);
+    assert_eq!(pixmap.pixel(10, 10), Color::new(255, 127, 127, 255));
+}
+
 #[test]
 fn test_clip_from_overflow_rejects_overflowing_child() {
     let (document, ids) = node_ids(3);

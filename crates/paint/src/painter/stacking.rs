@@ -106,7 +106,9 @@ pub(super) fn paint_stacking_context(
         && let Some(node_id) = layout_box.node_id()
         && resources.images.get(&node_id).is_some()
     {
-        paint_replaced_element(layout_box, node_id, list, resources, opacity);
+        // CSS Color 4 §3.2: `paint_stacking_context` wraps the entire subtree
+        // in one `OpacityGroup` below, so replaced content emits at full local alpha.
+        paint_replaced_element(layout_box, node_id, list, resources, 1.0);
     }
 
     // Step 7: positioned z-index auto/0 and z-index 0 contexts.
