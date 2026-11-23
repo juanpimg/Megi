@@ -282,3 +282,6 @@ mod mutation_observer_index_tests {
         assert!(host.observers[0].records.is_empty());
     }
 }
+
+mod timer_queue;
+pub(crate) use timer_queue::*;

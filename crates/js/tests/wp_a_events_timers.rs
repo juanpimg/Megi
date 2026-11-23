@@ -410,3 +410,65 @@ fn timeout_with_string_delay_applies_to_number() {
     assert_eq!(runtime.run_until(base + 120).expect("clock to +120ms"), 1);
     assert_eq!(runtime.eval("fired", "tstr.js").expect("fired"), "1");
 }
+
+#[test]
+fn draining_max_pending_timers_scales_subquadratically() {
+    // #2180: draining MAX_PENDING_TIMERS (4096) timers and polling with pending future
+    // timers must use an O(log n) priority queue rather than scanning a Vec in O(n^2).
+    let mut future_rt = JsRuntime::new().expect("runtime");
+    future_rt.set_budget(Budget {
+        loop_iterations: 100_000,
+        ..Budget::default()
+    });
+    future_rt
+        .eval(
+            "for (var i = 0; i < 4096; i++) { setTimeout(function () {}, 100000); }",
+            "future.js",
+        )
+        .expect("schedule future");
+    let poll_start = std::time::Instant::now();
+    for _ in 0..2000 {
+        assert_eq!(future_rt.run_tasks(1).expect("poll"), 0);
+    }
+    let poll_elapsed = poll_start.elapsed();
+    assert!(
+        poll_elapsed < std::time::Duration::from_millis(50),
+        "polling 2000 times with 4096 future timers took {poll_elapsed:?} (expected O(1) peek < 50ms)"
+    );
+
+    fn measure_pump(count: usize) -> std::time::Duration {
+        let mut runtime = JsRuntime::new().expect("runtime");
+        runtime.set_budget(Budget {
+            loop_iterations: 100_000,
+            ..Budget::default()
+        });
+        let script = format!(
+            "window.__count = 0; window.__last = 0; \
+             for (var i = 1; i <= {count}; i++) {{ \
+               (function(idx) {{ \
+                 setTimeout(function() {{ window.__count += 1; window.__last = idx; }}, 0); \
+               }})(i); \
+             }}"
+        );
+        runtime.eval(&script, "bench_timers.js").expect("schedule");
+        let start = std::time::Instant::now();
+        let ran = runtime.run_tasks(count + 16).expect("run_tasks");
+        let elapsed = start.elapsed();
+        assert_eq!(ran, count, "all {count} timers must run");
+        assert_eq!(runtime.pending_timers(), 0);
+        assert_eq!(
+            runtime
+                .eval("window.__count + ':' + window.__last", "bench_timers.js")
+                .unwrap(),
+            format!("{count}:{count}")
+        );
+        elapsed
+    }
+
+    let t_512 = measure_pump(512);
+    let t_4096 = measure_pump(4096);
+    assert!(
+        t_4096 < std::time::Duration::from_secs(2),
+        "4096 due timers took {t_4096:?} (512 took {t_512:?})"
+    );
+}

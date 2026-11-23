@@ -14,7 +14,7 @@ impl Host {
             listeners: Vec::new(),
             worker_dom_listeners: Vec::new(),
             free_listener_slots: Vec::new(),
-            timers: Vec::new(),
+            timers: TimerQueue::default(),
             next_timer_id: 1,
             document_write_bytes: 0,
             max_document_write_bytes: 8 * 1024 * 1024,

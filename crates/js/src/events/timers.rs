@@ -54,11 +54,13 @@ pub(crate) fn schedule_timer(
         id
     };
     array_put(context, "__megi_timer_callbacks", id, callback)?;
-    let args_array = JsArray::from_iter([], context);
-    for argument in args.iter().skip(2) {
-        let _ = args_array.push(argument.clone(), context);
+    if args.len() > 2 {
+        let args_array = JsArray::from_iter([], context);
+        for argument in args.iter().skip(2) {
+            let _ = args_array.push(argument.clone(), context);
+        }
+        array_put(context, "__megi_timer_args", id, JsValue::from(args_array))?;
     }
-    array_put(context, "__megi_timer_args", id, JsValue::from(args_array))?;
     Ok(JsValue::from(id as f64))
 }
 
@@ -100,11 +102,7 @@ pub(crate) fn cancel_animation_frame(
         let id = id as u64;
         // #1849: animation frames are a separate timer family (WHATWG HTML §8.1.7);
         // cancelAnimationFrame must not remove `setTimeout`/`setInterval` timers.
-        let before = host_cell(context)?.timers.len();
-        host_cell(context)?
-            .timers
-            .retain(|timer| timer.id != id || !timer.animation);
-        if host_cell(context)?.timers.len() < before {
+        if host_cell(context)?.timers.cancel(id, true) {
             release_timer_slots(context, id);
         }
     }
@@ -122,11 +120,7 @@ pub(crate) fn clear_timer(
         }
         let id = id as u64;
         // #1849: clearTimeout clears only the timeout/interval family (WHATWG HTML §8.1.6).
-        let before = host_cell(context)?.timers.len();
-        host_cell(context)?
-            .timers
-            .retain(|timer| timer.id != id || timer.animation);
-        if host_cell(context)?.timers.len() < before {
+        if host_cell(context)?.timers.cancel(id, false) {
             release_timer_slots(context, id);
         }
     }
@@ -149,38 +143,17 @@ pub(crate) fn run_due_timers(
     let mut executed = 0usize;
     while executed < max_steps {
         let next = {
-            let host =
-                host_ref(context).map_err(|error| CrateJsError::Runtime(error.to_string()))?;
-            let effective = host.now_ms().max(deadline_ms);
-            host.timers
-                .iter()
-                .enumerate()
-                .filter(|(_, timer)| timer.due_ms <= effective)
-                .min_by_key(|(_, timer)| (timer.due_ms, timer.id))
-                .map(|(index, timer)| {
-                    (
-                        index,
-                        timer.id,
-                        timer.interval_ms,
-                        timer.due_ms,
-                        timer.animation,
-                    )
-                })
-        };
-        let Some((index, id, interval, due_ms, animation)) = next else {
-            break;
-        };
-        {
             let mut host =
                 host_cell(context).map_err(|error| CrateJsError::Runtime(error.to_string()))?;
-            if let Some(interval) = interval {
-                if let Some(timer) = host.timers.get_mut(index) {
-                    timer.due_ms = due_ms.saturating_add(interval);
-                }
-            } else {
-                host.timers.remove(index);
-            }
-        }
+            let effective = host.now_ms().max(deadline_ms);
+            host.timers.pop_due(effective)
+        };
+        let Some(entry) = next else {
+            break;
+        };
+        let id = entry.id;
+        let interval = entry.interval_ms;
+        let animation = entry.animation;
         let callback = array_get(context, "__megi_timer_callbacks", id)
             .map_err(|error| CrateJsError::Runtime(error.to_string()))?;
         if let Some(callback) = callback.as_object() {
