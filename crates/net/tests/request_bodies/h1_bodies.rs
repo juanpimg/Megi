@@ -149,3 +149,153 @@ fn loader_fetch_with_method_posts_and_returns_resource() {
     assert_eq!(resource.url, url);
     let _ = handle.join();
 }
+
+#[test]
+fn h1_103_early_hints_before_100_continue_still_sends_body() {
+    let (listener, authority) = listener();
+    let handle = h1_server(listener, |stream| {
+        let head = read_head(stream);
+        assert!(head.contains("Expect: 100-continue\r\n"), "{head}");
+        stream
+            .write_all(b"HTTP/1.1 103 Early Hints\r\nLink: </app.css>; rel=preload\r\n\r\n")
+            .expect("103");
+        stream.flush().expect("flush");
+        stream
+            .write_all(b"HTTP/1.1 100 Continue\r\n\r\n")
+            .expect("100");
+        stream.flush().expect("flush");
+        let mut body = [0u8; 6];
+        stream.read_exact(&mut body).expect("body");
+        assert_eq!(&body, b"secret");
+        ok_response(stream, b"done");
+    });
+    let options = FetchOptions::default();
+    let url = Url::parse(&format!("http://{authority}/hints-then-continue")).expect("url");
+    let response = fetch_with_method(
+        &url,
+        &options,
+        "POST",
+        &[("Expect", "100-continue")],
+        Some(b"secret"),
+    )
+    .expect("103 then 100-continue POST");
+    assert_eq!(response.status, 200);
+    assert_eq!(response.body, b"done");
+    let _ = handle.join();
+}
+
+#[test]
+fn h1_100_continue_then_103_early_hints_returns_final_200() {
+    let (listener, authority) = listener();
+    let handle = h1_server(listener, |stream| {
+        let _ = read_head(stream);
+        stream
+            .write_all(b"HTTP/1.1 100 Continue\r\n\r\n")
+            .expect("100");
+        stream.flush().expect("flush");
+        let mut body = [0u8; 6];
+        stream.read_exact(&mut body).expect("body");
+        assert_eq!(&body, b"secret");
+        stream
+            .write_all(b"HTTP/1.1 103 Early Hints\r\nLink: </app.js>; rel=preload\r\n\r\n")
+            .expect("103");
+        stream.flush().expect("flush");
+        ok_response(stream, b"after-hints");
+    });
+    let options = FetchOptions::default();
+    let url = Url::parse(&format!("http://{authority}/continue-then-hints")).expect("url");
+    let response = fetch_with_method(
+        &url,
+        &options,
+        "POST",
+        &[("Expect", "100-continue")],
+        Some(b"secret"),
+    )
+    .expect("100-continue then 103 POST");
+    assert_eq!(response.status, 200);
+    assert_eq!(response.body, b"after-hints");
+    let _ = handle.join();
+}
+
+#[test]
+fn h1_103_early_hints_followed_by_417_aborts_without_body() {
+    let (listener, authority) = listener();
+    let handle = h1_server(listener, |stream| {
+        let _ = read_head(stream);
+        stream
+            .write_all(b"HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n")
+            .expect("103");
+        stream.flush().expect("flush");
+        stream
+            .write_all(b"HTTP/1.1 417 Expectation Failed\r\nContent-Length: 4\r\n\r\nnope")
+            .expect("417");
+        stream.flush().expect("flush");
+        // Verify client closed/did not send the request body after 417.
+        let mut extra = [0u8; 1];
+        assert_eq!(stream.read(&mut extra).unwrap_or(0), 0);
+    });
+    let options = FetchOptions::default();
+    let url = Url::parse(&format!("http://{authority}/hints-then-417")).expect("url");
+    let response = fetch_with_method(
+        &url,
+        &options,
+        "POST",
+        &[("Expect", "100-continue")],
+        Some(b"secret"),
+    )
+    .expect("103 then 417 POST");
+    assert_eq!(response.status, 417);
+    assert_eq!(response.body, b"nope");
+    let _ = handle.join();
+}
+
+#[test]
+fn h1_regular_request_ignores_103_early_hints() {
+    let (listener, authority) = listener();
+    let handle = h1_server(listener, |stream| {
+        let _ = read_head(stream);
+        stream
+            .write_all(b"HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n")
+            .expect("103");
+        stream.flush().expect("flush");
+        ok_response(stream, b"final");
+    });
+    let options = FetchOptions::default();
+    let url = Url::parse(&format!("http://{authority}/regular-hints")).expect("url");
+    let response = fetch_with_method(&url, &options, "GET", &[], None).expect("GET after 103");
+    assert_eq!(response.status, 200);
+    assert_eq!(response.body, b"final");
+    let _ = handle.join();
+}
+
+#[test]
+fn h1_excessive_interim_1xx_responses_are_rejected() {
+    let (listener, authority) = listener();
+    let handle = h1_server(listener, |stream| {
+        let _ = read_head(stream);
+        for _ in 0..20 {
+            if stream
+                .write_all(b"HTTP/1.1 103 Early Hints\r\n\r\n")
+                .is_err()
+            {
+                break;
+            }
+        }
+        let _ = stream.flush();
+    });
+    let options = FetchOptions::default();
+    let url = Url::parse(&format!("http://{authority}/too-many-1xx")).expect("url");
+    let err = fetch_with_method(
+        &url,
+        &options,
+        "POST",
+        &[("Expect", "100-continue")],
+        Some(b"secret"),
+    )
+    .expect_err("too many 1xx interim heads must fail");
+    assert!(
+        matches!(err, megi_net::FetchError::InvalidResponse(_)),
+        "expected InvalidResponse, got {err:?}"
+    );
+    let _ = handle.join();
+}
