@@ -438,3 +438,63 @@ fn worker_onmessage_setter_preserves_add_event_listener() {
     let out = runtime.eval("__log.join('|')", "page.js").expect("log");
     assert_eq!(out, "prop:hi|listener:hi");
 }
+
+#[test]
+fn worker_dom_event_is_delivered_only_to_subscribed_workers() {
+    // #2148: forward_dom_event_to_workers must route each subscription only to its
+    // owning worker_id (and deduplicate per worker), never broadcast to every worker.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime.set_worker_loader(Arc::new(|url| {
+        if url.ends_with("w1.js") {
+            Ok(
+                "document.getElementById('x').then(function (el) { \
+                   el.addEventListener('click', function (e) { postMessage('W1:' + e.type); }); \
+                   postMessage('W1:ready'); \
+                 });"
+                .to_string(),
+            )
+        } else if url.ends_with("w2.js") {
+            Ok(
+                "document.getElementById('x').then(function (el) { \
+                   el.addEventListener('click', function (e) { postMessage('W2:' + e.type); }); \
+                   postMessage('W2:ready'); \
+                 });"
+                .to_string(),
+            )
+        } else {
+            Ok(
+                "document.getElementById('y').then(function (el) { \
+                   el.addEventListener('click', function (e) { postMessage('W3:' + e.type); }); \
+                   postMessage('W3:ready'); \
+                 });"
+                .to_string(),
+            )
+        }
+    }));
+    runtime
+        .eval(
+            "document.body.innerHTML = '<button id=x>x</button><div id=y>y</div>'; \
+             window.__log = []; \
+             var w1 = new Worker('w1.js'); w1.onmessage = function (e) { __log.push(e.data); }; \
+             var w2 = new Worker('w2.js'); w2.onmessage = function (e) { __log.push(e.data); }; \
+             var w3 = new Worker('w3.js'); w3.onmessage = function (e) { __log.push(e.data); };",
+            "page.js",
+        )
+        .expect("setup");
+    runtime.run_worker_tasks(64).expect("register tasks");
+    runtime
+        .eval(
+            "document.getElementById('x').dispatchEvent(new Event('click'));",
+            "page.js",
+        )
+        .expect("dispatch");
+    runtime.run_worker_tasks(64).expect("delivery tasks");
+    runtime.run_microtasks().expect("microtasks");
+    let log = runtime.eval("__log.join(',')", "page.js").expect("log");
+    let w1_clicks = log.split(',').filter(|s| *s == "W1:click").count();
+    let w2_clicks = log.split(',').filter(|s| *s == "W2:click").count();
+    let w3_clicks = log.split(',').filter(|s| *s == "W3:click").count();
+    assert_eq!(w1_clicks, 1, "W1 must receive 1 click: {log}");
+    assert_eq!(w2_clicks, 1, "W2 must receive 1 click: {log}");
+    assert_eq!(w3_clicks, 0, "unsubscribed W3 must receive 0 clicks: {log}");
+}
