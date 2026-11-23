@@ -498,3 +498,41 @@ fn worker_dom_event_is_delivered_only_to_subscribed_workers() {
     assert_eq!(w2_clicks, 1, "W2 must receive 1 click: {log}");
     assert_eq!(w3_clicks, 0, "unsubscribed W3 must receive 0 clicks: {log}");
 }
+
+#[test]
+fn worker_dom_event_escapes_control_characters_in_event_type() {
+    // #2179: RFC 8259 §7 — control characters (`\n`, `\r`, `\t`, etc.) in the event type
+    // must be JSON-escaped before queuing the forwarded event message into the worker.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.addEventListener('a\\nb\\r\\t\\u0007\"\\\\c', function (e) { \
+             postMessage('got:' + JSON.stringify(e.type)); \
+           }); \
+           postMessage('ready'); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<button id=x>x</button>'; \
+             window.__log = []; window.__err = ''; \
+             var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __log.push(e.data); }; \
+             w.onerror = function (e) { __err = e.message; };",
+            "page.js",
+        )
+        .expect("setup");
+    runtime.run_worker_tasks(64).expect("setup tasks");
+    runtime
+        .eval(
+            "document.getElementById('x').dispatchEvent(new Event('a\\nb\\r\\t\\u0007\"\\\\c'));",
+            "page.js",
+        )
+        .expect("dispatch");
+    runtime.run_worker_tasks(64).expect("delivery tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(runtime.eval("__err", "page.js").unwrap(), "", "worker must not hit SyntaxError");
+    assert_eq!(
+        runtime.eval("__log.join('|')", "page.js").unwrap(),
+        r#"ready|got:"a\nb\r\t\u0007\"\\c""#
+    );
+}

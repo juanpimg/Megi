@@ -248,9 +248,10 @@ pub(crate) fn forward_dom_event_to_workers(
             if worker.terminated {
                 continue;
             }
+            // RFC 8259 §7: escape control characters and quotes via `module_quote` (#2179).
             let message = format!(
-                "{{\"__megi_dom_event\":{{\"type\":\"{}\",\"token\":{}}}}}",
-                event_type.replace('\\', "\\\\").replace('"', "\\\""),
+                "{{\"__megi_dom_event\":{{\"type\":{},\"token\":{}}}}}",
+                crate::runtime::module_quote(event_type),
                 token
             );
             worker.to_worker.push_back(message);
