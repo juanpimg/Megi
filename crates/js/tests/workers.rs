@@ -446,29 +446,23 @@ fn worker_dom_event_is_delivered_only_to_subscribed_workers() {
     let mut runtime = JsRuntime::new().expect("runtime");
     runtime.set_worker_loader(Arc::new(|url| {
         if url.ends_with("w1.js") {
-            Ok(
-                "document.getElementById('x').then(function (el) { \
+            Ok("document.getElementById('x').then(function (el) { \
                    el.addEventListener('click', function (e) { postMessage('W1:' + e.type); }); \
                    postMessage('W1:ready'); \
                  });"
-                .to_string(),
-            )
+            .to_string())
         } else if url.ends_with("w2.js") {
-            Ok(
-                "document.getElementById('x').then(function (el) { \
+            Ok("document.getElementById('x').then(function (el) { \
                    el.addEventListener('click', function (e) { postMessage('W2:' + e.type); }); \
                    postMessage('W2:ready'); \
                  });"
-                .to_string(),
-            )
+            .to_string())
         } else {
-            Ok(
-                "document.getElementById('y').then(function (el) { \
+            Ok("document.getElementById('y').then(function (el) { \
                    el.addEventListener('click', function (e) { postMessage('W3:' + e.type); }); \
                    postMessage('W3:ready'); \
                  });"
-                .to_string(),
-            )
+            .to_string())
         }
     }));
     runtime
@@ -530,7 +524,11 @@ fn worker_dom_event_escapes_control_characters_in_event_type() {
         .expect("dispatch");
     runtime.run_worker_tasks(64).expect("delivery tasks");
     runtime.run_microtasks().expect("microtasks");
-    assert_eq!(runtime.eval("__err", "page.js").unwrap(), "", "worker must not hit SyntaxError");
+    assert_eq!(
+        runtime.eval("__err", "page.js").unwrap(),
+        "",
+        "worker must not hit SyntaxError"
+    );
     assert_eq!(
         runtime.eval("__log.join('|')", "page.js").unwrap(),
         r#"ready|got:"a\nb\r\t\u0007\"\\c""#
@@ -612,7 +610,10 @@ fn worker_get_elements_by_tag_name_returns_valid_node_tokens() {
     );
     assert_eq!(
         runtime
-            .eval("document.getElementById('b').getAttribute('data-tag')", "page.js")
+            .eval(
+                "document.getElementById('b').getAttribute('data-tag')",
+                "page.js"
+            )
             .expect("attr"),
         "ok"
     );
