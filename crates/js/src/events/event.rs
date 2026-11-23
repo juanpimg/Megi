@@ -159,7 +159,9 @@ pub(crate) fn event_constructor(
                 .map(|v| v.to_boolean())
         })
         .unwrap_or(false);
-    if let Some(object) = this.as_object() {
+    // Boa passes `new_target` (the constructor function itself) as `this` for `new Event(...)`;
+    // only reuse `this` when a non-callable instance is explicitly passed (#2182).
+    if let Some(object) = this.as_object().filter(|object| !object.is_callable()) {
         init_event_object(
             context,
             &object,

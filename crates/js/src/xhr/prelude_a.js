@@ -192,30 +192,46 @@
     try { event.currentTarget = target; } catch (_e) {}
     try { event.eventPhase = 2; } catch (_e) {}
     var stopped = false;
+    // #2182: DOM §2.9 — preserve own/inherited descriptor of `stopImmediatePropagation`
+    // and dispatch state even when a listener calls it or throws.
+    var hadOwnStopImm = Object.prototype.hasOwnProperty.call(event, "stopImmediatePropagation");
+    var origStopImmDesc = hadOwnStopImm
+      ? Object.getOwnPropertyDescriptor(event, "stopImmediatePropagation")
+      : null;
     var origStopImm = event.stopImmediatePropagation;
-    event.stopImmediatePropagation = function () {
-      stopped = true;
-      if (typeof origStopImm === "function") { origStopImm.call(this); }
-    };
+    try {
+      event.stopImmediatePropagation = function () {
+        stopped = true;
+        if (typeof origStopImm === "function") { origStopImm.call(this); }
+      };
 
-    // #1747: `on<event>` handlers are registered as listeners (see
-    // defineHandlerProperty), so they fire here in registration order; do not
-    // invoke the property handler ahead of the listener list.
-    var list = target._listeners[event.type];
-    if (list && list.length > 0 && !stopped) {
-      var snapshot = list.slice();
-      for (var i = 0; i < snapshot.length; i++) {
-        if (stopped) { break; }
-        var entry = snapshot[i];
-        if (entry.once) {
-          removeTargetListener(target, event.type, entry.fn, entry.capture);
+      // #1747: `on<event>` handlers are registered as listeners (see
+      // defineHandlerProperty), so they fire here in registration order; do not
+      // invoke the property handler ahead of the listener list.
+      var list = target._listeners[event.type];
+      if (list && list.length > 0 && !stopped) {
+        var snapshot = list.slice();
+        for (var i = 0; i < snapshot.length; i++) {
+          if (stopped) { break; }
+          var entry = snapshot[i];
+          if (entry.once) {
+            removeTargetListener(target, event.type, entry.fn, entry.capture);
+          }
+          entry.fn.call(target, event);
         }
-        entry.fn.call(target, event);
       }
+      return !event.defaultPrevented;
+    } finally {
+      try {
+        if (hadOwnStopImm && origStopImmDesc) {
+          Object.defineProperty(event, "stopImmediatePropagation", origStopImmDesc);
+        } else if (!hadOwnStopImm) {
+          delete event.stopImmediatePropagation;
+        }
+      } catch (_e) {}
+      try { event.currentTarget = null; } catch (_e) {}
+      try { event.eventPhase = 0; } catch (_e) {}
     }
-    try { event.currentTarget = null; } catch (_e) {}
-    try { event.eventPhase = 0; } catch (_e) {}
-    return !event.defaultPrevented;
   }
 
   function serializeRequestBody(body) {
