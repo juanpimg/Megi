@@ -714,7 +714,10 @@ crates/js/tests/fetch_abort_tests.rs	180	test	F1	wave-max-mod	2026-11-19	covered
 crates/js/tests/fetch_tests.rs	363	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/fixtures/jquery-3.5.1.min.js	1	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/form_tests.rs	295	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/gap_apis.rs	588	test	F1	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
+crates/js/tests/gap_apis.rs	11	test	F1	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
+crates/js/tests/gap_apis/dom.rs	189	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/gap_apis/helpers.rs	10	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/gap_apis/misc.rs	393	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/host_reentrancy_new.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/iframe_tests.rs	201	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/import_maps_r187.rs	314	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -728,7 +731,10 @@ crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/websocket_api_tests.rs	318	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/workers.rs	620	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/workers.rs	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/workers/basic.rs	194	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/workers/dom_proxy.rs	411	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/workers/helpers.rs	20	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/wp_a_events_timers.rs	474	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/wp_b_tests.rs	481	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/wpt_conformance_r233.rs	393	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2083,7 +2089,7 @@ tools/audit_coverage.py	406	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	writte
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/check_arch.py	165	tool	F3	jp	2026-11-19	covered	#1759	
+tools/check_arch.py	173	tool	F3	jp	2026-11-19	covered	#1759	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
@@ -2096,7 +2102,7 @@ tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/soak_fuzz.sh	158	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
-tools/test_check_arch.py	157	tool	F3	jp	2026-11-19	covered	#1759	
+tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
