@@ -107,6 +107,11 @@ def _gate_changed_paths_since(root: Path, commit: str) -> list[str] | None:
     return [line.strip() for line in diff.stdout.splitlines() if line.strip()]
 
 
+_CHAR_LITERAL_RE = re.compile(
+    r"'(?:[^'\\\n\r]|\\(?:['\"\\nrt0]|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F_]{1,6}\}))'"
+)
+
+
 def _strip_rust_comments_and_strings(source: str) -> str:
     """Blank out Rust line/block comments and string/char literals, preserving offsets."""
     out = list(source)
@@ -186,9 +191,14 @@ def _strip_rust_comments_and_strings(source: str) -> str:
                     out[j] = " "
                 j += 1
             i = j
+        elif source[i] == "'" and (m_char := _CHAR_LITERAL_RE.match(source, i)):
+            # Blank Rust character literals (`'"'`, `'{'`, `'\''`, `'\u{22}'`) while
+            # leaving lifetimes (`'a`, `'static`) untouched so quotes/braces inside
+            # char literals cannot swallow subsequent test functions (#2169).
+            for j in range(i, m_char.end()):
+                out[j] = " "
+            i = m_char.end()
         elif source[i] == '"':
-            # Only double-quoted strings; `'` is used for Rust lifetimes/chars and must not
-            # open a string state (that would swallow the rest of the file).
             out[i] = " "
             quote = '"'
             i += 1

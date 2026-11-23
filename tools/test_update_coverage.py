@@ -578,6 +578,34 @@ class GateFreshnessTests(unittest.TestCase):
         )
         self.assertTrue(ok, reason)
 
+    def test_strip_handles_char_literals_containing_quotes_and_braces(self) -> None:
+        source = (
+            "fn helper<'a>(_x: &'a str) -> (char, char, char, char) {\n"
+            "    ('\"', '{', '\\'', '\\\"')\n"
+            "}\n"
+            "#[test]\n"
+            "fn test_after_char_literal() {\n"
+            "    assert!(true);\n"
+            "}\n"
+        )
+        stripped = update_coverage._strip_rust_comments_and_strings(source)
+        self.assertIn("fn test_after_char_literal", stripped)
+        self.assertIn("assert!(true);", stripped)
+        self.assertIn("'a", stripped)
+
+        test_file = self.root / "crates/example/tests/char_literals.rs"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text(source, encoding="utf-8")
+        ok, reason = update_coverage.verify_evidence(
+            {
+                "state": "done",
+                "evidence": "test:crates/example/tests/char_literals.rs::test_after_char_literal",
+            },
+            self.root,
+            GATE_PASS,
+        )
+        self.assertTrue(ok, reason)
+
 
 if __name__ == "__main__":
     unittest.main()
