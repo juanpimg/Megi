@@ -133,6 +133,9 @@ impl LiveWebSocketTransport {
                             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                         ) =>
                     {
+                        // Yield outside the client mutex so JS send()/close() calls are never
+                        // starved by tight pump re-locking under CI CPU load.
+                        std::thread::sleep(std::time::Duration::from_millis(2));
                         continue; // no frame yet; loop and re-check `stop`
                     }
                     Err(error) => {
