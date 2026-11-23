@@ -248,6 +248,32 @@ fn xhr_network_error_and_timeout_fire_expected_events() {
 }
 
 #[test]
+fn xhr_synchronous_send_exposes_real_status_2134() {
+    // #2134: the synchronous send path assigned `this.status = raw.status`,
+    // but `status`/`statusText` are getter-only accessors, so in non-strict mode
+    // the assignment was a silent no-op and status stayed 0.
+    let (mut runtime, _calls) = mock_runtime(FetchResult {
+        status: 200,
+        status_text: "OK".into(),
+        url: "https://example.test/sync-status".into(),
+        headers: vec![],
+        body: b"ok".to_vec(),
+    });
+    let out = runtime
+        .eval(
+            r#"
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'https://example.test/sync-status', false);
+            xhr.send();
+            [xhr.status, xhr.statusText, xhr.readyState, xhr.responseText].join('|');
+            "#,
+            "xhr",
+        )
+        .expect("eval");
+    assert_eq!(out, "200|OK|4|ok");
+}
+
+#[test]
 fn xhr_rejects_synchronous_and_invalid_state_operations() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let out = runtime
