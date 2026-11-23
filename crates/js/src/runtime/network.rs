@@ -119,12 +119,36 @@ pub(crate) fn fetch_native(
     } else {
         None
     };
+    // #2135: when the JS prelude encodes a binary body as a Latin-1 string
+    // (one char per byte via String.fromCharCode), `.into_bytes()` would
+    // UTF-8-encode chars ≥ 0x80 (ff → c3 bf), corrupting the payload. An
+    // explicit flag makes the bridge reinterpret each char code as one byte.
+    let is_binary = args
+        .get(5)
+        .is_some_and(|value| value.as_boolean().unwrap_or(false));
+    let body = if !body_text.is_empty() && method != "GET" && method != "HEAD" {
+        if is_binary {
+            // Each char was produced by String.fromCharCode(byte) on the JS side,
+            // so it is in 0..=255. Reject anything else rather than truncate.
+            let mut bytes = Vec::with_capacity(body_text.len());
+            for ch in body_text.chars() {
+                bytes
+                    .push(u8::try_from(u32::from(ch)).map_err(|_| {
+                        js_error("binary fetch body contains a non-byte character")
+                    })?);
+            }
+            Some(bytes)
+        } else {
+            Some(body_text.into_bytes())
+        }
+    } else {
+        None
+    };
     let request = crate::host::FetchRequest {
         url,
         method: method.clone(),
         headers,
-        body: (!body_text.is_empty() && method != "GET" && method != "HEAD")
-            .then(|| body_text.into_bytes()),
+        body,
         redirect,
     };
     let provider = ctx_or_mirror(

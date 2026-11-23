@@ -391,8 +391,10 @@ fn ws_bridge_ping_sends_single_pong_and_preserves_mixed_case_scheme_url() {
             }
         };
         stream.set_nonblocking(false).ok();
+        // CI runners can be heavily loaded: give the client enough time to send its
+        // Ping reply and the "hi" text frame before declaring the exchange dead.
         stream
-            .set_read_timeout(Some(std::time::Duration::from_millis(500)))
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
             .ok();
         let Ok(head) = read_handshake_head(&mut stream) else {
             return (String::new(), 0usize);

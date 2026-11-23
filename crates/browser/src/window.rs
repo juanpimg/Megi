@@ -351,24 +351,32 @@ enum FocusTarget {
 }
 
 /// Builds the keyboard focus list for a DOM snapshot in document order (#1517).
-///
-/// Each focusable element from [`a11y::focus_order`] is mapped to a form control (matched by
-/// its DOM node) or a link (matched by `LinkRegion::node`). Pure so it can be tested without
-/// a window/event loop.
+/// Maps each focusable node to a form control or link; pure and window-free.
 fn build_focus_targets(
     document: &megi_webview::core::Document,
     forms: &[FormControl],
     links: &[LinkRegion],
 ) -> Vec<FocusTarget> {
-    let mut targets = Vec::new();
-    for node in a11y::focus_order(document, document.root()) {
-        if let Some(pos) = forms.iter().position(|control| control.node_id == node) {
-            targets.push(FocusTarget::Control(forms[pos].form_id));
-        } else if links.iter().any(|region| region.node == Some(node)) {
-            targets.push(FocusTarget::Link(node));
-        }
-    }
-    targets
+    // #2196: O(1) node indexes, not O(F*(A+L)) linear scans per frame.
+    let form_by_node: std::collections::HashMap<_, _> = forms
+        .iter()
+        .map(|control| (control.node_id, control.form_id))
+        .collect();
+    let link_nodes: std::collections::HashSet<_> =
+        links.iter().filter_map(|region| region.node).collect();
+    a11y::focus_order(document, document.root())
+        .into_iter()
+        .map(|node| {
+            form_by_node
+                .get(&node)
+                .map(|form_id| FocusTarget::Control(*form_id))
+                .unwrap_or(FocusTarget::Link(node))
+        })
+        .filter(|target| match target {
+            FocusTarget::Control(_) => true,
+            FocusTarget::Link(node) => link_nodes.contains(node),
+        })
+        .collect()
 }
 
 struct WindowApp {
