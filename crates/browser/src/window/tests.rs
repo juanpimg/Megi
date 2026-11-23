@@ -166,3 +166,43 @@ mod form_patch_send_tests {
         assert!(send_ok.is_ok());
     }
 }
+
+#[test]
+fn build_focus_targets_maps_controls_and_links_in_document_order() {
+    // #2196: the focus-target mapping must stay correct while using O(1) node indexes.
+    use super::{FocusTarget, build_focus_targets};
+    use megi_webview::core::Namespace;
+    let mut doc = megi_webview::core::Document::new();
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let button = doc.create_element(Namespace::Html, "button", vec![]);
+    let link = doc.create_element(
+        Namespace::Html,
+        "a",
+        vec![megi_webview::core::Attribute::new("href", "/x")],
+    );
+    assert!(doc.append_child(doc.root(), body));
+    assert!(doc.append_child(body, button));
+    assert!(doc.append_child(body, link));
+
+    let control = FormControl {
+        form_id: 42,
+        name: String::new(),
+        node_id: button,
+        kind: crate::forms::FormControlKind::Button,
+        rect: crate::links::CssRect::new(0.0, 0.0, 1.0, 1.0),
+        value: String::new(),
+        checked: false,
+        disabled: false,
+        options: Vec::new(),
+        multiple: false,
+    };
+    let links = vec![LinkRegion {
+        rect: crate::links::CssRect::new(0.0, 0.0, 1.0, 1.0),
+        href: "/x".to_owned(),
+        node: Some(link),
+        is_blocker: false,
+    }];
+    let targets = build_focus_targets(&doc, &[control], &links);
+    assert!(targets.contains(&FocusTarget::Control(42)));
+    assert!(targets.contains(&FocusTarget::Link(link)));
+}
