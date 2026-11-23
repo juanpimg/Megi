@@ -191,6 +191,20 @@ impl NodeId {
     pub const fn get(self) -> u32 {
         self.0.get()
     }
+
+    /// Reconstructs a handle from a raw value previously returned by [`NodeId::get`].
+    ///
+    /// #2136: bridges that carry the full packed handle (e.g. AccessKit publishes it as a
+    /// `u64`) must restore the generation too — routing such a value through
+    /// [`NodeId::from_index`] drops the generation and yields a stale/foreign handle that
+    /// every document rejects. A zero raw value is not a valid handle and returns `None`.
+    #[inline]
+    pub const fn from_raw(raw: u32) -> Option<Self> {
+        match NonZeroU32::new(raw) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
 }
 
 impl fmt::Debug for NodeId {
