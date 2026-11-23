@@ -53,10 +53,6 @@ class CheckSbomTests(unittest.TestCase):
         self.assertEqual(self._run(), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ReleaseWorkflowTests(unittest.TestCase):
     """The release workflow must not silently publish an empty SBOM (#1837)."""
 
@@ -89,3 +85,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "release-create stderr must not be discarded before a fallback",
         )
         self.assertIn("already exists", publish, "fallback must be limited to an existing release")
+
+
+if __name__ == "__main__":
+    unittest.main()
