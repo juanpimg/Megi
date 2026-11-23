@@ -86,6 +86,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
+      # whatwg_spec.py (imported by the tools tests below) needs lxml to parse the
+      # cached WHATWG spec pages; setup-python does not install it.
+      - name: Install Python test dependencies
+        run: python3 -m pip install lxml
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Coverage freshness (capability manifest + artifacts)
@@ -141,16 +145,16 @@ jobs:
       # The light WebView must not link Boa or any windowing backend.
       - name: Light WebView build (no JS, no UI)
         run: |
+          set -o pipefail
           cargo check -p megi-webview --no-default-features
           cargo test -p megi-webview --no-default-features
-          # #2138: capture cargo tree output first so a failing `cargo tree`
-          # (broken manifest, missing package) cannot be mistaken for an empty
-          # tree and let the `! grep` check pass. `set -e` above then aborts.
-          tree_output="$(cargo tree -p megi-webview --no-default-features -e normal)"
-          if printf '%s\n' "$tree_output" | grep -Eqi 'boa|winit|softbuffer'; then
-            echo "light webview links a forbidden crate" >&2
-            exit 1
-          fi
+          # #2138: capture cargo tree's output before grepping so its own exit
+          # status is observed. `! cargo tree ... | grep` fails open: without
+          # pipefail a failing `cargo tree` feeds grep an empty input, grep
+          # returns 1, and `!` turns the whole pipeline green. The dependency
+          # tree command must succeed; only then may the forbidden-dep grep fail.
+          tree="$(cargo tree -p megi-webview --no-default-features -e normal)"
+          ! grep -Eqi 'boa|winit|softbuffer' <<<"$tree"
       - name: Workspace tests
         run: |
           set -o pipefail

@@ -201,6 +201,30 @@ pub(crate) mod tests_part2 {
     }
 
     #[test]
+    fn test_link_pseudo_class_matches_href_elements() {
+        // Selectors Level 4 §3.6.1 / WHATWG HTML §15.3.2: `:link` and `:any-link`
+        // match hyperlinks (elements with an href), so UA and author link styles apply.
+        let mut doc = Document::new();
+        let link = doc.create_element(
+            Namespace::Html,
+            "a",
+            vec![Attribute::new("href", "https://example.test/")],
+        );
+        let plain = doc.create_element(Namespace::Html, "a", vec![]);
+        doc.append_child(doc.root(), link);
+        doc.append_child(doc.root(), plain);
+
+        for selector in ["a:link", "a:any-link", ":link", ":any-link"] {
+            let list = parse_selectors(selector);
+            assert!(list.matches(&doc, link), "{selector} must match <a href>");
+            assert!(
+                !list.matches(&doc, plain),
+                "{selector} must not match <a> without href"
+            );
+        }
+    }
+
+    #[test]
     fn test_dynamic_pseudo_classes_never_match() {
         let mut doc = Document::new();
         let a = doc.create_element(
@@ -215,7 +239,6 @@ pub(crate) mod tests_part2 {
             "a:active",
             "a:focus",
             "a:visited",
-            "a:link",
             "a:focus-visible",
         ] {
             let list = parse_selectors(selector);
