@@ -77,6 +77,7 @@ fn zoom_and_refresh_flags_are_documented_in_help() {
 /// event loop: the refresh policy must ask for repaints, repeated worker renders must be
 /// deterministic (same virtual clock) and the frame must expose the counters the window
 /// uses to drive auto-refresh.
+#[cfg(feature = "full")]
 #[test]
 fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
     let input = "data:text/html,<div id=out>x</div>\

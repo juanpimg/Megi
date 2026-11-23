@@ -9,14 +9,20 @@ repository.workspace = true
 description = "Megi Engine — Phase 7 desktop shell: winit window + softbuffer presentation and headless screenshots"
 
 [features]
-default = ["a11y"]
+default = ["window", "full", "a11y"]
+# Interactive desktop window via winit + softbuffer (disable with `--no-default-features`
+# for a light headless-only binary without X11/Wayland/Boa/PAC).
+window = ["dep:winit", "dep:softbuffer"]
+# Full browser engine capabilities (Boa ECMAScript + PAC auto-configuration) via megi-webview.
+# The standard `megi` binary enables `full` by default.
+full = ["megi-webview/full"]
 # ADR-002: platform accessibility backend (AT-SPI/UIA/NSAccessibility via AccessKit).
-a11y = ["dep:accesskit", "dep:accesskit_winit", "dep:accesskit_consumer"]
+a11y = ["window", "dep:accesskit", "dep:accesskit_winit", "dep:accesskit_consumer"]
 
 [dependencies]
-megi-webview = { workspace = true, features = ["full"] }
-winit.workspace = true
-softbuffer.workspace = true
+megi-webview = { workspace = true }
+winit = { workspace = true, optional = true }
+softbuffer = { workspace = true, optional = true }
 accesskit = { version = "0.25", optional = true }
 accesskit_winit = { version = "0.34", optional = true }
 accesskit_consumer = { version = "0.39", optional = true }

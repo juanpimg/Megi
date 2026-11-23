@@ -290,3 +290,17 @@ fn ipc_render_flag_is_parsed() {
     let plain = parse_cli(args(&["data:text/html,<p>hi</p>"])).expect("parse");
     assert!(!plain.ipc_render, "process rendering is opt-in");
 }
+
+#[test]
+fn window_flag_selects_window_mode_and_conflicts_with_screenshot() {
+    let cli = parse_cli(args(&["data:text/html,<p>hi</p>", "--window"])).expect("parse --window");
+    assert_eq!(cli.mode, LaunchMode::Window);
+    let err = parse_cli(args(&[
+        "data:text/html,<p>hi</p>",
+        "--window",
+        "--screenshot",
+        "/tmp/out.png",
+    ]))
+    .expect_err("--window conflicts with --screenshot");
+    assert!(matches!(err, ShellError::Usage(_)));
+}

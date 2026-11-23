@@ -191,6 +191,7 @@ fn snapshot_exposes_widget_states() {
     assert_eq!(find("field").value.as_deref(), Some("hello"), "input value");
 }
 
+#[cfg(feature = "a11y")]
 #[test]
 fn widget_states_map_to_accesskit_nodes() {
     use crate::a11y::SnapshotNode;

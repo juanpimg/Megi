@@ -18,6 +18,7 @@ usage: megi <url|file> [options]
 options:
   --width W           window/screenshot width in CSS pixels (default 800, max 8192)
   --height H          window/screenshot height in CSS pixels (default 600, max 8192)
+  --window            explicitly request interactive window mode (requires `window` feature)
   --screenshot PATH   headless mode: render once and write a PNG (no window/display)
   --title T           initial window title (default \"Megi\"; replaced by page title)
   --cookies           enable the session cookie jar (Set-Cookie shared between the
@@ -173,6 +174,8 @@ pub struct RawArgs {
     pub time_ms: Option<f64>,
     /// `--ipc-render` was passed.
     pub ipc_render: bool,
+    /// `--window` was passed.
+    pub window: bool,
     /// `-h`/`--help` was passed.
     pub help: bool,
 }

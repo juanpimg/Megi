@@ -50,6 +50,7 @@ fn reader_page_extracts_the_article_and_centers_the_column() {
     assert!(!page.contains("<footer>"));
 }
 
+#[cfg(feature = "full")]
 #[test]
 fn worker_render_dispatches_host_popstate_before_the_final_frame() {
     // #1503: a same-document history navigation re-renders with `host_events=["popstate"]`;

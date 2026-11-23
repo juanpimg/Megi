@@ -43,6 +43,7 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--chrome-menu" => raw.chrome_menu = true,
             "--reader" => raw.reader = true,
             "--ipc-render" => raw.ipc_render = true,
+            "--window" => raw.window = true,
             "--no-session" => raw.no_session = true,
             "--session-file" => {
                 raw.session_file = Some(PathBuf::from(next_value(
