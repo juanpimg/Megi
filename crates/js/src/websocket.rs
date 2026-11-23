@@ -272,9 +272,10 @@ pub fn poll(context: &mut Context) -> usize {
                             js_string!("binary").into(),
                         ]
                     }
+                    // #2152: WHATWG WebSockets — CloseEvent.code is an unsigned short (number).
                     WebSocketEvent::Close(code) => vec![
                         js_string!("close").into(),
-                        js_string!(code.to_string().as_str()).into(),
+                        JsValue::from(f64::from(code)),
                     ],
                     WebSocketEvent::Error(message) => vec![
                         js_string!("error").into(),

@@ -217,3 +217,28 @@ fn websocket_close_fires_onclose_and_reaches_closed_state() {
     let state = runtime.eval("String(ws.readyState)", "t").expect("state");
     assert_eq!(state, "3", "readyState must be CLOSED after the event");
 }
+
+#[test]
+fn close_event_code_is_number() {
+    // #2152: CloseEvent.code must be a JS number, not a string.
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let sent = Arc::new(Mutex::new(Vec::new()));
+    let provider: WebSocketProvider = Arc::new(move |_url| {
+        Ok(Box::new(MockTransport {
+            events: VecDeque::from([WebSocketEvent::Open, WebSocketEvent::Close(1000)]),
+            sent: Arc::clone(&sent),
+        }))
+    });
+    runtime.set_websocket_provider(provider);
+    runtime
+        .eval(
+            "var __res = ''; \
+             var ws = new WebSocket('wss://example.com/ws'); \
+             ws.onclose = function(e) { __res = (typeof e.code) + '|' + (e.code === 1000); };",
+            "t",
+        )
+        .expect("eval");
+    runtime.poll_websockets();
+    let res = runtime.eval("__res", "t").expect("res");
+    assert_eq!(res, "number|true");
+}
