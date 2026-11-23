@@ -26,7 +26,7 @@ edges.layout = ['core', 'css', 'fonts']
 # net may import the crates listed below.
 edges.net = ['core', 'image']
 # paint may import the crates listed below.
-edges.paint = ['core', 'css', 'display', 'fonts', 'image', 'layout']
+edges.paint = ['core', 'css', 'display', 'fonts', 'image', 'layout', 'raster']
 # raster may import the crates listed below.
 edges.raster = ['core', 'display', 'fonts']
 # render may import the crates listed below.

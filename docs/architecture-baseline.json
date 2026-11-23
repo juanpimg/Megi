@@ -52,8 +52,7 @@
       "core",
       "fonts",
       "image",
-      "layout",
-      "raster"
+      "layout"
     ],
     "net": [
       "image",

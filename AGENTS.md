@@ -33,7 +33,8 @@ Prohibiciones clave:
 - `net` NUNCA importa `js` (PAC usa el trait `PacEvaluator`).
 - `js` NUNCA importa `net`, `layout`, `paint` ni `render` (usa providers).
 - `layout` NUNCA importa `paint`, `display` ni `render`.
-- `paint` NUNCA importa `raster` ni `render`; `raster` NUNCA importa `layout`.
+- `paint` NUNCA importa `render`, `webview` ni UI; `raster` es su dependencia de
+  rasterización de bajo nivel (spec §2.3: `paint` extrae su rasterizador) y NUNCA importa `layout`.
 - `webview` NUNCA importa winit/softbuffer/UI; `browser` no importa crates de motor
   directamente (solo `webview`).
 - `test_harness`/`bench` son herramientas: nadie del motor depende de ellos.
