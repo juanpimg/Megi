@@ -109,6 +109,7 @@ impl ProcessFrame {
 pub struct ProcessRenderSession {
     renderer: ProcessRenderer,
     document: Option<megi_webview::core::Document>,
+    last_viewport: Option<(u32, u32)>,
 }
 
 impl ProcessRenderSession {
@@ -116,34 +117,48 @@ impl ProcessRenderSession {
         Ok(Self {
             renderer: ProcessRenderer::spawn()?,
             document: None,
+            last_viewport: None,
         })
     }
 
     /// Renders a fresh request and caches the returned DOM.
     pub fn render(&mut self, request: IpcRenderRequest) -> Result<ProcessFrame, IpcError> {
+        let viewport = (request.css_width, request.css_height);
         let response = self.renderer.render(request)?;
-        let frame = ProcessFrame::from_response(response);
-        self.document = Some(frame.document.clone());
-        Ok(frame)
+        self.last_viewport = Some(viewport);
+        self.apply_response(response)
     }
 
     /// Patches the cached DOM and re-renders in the same process. Fails when no document has
     /// been rendered yet.
     pub fn patch(&mut self, base_url: &str) -> Result<ProcessFrame, IpcError> {
+        let request = self.build_patch_request(base_url)?;
+        let response = self.renderer.render(request)?;
+        self.apply_response(response)
+    }
+
+    fn build_patch_request(&self, base_url: &str) -> Result<IpcRenderRequest, IpcError> {
         let document = self
             .document
             .as_ref()
             .ok_or_else(|| IpcError::Io("no document to patch".to_owned()))?;
         let patch = DomPatch::from_document(document, base_url);
-        let response = self.renderer.render(IpcRenderRequest {
+        let (css_width, css_height) = self.last_viewport.unwrap_or((800, 600));
+        Ok(IpcRenderRequest {
             generation: 0,
             input: patch.input,
-            css_width: 0,
-            css_height: 0,
+            css_width,
+            css_height,
             base_override: patch.base_override,
             scripting: true,
             find_query: None,
-        })?;
+        })
+    }
+
+    fn apply_response(&mut self, response: IpcRenderResponse) -> Result<ProcessFrame, IpcError> {
+        if let Some(error) = response.error {
+            return Err(IpcError::Io(error));
+        }
         let frame = ProcessFrame::from_response(response);
         self.document = Some(frame.document.clone());
         Ok(frame)
@@ -151,5 +166,51 @@ impl ProcessRenderSession {
 
     pub fn document(&self) -> Option<&megi_webview::core::Document> {
         self.document.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_request_reuses_last_viewport_instead_of_zero() {
+        let mut doc = megi_webview::core::Document::new();
+        let html = doc.create_element(
+            megi_webview::core::Namespace::Html,
+            "html",
+            Vec::new(),
+        );
+        doc.append_child(doc.root(), html);
+        let mut session = ProcessRenderSession {
+            renderer: ProcessRenderer::spawn().expect("spawn"),
+            document: Some(doc),
+            last_viewport: Some((800, 600)),
+        };
+        let req = session.build_patch_request("https://example.com/").unwrap();
+        assert_eq!((req.css_width, req.css_height), (800, 600));
+
+        // An error response must not overwrite the cached document.
+        let err_resp = IpcRenderResponse {
+            generation: 0,
+            png_bytes: Vec::new(),
+            content_height: 0,
+            css_width: 800,
+            title: None,
+            document_url: String::new(),
+            scripts_executed: 0,
+            script_timers_pending: 0,
+            warnings: 0,
+            script_errors: 0,
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            find_matches: Vec::new(),
+            find_rects: Vec::new(),
+            document_html: String::new(),
+            error: Some("render failed".to_owned()),
+        };
+        assert!(session.apply_response(err_resp).is_err());
+        assert!(session.document().is_some());
     }
 }
