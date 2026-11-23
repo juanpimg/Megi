@@ -182,10 +182,8 @@ mod tests {
     #[test]
     fn pi_questionable_respects_max_pi_data_bytes() {
         let html = format!("<?pi {}x", "?".repeat(super::MAX_PI_DATA_BYTES + 100));
-        let mut tok = super::Tokenizer::from_str_input(
-            &html,
-            super::types::TokenizerConfig::default(),
-        );
+        let mut tok =
+            super::Tokenizer::from_str_input(&html, super::types::TokenizerConfig::default());
         let mut max_len = 0;
         while !matches!(tok.tokens.last(), Some(super::Token::Eof)) {
             tok.step();

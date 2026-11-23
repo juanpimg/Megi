@@ -480,6 +480,9 @@ mod tests {
             tok.step();
             max_len = max_len.max(tok.temp_buffer.len());
         }
-        assert!(max_len <= super::super::MAX_TOKEN_BYTES, "max_len={max_len}");
+        assert!(
+            max_len <= super::super::MAX_TOKEN_BYTES,
+            "max_len={max_len}"
+        );
     }
 }
