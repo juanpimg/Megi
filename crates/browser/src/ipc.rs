@@ -13,7 +13,8 @@ mod regions;
 mod session;
 pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
 pub use regions::{
-    IpcFindMatch, IpcFormControl, IpcImageRegion, IpcLinkRegion, IpcRect, IpcSelectOption,
+    DocumentNodeOrdinals, DocumentOrdinalNodes, IpcFindMatch, IpcFormControl, IpcImageRegion,
+    IpcLinkRegion, IpcRect, IpcSelectOption,
 };
 pub use session::{ProcessFrame, ProcessRenderSession};
 
@@ -218,46 +219,49 @@ where
             }
         };
         let response = match render_result {
-            Ok(frame) => IpcRenderResponse {
-                generation: frame.generation,
-                png_bytes: frame.png_bytes,
-                content_height: frame.content_height,
-                css_width: request.css_width,
-                title: frame.title,
-                document_url: frame.document_url,
-                scripts_executed: frame.scripts_executed,
-                script_timers_pending: frame.script_timers_pending,
-                warnings: frame.warnings,
-                script_errors: frame.script_errors,
-                links: frame
-                    .links
-                    .iter()
-                    .map(|region| IpcLinkRegion::from_region(region, &frame.document))
-                    .collect(),
-                images: frame
-                    .images
-                    .iter()
-                    .map(|region| IpcImageRegion::from_region(region, &frame.document))
-                    .collect(),
-                forms: frame
-                    .forms
-                    .iter()
-                    .map(|control| IpcFormControl::from_control(control, &frame.document))
-                    .collect(),
-                find_matches: frame
-                    .find_matches
-                    .iter()
-                    .map(|m| IpcFindMatch::from_match(m, &frame.document))
-                    .collect(),
-                find_rects: frame
-                    .find_rects
-                    .iter()
-                    .copied()
-                    .map(IpcRect::from_rect)
-                    .collect(),
-                document_html: crate::download::serialize_document(&frame.document),
-                error: None,
-            },
+            Ok(frame) => {
+                let ordinals = DocumentNodeOrdinals::build(&frame.document);
+                IpcRenderResponse {
+                    generation: frame.generation,
+                    png_bytes: frame.png_bytes,
+                    content_height: frame.content_height,
+                    css_width: request.css_width,
+                    title: frame.title,
+                    document_url: frame.document_url,
+                    scripts_executed: frame.scripts_executed,
+                    script_timers_pending: frame.script_timers_pending,
+                    warnings: frame.warnings,
+                    script_errors: frame.script_errors,
+                    links: frame
+                        .links
+                        .iter()
+                        .map(|region| IpcLinkRegion::from_region_indexed(region, &ordinals))
+                        .collect(),
+                    images: frame
+                        .images
+                        .iter()
+                        .map(|region| IpcImageRegion::from_region_indexed(region, &ordinals))
+                        .collect(),
+                    forms: frame
+                        .forms
+                        .iter()
+                        .map(|control| IpcFormControl::from_control_indexed(control, &ordinals))
+                        .collect(),
+                    find_matches: frame
+                        .find_matches
+                        .iter()
+                        .map(|m| IpcFindMatch::from_match_indexed(m, &ordinals))
+                        .collect(),
+                    find_rects: frame
+                        .find_rects
+                        .iter()
+                        .copied()
+                        .map(IpcRect::from_rect)
+                        .collect(),
+                    document_html: crate::download::serialize_document(&frame.document),
+                    error: None,
+                }
+            }
             Err(error) => IpcRenderResponse {
                 generation: request.generation,
                 png_bytes: Vec::new(),

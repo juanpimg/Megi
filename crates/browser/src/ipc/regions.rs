@@ -1,3 +1,50 @@
+/// Precomputed `NodeId -> document-order ordinal` index built in one O(N) pass.
+#[derive(Debug, Clone)]
+pub struct DocumentNodeOrdinals {
+    ordinals: std::collections::HashMap<megi_webview::core::NodeId, usize>,
+}
+
+impl DocumentNodeOrdinals {
+    /// Indexes every node reachable from `document.root()` in `descendants` order.
+    pub fn build(document: &megi_webview::core::Document) -> Self {
+        let ordinals = document
+            .descendants(document.root())
+            .enumerate()
+            .map(|(ordinal, node_id)| (node_id, ordinal))
+            .collect();
+        Self { ordinals }
+    }
+
+    /// Returns the document-order ordinal for `node_id` in O(1) expected time.
+    pub fn ordinal_of(&self, node_id: megi_webview::core::NodeId) -> Option<usize> {
+        self.ordinals.get(&node_id).copied()
+    }
+}
+
+/// Precomputed `ordinal -> NodeId` table built in one O(N) pass over `document`.
+#[derive(Debug, Clone)]
+pub struct DocumentOrdinalNodes {
+    nodes: Vec<megi_webview::core::NodeId>,
+}
+
+impl DocumentOrdinalNodes {
+    /// Collects every node reachable from `document.root()` in `descendants` order.
+    pub fn build(document: &megi_webview::core::Document) -> Self {
+        Self {
+            nodes: document.descendants(document.root()).collect(),
+        }
+    }
+
+    /// Resolves a document-order `ordinal` to its `NodeId` in O(1) time.
+    pub fn node_at(&self, ordinal: usize) -> Option<megi_webview::core::NodeId> {
+        self.nodes.get(ordinal).copied()
+    }
+}
+
+fn sentinel_node_id() -> megi_webview::core::NodeId {
+    megi_webview::core::NodeId::from_index(usize::MAX)
+}
+
 /// Serializable hit region for a link, with a DOM ordinal instead of a raw `NodeId`
 /// (which is document-arena-specific and cannot cross the process boundary).
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
@@ -22,6 +69,19 @@ impl IpcLinkRegion {
                 .descendants(document.root())
                 .position(|candidate| candidate == node)
         });
+        Self::with_ordinal(region, node_ordinal)
+    }
+
+    /// Captures a child-side region in O(1) using a precomputed [`DocumentNodeOrdinals`] index.
+    pub fn from_region_indexed(
+        region: &crate::links::LinkRegion,
+        ordinals: &DocumentNodeOrdinals,
+    ) -> Self {
+        let node_ordinal = region.node.and_then(|node| ordinals.ordinal_of(node));
+        Self::with_ordinal(region, node_ordinal)
+    }
+
+    fn with_ordinal(region: &crate::links::LinkRegion, node_ordinal: Option<usize>) -> Self {
         Self {
             x: region.rect.x,
             y: region.rect.y,
@@ -55,6 +115,17 @@ impl IpcLinkRegion {
             ordinal.and_then(|ordinal| document.descendants(document.root()).nth(ordinal));
         region
     }
+
+    /// Reconstructs a region in O(1) using a precomputed [`DocumentOrdinalNodes`] table.
+    pub fn into_link_region_indexed(
+        self,
+        nodes: &DocumentOrdinalNodes,
+    ) -> crate::links::LinkRegion {
+        let ordinal = self.node_ordinal;
+        let mut region = self.into_link_region();
+        region.node = ordinal.and_then(|ordinal| nodes.node_at(ordinal));
+        region
+    }
 }
 
 /// Serializable image hit region with a DOM ordinal (ADR-004 hit-region parity).
@@ -76,6 +147,18 @@ impl IpcImageRegion {
         let node_ordinal = document
             .descendants(document.root())
             .position(|candidate| candidate == region.node_id);
+        Self::with_ordinal(region, node_ordinal)
+    }
+
+    /// Captures an image region in O(1) using a precomputed [`DocumentNodeOrdinals`] index.
+    pub fn from_region_indexed(
+        region: &crate::images::ImageRegion,
+        ordinals: &DocumentNodeOrdinals,
+    ) -> Self {
+        Self::with_ordinal(region, ordinals.ordinal_of(region.node_id))
+    }
+
+    fn with_ordinal(region: &crate::images::ImageRegion, node_ordinal: Option<usize>) -> Self {
         Self {
             node_ordinal,
             x: region.rect.x,
@@ -90,11 +173,28 @@ impl IpcImageRegion {
         self,
         document: &megi_webview::core::Document,
     ) -> crate::images::ImageRegion {
+        let node_id = self
+            .node_ordinal
+            .and_then(|ordinal| document.descendants(document.root()).nth(ordinal))
+            .unwrap_or_else(sentinel_node_id);
+        self.with_node_id(node_id)
+    }
+
+    /// Reconstructs an image region in O(1) using a precomputed [`DocumentOrdinalNodes`] table.
+    pub fn into_image_region_indexed(
+        self,
+        nodes: &DocumentOrdinalNodes,
+    ) -> crate::images::ImageRegion {
+        let node_id = self
+            .node_ordinal
+            .and_then(|ordinal| nodes.node_at(ordinal))
+            .unwrap_or_else(sentinel_node_id);
+        self.with_node_id(node_id)
+    }
+
+    fn with_node_id(self, node_id: megi_webview::core::NodeId) -> crate::images::ImageRegion {
         crate::images::ImageRegion {
-            node_id: self
-                .node_ordinal
-                .and_then(|ordinal| document.descendants(document.root()).nth(ordinal))
-                .unwrap_or_else(|| megi_webview::core::NodeId::from_index(usize::MAX)),
+            node_id,
             rect: crate::links::CssRect::new(self.x, self.y, self.width, self.height),
             url: self.url,
         }
@@ -147,12 +247,35 @@ impl IpcFindMatch {
         }
     }
 
+    /// Captures a find match in O(1) using a precomputed [`DocumentNodeOrdinals`] index.
+    pub fn from_match_indexed(
+        match_: &crate::find::FindMatch,
+        ordinals: &DocumentNodeOrdinals,
+    ) -> Self {
+        Self {
+            node_ordinal: ordinals.ordinal_of(match_.node_id),
+            start: match_.range.start,
+            end: match_.range.end,
+        }
+    }
+
     pub fn into_match(self, document: &megi_webview::core::Document) -> crate::find::FindMatch {
         crate::find::FindMatch {
             node_id: self
                 .node_ordinal
                 .and_then(|ordinal| document.descendants(document.root()).nth(ordinal))
-                .unwrap_or_else(|| megi_webview::core::NodeId::from_index(usize::MAX)),
+                .unwrap_or_else(sentinel_node_id),
+            range: self.start..self.end,
+        }
+    }
+
+    /// Reconstructs a find match in O(1) using a precomputed [`DocumentOrdinalNodes`] table.
+    pub fn into_match_indexed(self, nodes: &DocumentOrdinalNodes) -> crate::find::FindMatch {
+        crate::find::FindMatch {
+            node_id: self
+                .node_ordinal
+                .and_then(|ordinal| nodes.node_at(ordinal))
+                .unwrap_or_else(sentinel_node_id),
             range: self.start..self.end,
         }
     }
@@ -190,12 +313,25 @@ impl IpcFormControl {
         control: &crate::forms::FormControl,
         document: &megi_webview::core::Document,
     ) -> Self {
+        let node_ordinal = document
+            .descendants(document.root())
+            .position(|candidate| candidate == control.node_id);
+        Self::with_ordinal(control, node_ordinal)
+    }
+
+    /// Captures a form control in O(1) using a precomputed [`DocumentNodeOrdinals`] index.
+    pub fn from_control_indexed(
+        control: &crate::forms::FormControl,
+        ordinals: &DocumentNodeOrdinals,
+    ) -> Self {
+        Self::with_ordinal(control, ordinals.ordinal_of(control.node_id))
+    }
+
+    fn with_ordinal(control: &crate::forms::FormControl, node_ordinal: Option<usize>) -> Self {
         Self {
             form_id: control.form_id,
             name: control.name.clone(),
-            node_ordinal: document
-                .descendants(document.root())
-                .position(|candidate| candidate == control.node_id),
+            node_ordinal,
             kind: kind_str(control.kind).to_owned(),
             x: control.rect.x,
             y: control.rect.y,
@@ -222,14 +358,34 @@ impl IpcFormControl {
         self,
         document: &megi_webview::core::Document,
     ) -> Option<crate::forms::FormControl> {
+        let node_id = self
+            .node_ordinal
+            .and_then(|ordinal| document.descendants(document.root()).nth(ordinal))
+            .unwrap_or_else(sentinel_node_id);
+        self.with_node_id(node_id)
+    }
+
+    /// Reconstructs a form control in O(1) using a precomputed [`DocumentOrdinalNodes`] table.
+    pub fn into_control_indexed(
+        self,
+        nodes: &DocumentOrdinalNodes,
+    ) -> Option<crate::forms::FormControl> {
+        let node_id = self
+            .node_ordinal
+            .and_then(|ordinal| nodes.node_at(ordinal))
+            .unwrap_or_else(sentinel_node_id);
+        self.with_node_id(node_id)
+    }
+
+    fn with_node_id(
+        self,
+        node_id: megi_webview::core::NodeId,
+    ) -> Option<crate::forms::FormControl> {
         let kind = parse_kind(&self.kind)?;
         Some(crate::forms::FormControl {
             form_id: self.form_id,
             name: self.name,
-            node_id: self
-                .node_ordinal
-                .and_then(|ordinal| document.descendants(document.root()).nth(ordinal))
-                .unwrap_or_else(|| megi_webview::core::NodeId::from_index(usize::MAX)),
+            node_id,
             kind,
             rect: crate::links::CssRect::new(self.x, self.y, self.width, self.height),
             value: self.value,

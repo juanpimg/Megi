@@ -50,6 +50,7 @@ impl ProcessFrame {
         } else {
             image.height
         };
+        let nodes = DocumentOrdinalNodes::build(&self.document);
         Ok(crate::worker::RenderFrame {
             generation: self.response.generation,
             width: self.response.css_width,
@@ -63,14 +64,14 @@ impl ProcessFrame {
                 .links
                 .iter()
                 .cloned()
-                .map(|region| region.into_link_region_with_document(&self.document))
+                .map(|region| region.into_link_region_indexed(&nodes))
                 .collect(),
             images: self
                 .response
                 .images
                 .iter()
                 .cloned()
-                .map(|region| region.into_image_region(&self.document))
+                .map(|region| region.into_image_region_indexed(&nodes))
                 .collect(),
             title: self.response.title.clone(),
             document_url: self.response.document_url.clone(),
@@ -83,7 +84,7 @@ impl ProcessFrame {
                 .forms
                 .iter()
                 .cloned()
-                .filter_map(|control| control.into_control(&self.document))
+                .filter_map(|control| control.into_control_indexed(&nodes))
                 .collect(),
             document: std::sync::Arc::new(self.document.clone()),
             find_matches: self
@@ -91,7 +92,7 @@ impl ProcessFrame {
                 .find_matches
                 .iter()
                 .cloned()
-                .map(|m| m.into_match(&self.document))
+                .map(|m| m.into_match_indexed(&nodes))
                 .collect(),
             find_rects: self
                 .response
