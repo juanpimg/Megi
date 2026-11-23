@@ -155,7 +155,10 @@ fn parses_zoom_and_refresh_flags() {
     assert_eq!(disabled.refresh_ms, None);
 
     let with_path = parse_cli(args(&["--refresh-ms", "Cargo.toml"])).expect("parse");
-    assert_eq!(with_path.refresh_ms, Some(crate::refresh::DEFAULT_REFRESH_MS));
+    assert_eq!(
+        with_path.refresh_ms,
+        Some(crate::refresh::DEFAULT_REFRESH_MS)
+    );
     assert!(
         with_path.input.starts_with("file://") && with_path.input.ends_with("/Cargo.toml"),
         "expected resolved file:// URL, got {}",

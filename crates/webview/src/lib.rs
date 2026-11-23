@@ -162,7 +162,7 @@ impl WebView {
         megi_display::find_link_at(&frame.document, &frame.hit_regions, x, y)
     }
 
-        /// Enqueues a host-translated event for the next `tick()`.
+    /// Enqueues a host-translated event for the next `tick()`.
     ///
     /// The queue is bounded to [`MAX_QUEUED_EVENTS`]; if the host does not call
     /// [`WebView::drain_events`], the oldest queued event is dropped.

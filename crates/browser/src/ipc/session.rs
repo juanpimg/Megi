@@ -176,11 +176,7 @@ mod tests {
     #[test]
     fn patch_request_reuses_last_viewport_instead_of_zero() {
         let mut doc = megi_webview::core::Document::new();
-        let html = doc.create_element(
-            megi_webview::core::Namespace::Html,
-            "html",
-            Vec::new(),
-        );
+        let html = doc.create_element(megi_webview::core::Namespace::Html, "html", Vec::new());
         doc.append_child(doc.root(), html);
         let mut session = ProcessRenderSession {
             renderer: ProcessRenderer::spawn().expect("spawn"),
