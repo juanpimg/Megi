@@ -312,12 +312,16 @@ impl DisplayItem {
             Self::BoxShadow { rect, shadow, .. } => {
                 // #1716: the three-pass box blur reaches ~1.5 * blur; use
                 // that support so culling does not clip the shadow tail.
+                // #2143: the rasterizer also expands the shape by `spread`
+                // on every side — include it here or culling drops visible
+                // rings whose original rect lies outside the viewport.
                 let blur = shadow.blur.clamp(0.0, MAX_SHADOW_BLUR) * 1.5;
+                let spread = shadow.spread.max(0.0);
                 Some(Rect::new(
-                    rect.x + shadow.offset_x.min(0.0) - blur,
-                    rect.y + shadow.offset_y.min(0.0) - blur,
-                    rect.width + shadow.offset_x.abs() + 2.0 * blur,
-                    rect.height + shadow.offset_y.abs() + 2.0 * blur,
+                    rect.x + shadow.offset_x.min(0.0) - blur - spread,
+                    rect.y + shadow.offset_y.min(0.0) - blur - spread,
+                    rect.width + shadow.offset_x.abs() + 2.0 * blur + 2.0 * spread,
+                    rect.height + shadow.offset_y.abs() + 2.0 * blur + 2.0 * spread,
                 ))
             }
             Self::TextShadow {
@@ -449,6 +453,28 @@ pub use megi_image::RgbaImage;
 #[cfg(test)]
 mod shadow_bounds_tests {
     use super::*;
+
+    #[test]
+    fn box_shadow_bounds_cover_spread() {
+        // #2143: spread expands the painted rect; culling must use the same geometry.
+        let item = DisplayItem::BoxShadow {
+            rect: Rect::new(-40.0, 0.0, 20.0, 20.0),
+            radii: BorderRadii::default(),
+            shadow: BoxShadow {
+                offset_x: 0.0,
+                offset_y: 0.0,
+                blur: 0.0,
+                spread: 50.0,
+                color: Color::RED,
+                inset: false,
+            },
+        };
+        let bounds = item.bounds().expect("box shadow bounds");
+        assert!(
+            (bounds.x + 90.0).abs() < 0.001 && (bounds.width - 120.0).abs() < 0.001,
+            "bounds must include spread, got {bounds:?}"
+        );
+    }
 
     #[test]
     fn box_shadow_bounds_cover_three_pass_support() {

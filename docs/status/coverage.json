@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 69,
+    "implemented": 70,
     "partial": 1,
     "known": 75,
-    "percent": 92,
+    "percent": 93,
     "unverified": [],
     "invalid_states": []
   },
@@ -46,10 +46,10 @@
     },
     {
       "id": "F6",
-      "implemented": 11,
+      "implemented": 12,
       "partial": 0,
       "known": 13,
-      "percent": 85
+      "percent": 92
     },
     {
       "id": "F7",
@@ -105,16 +105,6 @@
       "state": "missing",
       "evidence": "none",
       "issue": 1881,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F6-GETCOMPUTEDSTYLE-PERF",
-      "area": "F6",
-      "name": "getComputedStyle eficiente (sin re-serializar 42 propiedades por llamada)",
-      "source": "issue #1868",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1868,
       "reason": "no requiere evidencia"
     },
     {
