@@ -110,13 +110,11 @@ pub(crate) fn install_style_providers(
     // and innerWidth/innerHeight/devicePixelRatio come from the real viewport (DPR 1.0).
     if let Some(styles) = host.styles.clone() {
         let layout = host.layout.clone();
+        // F6-GETCOMPUTEDSTYLE-PERF (#1868): serialize each node's 42 CSS pairs once,
+        // not on every getComputedStyle call (46 properties formatted per read before).
+        let cache = crate::browser_host::ComputedStyleCache::new(styles, layout);
         runtime.set_computed_style_provider(Arc::new(move |document, node_id| {
-            crate::browser_host::computed_style_for(
-                &styles,
-                document,
-                node_id,
-                layout.as_ref().map(std::sync::Arc::as_ref),
-            )
+            cache.get(document, node_id)
         }));
     }
     let media = host.media.clone();

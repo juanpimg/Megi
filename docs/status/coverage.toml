@@ -614,10 +614,9 @@ id = "F6-GETCOMPUTEDSTYLE-PERF"
 area = "F6"
 name = "getComputedStyle eficiente (sin re-serializar 42 propiedades por llamada)"
 source = "issue #1868"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/src/browser_host.rs::computed_style_cache_serializes_each_node_only_once"
 issue = 1868
-reason = "getComputedStyle re-serializes 42 properties on every call; scripts that poll styles on animation frames are dominated by this cost."
 
 [[capability]]
 id = "F7-FIND-IN-PAGE-PERF"

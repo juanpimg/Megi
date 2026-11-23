@@ -22,6 +22,7 @@
 //! `devicePixelRatio` come from the same viewport (DPR is fixed at 1.0 by the pipeline).
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use megi_core::{Document, NodeId};
 use megi_css::{
@@ -139,6 +140,60 @@ pub(crate) fn computed_style_for(
         }
     }
     pairs
+}
+
+/// Caches serialized computed-style pairs per DOM node (F6-GETCOMPUTEDSTYLE-PERF / #1868).
+///
+/// The pre-script style snapshot is immutable for a render, so each node's 42 CSS pairs
+/// only need to be built once. Repeated `getComputedStyle` reads then reuse the cached
+/// vector instead of allocating and formatting every property again. Nodes absent from
+/// the snapshot (created by scripts) use the inline-style fallback and are cached too.
+pub(crate) struct ComputedStyleCache {
+    styles: Arc<HashMap<NodeId, ComputedStyle>>,
+    layout: Option<Arc<HashMap<NodeId, megi_js::host::LayoutRect>>>,
+    cached: std::sync::Mutex<HashMap<NodeId, Vec<(String, String)>>>,
+    serializations: std::sync::atomic::AtomicUsize,
+}
+
+impl ComputedStyleCache {
+    pub(crate) fn new(
+        styles: Arc<HashMap<NodeId, ComputedStyle>>,
+        layout: Option<Arc<HashMap<NodeId, megi_js::host::LayoutRect>>>,
+    ) -> Self {
+        Self {
+            styles,
+            layout,
+            cached: std::sync::Mutex::new(HashMap::new()),
+            serializations: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    /// Returns the cached pairs for `node_id`, serializing on the first read only.
+    pub(crate) fn get(&self, document: &Document, node_id: NodeId) -> Vec<(String, String)> {
+        if let Some(pairs) = self
+            .cached
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&node_id)
+        {
+            return pairs.clone();
+        }
+        let pairs = computed_style_for(&self.styles, document, node_id, self.layout.as_deref());
+        self.serializations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.cached
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(node_id, pairs.clone());
+        pairs
+    }
+
+    /// Number of nodes serialized so far (diagnostics/tests).
+    #[cfg(test)]
+    pub(crate) fn serializations(&self) -> usize {
+        self.serializations
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 fn replace_pair(pairs: &mut Vec<(String, String)>, name: &str, value: String) {
@@ -365,5 +420,54 @@ mod used_value_tests {
         };
         assert_eq!(get("width").as_deref(), Some("96px"));
         assert_eq!(get("height").as_deref(), Some("16px"));
+    }
+}
+
+#[cfg(test)]
+mod style_cache_tests {
+    use super::*;
+    use megi_core::{Attribute, Namespace};
+    use std::sync::Arc;
+
+    #[test]
+    fn computed_style_cache_serializes_each_node_only_once() {
+        // #1868: getComputedStyle used to build 42 String pairs on every call. The cache
+        // must serialize a node once and reuse the result for repeated reads.
+        let mut doc = Document::new();
+        let html = doc.create_element(Namespace::Html, "html", vec![]);
+        let div = doc.create_element(Namespace::Html, "div", vec![Attribute::new("id", "x")]);
+        assert!(doc.append_child(doc.root(), html));
+        assert!(doc.append_child(html, div));
+        let mut styles = HashMap::new();
+        styles.insert(div, ComputedStyle::initial());
+
+        let cache = ComputedStyleCache::new(Arc::new(styles), None);
+        let first = cache.get(&doc, div);
+        let second = cache.get(&doc, div);
+        assert_eq!(first, second);
+        assert_eq!(
+            cache.serializations(),
+            1,
+            "the node must be serialized once"
+        );
+        assert!(first.iter().any(|(name, _)| name == "color"));
+
+        // A different node serializes once more (no cross-node contamination).
+        cache.get(&doc, html);
+        assert_eq!(cache.serializations(), 2);
+    }
+
+    #[test]
+    fn computed_style_cache_falls_back_for_nodes_outside_the_snapshot() {
+        let mut doc = Document::new();
+        let div = doc.create_element(
+            Namespace::Html,
+            "div",
+            vec![Attribute::new("style", "color:red")],
+        );
+        assert!(doc.append_child(doc.root(), div));
+        let cache = ComputedStyleCache::new(Arc::new(HashMap::new()), None);
+        let pairs = cache.get(&doc, div);
+        assert!(pairs.iter().any(|(n, v)| n == "color" && v == "red"));
     }
 }
