@@ -244,7 +244,7 @@ impl WindowApp {
     pub(super) fn drain_worker_messages(&mut self) -> bool {
         let mut applied = false;
         let mut messages = Vec::new();
-        if let Some(pool) = &self.render_pool {
+        if let Some(pool) = &mut self.render_pool {
             messages.extend(pool.drain_messages());
         }
         while let Some(message) = self.process_messages.pop_front() {
