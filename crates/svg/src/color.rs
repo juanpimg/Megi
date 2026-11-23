@@ -104,35 +104,42 @@ fn parse_hsl_function(arguments: &str, with_alpha: bool) -> Option<Color> {
     if parts.len() != if with_alpha { 4 } else { 3 } {
         return None;
     }
+    // #2200: reject non-finite components like rgb() does, so an invalid hsl()/hsla()
+    // declaration is discarded instead of parsing into an opaque arbitrary color.
     let parse_angle = |raw: &str| -> Option<f32> {
         let raw = raw.trim().to_ascii_lowercase();
-        if let Some(deg) = raw.strip_suffix("deg") {
-            deg.trim().parse::<f32>().ok()
+        let value = if let Some(deg) = raw.strip_suffix("deg") {
+            deg.trim().parse::<f32>().ok()?
         } else if let Some(rad) = raw.strip_suffix("rad") {
-            rad.trim().parse::<f32>().ok().map(|v| v.to_degrees())
+            rad.trim().parse::<f32>().ok()?.to_degrees()
         } else if let Some(turn) = raw.strip_suffix("turn") {
-            turn.trim().parse::<f32>().ok().map(|v| v * 360.0)
+            turn.trim().parse::<f32>().ok()? * 360.0
         } else {
-            raw.parse::<f32>().ok()
-        }
+            raw.parse::<f32>().ok()?
+        };
+        value.is_finite().then_some(value)
     };
     let hue = parse_angle(parts[0])?.rem_euclid(360.0);
-    let saturation = parts[1]
-        .strip_suffix('%')?
-        .trim()
-        .parse::<f32>()
-        .ok()?
-        .clamp(0.0, 100.0)
-        / 100.0;
-    let lightness = parts[2]
-        .strip_suffix('%')?
-        .trim()
-        .parse::<f32>()
-        .ok()?
-        .clamp(0.0, 100.0)
-        / 100.0;
+    let saturation = {
+        let value: f32 = parts[1].strip_suffix('%')?.trim().parse().ok()?;
+        if !value.is_finite() {
+            return None;
+        }
+        value.clamp(0.0, 100.0) / 100.0
+    };
+    let lightness = {
+        let value: f32 = parts[2].strip_suffix('%')?.trim().parse().ok()?;
+        if !value.is_finite() {
+            return None;
+        }
+        value.clamp(0.0, 100.0) / 100.0
+    };
     let alpha = if with_alpha {
-        parts[3].trim().parse::<f32>().ok()?.clamp(0.0, 1.0)
+        let value: f32 = parts[3].trim().parse().ok()?;
+        if !value.is_finite() {
+            return None;
+        }
+        value.clamp(0.0, 1.0)
     } else {
         1.0
     };

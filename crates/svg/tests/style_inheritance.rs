@@ -66,6 +66,33 @@ fn hsl_functional_colors_paint() {
 }
 
 #[test]
+fn non_finite_hsl_components_are_rejected() {
+    // #2200: hsl()/hsla() components must be finite, exactly like rgb() already is.
+    // A NaN/inf declaration must be discarded rather than parsed into an opaque arbitrary
+    // color. Compare against rgb(NaN), the reference for an already-rejected color.
+    let render_style = |color: &str| {
+        render(&format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+                 <rect width="20" height="20" fill="red" style="fill:{color}"/>
+            </svg>"##
+        ))
+    };
+    let rejected = px(&render_style("rgb(NaN,0,0)"), 10, 10);
+    for bad in [
+        "hsl(NaN,50%,50%)",
+        "hsl(inf,50%,50%)",
+        "hsla(0,50%,50%,NaN)",
+    ] {
+        let image = render_style(bad);
+        assert_eq!(
+            px(&image, 10, 10),
+            rejected,
+            "{bad} must be rejected just like rgb(NaN)"
+        );
+    }
+}
+
+#[test]
 fn first_number_accepts_px_units() {
     // #1658: x="10px" must behave like x="10" (and stdDeviation="2px" must not vanish).
     let px_attr = render(
