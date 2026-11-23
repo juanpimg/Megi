@@ -98,20 +98,26 @@ pub(crate) fn decode_progressive_scan(
                         .ok_or(ImageError::InvalidData {
                             reason: "JPEG missing DC Huffman table",
                         })?;
+                    let mut dummy = [0i32; BLOCK_LEN];
                     for block_y in 0..v {
                         for block_x in 0..h {
                             let block_col = mcu_x * h + block_x;
                             let block_row = mcu_y * v + block_y;
-                            if block_col >= *blocks_x || block_row >= *blocks_y {
-                                continue;
-                            }
-                            let block_index = block_row * *blocks_x + block_col;
-                            let coefficients = coeffs
-                                .as_mut()
-                                .and_then(|coeffs| coeffs.get_mut(block_index))
-                                .ok_or(ImageError::InvalidData {
-                                    reason: "progressive JPEG coefficient buffer missing",
-                                })?;
+                            // ITU-T T.81 §A.2.3: interleaved MCUs include dummy
+                            // padding blocks at non-aligned right/bottom edges. Decode
+                            // them into scratch storage so `dc_pred` and bitstream
+                            // positions stay synchronized across the scan.
+                            let coefficients = if block_col < *blocks_x && block_row < *blocks_y {
+                                let block_index = block_row * *blocks_x + block_col;
+                                coeffs
+                                    .as_mut()
+                                    .and_then(|coeffs| coeffs.get_mut(block_index))
+                                    .ok_or(ImageError::InvalidData {
+                                        reason: "progressive JPEG coefficient buffer missing",
+                                    })?
+                            } else {
+                                &mut dummy
+                            };
                             if scan.ah == 0 {
                                 decode_dc_first(reader, dc_table, coefficients, dc_pred, scan.al)?;
                             } else {
