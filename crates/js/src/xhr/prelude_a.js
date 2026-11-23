@@ -236,6 +236,9 @@
         view = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
       }
       if (view) {
+        // #2135: encode one byte per char (Latin-1). The native bridge is told
+        // via isBinary=true to reinterpret each char code as a byte, avoiding
+        // UTF-8 re-encoding that corrupts bytes ≥ 0x80.
         var out = "";
         for (var i = 0; i < view.length; i++) {
           out += String.fromCharCode(view[i]);
@@ -244,6 +247,15 @@
       }
     }
     return String(body);
+  }
+
+  // #2135: report whether `serializeRequestBody` used the byte-preserving
+  // Latin-1 path, so the native bridge can decode the payload correctly.
+  function isBinaryRequestBody(body) {
+    if (body === undefined || body === null || typeof body === "string") { return false; }
+    if (typeof FormData !== "undefined" && body instanceof FormData) { return false; }
+    return typeof ArrayBuffer !== "undefined"
+      && (body instanceof ArrayBuffer || (ArrayBuffer.isView && ArrayBuffer.isView(body)));
   }
 
   function XMLHttpRequestUpload() {
