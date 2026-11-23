@@ -44,3 +44,7 @@ Thumbs.db
 
 # Superpowers planning workspace (specs/plans live in docs/superpowers/ and are tracked)
 /.superpowers/
+
+# Local tooling state (not shared)
+/.code-review-graph/
+/docs/status/badge-lcov.svg

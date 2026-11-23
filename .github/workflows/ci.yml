@@ -113,6 +113,13 @@ jobs:
           tools.test_real_site_check
           tools.test_check_arch
           tools.test_soak_fuzz
+          tools.test_bench_compare
+          tools.test_check_sbom
+          tools.test_ci_gate
+          tools.test_exif_generators
+          tools.test_fuzz_cache
+          tools.test_image_docs
+          tools.test_perf_measurer_doc
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)

@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Coverage](docs/status/badge-coverage.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg)
 
-**Snapshot** — commit `2000bce` (2026-11-23) · coverage **93%** (70/75) · **3,289** tests · conformance **PASS** · **17** crates · **242,656** lines of Rust
+**Snapshot** — commit `59fd655` (2026-11-23) · coverage **93%** (70/75) · **3,289** tests · conformance **PASS** · **17** crates · **242,652** lines of Rust
 
 > This page is generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). No external services are involved.
 
@@ -145,16 +145,15 @@
 
 **Pending**
 
-- Visual save-as/prompt, resource downloads, cookies/passwords
-- Multi-select/native widgets, per-tab process isolation/accessibility and visual history polish
+- Multi-select/native widgets, full AT bus/accessibility in CI and visual history polish
 
 ## Repository statistics (measured)
 
 | Metric | Value |
 |---|---|
-| Commit | `2000bce` (2026-11-23) |
+| Commit | `59fd655` (2026-11-23) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 242656 |
+| Lines of Rust (tracked `.rs`) | 242652 |
 | Tests (`cargo test --workspace -- --list`) | 3289 |
 | Crates with `#![forbid(unsafe_code)]` | 17 / 17 |
 | Conformance gate | **PASS** |
@@ -184,8 +183,7 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 - HTTP/1.0 support and proxy PAC/SOCKS/pooling
 - JS/DOM conformance testing and memory accounting
 - Multi-select/native widgets and accessibility in shell
-- Visual save-as/prompt and resource downloads
-- Longer fuzz campaigns with 14 targets
+- Longer fuzz campaigns with 28 targets
 - Bench improvements and real-page E2E rows
 
 ## Cross-cutting areas
@@ -193,7 +191,7 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 | Area | What | Estimate | Notes |
 |---|---|---|---|
 | BENCH | Performance bench & budgets | 90% | crates/bench + docs/PERFORMANCE.md; baselines repeatable, budgets met with margin |
-| FUZZ | Fuzzing | 90% | 16 libFuzzer targets + nightly CI smoke; longer campaigns pending |
+| FUZZ | Fuzzing | 90% | 28 libFuzzer targets (170 corpus files; 27 in CI) + nightly smoke; longer campaigns pending |
 | DOCS | Documentation | 92% | ARCHITECTURE/ROADMAP/HANDOFF/FUZZING/TOOLING + generated progress page |
 | CI | CI & quality gates | 97% | fmt/clippy/tests/doc/conformance/MSRV/fuzz + status freshness check |
 

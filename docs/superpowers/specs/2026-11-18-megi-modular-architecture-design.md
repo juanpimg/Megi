@@ -1,5 +1,7 @@
 # Megi — Auditoría y propuesta de arquitectura modular
 
+> **Archivado**: la restructuración descrita ya se completó. Las reglas vigentes viven en `AGENTS.md`; este documento se conserva como registro de la decisión.
+
 **Fecha:** 2026-11-18 · **Estado:** borrador para aprobación · **Autor:** arquitectura/asistente
 **Ámbito:** solo análisis y planificación. **No se ha modificado ningún archivo de código.**
 **Fuente:** lectura directa de `Cargo.toml`, 387 archivos `.rs`, documentación y CI, más cinco auditorías paralelas por subsistema.

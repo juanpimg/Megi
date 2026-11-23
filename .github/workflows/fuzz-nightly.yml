@@ -1,8 +1,8 @@
 name: Fuzz (nightly)
 
 # Nightly libFuzzer runs over every parser/renderer surface that consumes untrusted
-# input (26 harnesses): the 9 critical parsers/decoders run 10 minutes each, the other
-# 17 run 5 minutes. Pull requests and pushes to main get a fast "build every target"
+# input (28 harnesses): the 10 critical parsers/decoders run 10 minutes each, the other
+# 18 run 5 minutes. Pull requests and pushes to main get a fast "build every target"
 # job instead.
 # Not a substitute for a long-running fuzzing farm: the scheduled job is a daily
 # regression gate that keeps the harnesses compiling and catches shallow crashes.
@@ -18,8 +18,7 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
   # A manifest/API break in the harness is a hard error, not a flaky run: catch it on
-  # the merge that causes it instead of the next morning (the 2026-11 duplicate
-  # `[[bin]] font_decode` entry broke every scheduled job for days).
+  # the merge that causes it instead of the next morning.
   push:
     branches: [main]
     paths:
@@ -96,7 +95,7 @@ jobs:
 
   fuzz:
     name: fuzz ${{ matrix.target }}
-    # Only the nightly schedule and explicit dispatches run the 22 libFuzzer budgets:
+    # Only the nightly schedule and explicit dispatches run the 28 libFuzzer budgets:
     # pushes to main are covered by the build gate above.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -188,6 +187,10 @@ jobs:
             extra: ""
           # Ronda 36: byte -> code-point preprocessor (raw lone surrogates, >U+10FFFF).
           - target: text_boundary
+            seconds: 300
+            extra: ""
+          # Charset/encoding detection consumes untrusted header and <meta> bytes.
+          - target: charset
             seconds: 300
             extra: ""
           # Direct core-crate harnesses (#834, #716). They were added to the workspace but

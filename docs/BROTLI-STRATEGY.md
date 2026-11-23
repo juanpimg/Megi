@@ -1,7 +1,7 @@
 # ADR-003 — Decodificación Brotli en `crates/net` (Fase 5)
 
-- **Estado**: **ACEPTADO (ADR-003, 2026-11-20)** — decisión de arquitectura registrada para el módulo de red.
-- **Contexto**: Megi negocia `Content-Encoding` con `Accept-Encoding: gzip` y decodifica `gzip`/`deflate` desde cero en `crates/net/src/compression.rs` (con `megi_image::inflate`). Los sitios modernos servidos por CDN (p. ej. `https://www.hola.com/`, issue #1918) responden sus bundles JavaScript con `Content-Encoding: br` (RFC 7932 / Brotli); al no existir decodificador, esos scripts se descartan y la página no se inicializa. La matriz §3.1 de `docs/ARCHITECTURE.md` no autorizaba explícitamente una dependencia de compresión para `net`.
+- **Estado**: **ACEPTADO (ADR-003, 2026-11-20) — IMPLEMENTADO**. `brotli = "9"` en `crates/net`, `Accept-Encoding: gzip, deflate, br` y tests de cuerpo completo/streaming con límites anti-bomb; #1918 resuelto.
+- **Contexto**: Megi negocia `Content-Encoding` con `Accept-Encoding: gzip` y decodifica `gzip`/`deflate` desde cero en `crates/net/src/compression.rs` (con `megi_image::inflate`). Los sitios modernos servidos por CDN (p. ej. `https://www.hola.com/`, issue #1918) responden sus bundles JavaScript con `Content-Encoding: br` (RFC 7932 / Brotli); al no existir decodificador esos scripts se descartaban; hoy se decodifican con los límites anti-bomb propios. La matriz §3.1 de `docs/ARCHITECTURE.md` no autorizaba explícitamente una dependencia de compresión para `net`.
 
 ## Decisión
 
@@ -29,4 +29,4 @@ Autorizar **`brotli` 9.x** (Rust puro, licencia MIT/Apache-2.0, sin C/FFI) como 
 - `crates/net/Cargo.toml` gana `brotli = "9"` (no feature-gateado: es codificación de transporte, no una capacidad opcional del motor).
 - `Cargo.lock` incorpora la dependencia (licencias compatibles).
 - CI: tests de fixture `br` (cuerpo completo y streaming) + clippy + architecture check. El build determinista y los goldens no cambian.
-- #1918 puede cerrarse cuando los tests `br` pasen en CI.
+- #1918 quedó resuelto con los tests `br` de cuerpo completo y streaming en CI.
