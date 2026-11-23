@@ -62,9 +62,10 @@ struct MetricsEntry {
     metrics: FontMetrics,
 }
 
-/// One cached text advance (keyed by text + the CSS style fields that affect it).
+/// One cached text advance (keyed by text + font family + style fields that affect it).
 #[derive(Clone, Copy)]
 struct AdvanceEntry {
+    family_id: u64,
     font_size: u32,
     weight: u16,
     italic: bool,
@@ -74,14 +75,34 @@ struct AdvanceEntry {
 /// Memoisation tables for [`FontTextMeasurer`].
 #[derive(Default)]
 struct MeasurerCache {
-    /// Parsed CSS family lists, keyed by the computed `font-family` string.
-    families: HashMap<String, Vec<String>>,
+    /// Interned family ID + parsed CSS family lists, keyed by `font-family` string.
+    families: HashMap<String, (u64, Vec<String>)>,
+    /// Monotonic counter so evicted family entries never collide with older advance entries.
+    next_family_id: u64,
     /// Metrics per family string; the inner list has one entry per style signature.
     metrics: HashMap<String, Vec<MetricsEntry>>,
-    /// Advances per text; the inner list has one entry per style signature.
+    /// Advances per text; the inner list has one entry per (family, style) signature.
     advances: HashMap<String, Vec<AdvanceEntry>>,
     /// Total `String` bytes currently stored as advance-cache keys.
     advance_bytes: usize,
+}
+
+impl MeasurerCache {
+    fn ensure_family(&mut self, font_family: &str) -> u64 {
+        if let Some(&(id, _)) = self.families.get(font_family) {
+            return id;
+        }
+        if self.families.len() >= MAX_FAMILY_CACHE_ENTRIES {
+            self.families.clear();
+            self.advances.clear();
+            self.advance_bytes = 0;
+        }
+        let id = self.next_family_id;
+        self.next_family_id = self.next_family_id.wrapping_add(1);
+        let parsed = FontTextMeasurer::families(font_family);
+        self.families.insert(font_family.to_owned(), (id, parsed));
+        id
+    }
 }
 
 impl FontTextMeasurer {
@@ -157,24 +178,19 @@ impl TextMeasurer for FontTextMeasurer {
             .cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if !cache.families.contains_key(font_family) {
-            if cache.families.len() >= MAX_FAMILY_CACHE_ENTRIES {
-                cache.families.clear();
-            }
-            let parsed = Self::families(font_family);
-            cache.families.insert(font_family.to_owned(), parsed);
-        }
+        let family_id = cache.ensure_family(font_family);
         let size_bits = font_size.to_bits();
         if let Some(entries) = cache.advances.get(text)
             && let Some(entry) = entries.iter().find(|entry| {
-                entry.font_size == size_bits
+                entry.family_id == family_id
+                    && entry.font_size == size_bits
                     && entry.weight == font_weight
                     && entry.italic == font_italic
             })
         {
             return entry.width;
         }
-        let families = &cache.families[font_family];
+        let families = &cache.families[font_family].1;
         let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
         let (weight, style) = Self::weight_and_italic(font_weight, font_italic);
         let width = match self
@@ -192,6 +208,7 @@ impl TextMeasurer for FontTextMeasurer {
             cache.advance_bytes = 0;
         }
         let entry = AdvanceEntry {
+            family_id,
             font_size: size_bits,
             weight: font_weight,
             italic: font_italic,
@@ -231,14 +248,8 @@ impl TextMeasurer for FontTextMeasurer {
         {
             return entry.metrics;
         }
-        if !cache.families.contains_key(font_family) {
-            if cache.families.len() >= MAX_FAMILY_CACHE_ENTRIES {
-                cache.families.clear();
-            }
-            let parsed = Self::families(font_family);
-            cache.families.insert(font_family.to_owned(), parsed);
-        }
-        let families = &cache.families[font_family];
+        cache.ensure_family(font_family);
+        let families = &cache.families[font_family].1;
         let family_refs: Vec<&str> = families.iter().map(String::as_str).collect();
         let (weight, style) = Self::weight_and_italic(font_weight, font_italic);
         let metrics = match self
@@ -307,6 +318,37 @@ mod tests {
                 .metrics
                 .values()
                 .all(|bucket| bucket.len() <= MAX_METRICS_ENTRIES_PER_FAMILY)
+        );
+    }
+
+    #[test]
+    fn advance_cache_distinguishes_font_families() {
+        let regular = include_bytes!("../../fonts/assets/DejaVuSans.ttf").to_vec();
+        let bold = include_bytes!("../../fonts/assets/DejaVuSans-Bold.ttf").to_vec();
+        let mut db = FontDatabase::new();
+        db.load_font_data_family("AliasReg", regular.clone())
+            .expect("load AliasReg");
+        db.load_font_data_family("AliasBold", bold.clone())
+            .expect("load AliasBold");
+
+        let mut control_db = FontDatabase::new();
+        control_db
+            .load_font_data_family("AliasBold", bold)
+            .expect("load control AliasBold");
+        let control = FontTextMeasurer::from_database(control_db);
+        let control_bold = control.measure_text_styled("Hello", "AliasBold", 16.0, 400, false);
+
+        let measurer = FontTextMeasurer::from_database(db);
+        let reg_width = measurer.measure_text_styled("Hello", "AliasReg", 16.0, 400, false);
+        let bold_width = measurer.measure_text_styled("Hello", "AliasBold", 16.0, 400, false);
+
+        assert!(
+            (reg_width - bold_width).abs() > 0.5,
+            "different font families must yield different advances: reg={reg_width}, bold={bold_width}"
+        );
+        assert!(
+            (bold_width - control_bold).abs() < 1e-4,
+            "AliasBold width {bold_width} must match control {control_bold}"
         );
     }
 }
