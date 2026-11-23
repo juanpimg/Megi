@@ -159,6 +159,15 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             } => {
                 self.middle_click();
             }
+            WindowEvent::MouseInput {
+                state: ElementState::Released,
+                button: MouseButton::Left,
+                ..
+            } => {
+                if let Some(form_id) = self.release_button.take() {
+                    self.apply_form_patch(Some(form_id), None, None, false);
+                }
+            }
             WindowEvent::MouseInput { .. } => {}
             WindowEvent::Ime(ime_event) => {
                 self.handle_ime(ime_event);
@@ -407,6 +416,15 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     _ => {}
                 }
             }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Released => {
+                if matches!(
+                    event.logical_key.as_ref(),
+                    Key::Named(NamedKey::Space | NamedKey::Enter)
+                ) && let Some(form_id) = self.release_button.take()
+                {
+                    self.apply_form_patch(Some(form_id), None, None, false);
+                }
+            }
             _ => {}
         }
     }
@@ -416,6 +434,7 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         #[cfg(feature = "a11y")]
         self.publish_accessibility_tree(false);
         let now = Instant::now();
+        self.flush_debounced_form_events(now);
         // Auto-refresh: re-render the current URL (same generation-based worker path, scroll
         // preserved). The new frame re-arms the timer only while timers remain pending.
         if self.refresh.take_due(now) {
@@ -439,6 +458,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
         if let Some(session_deadline) = self.session_autosave.deadline() {
             deadline =
                 Some(deadline.map_or(session_deadline, |deadline| deadline.min(session_deadline)));
+        }
+        if let Some(form_deadline) = self.live_forms.debounce_deadline() {
+            deadline = Some(deadline.map_or(form_deadline, |deadline| deadline.min(form_deadline)));
         }
         match deadline {
             Some(deadline) => event_loop.set_control_flow(ControlFlow::WaitUntil(deadline)),

@@ -225,11 +225,15 @@ pub(crate) fn forward_dom_event_to_workers(
         _ => None,
     };
     let Some(node) = node else { return };
-    let mut deliveries: Vec<u64> = Vec::new();
+    // Preserve `(worker_id, token)` so events only reach subscribed workers (#2148).
+    let mut deliveries: Vec<(u32, u64)> = Vec::new();
     if let Ok(host) = host_ref(context) {
-        for (_worker_id, registered_node, registered_type, token) in &host.worker_dom_listeners {
-            if *registered_node == node && registered_type == event_type {
-                deliveries.push(*token);
+        for (worker_id, registered_node, registered_type, token) in &host.worker_dom_listeners {
+            if *registered_node == node
+                && registered_type == event_type
+                && !deliveries.contains(&(*worker_id, *token))
+            {
+                deliveries.push((*worker_id, *token));
             }
         }
     }
@@ -237,15 +241,19 @@ pub(crate) fn forward_dom_event_to_workers(
         return;
     }
     if let Ok(mut host) = host_cell(context) {
-        for worker in host.workers.iter_mut().flatten() {
-            for token in &deliveries {
-                let message = format!(
-                    "{{\"__megi_dom_event\":{{\"type\":\"{}\",\"token\":{}}}}}",
-                    event_type.replace('\\', "\\\\").replace('"', "\\\""),
-                    token
-                );
-                worker.to_worker.push_back(message);
-            }
+        for (worker_id, token) in deliveries {
+            let Some(Some(worker)) = host.workers.get_mut(worker_id as usize) else {
+                continue;
+            };
+            // RFC 8259 §7: escape control characters and quotes via `module_quote` (#2179).
+            let message = format!(
+                "{{\"__megi_dom_event\":{{\"type\":{},\"token\":{}}}}}",
+                crate::runtime::module_quote(event_type),
+                token
+            );
+            // #2157: enforce MAX_WORKER_MESSAGES on DOM event forwarding so bursty page
+            // dispatches cannot overflow the worker's inbox/outbox.
+            let _ = worker.push_to_worker(message);
         }
     }
 }

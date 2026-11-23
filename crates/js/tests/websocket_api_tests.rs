@@ -242,3 +242,77 @@ fn close_event_code_is_number() {
     let res = runtime.eval("__res", "t").expect("res");
     assert_eq!(res, "number|true");
 }
+
+#[test]
+fn websocket_send_preserves_binary_arraybuffer_and_typed_array_bytes() {
+    // #2153: WHATWG WebSockets §9.3 — `WebSocket.send(ArrayBuffer | ArrayBufferView)` must
+    // send raw binary frames via `send_binary`, not coerce to comma-separated text via `String()`.
+    #[derive(Debug, PartialEq, Eq)]
+    enum SentFrame {
+        Text(String),
+        Binary(Vec<u8>),
+    }
+
+    struct BinaryMockTransport {
+        events: VecDeque<WebSocketEvent>,
+        sent: Arc<Mutex<Vec<SentFrame>>>,
+    }
+
+    impl WebSocketTransport for BinaryMockTransport {
+        fn send(&mut self, text: &str) -> Result<(), JsError> {
+            self.sent
+                .lock()
+                .expect("sent lock")
+                .push(SentFrame::Text(text.to_owned()));
+            Ok(())
+        }
+        fn send_binary(&mut self, bytes: &[u8]) -> Result<(), JsError> {
+            self.sent
+                .lock()
+                .expect("sent lock")
+                .push(SentFrame::Binary(bytes.to_vec()));
+            Ok(())
+        }
+        fn poll(&mut self) -> Vec<WebSocketEvent> {
+            self.events.drain(..).collect()
+        }
+        fn close(&mut self) {}
+    }
+
+    let sent = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&sent);
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let provider: WebSocketProvider = Arc::new(move |_url| {
+        Ok(Box::new(BinaryMockTransport {
+            events: VecDeque::from([WebSocketEvent::Open]),
+            sent: Arc::clone(&seen),
+        }))
+    });
+    runtime.set_websocket_provider(provider);
+    runtime
+        .eval("var ws = new WebSocket('ws://example.com/bin');", "t")
+        .expect("open");
+    runtime.poll_websockets();
+    runtime
+        .eval(
+            "ws.send(new Uint8Array([1, 2, 3])); \
+             var backing = new Uint8Array([99, 0xff, 0x00, 0x80, 77]); \
+             ws.send(backing.subarray(1, 4)); \
+             ws.send(new Uint8Array([10, 20, 30]).buffer); \
+             ws.send(new DataView(backing.buffer, 2, 2)); \
+             ws.send('hello');",
+            "t",
+        )
+        .expect("send frames");
+    let frames = sent.lock().expect("sent lock");
+    assert_eq!(
+        frames.as_slice(),
+        &[
+            SentFrame::Binary(vec![1, 2, 3]),
+            SentFrame::Binary(vec![0xff, 0x00, 0x80]),
+            SentFrame::Binary(vec![10, 20, 30]),
+            SentFrame::Binary(vec![0x00, 0x80]),
+            SentFrame::Text("hello".to_owned()),
+        ]
+    );
+}

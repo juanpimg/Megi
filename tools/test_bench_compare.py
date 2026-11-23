@@ -8,7 +8,7 @@ import json
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -45,23 +45,42 @@ class MissingRowsTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def _run(self, *extra: str) -> int:
+    def _run(self, *extra: str) -> tuple[int, str]:
         argv = ["bench_compare.py", str(self._actual), "--baseline", str(self._baseline), *extra]
         old = sys.argv
         sys.argv = argv
+        stderr = StringIO()
         try:
-            with redirect_stdout(StringIO()):
-                return bench_compare.main()
+            with redirect_stdout(StringIO()), redirect_stderr(stderr):
+                try:
+                    rc = bench_compare.main()
+                except SystemExit as exc:
+                    rc = int(exc.code)
+            return rc, stderr.getvalue()
         finally:
             sys.argv = old
 
     def test_missing_baseline_row_fails_the_gate(self) -> None:
         # #1836: a fresh run that silently drops the slow row must not report
         # "no regressions" and exit 0 -- that defeats the only perf gate.
-        self.assertEqual(self._run(), 1)
+        rc, _ = self._run()
+        self.assertEqual(rc, 1)
 
     def test_allow_missing_restores_old_behavior(self) -> None:
-        self.assertEqual(self._run("--allow-missing"), 0)
+        rc, _ = self._run("--allow-missing")
+        self.assertEqual(rc, 0)
+
+    def test_non_dict_actual_document_exits_with_code_2(self) -> None:
+        self._actual.write_text("[]", encoding="utf-8")
+        rc, err = self._run()
+        self.assertEqual(rc, 2)
+        self.assertIn("error:", err)
+
+    def test_non_dict_baseline_document_exits_with_code_2(self) -> None:
+        self._baseline.write_text("[]", encoding="utf-8")
+        rc, err = self._run()
+        self.assertEqual(rc, 2)
+        self.assertIn("error:", err)
 
 
 if __name__ == "__main__":

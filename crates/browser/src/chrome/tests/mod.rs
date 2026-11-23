@@ -102,3 +102,53 @@ fn native_widget_overlay_only_touches_its_patch_region() {
         "a single widget must not touch thousands of pixels: {touched}"
     );
 }
+
+#[test]
+fn native_widget_content_overlay_renders_text_and_caret_inside_local_patch() {
+    let (width, height) = (400u32, 300u32);
+    let mut blank = vec![0xDEAD_BEEFu32; (width * height) as usize];
+    let mut typed = blank.clone();
+    let rect = crate::links::CssRect::new(10.0, 10.0, 120.0, 22.0);
+    let visual = crate::forms::widget_visual(
+        crate::forms::FormControlKind::TextInput,
+        false,
+        true,
+        false,
+        false,
+        false,
+    );
+    super::draw_native_widget(&mut blank, width, height, 1.0, 0, rect, visual);
+    super::draw_native_widget_with_content(
+        &mut typed,
+        width,
+        height,
+        1.0,
+        0,
+        rect,
+        visual,
+        super::NativeWidgetContent {
+            kind: crate::forms::FormControlKind::TextInput,
+            text: "hello",
+            checked: false,
+            caret: Some(5),
+            disabled: false,
+        },
+    );
+    assert_ne!(
+        blank, typed,
+        "live typed text and caret must visibly paint into the local widget patch"
+    );
+    for (i, pixel) in typed.iter().enumerate() {
+        if *pixel != 0xDEAD_BEEF {
+            let x = (i as u32) % width;
+            let y = (i as u32) / width;
+            assert!(
+                (6..134).contains(&x)
+                    && (6 + crate::chrome::CHROME_HEIGHT as u32
+                        ..36 + crate::chrome::CHROME_HEIGHT as u32)
+                        .contains(&y),
+                "content overlay touched pixel outside its patch: ({x},{y})"
+            );
+        }
+    }
+}

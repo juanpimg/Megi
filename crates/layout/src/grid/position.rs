@@ -96,7 +96,9 @@ pub(super) fn finish_grid_layout(
             }
             TrackSize::Auto => auto_rows.push((index, 0.0)),
             TrackSize::MinMax { max, .. } => {
-                let minimum = min_track_size(track, definite_height.unwrap_or(container_width));
+                // CSS Grid Layout §7.2.1 / §11.5 (#2185): percentage row track minimums with
+                // indefinite container height resolve as `auto` (0 floor), never container width.
+                let minimum = min_track_size(track, definite_height);
                 match max {
                     TrackMax::Fixed(length) => {
                         heights[index] = definite_length(*length, None, definite_height)

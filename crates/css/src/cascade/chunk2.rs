@@ -154,6 +154,27 @@ impl StyleCollection {
         }
     }
 
+    fn record_rule_flags(&mut self, compiled: &CompiledRule) {
+        for decl in &compiled.declarations {
+            if is_revert_layer(decl) {
+                self.has_revert_layer = true;
+            }
+            if decl.name == "animation" || decl.name.starts_with("animation-") {
+                self.has_animations = true;
+            } else if decl.name == "transition" || decl.name.starts_with("transition-") {
+                self.has_transitions = true;
+            }
+        }
+        if compiled
+            .selectors
+            .selectors
+            .iter()
+            .any(|s| s.pseudo_element().is_some())
+        {
+            self.has_pseudo_rules = true;
+        }
+    }
+
     /// Compiles the style rules inside an `@container` block (nested `@container`/`@layer`
     /// at-rules are not supported; `@media` inside is evaluated immediately).
     pub(crate) fn add_container_rules(
@@ -173,17 +194,7 @@ impl StyleCollection {
                             ..compiled
                         };
                         self.next_source_order += 1;
-                        if compiled.declarations.iter().any(is_revert_layer) {
-                            self.has_revert_layer = true;
-                        }
-                        if compiled
-                            .selectors
-                            .selectors
-                            .iter()
-                            .any(|s| s.pseudo_element().is_some())
-                        {
-                            self.has_pseudo_rules = true;
-                        }
+                        self.record_rule_flags(&compiled);
                         self.container_rules.push(ContainerRule {
                             query: query.clone(),
                             rule: compiled,
@@ -249,23 +260,23 @@ impl StyleCollection {
         }
         let rule_index = self.rules.len() as u32;
         self.index.insert(rule_index, &compiled.selectors);
-        if compiled.declarations.iter().any(is_revert_layer) {
-            self.has_revert_layer = true;
-        }
-        if compiled
-            .selectors
-            .selectors
-            .iter()
-            .any(|s| s.pseudo_element().is_some())
-        {
-            self.has_pseudo_rules = true;
-        }
+        self.record_rule_flags(&compiled);
         self.rules.push(compiled);
     }
 
     /// Returns true if pseudo-element rules may be present (or `rules` was mutated directly).
     pub fn may_have_pseudo_rules(&self) -> bool {
         self.has_pseudo_rules || self.index.indexed_rules != self.rules.len()
+    }
+
+    /// Returns true if any rule may declare `animation*` properties (or `rules` was mutated directly).
+    pub fn may_have_animations(&self) -> bool {
+        self.has_animations || self.index.indexed_rules != self.rules.len()
+    }
+
+    /// Returns true if any rule may declare `transition*` properties (or `rules` was mutated directly).
+    pub fn may_have_transitions(&self) -> bool {
+        self.has_transitions || self.index.indexed_rules != self.rules.len()
     }
 
     /// Returns the candidate selectors that can possibly match `node_id`, in ascending

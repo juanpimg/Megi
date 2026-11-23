@@ -91,6 +91,7 @@ impl WindowApp {
             ime: crate::forms::ImeState::new(),
             save_dialog: None,
             document: None,
+            live_forms: crate::forms::LiveFormPatcher::new(),
             release_button: None,
             find: FindState::new(),
             find_editing: false,

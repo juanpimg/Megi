@@ -163,6 +163,13 @@ pub enum WebSocketEvent {
 /// The real implementation (in the shell) drives `megi_net::websocket::WebSocketClient`.
 pub trait WebSocketTransport: Send {
     fn send(&mut self, text: &str) -> Result<(), crate::error::JsError>;
+    /// Sends a binary message (WHATWG WebSockets §9.3 / RFC 6455 §5.6).
+    fn send_binary(&mut self, bytes: &[u8]) -> Result<(), crate::error::JsError> {
+        let _ = bytes;
+        Err(crate::error::JsError::Runtime(
+            "WebSocket binary send is not supported by this transport".to_owned(),
+        ))
+    }
     fn poll(&mut self) -> Vec<WebSocketEvent>;
     fn close(&mut self);
 }

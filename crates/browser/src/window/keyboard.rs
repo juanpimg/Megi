@@ -214,7 +214,9 @@ impl WindowApp {
             }
             Key::Named(NamedKey::Enter) => true, // no backend: Enter never submits
             Key::Named(NamedKey::ArrowLeft) => {
-                editor.move_caret(false);
+                if editor.move_caret(false) {
+                    self.request_repaint();
+                }
                 if self.frame_scripts_executed > 0
                     && let Some(ev) =
                         host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)
@@ -224,7 +226,9 @@ impl WindowApp {
                 true
             }
             Key::Named(NamedKey::ArrowRight) => {
-                editor.move_caret(true);
+                if editor.move_caret(true) {
+                    self.request_repaint();
+                }
                 if self.frame_scripts_executed > 0
                     && let Some(ev) =
                         host_keydown_event(target, key, ctrl_pressed, shift_pressed, alt_pressed)

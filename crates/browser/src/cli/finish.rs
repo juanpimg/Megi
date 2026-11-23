@@ -81,6 +81,11 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
     let width = raw.width.unwrap_or(DEFAULT_WIDTH);
     let height = raw.height.unwrap_or(DEFAULT_HEIGHT);
     validate_dimensions(width, height)?;
+    if raw.window && raw.screenshot.is_some() {
+        return Err(ShellError::Usage(
+            "--window cannot be combined with --screenshot".to_string(),
+        ));
+    }
     let mode = match raw.screenshot {
         Some(path) => LaunchMode::Screenshot(path),
         None => LaunchMode::Window,

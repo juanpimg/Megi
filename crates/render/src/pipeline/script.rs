@@ -4,17 +4,23 @@
 //! signature and the state (un)packing were added to keep the file within size caps.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use megi_core::NodeId;
 use megi_css::ComputedStyle;
 
 use super::imports::stylesheet_signature;
-use super::state::{ParsedDocumentInput, ScriptContext, ScriptStats};
+use super::state::{
+    CachedPostStyles, ParsedDocumentInput, ScriptContext, ScriptStats, SharedPostStylesCache,
+    needs_pre_script_finalization, style_dom_signature,
+};
 #[cfg(feature = "js")]
 use super::styles::collect_layout_rects;
-use super::styles::{StyleSummary, collect_styles, document_csp, resolve_styles_with_state};
+use super::styles::{
+    StyleSummary, collect_styles, document_csp, finalize_resolved_styles,
+    resolve_base_styles_with_state,
+};
 use crate::{RenderError, ScriptingMode};
 use crate::{frames, scripts, stylesheets, webfonts};
 
@@ -99,15 +105,17 @@ pub(crate) fn run_script_stage<'a>(
     #[cfg(feature = "js")]
     let mut pre_script_pseudos: Option<Arc<megi_css::PseudoStyles>> = None;
     let mut reusable_stylesheets: Option<(
-        megi_css::StyleCollection,
+        Arc<megi_css::StyleCollection>,
         StyleSummary,
         Vec<webfonts::LocatedFontFace>,
         u64,
     )> = None;
+    let cached_post_styles: SharedPostStylesCache = Arc::new(Mutex::new(None));
     let mut pre_warnings = Vec::new();
     if !script_candidates.is_empty() {
         let pre_start = Instant::now();
         let stylesheet_signature_before = stylesheet_signature(&document);
+        let pre_dom_sig = style_dom_signature(&document);
         if let Ok((collection, summary, fonts)) = collect_styles(
             &document,
             &base_url,
@@ -117,23 +125,48 @@ pub(crate) fn run_script_stage<'a>(
             csp.as_ref(),
             &mut pre_warnings,
         ) {
-            let (resolved, resolved_pseudos) = resolve_styles_with_state(
+            let collection = Arc::new(collection);
+            let (base_styles, base_pseudos) = resolve_base_styles_with_state(
                 &document,
                 &collection,
                 megi_css::StateContext::new(),
-                options.time_ms,
                 (
                     options.viewport.width as f32,
                     options.viewport.height as f32,
                 ),
             );
-            pre_script_styles = Some(Arc::new(resolved));
-            #[cfg(feature = "js")]
-            {
-                pre_script_pseudos = Some(Arc::new(resolved_pseudos));
+            let base_styles_arc = Arc::new(base_styles);
+            let base_pseudos_arc = Arc::new(base_pseudos);
+            *cached_post_styles.lock().unwrap_or_else(|p| p.into_inner()) =
+                Some(CachedPostStyles {
+                    stylesheet_sig: stylesheet_signature_before,
+                    dom_sig: pre_dom_sig,
+                    styles: Arc::clone(&base_styles_arc),
+                    pseudo_styles: Arc::clone(&base_pseudos_arc),
+                });
+            if needs_pre_script_finalization(&document, &collection) {
+                let mut finalized = (*base_styles_arc).clone();
+                let mut finalized_pseudos = (*base_pseudos_arc).clone();
+                finalize_resolved_styles(
+                    &document,
+                    &collection,
+                    &mut finalized,
+                    &mut finalized_pseudos,
+                    options.time_ms,
+                    None,
+                );
+                pre_script_styles = Some(Arc::new(finalized));
+                #[cfg(feature = "js")]
+                {
+                    pre_script_pseudos = Some(Arc::new(finalized_pseudos));
+                }
+            } else {
+                pre_script_styles = Some(Arc::clone(&base_styles_arc));
+                #[cfg(feature = "js")]
+                {
+                    pre_script_pseudos = Some(Arc::clone(&base_pseudos_arc));
+                }
             }
-            #[cfg(not(feature = "js"))]
-            let _ = resolved_pseudos;
             reusable_stylesheets = Some((collection, summary, fonts, stylesheet_signature_before));
         }
         styles_pre_script = pre_start.elapsed();
@@ -200,19 +233,25 @@ pub(crate) fn run_script_stage<'a>(
                     options.viewport.height as f32,
                 );
                 let doc_snapshot = document.clone();
-                host_context.layout_provider = Some(Arc::new(move || {
-                    let mut rects = std::collections::HashMap::new();
-                    let empty_pseudos = megi_css::PseudoStyles::new();
-                    let pseudos_ref = pre_pseudos.as_deref().unwrap_or(&empty_pseudos);
-                    if let Some(layout_root) = megi_layout::layout_document_with_pseudos(
-                        &doc_snapshot,
-                        &styles,
-                        pseudos_ref,
-                        pre_layout_viewport,
-                    ) {
-                        collect_layout_rects(&layout_root, &mut rects);
-                    }
-                    rects
+                let cached_rects: Arc<
+                    std::sync::OnceLock<HashMap<NodeId, megi_js::host::LayoutRect>>,
+                > = Arc::new(std::sync::OnceLock::new());
+                host_context.layout_lookup = Some(Arc::new(move |node_id| {
+                    let rects = cached_rects.get_or_init(|| {
+                        let mut rects = std::collections::HashMap::new();
+                        let empty_pseudos = megi_css::PseudoStyles::new();
+                        let pseudos_ref = pre_pseudos.as_deref().unwrap_or(&empty_pseudos);
+                        if let Some(layout_root) = super::styles::layout_snapshot(
+                            &doc_snapshot,
+                            &styles,
+                            pseudos_ref,
+                            pre_layout_viewport,
+                        ) {
+                            collect_layout_rects(&layout_root, &mut rects);
+                        }
+                        rects
+                    });
+                    rects.get(&node_id).copied()
                 }));
             }
             host_context.sandbox_flags = frame_ctx.sandbox_flags;
@@ -225,65 +264,39 @@ pub(crate) fn run_script_stage<'a>(
                 .clone()
                 .or_else(|| pre_script_styles.clone());
             let timeline_media = media_context.clone();
+            let timeline_base = base_url.clone();
+            let timeline_csp = csp.clone();
+            let timeline_viewport = (
+                options.viewport.width as f32,
+                options.viewport.height as f32,
+            );
+            let pre_collection = reusable_stylesheets
+                .as_ref()
+                .map(|(collection, _, _, _)| Arc::clone(collection));
+            let pre_sheet_sig = reusable_stylesheets
+                .as_ref()
+                .map(|(_, _, _, sig)| *sig)
+                .unwrap_or(0);
+            let external_sheets = reusable_stylesheets
+                .as_ref()
+                .map(|(_, summary, _, _)| summary.external_sheets.clone())
+                .unwrap_or_default();
+            let timeline_cache = Arc::clone(&cached_post_styles);
             host_context.timeline_events_provider = Some(Arc::new(
                 move |post_doc: &megi_core::Document, elapsed_ms: f32| {
-                    // Rebuild the author stylesheet set from the post-script DOM: scripts may
-                    // have inserted `<style>` elements after the pre-script cascade (#941).
-                    let mut collection = megi_css::create_user_agent_style_collection();
-                    collection.media = timeline_media.clone();
-                    for style_el in post_doc.get_elements_by_tag_name("style") {
-                        collection
-                            .add_css(&post_doc.text_content(style_el), megi_css::Origin::Author);
-                    }
-                    let (post_styles, _) =
-                        megi_css::resolve_document_styles_from_collection(post_doc, &collection);
-                    let slot_lookup = transition_from
-                        .as_deref()
-                        .and_then(|m| megi_css::cascade::previous_style_slot_lookup(post_doc, m));
-                    let mut out = Vec::new();
-                    for node_id in post_doc.descendants(post_doc.root()) {
-                        let Some(to) = post_styles.get(&node_id) else {
-                            continue;
-                        };
-                        if !to.animations.is_empty() && !collection.keyframes.is_empty() {
-                            for ev in megi_css::animation_runtime::collect_animation_events(
-                                &to.animations,
-                                &collection.keyframes,
-                                elapsed_ms,
-                            ) {
-                                out.push(scripts::TimelineEvent {
-                                    target: node_id,
-                                    event_type: ev.event_type,
-                                    kind: scripts::TimelineEventKind::Animation {
-                                        animation_name: ev.animation_name,
-                                        elapsed_time_secs: ev.elapsed_time_secs,
-                                    },
-                                });
-                            }
-                        }
-                        let from_style = match (&slot_lookup, transition_from.as_deref()) {
-                            (Some(by_slot), _) => by_slot.get(&node_id.slot()).copied(),
-                            (None, Some(m)) => m.get(&node_id),
-                            (None, None) => None,
-                        };
-                        if !to.transitions.is_empty()
-                            && let Some(from) = from_style
-                        {
-                            for ev in megi_css::animation_runtime::collect_transition_events(
-                                from, to, elapsed_ms,
-                            ) {
-                                out.push(scripts::TimelineEvent {
-                                    target: node_id,
-                                    event_type: ev.event_type,
-                                    kind: scripts::TimelineEventKind::Transition {
-                                        property_name: ev.property_name,
-                                        elapsed_time_secs: ev.elapsed_time_secs,
-                                    },
-                                });
-                            }
-                        }
-                    }
-                    out
+                    super::state::collect_timeline_events(
+                        post_doc,
+                        elapsed_ms,
+                        &timeline_base,
+                        &timeline_media,
+                        timeline_csp.as_ref(),
+                        pre_collection.as_ref(),
+                        pre_sheet_sig,
+                        &external_sheets,
+                        transition_from.as_ref(),
+                        timeline_viewport,
+                        &timeline_cache,
+                    )
                 },
             ));
         }
@@ -408,6 +421,7 @@ pub(crate) fn run_script_stage<'a>(
             csp,
             media_context,
             reusable_stylesheets,
+            cached_post_styles,
             pre_warnings,
             transition_from_styles: options
                 .transition_from_styles

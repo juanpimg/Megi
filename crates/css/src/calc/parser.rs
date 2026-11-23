@@ -143,7 +143,7 @@ impl Parser<'_> {
         }
     }
 
-    /// Parses CSS Values 4 math functions `min()`, `max()` and `clamp()` (#1928).
+    /// Parses CSS Values 4 math functions `calc()`, `min()`, `max()` and `clamp()` (#1928, #2172).
     ///
     /// Returns `Some(None)` (leaving `position` untouched) when the upcoming token is not
     /// one of these functions, so the caller can fall through to the plain number path.
@@ -157,6 +157,11 @@ impl Parser<'_> {
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case("clamp"))
         {
             ("clamp", 5)
+        } else if rest
+            .get(..4)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("calc"))
+        {
+            ("calc", 4)
         } else if rest
             .get(..3)
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case("max"))
@@ -179,6 +184,19 @@ impl Parser<'_> {
         }
         self.position = start + after_name + 1;
         self.depth += 1;
+        if name == "calc" {
+            // CSS Values 4 §10.1 / §11: a nested `calc(...)` accepts one `<calc-sum>` argument
+            // and simplifies identically to parenthesized grouping.
+            self.skip_whitespace();
+            let value = self.expression()?;
+            self.skip_whitespace();
+            if self.peek() != Some(b')') {
+                return None;
+            }
+            self.position += 1;
+            self.depth -= 1;
+            return Some(Some(value));
+        }
         let mut args = Vec::new();
         loop {
             self.skip_whitespace();

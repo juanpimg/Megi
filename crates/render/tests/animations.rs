@@ -286,3 +286,112 @@ t.addEventListener('animationend', (e) => {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[cfg(feature = "js")]
+#[test]
+fn external_keyframes_fire_animation_timeline_events() {
+    let dir = std::env::temp_dir().join(format!("megi-ext-keyframes-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+
+    std::fs::write(
+        dir.join("anim.css"),
+        "@keyframes pop { from { opacity: 0; } to { opacity: 1; } }\n\
+         #box { width: 50px; height: 50px; background: #ff0000; animation: pop 200ms linear both; }\n",
+    )
+    .expect("write css");
+    let page = dir.join("index.html");
+    std::fs::write(
+        &page,
+        r#"<!doctype html><html><head>
+<link rel="stylesheet" href="anim.css">
+</head><body>
+<div id="box"></div><p id="log"></p>
+<script>
+const events = [];
+const box = document.getElementById('box');
+box.addEventListener('animationstart', (e) => events.push('start:' + e.animationName));
+box.addEventListener('animationend', (e) => {
+    events.push('end:' + e.animationName);
+    document.getElementById('log').textContent = events.join(',');
+});
+</script></body></html>"#,
+    )
+    .expect("write html");
+
+    let out = render_url(
+        &format!("file://{}", page.display()),
+        &RenderOptions {
+            viewport: Viewport::new(100, 100).expect("viewport"),
+            time_ms: 500.0,
+            scripting: megi_render::ScriptingMode::Enabled,
+            encode_png: false,
+            ..RenderOptions::default()
+        },
+    )
+    .expect("render");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let log_text = out
+        .document
+        .get_elements_by_tag_name("p")
+        .into_iter()
+        .map(|id| out.document.text_content(id))
+        .collect::<Vec<_>>()
+        .join("");
+    assert_eq!(
+        log_text, "start:pop,end:pop",
+        "external @keyframes in <link> stylesheet must trigger animation timeline events"
+    );
+
+    // Also verify when a script injects a new `<style>` element referencing external `@keyframes`.
+    let dir2 = std::env::temp_dir().join(format!("megi-ext-keyframes-dyn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir2);
+    std::fs::create_dir_all(&dir2).expect("mkdir2");
+    std::fs::write(
+        dir2.join("kf.css"),
+        "@keyframes pop { from { opacity: 0; } to { opacity: 1; } }\n",
+    )
+    .expect("write kf");
+    let page2 = dir2.join("index.html");
+    std::fs::write(
+        &page2,
+        r#"<!doctype html><html><head>
+<link rel="stylesheet" href="kf.css">
+</head><body>
+<div id="box"></div><p id="log"></p>
+<script>
+const st = document.createElement('style');
+st.textContent = '#box { animation: pop 200ms linear both; }';
+document.head.appendChild(st);
+const events = [];
+const box = document.getElementById('box');
+box.addEventListener('animationstart', (e) => events.push('start:' + e.animationName));
+box.addEventListener('animationend', (e) => {
+    events.push('end:' + e.animationName);
+    document.getElementById('log').textContent = events.join(',');
+});
+</script></body></html>"#,
+    )
+    .expect("write html2");
+    let out2 = render_url(
+        &format!("file://{}", page2.display()),
+        &RenderOptions {
+            viewport: Viewport::new(100, 100).expect("viewport"),
+            time_ms: 500.0,
+            scripting: megi_render::ScriptingMode::Enabled,
+            encode_png: false,
+            ..RenderOptions::default()
+        },
+    )
+    .expect("render2");
+    let _ = std::fs::remove_dir_all(&dir2);
+    let log2 = out2
+        .document
+        .get_elements_by_tag_name("p")
+        .into_iter()
+        .map(|id| out2.document.text_content(id))
+        .collect::<Vec<_>>()
+        .join("");
+    assert_eq!(log2, "start:pop,end:pop");
+}

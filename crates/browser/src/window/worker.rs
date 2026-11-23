@@ -29,6 +29,7 @@ impl WindowApp {
             base_override: request.base_override.clone(),
             scripting: request.scripting,
             find_query: request.find_query.clone(),
+            options: crate::ipc::IpcRenderOptions::from_render_options(&self.render_options),
         };
         let pool = self.process_pool.get_or_insert_with(|| {
             crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
@@ -139,6 +140,7 @@ impl WindowApp {
         self.focus.blur();
         self.editor = None;
         self.document = None;
+        self.live_forms.reset();
         self.doc_title = None;
         self.close_find();
         self.dropdown = None;
@@ -243,16 +245,22 @@ impl WindowApp {
     pub(super) fn drain_worker_messages(&mut self) -> bool {
         let mut applied = false;
         let mut messages = Vec::new();
-        if let Some(pool) = &self.render_pool {
+        if let Some(pool) = &mut self.render_pool {
             messages.extend(pool.drain_messages());
         }
         while let Some(message) = self.process_messages.pop_front() {
             messages.push(message);
         }
         if let Some(pool) = &mut self.process_pool {
-            for response in pool.drain() {
+            for (pending_gen, response) in pool.drain_tagged() {
                 match response {
                     Ok(response) => {
+                        if !response.cookies.is_empty()
+                            && let Some(jar) = &self.render_options.cookie_jar
+                            && let Ok(mut guard) = jar.lock()
+                        {
+                            crate::ipc::IpcCookie::apply_to_jar(&response.cookies, &mut guard);
+                        }
                         let frame = crate::ipc::ProcessFrame::from_response(response);
                         match frame.to_render_frame(0) {
                             Ok(rendered) => {
@@ -264,10 +272,16 @@ impl WindowApp {
                             }),
                         }
                     }
-                    Err(error) => messages.push(crate::worker::WorkerMessage::Failed {
-                        generation: 0,
-                        message: error.to_string(),
-                    }),
+                    Err(error) => {
+                        if let Some(generation) = pending_gen {
+                            messages.push(crate::worker::WorkerMessage::Failed {
+                                generation,
+                                message: error.to_string(),
+                            });
+                        } else {
+                            self.error = Some(error.to_string());
+                        }
+                    }
                 }
             }
         }
@@ -303,7 +317,6 @@ impl WindowApp {
                     self.frame_warnings = frame.warnings;
                     self.frame_script_errors = frame.script_errors;
                     self.forms = frame.forms.clone();
-                    self.document = Some(Arc::clone(&frame.document));
                     self.find_rects = frame.find_rects.clone();
                     if self.find_editing && !self.find.query().is_empty() {
                         self.find.set_matches(frame.find_matches.clone());
@@ -335,6 +348,10 @@ impl WindowApp {
                     {
                         self.input = final_url.as_str();
                     }
+                    // Take unique ownership of the frame's Document (`strong_count == 1`) so live
+                    // form edits mutate in-place via `Arc::make_mut` without cloning the DOM (#2199).
+                    self.document = self.store.take_frame_document();
+                    self.live_forms.on_frame_applied();
                 }
                 None => {
                     self.render_pending = false;

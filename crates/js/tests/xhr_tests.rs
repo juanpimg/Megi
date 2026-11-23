@@ -397,3 +397,52 @@ fn binary_request_body_reaches_the_provider_byte_for_byte_2135() {
     let hex: String = body.iter().map(|b| format!("{b:02x} ")).collect();
     assert_eq!(hex.trim(), "ff 80 00 41");
 }
+
+#[test]
+fn xhr_dispatch_restores_stop_immediate_propagation_identity_2182() {
+    // #2182: DOM §2.9 — `dispatchTargetEvent` must not leave `event.stopImmediatePropagation`
+    // monkey-patched after dispatch completes (including when a listener stops or throws).
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            r#"
+            var xhr = new XMLHttpRequest();
+            var proto = Object.create({ stopImmediatePropagation: function () { return 'proto'; } });
+            proto.type = 'custom';
+            var protoOrig = proto.stopImmediatePropagation;
+
+            var ev = new Event('readystatechange');
+            var orig = ev.stopImmediatePropagation;
+            var calls = 0;
+            xhr.addEventListener('readystatechange', function () { calls += 1; });
+            xhr.addEventListener('readystatechange', function (e) { e.stopImmediatePropagation(); calls += 10; });
+            xhr.addEventListener('readystatechange', function () { calls += 100; });
+            xhr.dispatchEvent(ev);
+            var eqRightAfter = (ev.stopImmediatePropagation === orig);
+            var descRightAfter = (Object.getOwnPropertyDescriptor(ev, 'stopImmediatePropagation').value === orig);
+            xhr.dispatchEvent(proto);
+            var eqAfterProto = (ev.stopImmediatePropagation === orig);
+
+            // Also verify restoration when a listener throws.
+            var evThrow = new Event('boom');
+            var origThrow = evThrow.stopImmediatePropagation;
+            xhr.addEventListener('boom', function () { throw new Error('boom'); });
+            try { xhr.dispatchEvent(evThrow); } catch (_e) {}
+
+            [
+              typeof ev.stopImmediatePropagation,
+              ev !== evThrow,
+              ev.stopImmediatePropagation === orig,
+              evThrow.stopImmediatePropagation === origThrow,
+              evThrow.currentTarget === null,
+              evThrow.eventPhase,
+              Object.prototype.hasOwnProperty.call(proto, 'stopImmediatePropagation'),
+              proto.stopImmediatePropagation === protoOrig,
+              calls
+            ].join('|');
+            "#,
+            "xhr_stop_imm",
+        )
+        .expect("eval");
+    assert_eq!(out, "function|true|true|true|true|0|false|true|11");
+}

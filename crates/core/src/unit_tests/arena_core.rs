@@ -444,3 +444,34 @@ fn from_index_out_of_range_never_panics_and_does_not_resolve() {
     // The highest representable slot still round-trips.
     assert_eq!(NodeId::from_index(MAX_SLOTS - 1).index(), MAX_SLOTS - 1);
 }
+
+#[test]
+fn raw_handle_roundtrip_preserves_generation_2136() {
+    // #2136: AccessKit publishes a NodeId's raw packed value (which carries the
+    // generation in its high bits). Reconstructing it via `from_index` corrupts
+    // every node whose generation > 0 into an invalid sentinel. A raw roundtrip
+    // must preserve the exact handle so an action can resolve back to the DOM node.
+    let mut doc = Document::new();
+    let root = doc.create_element(Namespace::Html, "html", Vec::new());
+    // Creating and freeing a child in the same slot bumps its generation.
+    let temp = doc.create_element(Namespace::Html, "head", Vec::new());
+    let raw = temp.get();
+    assert!(
+        NodeId::from_raw(raw).is_some(),
+        "a live handle's raw value must roundtrip"
+    );
+    assert_eq!(NodeId::from_raw(raw), Some(temp));
+    assert_eq!(
+        NodeId::from_raw(raw).map(|id| id.index()),
+        Some(temp.index())
+    );
+    assert_eq!(
+        NodeId::from_raw(raw).map(|id| id.generation()),
+        Some(temp.generation())
+    );
+    assert!(doc.owns(temp));
+    // The zero handle cannot be reconstructed.
+    assert_eq!(NodeId::from_raw(0), None);
+    // Root with its own generation also roundtrips.
+    assert_eq!(NodeId::from_raw(root.get()), Some(root));
+}

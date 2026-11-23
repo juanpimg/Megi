@@ -65,9 +65,10 @@ def load_documents(paths: list[Path]) -> list[dict]:
         except (OSError, json.JSONDecodeError) as exc:
             print(f"error: cannot read {path}: {exc}", file=sys.stderr)
             raise SystemExit(2) from exc
-        if data.get("schema") != "megi-bench-v1":
+        if not isinstance(data, dict) or data.get("schema") != "megi-bench-v1":
+            schema = data.get("schema") if isinstance(data, dict) else type(data).__name__
             print(
-                f"error: {path} is not a megi-bench-v1 document (schema={data.get('schema')!r})",
+                f"error: {path} is not a megi-bench-v1 document (schema={schema!r})",
                 file=sys.stderr,
             )
             raise SystemExit(2)
@@ -118,7 +119,7 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as exc:
         print(f"error: cannot read baseline {args.baseline}: {exc}", file=sys.stderr)
         return 2
-    if baseline.get("schema") != "megi-bench-baseline-v1":
+    if not isinstance(baseline, dict) or baseline.get("schema") != "megi-bench-baseline-v1":
         print("error: unexpected baseline schema", file=sys.stderr)
         return 2
     validate_rows(baseline, str(args.baseline), "rows")

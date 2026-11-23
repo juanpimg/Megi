@@ -97,7 +97,8 @@ const WEBSOCKET_PRELUDE: &str = r####"
     if (this.readyState === 0) { throw new Error("InvalidStateError: WebSocket is still connecting"); }
     if (this.readyState >= 2) { return; }
     if (typeof __megi_ws_native === "function" && typeof this._handle === "number") {
-      __megi_ws_native(this.url, "send:" + this._handle, String(data));
+      // #2153: pass raw BufferSource values to native without coercing through String(data).
+      __megi_ws_native(this.url, "send:" + this._handle, data);
     }
   };
   WebSocket.prototype.close = function (code, reason) {
@@ -133,6 +134,11 @@ const WEBSOCKET_PRELUDE: &str = r####"
 })();
 "####;
 
+enum WsSendPayload {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
 fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let string = |index: usize| -> String {
         args.get(index)
@@ -142,7 +148,6 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
     };
     let url = string(0);
     let op = string(1);
-    let payload = string(2);
 
     if op == "open" {
         // Clone the Arc from the immutable provider slot so the provider runs with
@@ -178,12 +183,35 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
     // send:/close:<handle>
     let (command, handle_str) = op.split_once(':').unwrap_or((&op, ""));
     let handle = handle_str.parse::<u32>().unwrap_or(0);
+    let send_payload = if command == "send" {
+        let raw = args.get(2).cloned().unwrap_or_else(JsValue::undefined);
+        if let Some(obj) = raw.as_object()
+            && let Some(bytes) =
+                crate::runtime::buffer_source::extract_buffer_source_bytes(&obj, context)?
+        {
+            Some(WsSendPayload::Binary(bytes))
+        } else {
+            let text = raw.to_string(context)?.to_std_string_escaped();
+            Some(WsSendPayload::Text(text))
+        }
+    } else {
+        None
+    };
     if let Ok(mut host) = crate::host::host_cell(context)
         && let Some(transport) = host.websockets.get_mut(&handle)
     {
         match command {
             "send" => {
-                let _ = transport.send(&payload);
+                if let Some(payload) = send_payload {
+                    match payload {
+                        WsSendPayload::Text(text) => {
+                            let _ = transport.send(&text);
+                        }
+                        WsSendPayload::Binary(bytes) => {
+                            let _ = transport.send_binary(&bytes);
+                        }
+                    }
+                }
             }
             "close" => {
                 // #1847: keep the transport registered so poll() can deliver the

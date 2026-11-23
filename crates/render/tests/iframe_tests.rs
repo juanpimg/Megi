@@ -425,3 +425,66 @@ fn iframe_sandbox_without_allow_same_origin_has_opaque_origin_and_isolated_stora
     );
     handle.join().expect("server");
 }
+
+#[cfg(feature = "js")]
+#[test]
+fn iframe_src_honors_meta_charset_and_utf8_bom() {
+    let dir = std::env::temp_dir().join(format!(
+        "megi-iframe-charset-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+
+    let win1252_path = dir.join("win1252.html");
+    let mut win1252_bytes = b"<meta charset=\"windows-1252\"><p id=\"t\">caf".to_vec();
+    win1252_bytes.push(0xE9);
+    win1252_bytes.extend_from_slice(b"</p>");
+    std::fs::write(&win1252_path, &win1252_bytes).expect("write win1252");
+
+    let bom_path = dir.join("bom.html");
+    let mut bom_bytes = b"\xEF\xBB\xBF<p id=\"t\">caf".to_vec();
+    bom_bytes.extend_from_slice("é</p>".as_bytes());
+    std::fs::write(&bom_path, &bom_bytes).expect("write bom");
+
+    let parent_path = dir.join("parent.html");
+    std::fs::write(
+        &parent_path,
+        "<!doctype html><html><body>\
+         <iframe id='f1' src='win1252.html'></iframe>\
+         <iframe id='f2' src='bom.html'></iframe>\
+         <div id='out'></div>\
+         <script>\
+         var t1 = document.getElementById('f1').contentDocument.getElementById('t').textContent;\
+         var b2 = document.getElementById('f2').contentDocument.body.textContent;\
+         var hasBom = b2.indexOf('\\uFEFF') !== -1;\
+         document.getElementById('out').textContent = t1 + ':' + t1.charCodeAt(3) + '|bom=' + hasBom + '|' + b2;\
+         </script></body></html>",
+    )
+    .expect("write parent");
+
+    let output = render_url(
+        &format!("file://{}", parent_path.display()),
+        &RenderOptions {
+            viewport: Viewport::new(400, 300).expect("viewport"),
+            scripting: megi_render::ScriptingMode::Enabled,
+            encode_png: false,
+            ..RenderOptions::default()
+        },
+    )
+    .expect("render");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let out_text = output
+        .document
+        .get_elements_by_tag_name("div")
+        .into_iter()
+        .map(|id| output.document.text_content(id))
+        .collect::<Vec<_>>()
+        .join("");
+    assert_eq!(
+        out_text, "café:233|bom=false|café",
+        "iframe loader must decode <meta charset=windows-1252> and strip UTF-8 BOM"
+    );
+}

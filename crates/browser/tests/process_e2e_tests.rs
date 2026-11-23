@@ -14,6 +14,7 @@ fn request(generation: u64, url: &str) -> IpcRenderRequest {
         base_override: None,
         scripting: false,
         find_query: None,
+        options: Default::default(),
     }
 }
 
@@ -73,6 +74,7 @@ fn tab(generation: u64, base: &str, title: &str) -> IpcRenderRequest {
         base_override: Some(base.to_owned()),
         scripting: false,
         find_query: None,
+        options: Default::default(),
     }
 }
 

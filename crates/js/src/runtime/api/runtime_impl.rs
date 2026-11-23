@@ -23,7 +23,7 @@ impl JsRuntime {
     /// Number of pending `requestAnimationFrame` callbacks.
     pub fn pending_animation_frames(&self) -> usize {
         host_ref(&self.context)
-            .map(|host| host.timers.iter().filter(|timer| timer.animation).count())
+            .map(|host| host.timers.animation_len())
             .unwrap_or(0)
     }
 

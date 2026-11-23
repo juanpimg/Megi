@@ -49,3 +49,24 @@ fn display_none_has_no_box() {
     let output = render_fixture("js_geometry_display_none.html");
     assert_eq!(text(&output, "out"), "0:0");
 }
+
+#[test]
+fn repeated_get_bounding_client_rect_returns_consistent_geometry() {
+    let html = "<!doctype html><html><body style='margin:0'>\
+        <div id='b' style='width:80px;height:40px'></div><div id='out'></div>\
+        <script>\
+        var el = document.getElementById('b');\
+        var ok = true;\
+        for (var i = 0; i < 50; i++) {\
+          var r = el.getBoundingClientRect();\
+          if (Math.round(r.width) !== 80 || Math.round(r.height) !== 40) ok = false;\
+        }\
+        document.getElementById('out').textContent = ok ? 'ok' : 'bad';\
+        </script></body></html>";
+    let url = format!(
+        "data:text/html;base64,{}",
+        megi_net::base64_encode(html.as_bytes())
+    );
+    let output = render_url(&url, &options()).expect("render");
+    assert_eq!(text(&output, "out"), "ok");
+}

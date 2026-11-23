@@ -114,15 +114,15 @@ impl WindowApp {
         let Some(control) = self.focused_control().cloned() else {
             return false;
         };
-        let (Some(document), Some(base)) = (self.document.clone(), self.nav.current().cloned())
-        else {
+        let (Some(document), Some(base)) = (self.document.as_deref(), self.nav.current()) else {
             return false;
         };
         let Some(submission) =
-            crate::forms::form_submission(&document, &base, control.node_id, &self.forms)
+            crate::forms::form_submission(document, base, control.node_id, &self.forms)
         else {
             return false;
         };
+        let _ = self.live_forms.take_pending_events();
         self.editor = None;
         self.focus.blur();
         if submission.method == "post" {
@@ -234,53 +234,35 @@ impl WindowApp {
         self.apply_multi_select(control, &selected);
     }
 
-    /// Writes a multi-select selection into the DOM snapshot and re-renders it.
+    /// Writes a multi-select selection into the live DOM in-place without full DOM clones (#2199).
     pub(super) fn apply_multi_select(&mut self, control: &FormControl, selected: &[usize]) {
-        let Some(document) = self.document.clone() else {
+        let Some(doc_arc) = self.document.as_mut() else {
             return;
         };
-        let mut patched = (*document).clone();
-        if !crate::forms::patch_multi_select(&mut patched, control.form_id, selected) {
+        if !self
+            .live_forms
+            .apply_multi_select(doc_arc, &mut self.forms, control.form_id, selected)
+        {
             return;
         }
-        let snapshot = crate::forms::snapshot_data_url(&patched);
-        let base = self.nav.current_url();
-        let request = self.store.begin_patched_request(
-            &snapshot,
-            self.metrics.css_width,
-            self.metrics.css_height,
-            base.as_deref(),
-        );
-        if !self.send_render(request) {
-            return;
-        }
-        self.document = Some(Arc::new(patched));
         self.update_title();
+        self.request_repaint();
     }
 
-    /// Applies a `<select>` choice to the DOM snapshot and re-renders it.
+    /// Applies a `<select>` choice into the live DOM in-place without full DOM clones (#2199).
     pub(super) fn select_option(&mut self, form_id: u32, option_index: usize) {
         self.dropdown = None;
-        let Some(document) = self.document.clone() else {
+        let Some(doc_arc) = self.document.as_mut() else {
             return;
         };
-        let mut patched = (*document).clone();
-        if !forms::patch_select(&mut patched, form_id, option_index) {
+        if !self
+            .live_forms
+            .apply_select(doc_arc, &mut self.forms, form_id, option_index)
+        {
             return;
         }
-        let snapshot = forms::snapshot_data_url(&patched);
-        let base = self.nav.current_url();
-        let request = self.store.begin_patched_request(
-            &snapshot,
-            self.metrics.css_width,
-            self.metrics.css_height,
-            base.as_deref(),
-        );
-        if !self.send_render(request) {
-            return;
-        }
-        self.document = Some(Arc::new(patched));
         self.update_title();
+        self.request_repaint();
     }
 
     /// Rebuilds the keyboard focus list for the current frame's DOM (#1517).
@@ -294,12 +276,12 @@ impl WindowApp {
             .focus
             .focused()
             .and_then(|index| self.focus_targets.get(index).copied());
-        let Some(document) = self.document.clone() else {
+        let Some(document) = self.document.as_deref() else {
             self.focus_targets.clear();
             self.focus = FocusState::new();
             return;
         };
-        let targets = build_focus_targets(&document, &self.forms, &self.links);
+        let targets = build_focus_targets(document, &self.forms, &self.links);
         let kept =
             previous.and_then(|target| targets.iter().position(|candidate| *candidate == target));
         self.focus_targets = targets;
@@ -358,9 +340,6 @@ impl WindowApp {
         active: bool,
         ui_events: Vec<megi_webview::render::HostDomEvent>,
     ) {
-        let Some(document) = self.document.clone() else {
-            return;
-        };
         let focused = self.focus.focused().is_some();
         let target = form_id.or_else(|| self.focused_control().map(|control| control.form_id));
         let focused_link = self.focused_link().and_then(|region| region.node);
@@ -372,40 +351,60 @@ impl WindowApp {
         {
             return;
         }
-        let mut patched = (*document).clone();
-        if let Some(target) = target {
-            forms::patch_control(&mut patched, target, value, checked, focused, active);
-        } else {
-            // Focus is on a link (or being cleared): drop any stale control focus ring.
-            forms::clear_focus_markers(&mut patched);
-        }
-        // Draw the focus ring on a focused link too (#1517): links have no form_id, so the
-        // form patch above does not touch them.
-        if let Some(node) = focused_link {
-            forms::patch_focus_node(&mut patched, node, focused);
-        }
-        let snapshot = forms::snapshot_data_url(&patched);
-        let base = self.nav.current_url();
-        let request = if self.frame_scripts_executed > 0 && !ui_events.is_empty() {
-            self.store.begin_ui_event_request(
-                &snapshot,
-                self.metrics.css_width,
-                self.metrics.css_height,
-                base.as_deref(),
-                ui_events,
-            )
-        } else {
-            self.store.begin_patched_request(
-                &snapshot,
-                self.metrics.css_width,
-                self.metrics.css_height,
-                base.as_deref(),
-            )
-        };
-        if !self.send_render(request) {
+        let scripts_active = self.frame_scripts_executed > 0;
+        let Some(doc_arc) = self.document.as_mut() else {
             return;
+        };
+        let outcome = self.live_forms.apply_patch(
+            doc_arc,
+            &mut self.forms,
+            forms::LivePatchInput {
+                target_form: target,
+                focused_link,
+                value,
+                checked,
+                focused,
+                active,
+                scripts_active,
+                ui_events,
+                now: Instant::now(),
+            },
+        );
+        match outcome {
+            forms::PatchOutcome::LocalOnly | forms::PatchOutcome::QueuedJsFlush { .. } => {
+                self.update_title();
+                self.request_repaint();
+            }
+            forms::PatchOutcome::FlushNow => {
+                if let Some(events) = self.live_forms.take_pending_events() {
+                    self.flush_js_form_events(events);
+                }
+                self.update_title();
+                self.request_repaint();
+            }
         }
-        self.document = Some(Arc::new(patched));
-        self.update_title();
+    }
+
+    /// Dispatches coalesced JS form UI events once via a serialized DOM snapshot (#2199).
+    pub(super) fn flush_debounced_form_events(&mut self, now: Instant) {
+        if let Some(events) = self.live_forms.flush_if_due(now) {
+            self.flush_js_form_events(events);
+        }
+    }
+
+    fn flush_js_form_events(&mut self, ui_events: Vec<megi_webview::render::HostDomEvent>) {
+        let Some(document) = self.document.as_deref() else {
+            return;
+        };
+        let snapshot = forms::snapshot_data_url(document);
+        let base = self.nav.current_url();
+        let request = self.store.begin_ui_event_request(
+            &snapshot,
+            self.metrics.css_width,
+            self.metrics.css_height,
+            base.as_deref(),
+            ui_events,
+        );
+        let _ = self.send_render(request);
     }
 }

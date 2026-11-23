@@ -21,7 +21,7 @@ pub(crate) struct Host {
     /// Reusable slots in the JS `__megi_listeners` array freed by `removeEventListener` / `once` (#567).
     pub free_listener_slots: Vec<u32>,
     /// Scheduled timers.
-    pub timers: Vec<TimerEntry>,
+    pub timers: TimerQueue,
     /// Next timer id (insertion order for `(due, id)` ordering).
     pub next_timer_id: u64,
     /// Cumulative bytes written through `document.write` in this document (anti-DoS).

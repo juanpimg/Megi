@@ -131,11 +131,11 @@ impl WindowApp {
             crate::download::DownloadKind::Png
         };
         let result = if dialog.html {
-            let Some(document) = self.document.clone() else {
+            let Some(document) = self.document.as_deref() else {
                 self.notify("no page to save yet".to_string());
                 return;
             };
-            let html = crate::download::serialize_document(&document);
+            let html = crate::download::serialize_document(document);
             crate::download::write_atomic(&path, html.as_bytes()).map(|bytes| {
                 crate::download::SavedDownload {
                     path: path.clone(),
@@ -164,29 +164,32 @@ impl WindowApp {
     /// Fetches and saves the page's CSS/JS/font/image subresources as a bounded batch
     /// (F7-SAVE-AS / #988), tracking every job in the bounded download manager.
     pub(super) fn save_page_resources(&mut self) {
-        let Some(document) = self.document.clone() else {
-            self.notify("no page to save yet".to_string());
-            return;
+        let urls = {
+            let Some(document) = self.document.as_deref() else {
+                self.notify("no page to save yet".to_string());
+                return;
+            };
+            let mut urls = Vec::new();
+            for (tag, attribute) in [
+                ("link", "href"),
+                ("script", "src"),
+                ("img", "src"),
+                ("source", "src"),
+            ] {
+                for node in document.get_elements_by_tag_name(tag) {
+                    if let Some(value) = document
+                        .try_node(node)
+                        .and_then(|node| node.as_element())
+                        .and_then(|element| element.get_attribute(attribute))
+                    {
+                        urls.push(value.to_owned());
+                    }
+                }
+            }
+            urls
         };
         let base_owned = self.nav.current().map(|url| url.as_str());
         let base = base_owned.as_deref();
-        let mut urls = Vec::new();
-        for (tag, attribute) in [
-            ("link", "href"),
-            ("script", "src"),
-            ("img", "src"),
-            ("source", "src"),
-        ] {
-            for node in document.get_elements_by_tag_name(tag) {
-                if let Some(value) = document
-                    .try_node(node)
-                    .and_then(|node| node.as_element())
-                    .and_then(|element| element.get_attribute(attribute))
-                {
-                    urls.push(value.to_owned());
-                }
-            }
-        }
         let plan =
             crate::download::plan_batch_downloads(&urls, base, crate::download::DEFAULT_MAX_JOBS);
         if plan.is_empty() {

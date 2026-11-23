@@ -37,11 +37,11 @@ impl WindowApp {
     ///
     /// `force` re-sends a full tree even if the signature is unchanged (used on AT activation).
     pub(super) fn publish_accessibility_tree(&mut self, force: bool) {
-        let Some(document) = self.document.clone() else {
+        let focused = self.focused_dom_node();
+        let Some(document) = self.document.as_deref() else {
             return;
         };
-        let focused = self.focused_dom_node();
-        let snapshot = crate::a11y::snapshot(&document, document.root());
+        let snapshot = crate::a11y::snapshot(document, document.root());
         let signature = crate::a11y_backend::snapshot_signature(&snapshot, focused);
         if force {
             self.accessibility_publisher.invalidate();
@@ -71,7 +71,15 @@ impl WindowApp {
     /// Routes an AccessKit action to the existing focus/navigation model through the pure
     /// resolver, so AT behaviour is the same code path the headless tests exercise.
     fn handle_accessibility_action(&mut self, request: accesskit::ActionRequest) {
-        let dom_id = DomNodeId::from_index(request.target_node.0 as usize);
+        // #2136: AccessKit publishes the full packed NodeId (generation included)
+        // via `accesskit_id` -> `NodeId::get()`. Rebuild it with `from_raw`, not
+        // `from_index`: the latter treats the packed value as a slot index and
+        // returns an invalid sentinel for every node whose generation > 0, so
+        // Focus/Click actions never matched a real DOM node. An invalid/zero raw
+        // value resolves to no node and the action becomes a harmless no-op.
+        let Some(dom_id) = DomNodeId::from_raw(request.target_node.0 as u32) else {
+            return;
+        };
         let base = self.nav.current().cloned();
         let plan = resolve_accessibility_action(
             request.action,

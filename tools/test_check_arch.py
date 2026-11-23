@@ -136,6 +136,22 @@ class TestCheckArchPredicates(unittest.TestCase):
         # DAG makes the gate enforce a crate that no longer exists.
         self.assertNotIn("shell", check_arch.allowed_edges())
 
+    def test_dev_sh_all_includes_coverage_and_audit_gates(self):
+        # #2205: `dev.sh all` must run the same coverage and audit checks as `dev.sh lint`.
+        from pathlib import Path
+
+        text = Path("tools/dev.sh").read_text(encoding="utf-8")
+        lint_section = text[text.index("    lint)") : text.index("    doc)")]
+        all_section = text[text.index("    all)") : text.index("    -h|--help)")]
+        for required in (
+            "update_progress.py --check --no-gate --no-count",
+            "update_coverage.py --check",
+            "audit_coverage.py --check",
+        ):
+            with self.subTest(gate=required):
+                self.assertIn(required, lint_section)
+                self.assertIn(required, all_section)
+
 
 if __name__ == "__main__":
     unittest.main()

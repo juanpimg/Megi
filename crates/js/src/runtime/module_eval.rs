@@ -302,6 +302,14 @@ pub(crate) fn dynamic_import_native(
         .transpose()?
         .map(|text| text.to_std_string_escaped())
         .unwrap_or_default();
+    // #2184: inherit the active runtime limits from the execution context rather than
+    // resetting to `Budget::default()`, and propagate budget exhaustion uncatchably.
+    let limits = context.runtime_limits();
+    let active_budget = Budget {
+        loop_iterations: limits.loop_iteration_limit(),
+        recursion_limit: limits.recursion_limit(),
+        stack_size_limit: limits.stack_size_limit(),
+    };
     let evaluated = (|| -> Result<JsObject, JsError> {
         let url = resolve_module(context, &specifier, &base)?;
         let source = load_module(context, &url)?;
@@ -311,12 +319,23 @@ pub(crate) fn dynamic_import_native(
             context,
             &url,
             &source,
-            &Budget::default(),
+            &active_budget,
             &mut visiting,
             0,
             &mut done,
         )
     })();
+    if let Err(JsError::Budget(ref message)) = evaluated {
+        let lower = message.to_ascii_lowercase();
+        let limit_err = if lower.contains("recursion") {
+            boa_engine::error::RuntimeLimitError::Recursion
+        } else if lower.contains("stack") {
+            boa_engine::error::RuntimeLimitError::StackSize
+        } else {
+            boa_engine::error::RuntimeLimitError::LoopIteration
+        };
+        return Err(limit_err.into());
+    }
     let promise = boa_engine::object::builtins::JsPromise::new(
         move |resolvers, context| {
             match evaluated {

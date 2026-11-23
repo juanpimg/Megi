@@ -26,6 +26,17 @@ impl FrameStore {
         self.frame.as_ref()
     }
 
+    /// Moves sole ownership of the latest frame's `Document` out of the store (`strong_count == 1`),
+    /// allowing the window to mutate it in-place via `Arc::make_mut` without cloning the DOM (#2199).
+    pub fn take_frame_document(&mut self) -> Option<Arc<megi_webview::core::Document>> {
+        self.frame.as_mut().map(|frame| {
+            std::mem::replace(
+                &mut frame.document,
+                Arc::new(megi_webview::core::Document::new()),
+            )
+        })
+    }
+
     /// Latest error text, if the current generation failed.
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()

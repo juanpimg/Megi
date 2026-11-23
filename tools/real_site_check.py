@@ -44,10 +44,20 @@ def load_sites(root: Path) -> list[dict]:
     return list(manifest.get("site", []))
 
 
+def _failure_count(raw: object) -> int:
+    if raw is None or raw == "":
+        return 0
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        # Non-numeric sentinel (e.g. "n/a") must surface as degraded rather than crash (#2202).
+        return 1
+
+
 def classify(stats: dict, site: dict | None = None) -> str:
     """Classify one render result. Blank is a stronger signal than degraded."""
     try:
-        items = int(stats.get("display_items", 0))
+        items = int(stats.get("display_items", 0) or 0)
     except (TypeError, ValueError):
         items = 0
     if items <= 0:
@@ -60,8 +70,8 @@ def classify(stats: dict, site: dict | None = None) -> str:
     degraded = (
         bool(warnings)
         or status >= 400
-        or int(stats.get("images_failed", 0) or 0) > 0
-        or int(stats.get("scripts_failed", 0) or 0) > 0
+        or _failure_count(stats.get("images_failed")) > 0
+        or _failure_count(stats.get("scripts_failed")) > 0
     )
     if site and "min_items" in site and items < int(site["min_items"]):
         degraded = True
@@ -117,6 +127,15 @@ def render_one(root: Path, site: dict, live: bool) -> dict:
     return _result(site, classify(stats, site), stats, "", png_rel, source)
 
 
+def _total_time_ms(stats: dict) -> float:
+    timings = stats.get("timings_us")
+    raw_total = timings.get("total", 0) if isinstance(timings, dict) else 0
+    try:
+        return round(float(raw_total) / 1000, 1)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, source: str) -> dict:
     return {
         "id": site["id"],
@@ -129,7 +148,7 @@ def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, sou
         "status": stats.get("status"),
         "warnings": list(stats.get("warnings") or []),
         "images_failed": stats.get("images_failed", 0),
-        "time_ms": round(float((stats.get("timings_us") or {}).get("total", 0)) / 1000, 1),
+        "time_ms": _total_time_ms(stats),
         "issue": site.get("issue", 0),
         "error": error,
         "png": png_rel.as_posix(),

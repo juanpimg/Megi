@@ -64,6 +64,7 @@ fn process_frame_restores_dom_from_wire_response() {
         find_rects: Vec::new(),
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
+        cookies: Vec::new(),
         error: None,
     };
     let frame = ProcessFrame::from_response(response);
@@ -94,6 +95,7 @@ fn failed_response_uses_an_empty_document() {
         find_matches: Vec::new(),
         find_rects: Vec::new(),
         document_html: String::new(),
+        cookies: Vec::new(),
         error: Some("boom".to_owned()),
     };
     let frame = ProcessFrame::from_response(response);
@@ -203,6 +205,7 @@ fn process_requests_route_to_their_effective_site() {
         base_override: Some("https://real.example/page".to_owned()),
         scripting: true,
         find_query: None,
+        options: IpcRenderOptions::default(),
     };
     assert_eq!(
         crate::ipc::request_process_site(&request),
@@ -245,6 +248,7 @@ fn worker_stream_serves_requests_from_distinct_sites() {
             base_override: None,
             scripting: false,
             find_query: None,
+            options: IpcRenderOptions::default(),
         };
         write_message(&mut input, &request).expect("write request");
     }
@@ -278,4 +282,150 @@ fn worker_stream_detects_a_truncated_request_from_a_dead_peer() {
         Err(IpcError::Truncated)
     );
     assert!(output.is_empty(), "no response for an incomplete request");
+}
+
+#[test]
+fn indexed_region_translation_maps_large_dom_linearly_with_parity() {
+    let mut document = megi_webview::core::Document::new();
+    let mut link_nodes = Vec::with_capacity(5_000);
+    for idx in 0..5_000 {
+        let el = document.create_element(
+            megi_webview::core::Namespace::Html,
+            "a",
+            vec![megi_webview::core::Attribute::new(
+                "href",
+                format!("/{idx}"),
+            )],
+        );
+        let text = document.create_text_node(&format!("L{idx}"));
+        assert!(document.append_child(el, text));
+        assert!(document.append_child(document.root(), el));
+        link_nodes.push((el, text));
+    }
+
+    let ordinals = DocumentNodeOrdinals::build(&document);
+    let nodes = DocumentOrdinalNodes::build(&document);
+    for (idx, (el, text)) in link_nodes.iter().enumerate() {
+        let link = crate::links::LinkRegion {
+            rect: crate::links::CssRect::new(idx as f32, 0.0, 10.0, 10.0),
+            href: format!("/{idx}"),
+            node: Some(*el),
+            is_blocker: false,
+        };
+        let ipc_link = IpcLinkRegion::from_region_indexed(&link, &ordinals);
+        let restored_link = ipc_link.into_link_region_indexed(&nodes);
+        assert_eq!(restored_link.node, Some(*el));
+
+        let image = crate::images::ImageRegion {
+            node_id: *el,
+            rect: crate::links::CssRect::new(0.0, 0.0, 1.0, 1.0),
+            url: format!("/{idx}.png"),
+        };
+        assert_eq!(
+            IpcImageRegion::from_region_indexed(&image, &ordinals)
+                .into_image_region_indexed(&nodes)
+                .node_id,
+            *el
+        );
+
+        let find = crate::find::FindMatch {
+            node_id: *text,
+            range: 0..1,
+        };
+        assert_eq!(
+            IpcFindMatch::from_match_indexed(&find, &ordinals)
+                .into_match_indexed(&nodes)
+                .node_id,
+            *text
+        );
+
+        let control = crate::forms::FormControl {
+            form_id: 1,
+            name: format!("f{idx}"),
+            node_id: *el,
+            kind: crate::forms::FormControlKind::TextInput,
+            rect: crate::links::CssRect::new(0.0, 0.0, 20.0, 10.0),
+            value: String::new(),
+            checked: false,
+            disabled: false,
+            options: Vec::new(),
+            multiple: false,
+        };
+        let restored_control = IpcFormControl::from_control_indexed(&control, &ordinals)
+            .into_control_indexed(&nodes)
+            .expect("valid kind");
+        assert_eq!(restored_control.node_id, *el);
+    }
+
+    // Spot-check parity with single-shot helpers on deep tail nodes + invalid ordinal sentinel.
+    let tail = link_nodes[4_999].0;
+    let single = IpcLinkRegion::from_region(
+        &crate::links::LinkRegion {
+            rect: crate::links::CssRect::new(0.0, 0.0, 1.0, 1.0),
+            href: "/4999".to_owned(),
+            node: Some(tail),
+            is_blocker: false,
+        },
+        &document,
+    );
+    assert_eq!(single.node_ordinal, ordinals.ordinal_of(tail));
+    let sentinel = IpcImageRegion {
+        node_ordinal: Some(usize::MAX),
+        x: 0.0,
+        y: 0.0,
+        width: 1.0,
+        height: 1.0,
+        url: String::new(),
+    };
+    assert_eq!(
+        sentinel.into_image_region_indexed(&nodes).node_id,
+        megi_webview::core::NodeId::from_index(usize::MAX)
+    );
+}
+
+#[test]
+fn worker_stream_and_process_frame_preserve_many_link_and_form_nodes() {
+    let mut html = String::from("<html><body>");
+    for idx in 0..200 {
+        html.push_str(&format!(
+            "<a href=\"/{idx}\">L{idx}</a><input name=\"k{idx}\" value=\"v{idx}\">"
+        ));
+    }
+    html.push_str("</body></html>");
+
+    let request = IpcRenderRequest {
+        generation: 1,
+        input: format!("data:text/html,{html}"),
+        css_width: 400,
+        css_height: 300,
+        base_override: None,
+        scripting: false,
+        find_query: None,
+        options: IpcRenderOptions::default(),
+    };
+    let mut input = Vec::new();
+    write_message(&mut input, &request).expect("write request");
+    let mut output = Vec::new();
+    crate::ipc::run_ipc_worker_stream(&mut &input[..], &mut output).expect("worker stream");
+
+    let response: IpcRenderResponse = read_message(&mut &output[..]).expect("read response");
+    let process_frame = crate::ipc::ProcessFrame::from_response(response);
+    let render_frame = process_frame.to_render_frame(400).expect("render frame");
+    assert!(
+        render_frame.links.len() >= 200,
+        "expected >= 200 link regions, got {}",
+        render_frame.links.len()
+    );
+    assert_eq!(render_frame.forms.len(), 200);
+    assert!(
+        render_frame.links.iter().all(|link| link.node.is_some()),
+        "every restored link region must resolve to a node"
+    );
+    assert!(
+        render_frame
+            .forms
+            .iter()
+            .all(|control| control.node_id != megi_webview::core::NodeId::from_index(usize::MAX)),
+        "every restored form control must resolve to a node"
+    );
 }

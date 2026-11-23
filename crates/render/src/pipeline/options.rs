@@ -28,7 +28,7 @@ pub const MAX_VIEWPORT_AREA: u64 = 16 * 1024 * 1024;
 pub const DEFAULT_MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 /// Default maximum number of external stylesheets per page.
 pub const DEFAULT_MAX_STYLESHEETS: usize = 32;
-/// Default maximum size of one external stylesheet (1 MiB).
+/// Default maximum size of one external stylesheet (8 MiB).
 pub const DEFAULT_MAX_CSS_BYTES_PER_SHEET: usize = 8 * 1024 * 1024;
 /// Default total author-CSS budget (4 MiB, inline + external + imports).
 pub const DEFAULT_MAX_TOTAL_CSS_BYTES: usize = 4 * 1024 * 1024;
@@ -372,5 +372,21 @@ impl Default for RenderOptions {
             transition_from_styles: None,
             host_dom_events: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod doc_limit_tests {
+    use super::DEFAULT_MAX_CSS_BYTES_PER_SHEET;
+
+    #[test]
+    fn docs_match_default_max_css_bytes_per_sheet() {
+        let mib = DEFAULT_MAX_CSS_BYTES_PER_SHEET / (1024 * 1024);
+        let options_src = include_str!("options.rs");
+        let expected = format!("/// Default maximum size of one external stylesheet ({mib} MiB).");
+        assert!(
+            options_src.contains(&expected),
+            "options.rs doc comment must match DEFAULT_MAX_CSS_BYTES_PER_SHEET ({mib} MiB)"
+        );
     }
 }

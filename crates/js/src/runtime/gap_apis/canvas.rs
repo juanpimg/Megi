@@ -427,14 +427,32 @@ pub(crate) fn canvas_put_image_data(
         return Ok(JsValue::undefined());
     };
     let obj = data_obj.as_ref().expect("obj");
-    let bytes: Vec<u8> = (0..len)
-        .filter_map(|i| {
-            obj.get(js_string!(i.to_string()), context)
-                .ok()
-                .and_then(|v| v.as_number())
+    let fits_surface = with_context_host(context, |host| {
+        host.canvas_store.get(node).is_some_and(|s| {
+            dx >= 0
+                && dy >= 0
+                && (dx as u64) + u64::from(w) <= u64::from(s.width)
+                && (dy as u64) + u64::from(h) <= u64::from(s.height)
+                && w > 0
+                && h > 0
         })
-        .map(|n| n.clamp(0.0, 255.0) as u8)
-        .collect();
+    })
+    .unwrap_or(false);
+    if !fits_surface {
+        return Ok(JsValue::undefined());
+    }
+    let bytes: Vec<u8> =
+        match crate::runtime::buffer_source::extract_u8_typed_array_bytes(obj, len, context) {
+            Some(fast) => fast,
+            None => (0..len)
+                .filter_map(|i| {
+                    obj.get(js_string!(i.to_string()), context)
+                        .ok()
+                        .and_then(|v| v.as_number())
+                })
+                .map(|n| n.clamp(0.0, 255.0) as u8)
+                .collect(),
+        };
     with_context_host(context, |host| {
         host.canvas_store.with_surface_mut(node, |s| {
             s.operations = s.operations.saturating_add(len as u64);

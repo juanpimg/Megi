@@ -56,3 +56,41 @@ fn evaluate_rejects_oversized_and_non_finite_results() {
         })
     );
 }
+
+#[test]
+fn nested_calc_functions_evaluate_like_parenthesized_expressions() {
+    let ctx = CalcContext {
+        viewport_width: 400.0,
+        ..CalcContext::default()
+    };
+    assert_eq!(
+        evaluate("calc(1px + calc(2px))", &ctx),
+        Some(CalcValue {
+            percent: 0.0,
+            px: 3.0,
+        })
+    );
+    assert_eq!(
+        evaluate("calc(2 * CALC(10px + 5px))", &ctx),
+        Some(CalcValue {
+            percent: 0.0,
+            px: 30.0,
+        })
+    );
+    assert_eq!(
+        evaluate("calc(10px * calc(2))", &ctx),
+        Some(CalcValue {
+            percent: 0.0,
+            px: 20.0,
+        })
+    );
+    assert_eq!(
+        evaluate("min(calc(10px + 20px), 25px)", &ctx),
+        Some(CalcValue {
+            percent: 0.0,
+            px: 25.0,
+        })
+    );
+    assert_eq!(evaluate("calc(1px + calc())", &ctx), None);
+    assert_eq!(evaluate("calc(1px + calc(2px, 3px))", &ctx), None);
+}

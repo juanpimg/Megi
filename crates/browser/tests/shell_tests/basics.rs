@@ -243,3 +243,33 @@ fn worker_channel_applies_only_the_latest_generation() {
     drop(sender);
     handle.join().expect("worker join");
 }
+
+#[cfg(not(feature = "window"))]
+#[test]
+fn window_mode_errors_clearly_without_window_feature() {
+    let err = megi_browser::run_window(
+        "data:text/html,<p>hi</p>".to_owned(),
+        "Test".to_owned(),
+        320,
+        240,
+    )
+    .expect_err("window mode must fail without window feature");
+    assert!(
+        matches!(err, ShellError::Window(ref msg) if msg.contains("window")),
+        "expected ShellError::Window mentioning window feature, got {err:?}"
+    );
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+        .args(["data:text/html,<p>hi</p>", "--window"])
+        .output()
+        .expect("run megi --window");
+    assert!(
+        !output.status.success(),
+        "--window without feature must fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("window") && stderr.contains("--screenshot"),
+        "expected clear error message, got: {stderr}"
+    );
+}

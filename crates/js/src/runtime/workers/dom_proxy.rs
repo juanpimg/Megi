@@ -54,8 +54,7 @@ impl JsRuntime {
                         .and_then(|host| host.document.get_element_by_id(&id))
                     {
                         Some(node) => {
-                            let token = worker_nodes.len();
-                            worker_nodes.push(node);
+                            let token = register_worker_node(&mut worker_nodes, node);
                             JsValue::from(token as u64)
                         }
                         None => JsValue::null(),
@@ -74,25 +73,20 @@ impl JsRuntime {
                     JsValue::from(js_string!(text))
                 }
                 "getElementsByTagName" => {
-                    let tag = arg(0).to_ascii_lowercase();
-                    let mut ordinals = Vec::new();
-                    if let Ok(host) = host_ref(&self.context) {
-                        for (ordinal, node) in host
-                            .document
-                            .descendants_inclusive(host.document.root())
-                            .enumerate()
-                        {
-                            if host
-                                .document
-                                .try_node(node)
-                                .and_then(|node| node.as_element())
-                                .is_some_and(|element| element.local_name == tag)
-                            {
-                                ordinals.push(JsValue::from(ordinal as u64));
-                            }
-                        }
-                    }
-                    JsValue::from(JsArray::from_iter(ordinals, &mut self.context))
+                    // #2155: register matched nodes in `worker_nodes` so every proxy
+                    // method resolves the exact same token space as `getElementById`.
+                    let tag = arg(0);
+                    let nodes = host_ref(&self.context)
+                        .ok()
+                        .map(|host| host.document.get_elements_by_tag_name(&tag))
+                        .unwrap_or_default();
+                    let tokens: Vec<JsValue> = nodes
+                        .into_iter()
+                        .map(|node| {
+                            JsValue::from(register_worker_node(&mut worker_nodes, node) as u64)
+                        })
+                        .collect();
+                    JsValue::from(JsArray::from_iter(tokens, &mut self.context))
                 }
                 "getComputedStyle" => {
                     let token = first.as_number().unwrap_or(0.0) as usize;
@@ -227,6 +221,7 @@ impl JsRuntime {
             let result_json = crate::runtime::json_state(&result, &mut self.context);
             let reply =
                 format!("{{\"__megi_dom_reply\":{{\"seq\":{seq},\"result\":{result_json}}}}}");
+            let mut queue_full = false;
             if let Ok(mut host) = host_cell(&mut self.context)
                 && let Some(worker) = host
                     .workers
@@ -234,7 +229,11 @@ impl JsRuntime {
                     .and_then(|slot| slot.as_mut())
             {
                 worker.dom_nodes = worker_nodes;
-                worker.to_worker.push_back(reply);
+                // #2157: share MAX_WORKER_MESSAGES backpressure on DOM proxy replies too.
+                queue_full = !worker.push_to_worker(reply);
+            }
+            if queue_full {
+                return Err(JsError::Runtime("worker message queue is full".to_string()));
             }
             return Ok(Some(JsValue::undefined()));
         }
@@ -244,3 +243,13 @@ impl JsRuntime {
 
 /// Cap on worker DOM event subscriptions (anti-DoS).
 const MAX_WORKER_DOM_LISTENERS: usize = 512;
+
+/// Returns the canonical proxy token for `node` inside `worker_nodes`, appending it once.
+fn register_worker_node(worker_nodes: &mut Vec<NodeId>, node: NodeId) -> usize {
+    if let Some(token) = worker_nodes.iter().position(|existing| *existing == node) {
+        return token;
+    }
+    let token = worker_nodes.len();
+    worker_nodes.push(node);
+    token
+}

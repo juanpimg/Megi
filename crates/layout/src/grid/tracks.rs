@@ -36,7 +36,7 @@ pub(super) fn auto_repeat_count(tracks: &[TrackSize], available: f32, gap: f32) 
     }
     let mut size = 0.0_f32;
     for track in tracks {
-        size += min_track_size(track, available);
+        size += min_track_size(track, Some(available));
     }
     let inner_gaps = gap * (tracks.len().saturating_sub(1) as f32);
     let unit = size + inner_gaps;
@@ -47,13 +47,11 @@ pub(super) fn auto_repeat_count(tracks: &[TrackSize], available: f32, gap: f32) 
     count.min(MAX_EXPANDED_TRACKS)
 }
 
-pub(super) fn min_track_size(track: &TrackSize, reference: f32) -> f32 {
+pub(super) fn min_track_size(track: &TrackSize, reference: Option<f32>) -> f32 {
     match track {
-        TrackSize::Fixed(length) => definite_length(*length, None, Some(reference)).unwrap_or(0.0),
+        TrackSize::Fixed(length) => definite_length(*length, None, reference).unwrap_or(0.0),
         TrackSize::MinMax { min, .. } => match min {
-            TrackMin::Fixed(length) => {
-                definite_length(*length, None, Some(reference)).unwrap_or(0.0)
-            }
+            TrackMin::Fixed(length) => definite_length(*length, None, reference).unwrap_or(0.0),
             TrackMin::Auto => 0.0,
         },
         TrackSize::Fraction(_) | TrackSize::Auto => 0.0,

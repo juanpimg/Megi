@@ -45,6 +45,8 @@ case "$cmd" in
         cargo check -p megi-webview --no-default-features
         cargo test -p megi-webview --no-default-features
         python3 tools/update_progress.py --check --no-gate --no-count
+        python3 tools/update_coverage.py --check
+        python3 tools/audit_coverage.py --check
         echo "==> [3/5] Running closed-loop workspace tests..."
         cargo test --workspace
         echo "==> [4/5] Building workspace documentation..."

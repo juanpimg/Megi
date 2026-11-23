@@ -58,8 +58,12 @@ pub(crate) fn install_frame_providers(
             let resource = loader
                 .load_checked(&url, false)
                 .map_err(|e| format!("frame load failed: {e}"))?;
-            let html = String::from_utf8_lossy(&resource.bytes).into_owned();
-            Ok((resource.url.as_str(), html))
+            // WHATWG HTML §13.2.3: decode frame documents with the same BOM,
+            // HTTP Content-Type charset, and `<meta charset>` prescan rules as
+            // top-level documents (#2162).
+            let decoded = crate::charset::decode_html(&resource.bytes, &resource.content_type)
+                .map_err(|e| format!("frame decode failed: {e}"))?;
+            Ok((resource.url.as_str(), decoded.text))
         }));
     }
     for (iframe, frame_document) in &host.frame_documents {
@@ -137,10 +141,12 @@ pub(crate) fn install_layout_provider(
     #[cfg(feature = "js")]
     if let Some(layout) = host.layout.clone() {
         runtime.set_layout_provider(Arc::new(move |node_id| layout.get(&node_id).copied()));
+    } else if let Some(lookup) = host.layout_lookup.clone() {
+        runtime.set_layout_provider(lookup);
     } else if let Some(provider) = host.layout_provider.clone() {
         // No OnceLock: a one-shot cache froze the very first measurement for the whole
         // render (#1470). Re-evaluate the provider on every query so later checkpoints see
-        // fresh geometry (the provider itself is the pre-script snapshot in the pipeline).
+        // fresh geometry (the pipeline installs `layout_lookup` for its frozen snapshot).
         runtime.set_layout_provider(Arc::new(move |node_id| provider().get(&node_id).copied()));
     }
 }

@@ -1,9 +1,17 @@
 //! # Megi Shell (`shell`) — Phase 7 desktop shell
 //!
-//! First real Megi browser window: [`winit`] event loop + CPU framebuffer presented with
-//! [`softbuffer`] (no GPU, no external compositor APIs), plus a **headless**
+//! First real Megi browser window: `winit` event loop + CPU framebuffer presented with
+//! `softbuffer` (no GPU, no external compositor APIs), plus a **headless**
 //! `--screenshot` mode that runs the same render pipeline and writes a PNG (CI-friendly,
 //! no display server required).
+//!
+//! ## Cargo features (#1719)
+//!
+//! - `default = ["window", "full", "a11y"]` — the standard `megi` binary includes the interactive
+//!   desktop window (`winit`/`softbuffer`), Boa JavaScript + PAC (`megi-webview/full`), and
+//!   platform accessibility (`a11y`).
+//! - `--no-default-features` builds the lightweight headless CLI/library without Boa, PAC,
+//!   `winit`, or `softbuffer` (requesting window mode returns a typed [`ShellError::Window`]).
 //!
 //! ## Dependency policy
 //!

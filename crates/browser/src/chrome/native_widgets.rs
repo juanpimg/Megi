@@ -105,6 +105,89 @@ pub(crate) fn paint_native_widget(
     }
 }
 
+/// Paints control content (checkmark, radio dot, text/label, caret) on top of a local
+/// widget background inside its small patch pixmap (#2199).
+pub(crate) fn paint_native_widget_content(
+    pixmap: &mut megi_webview::paint::Pixmap,
+    rect: crate::links::CssRect,
+    scale: f32,
+    content: crate::chrome::NativeWidgetContent<'_>,
+) {
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let fg = if content.disabled {
+        Color::new(0x6E, 0x77, 0x81, 0xFF)
+    } else {
+        Color::new(0x1F, 0x23, 0x28, 0xFF)
+    };
+    match content.kind {
+        crate::forms::FormControlKind::Checkbox if content.checked => {
+            let cx = rect.x + rect.width * 0.5;
+            let cy = rect.y + rect.height * 0.5;
+            let mark = (rect.width.min(rect.height) * 0.4).max(3.0);
+            pixmap.fill_rect(
+                Rect::new(
+                    (cx - mark * 0.5) * scale,
+                    (cy - mark * 0.5) * scale,
+                    mark * scale,
+                    mark * scale,
+                ),
+                Color::WHITE,
+            );
+        }
+        crate::forms::FormControlKind::Radio if content.checked => {
+            let cx = rect.x + rect.width * 0.5;
+            let cy = rect.y + rect.height * 0.5;
+            let dot = (rect.width.min(rect.height) * 0.35).max(3.0);
+            pixmap.fill_rect(
+                Rect::new(
+                    (cx - dot * 0.5) * scale,
+                    (cy - dot * 0.5) * scale,
+                    dot * scale,
+                    dot * scale,
+                ),
+                Color::WHITE,
+            );
+        }
+        crate::forms::FormControlKind::Checkbox | crate::forms::FormControlKind::Radio => {}
+        _ => {
+            let font_size = (rect.height * 0.58).clamp(10.0, 14.0);
+            let pad_x = 4.0;
+            let text_y = rect.y + ((rect.height - font_size) * 0.5).max(1.0);
+            if !content.text.is_empty() && rect.width > pad_x * 2.0 {
+                drawing::draw_text(
+                    pixmap,
+                    content.text,
+                    rect.x + pad_x,
+                    text_y,
+                    scale,
+                    font_size,
+                    fg,
+                );
+            }
+            if let Some(caret) = content.caret {
+                let prefix_len = caret.min(content.text.len());
+                let prefix = content.text.get(..prefix_len).unwrap_or(content.text);
+                let advance = drawing::measure_text_width(prefix, font_size);
+                let caret_x = (rect.x + pad_x + advance).min(rect.x + rect.width - 2.0);
+                let caret_h = (rect.height - 4.0).max(font_size);
+                pixmap.fill_rect(
+                    Rect::new(
+                        caret_x * scale,
+                        (rect.y + 2.0) * scale,
+                        (1.5 * scale).max(1.0),
+                        caret_h * scale,
+                    ),
+                    Color::new(0x1F, 0x6F, 0xEB, 0xFF),
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

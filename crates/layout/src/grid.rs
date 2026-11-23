@@ -298,7 +298,7 @@ pub(crate) fn layout_grid_children(
             }
             TrackSize::Auto => auto_columns.push((index, 0.0)),
             TrackSize::MinMax { min, max } => {
-                let minimum = min_track_size(track, container_width);
+                let minimum = min_track_size(track, Some(container_width));
                 let _ = min;
                 match max {
                     TrackMax::Fixed(length) => {

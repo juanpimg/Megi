@@ -43,17 +43,26 @@ class Totals:
         return (self.functions_hit / self.functions_found * 100.0) if self.functions_found else 0.0
 
 
+def _parse_lcov_int(raw: str, prefix: str, path: Path, lineno: int) -> int:
+    try:
+        return int(raw[len(prefix) :])
+    except ValueError as exc:
+        raise ValueError(
+            f"{path}:{lineno}: invalid {prefix.rstrip(':')} integer {raw[len(prefix):]!r}"
+        ) from exc
+
+
 def parse_lcov(path: Path) -> Totals:
     totals = Totals()
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if raw.startswith("LF:"):
-            totals.lines_found += int(raw[3:])
+            totals.lines_found += _parse_lcov_int(raw, "LF:", path, lineno)
         elif raw.startswith("LH:"):
-            totals.lines_hit += int(raw[3:])
+            totals.lines_hit += _parse_lcov_int(raw, "LH:", path, lineno)
         elif raw.startswith("FNF:"):
-            totals.functions_found += int(raw[4:])
+            totals.functions_found += _parse_lcov_int(raw, "FNF:", path, lineno)
         elif raw.startswith("FNH:"):
-            totals.functions_hit += int(raw[4:])
+            totals.functions_hit += _parse_lcov_int(raw, "FNH:", path, lineno)
     return totals
 
 
@@ -96,8 +105,8 @@ def main() -> int:
 
     try:
         totals = parse_lcov(args.lcov)
-    except OSError as exc:
-        print(f"error: cannot read {args.lcov}: {exc}", file=sys.stderr)
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
     if not totals.lines_found:
         print(f"error: {args.lcov} has no LF/LH records", file=sys.stderr)

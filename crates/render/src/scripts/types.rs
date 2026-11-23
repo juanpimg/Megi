@@ -234,6 +234,10 @@ pub struct ScriptingHostContext {
                 + Sync,
         >,
     >,
+    /// Direct node-rect lookup used by the render pipeline so repeated geometry queries
+    /// reuse a single lazy snapshot without cloning the full rect map (#2163).
+    #[cfg(feature = "js")]
+    pub(crate) layout_lookup: Option<megi_js::host::LayoutProvider>,
     /// Optional `<iframe sandbox>` flags applied when this document is a framed subdocument (#1544).
     #[cfg(feature = "js")]
     pub sandbox_flags: Option<megi_js::SandboxFlags>,
@@ -305,6 +309,8 @@ impl ScriptingHostContext {
             #[cfg(feature = "js")]
             layout_provider: None,
             #[cfg(feature = "js")]
+            layout_lookup: None,
+            #[cfg(feature = "js")]
             sandbox_flags: None,
             frame_depth: 0,
             #[cfg(feature = "js")]
@@ -335,6 +341,8 @@ impl ScriptingHostContext {
             layout: None,
             #[cfg(feature = "js")]
             layout_provider: None,
+            #[cfg(feature = "js")]
+            layout_lookup: None,
             #[cfg(feature = "js")]
             sandbox_flags: None,
             frame_depth: 0,

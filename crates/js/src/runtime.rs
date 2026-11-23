@@ -204,6 +204,7 @@ fn classify_error(message: &str) -> JsError {
 // ---------------------------------------------------------------------------
 mod a11y;
 mod api;
+pub(crate) mod buffer_source;
 mod cssom;
 mod document;
 mod dom_utils;

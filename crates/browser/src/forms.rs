@@ -33,9 +33,15 @@ mod controls;
 pub use controls::*;
 mod edit;
 pub use edit::*;
+mod live_dom;
+pub use live_dom::*;
+mod live;
+pub use live::*;
 mod widget;
 pub use widget::*;
 mod submit;
 pub use submit::*;
+#[cfg(test)]
+mod live_tests;
 #[cfg(test)]
 mod tests;

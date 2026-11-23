@@ -310,4 +310,14 @@ impl WorkerState {
             pending_error: None,
         }
     }
+
+    /// Enqueues `message` into the worker's inbox, enforcing [`MAX_WORKER_MESSAGES`]
+    /// and rejecting terminated workers (#2157).
+    pub(crate) fn push_to_worker(&mut self, message: String) -> bool {
+        if self.terminated || self.to_worker.len() >= MAX_WORKER_MESSAGES {
+            return false;
+        }
+        self.to_worker.push_back(message);
+        true
+    }
 }

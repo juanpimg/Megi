@@ -6,14 +6,17 @@
 
 use std::io::{Read, Write};
 
+mod options;
 mod process;
 mod process_pool;
-pub use process::{ProcessRenderer, render_png_in_process};
+pub use options::{IpcCookie, IpcRenderOptions, IpcSameSite};
+pub use process::{ProcessRenderer, render_png_in_process, render_png_in_process_with_options};
 mod regions;
 mod session;
 pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
 pub use regions::{
-    IpcFindMatch, IpcFormControl, IpcImageRegion, IpcLinkRegion, IpcRect, IpcSelectOption,
+    DocumentNodeOrdinals, DocumentOrdinalNodes, IpcFindMatch, IpcFormControl, IpcImageRegion,
+    IpcLinkRegion, IpcRect, IpcSelectOption,
 };
 pub use session::{ProcessFrame, ProcessRenderSession};
 
@@ -125,6 +128,8 @@ pub struct IpcRenderRequest {
     pub base_override: Option<String>,
     pub scripting: bool,
     pub find_query: Option<String>,
+    #[serde(default)]
+    pub options: IpcRenderOptions,
 }
 
 /// The serializable part of a rendered frame. The parent rebuilds documentation-dependent
@@ -151,6 +156,9 @@ pub struct IpcRenderResponse {
     pub find_rects: Vec<IpcRect>,
     /// Post-script serialized DOM, so the parent can build further patches (ADR-004 phase 3).
     pub document_html: String,
+    /// Updated cookie snapshot produced during the child render (#2165).
+    #[serde(default)]
+    pub cookies: Vec<IpcCookie>,
     /// Render failure text (`Some` means the other fields are defaults).
     pub error: Option<String>,
 }
@@ -203,7 +211,7 @@ where
             host_dom_events: Vec::new(),
             form_post: None,
         };
-        let options = megi_webview::render::RenderOptions::default();
+        let options = request.options.to_render_options();
         let render_result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             render_fn(&render_request, &options)
         })) {
@@ -217,47 +225,56 @@ where
                 Err(format!("render worker panicked: {reason}"))
             }
         };
+        let cookies = options
+            .cookie_jar
+            .as_deref()
+            .map(IpcCookie::from_jar)
+            .unwrap_or_default();
         let response = match render_result {
-            Ok(frame) => IpcRenderResponse {
-                generation: frame.generation,
-                png_bytes: frame.png_bytes,
-                content_height: frame.content_height,
-                css_width: request.css_width,
-                title: frame.title,
-                document_url: frame.document_url,
-                scripts_executed: frame.scripts_executed,
-                script_timers_pending: frame.script_timers_pending,
-                warnings: frame.warnings,
-                script_errors: frame.script_errors,
-                links: frame
-                    .links
-                    .iter()
-                    .map(|region| IpcLinkRegion::from_region(region, &frame.document))
-                    .collect(),
-                images: frame
-                    .images
-                    .iter()
-                    .map(|region| IpcImageRegion::from_region(region, &frame.document))
-                    .collect(),
-                forms: frame
-                    .forms
-                    .iter()
-                    .map(|control| IpcFormControl::from_control(control, &frame.document))
-                    .collect(),
-                find_matches: frame
-                    .find_matches
-                    .iter()
-                    .map(|m| IpcFindMatch::from_match(m, &frame.document))
-                    .collect(),
-                find_rects: frame
-                    .find_rects
-                    .iter()
-                    .copied()
-                    .map(IpcRect::from_rect)
-                    .collect(),
-                document_html: crate::download::serialize_document(&frame.document),
-                error: None,
-            },
+            Ok(frame) => {
+                let ordinals = DocumentNodeOrdinals::build(&frame.document);
+                IpcRenderResponse {
+                    generation: frame.generation,
+                    png_bytes: frame.png_bytes,
+                    content_height: frame.content_height,
+                    css_width: request.css_width,
+                    title: frame.title,
+                    document_url: frame.document_url,
+                    scripts_executed: frame.scripts_executed,
+                    script_timers_pending: frame.script_timers_pending,
+                    warnings: frame.warnings,
+                    script_errors: frame.script_errors,
+                    links: frame
+                        .links
+                        .iter()
+                        .map(|region| IpcLinkRegion::from_region_indexed(region, &ordinals))
+                        .collect(),
+                    images: frame
+                        .images
+                        .iter()
+                        .map(|region| IpcImageRegion::from_region_indexed(region, &ordinals))
+                        .collect(),
+                    forms: frame
+                        .forms
+                        .iter()
+                        .map(|control| IpcFormControl::from_control_indexed(control, &ordinals))
+                        .collect(),
+                    find_matches: frame
+                        .find_matches
+                        .iter()
+                        .map(|m| IpcFindMatch::from_match_indexed(m, &ordinals))
+                        .collect(),
+                    find_rects: frame
+                        .find_rects
+                        .iter()
+                        .copied()
+                        .map(IpcRect::from_rect)
+                        .collect(),
+                    document_html: crate::download::serialize_document(&frame.document),
+                    cookies,
+                    error: None,
+                }
+            }
             Err(error) => IpcRenderResponse {
                 generation: request.generation,
                 png_bytes: Vec::new(),
@@ -275,6 +292,7 @@ where
                 find_matches: Vec::new(),
                 find_rects: Vec::new(),
                 document_html: String::new(),
+                cookies: Vec::new(),
                 error: Some(error),
             },
         };
@@ -323,6 +341,7 @@ mod tests {
             base_override: None,
             scripting: true,
             find_query: Some("café".to_owned()),
+            options: IpcRenderOptions::default(),
         };
         write_message(&mut buffer, &request).expect("write request");
         assert_eq!(
@@ -348,6 +367,7 @@ mod tests {
             find_matches: Vec::new(),
             find_rects: Vec::new(),
             document_html: "<!DOCTYPE html><html><head></head><body></body></html>".to_owned(),
+            cookies: Vec::new(),
             error: None,
         };
         write_message(&mut buffer, &response).expect("write response");
@@ -407,6 +427,7 @@ mod tests {
             base_override: None,
             scripting: false,
             find_query: None,
+            options: IpcRenderOptions::default(),
         };
         let req2 = IpcRenderRequest {
             generation: 2,
@@ -416,6 +437,7 @@ mod tests {
             base_override: None,
             scripting: false,
             find_query: None,
+            options: IpcRenderOptions::default(),
         };
         let mut input = Vec::new();
         write_message(&mut input, &req1).unwrap();

@@ -211,11 +211,7 @@ pub(crate) fn worker_post_message(
         let Some(Some(worker)) = host.workers.get_mut(id as usize) else {
             return false;
         };
-        if worker.terminated || worker.to_worker.len() >= MAX_WORKER_MESSAGES {
-            return false;
-        }
-        worker.to_worker.push_back(json);
-        true
+        worker.push_to_worker(json)
     })
     .unwrap_or(false);
     if !queued {

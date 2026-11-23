@@ -308,74 +308,55 @@ pub(super) fn fetch_once(
     head.push_str("Connection: close\r\n\r\n");
 
     let mut body = body;
-    if expect_continue && body.is_some() {
-        // Send only the head, wait for the interim response, then stream the body.
-        stream.write_all(head.as_bytes()).map_err(map_io_error)?;
-        stream.flush().map_err(map_io_error)?;
-        let mut reader = ConnReader::new(stream);
-        let interim_head = reader.read_head(options.max_header_bytes)?;
-        let (status, reason, headers) = parse_head(&interim_head)?;
-        if status == 100 {
-            let request_body = body.take().expect("checked above");
+    let expect_continue_body = expect_continue && body.is_some();
+    stream.write_all(head.as_bytes()).map_err(map_io_error)?;
+    if !expect_continue_body {
+        if let Some(request_body) = body.take() {
             send_request_body(
-                &mut reader,
+                &mut stream,
                 request_body,
                 chunked,
                 options.max_request_body,
                 trailers,
             )?;
-            reader.flush()?;
-            let final_head = reader.read_head(options.max_header_bytes)?;
-            let (status, reason, headers) = parse_head(&final_head)?;
-            if status == 407
-                && absolute_form.is_some()
-                && let Some(proxy) = proxy_for_407.as_ref()
-            {
-                return Err(crate::proxy::auth_required_error(proxy));
-            }
-            validate_streaming_cors(url, options, &headers, on_data.is_some())?;
-            let (body, trailers) =
-                read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
-            return Ok(RawResponse {
-                status,
-                reason,
-                headers,
-                body,
-                trailers,
-                pushed: Vec::new(),
-            });
+        } else if chunked {
+            stream.write_all(b"0\r\n\r\n").map_err(map_io_error)?;
         }
-        // The server answered without 100-continue: don't send the body.
-        validate_streaming_cors(url, options, &headers, on_data.is_some())?;
-        let (body, trailers) =
-            read_body_dispatch(&mut reader, status, &headers, options, &mut on_data)?;
-        return Ok(RawResponse {
-            status,
-            reason,
-            headers,
-            body,
-            trailers,
-            pushed: Vec::new(),
-        });
-    }
-
-    stream.write_all(head.as_bytes()).map_err(map_io_error)?;
-    if let Some(request_body) = body {
-        send_request_body(
-            &mut stream,
-            request_body,
-            chunked,
-            options.max_request_body,
-            trailers,
-        )?;
-    } else if chunked {
-        stream.write_all(b"0\r\n\r\n").map_err(map_io_error)?;
     }
     stream.flush().map_err(map_io_error)?;
 
     let mut reader = ConnReader::new(stream);
-    let final_head = reader.read_head(options.max_header_bytes)?;
-    let (status, reason, headers) = parse_head(&final_head)?;
+    // RFC 9110 §15.2 / §10.1.1 (#2186): read interim 1xx heads in a bounded loop until the
+    // final response. Send the pending request body once on `100 Continue`, ignore other
+    // non-101 interim heads (e.g. `103 Early Hints`) before or after `100`, and stop on `101`.
+    const MAX_INTERIM_RESPONSES: usize = 16;
+    let mut interim_count = 0usize;
+    let (status, reason, headers) = loop {
+        let response_head = reader.read_head(options.max_header_bytes)?;
+        let (status, reason, headers) = parse_head(&response_head)?;
+        if (100..200).contains(&status) && status != 101 {
+            interim_count += 1;
+            if interim_count > MAX_INTERIM_RESPONSES {
+                return Err(FetchError::InvalidResponse(
+                    "too many interim 1xx HTTP responses".to_owned(),
+                ));
+            }
+            if status == 100
+                && let Some(request_body) = body.take()
+            {
+                send_request_body(
+                    &mut reader,
+                    request_body,
+                    chunked,
+                    options.max_request_body,
+                    trailers,
+                )?;
+                reader.flush()?;
+            }
+            continue;
+        }
+        break (status, reason, headers);
+    };
     if status == 407
         && absolute_form.is_some()
         && let Some(proxy) = proxy_for_407.as_ref()

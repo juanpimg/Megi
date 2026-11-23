@@ -103,3 +103,35 @@ fn test_minmax_fixed_min_fr_row_does_not_double_count_minimum() {
         "minmax(40px,1fr) row in 100px container must be 100px, got {row_height}"
     );
 }
+
+#[test]
+fn test_minmax_percentage_min_row_with_indefinite_height_uses_zero_floor() {
+    // CSS Grid Layout §7.2.1 / §11.5 (#2185): percentage track minimums on rows when
+    // the grid container has indefinite height resolve against nothing (behaving as
+    // `auto`/0 floor for minmax), NOT against container width.
+    let mut container = grid_container_style(Length::Px(1000.0), Length::Auto);
+    container.grid_template_rows = template(vec![TrackSize::MinMax {
+        min: megi_css::TrackMin::Fixed(Length::Percent(10.0)),
+        max: megi_css::TrackMax::Fixed(Length::Px(50.0)),
+    }]);
+    let case = layout_case(container, vec![item_style(Length::Auto, Length::Auto)]);
+    let row_height = case.item(0).dimensions.content.height;
+    assert!(
+        (row_height - 50.0).abs() < 0.5,
+        "minmax(10%, 50px) row with auto container height must be 50px, not 10% of 1000px width (got {row_height})"
+    );
+
+    let mut auto_max = grid_container_style(Length::Px(1000.0), Length::Auto);
+    auto_max.grid_template_rows = template(vec![TrackSize::MinMax {
+        min: megi_css::TrackMin::Fixed(Length::Percent(10.0)),
+        max: megi_css::TrackMax::Auto,
+    }]);
+    let mut min_item = item_style(Length::Auto, Length::Auto);
+    min_item.min_height = Length::Px(20.0);
+    let case_auto = layout_case(auto_max, vec![min_item]);
+    let auto_row_height = case_auto.item(0).dimensions.content.height;
+    assert!(
+        (auto_row_height - 20.0).abs() < 0.5,
+        "minmax(10%, auto) row with 20px item and auto container height must be 20px (got {auto_row_height})"
+    );
+}

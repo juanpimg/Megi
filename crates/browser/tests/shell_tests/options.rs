@@ -77,6 +77,7 @@ fn zoom_and_refresh_flags_are_documented_in_help() {
 /// event loop: the refresh policy must ask for repaints, repeated worker renders must be
 /// deterministic (same virtual clock) and the frame must expose the counters the window
 /// uses to drive auto-refresh.
+#[cfg(feature = "full")]
 #[test]
 fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
     let input = "data:text/html,<div id=out>x</div>\
@@ -121,4 +122,65 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         !refresh.should_refresh(0, first.script_timers_pending),
         "pages without executed scripts must not refresh"
     );
+}
+
+#[test]
+fn ipc_render_forwards_time_ms_to_child_process() {
+    let html_path = temp_path("ipc_anim.html");
+    let png_t0 = temp_path("ipc_anim_t0.png");
+    let png_t1000 = temp_path("ipc_anim_t1000.png");
+    std::fs::write(
+        &html_path,
+        "<!DOCTYPE html><style>\
+         @keyframes k{from{background:rgb(255,0,0)}to{background:rgb(0,0,255)}}\
+         html,body{margin:0;padding:0}\
+         div{animation:k 1s linear forwards;width:60px;height:60px}\
+         </style><div></div>",
+    )
+    .expect("write anim fixture");
+
+    let pixel_at_25 = |time_ms: &str, out: &PathBuf| -> [u8; 4] {
+        let status = std::process::Command::new(env!("CARGO_BIN_EXE_megi"))
+            .arg(&html_path)
+            .arg("--screenshot")
+            .arg(out)
+            .args([
+                "--ipc-render",
+                "--width",
+                "60",
+                "--height",
+                "60",
+                "--time",
+                time_ms,
+            ])
+            .status()
+            .expect("run megi --ipc-render");
+        assert!(status.success(), "--ipc-render failed at time={time_ms}");
+        let bytes = std::fs::read(out).expect("read png");
+        let img =
+            megi_webview::image::decode_png(&bytes, &megi_webview::image::PngLimits::default())
+                .expect("decode png");
+        let idx = ((25usize * img.width as usize) + 25usize) * 4;
+        [
+            img.data[idx],
+            img.data[idx + 1],
+            img.data[idx + 2],
+            img.data[idx + 3],
+        ]
+    };
+
+    assert_eq!(
+        pixel_at_25("0", &png_t0),
+        [255, 0, 0, 255],
+        "t=0 must be red"
+    );
+    assert_eq!(
+        pixel_at_25("1000", &png_t1000),
+        [0, 0, 255, 255],
+        "--ipc-render --time 1000 must reach the child and render blue"
+    );
+
+    let _ = std::fs::remove_file(&html_path);
+    let _ = std::fs::remove_file(&png_t0);
+    let _ = std::fs::remove_file(&png_t1000);
 }

@@ -169,6 +169,12 @@ impl WebSocketTransport for LiveWebSocketTransport {
             .map_err(|error| JsError::Runtime(format!("WebSocket send: {error}")))
     }
 
+    fn send_binary(&mut self, bytes: &[u8]) -> Result<(), JsError> {
+        lock(&self.client)
+            .send_bytes(bytes)
+            .map_err(|error| JsError::Runtime(format!("WebSocket send_binary: {error}")))
+    }
+
     fn poll(&mut self) -> Vec<WebSocketEvent> {
         let mut events: Vec<WebSocketEvent> = self.events.try_iter().collect();
         // w3-render-005: if the queue overflowed, surface an aggregate count so the
