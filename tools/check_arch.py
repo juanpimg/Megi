@@ -114,7 +114,12 @@ def scan() -> tuple[list[str], int]:
                 local_modules.update(
                     re.findall(r"(?:pub\s+)?mod\s+([a-z0-9_]+)\s*;", p.read_text(errors="replace"))
                 )
-        for path in sorted(src.rglob("*.rs")) if src.exists() else []:
+        # AGENTS.md §4 caps EVERY .rs file, including integration tests.
+        # Report size violations for both src/ and tests/; only src/ is scanned
+        # for import edges (dev-dependencies are not part of the production DAG).
+        size_roots = [r for r in (src, ROOT / member / "tests") if r.exists()]
+        sized = sorted({p for root in size_roots for p in root.rglob("*.rs")})
+        for path in sized:
             rel = path.relative_to(ROOT).as_posix()
             lines = path.read_text(errors="replace").splitlines()
             if len(lines) > MAX_LINES:
@@ -122,10 +127,13 @@ def scan() -> tuple[list[str], int]:
                     legacy_count += 1
                 else:
                     violations.append(f"{rel}: {len(lines)} lines (max {MAX_LINES})")
-            for lineno, line in enumerate(lines, 1):
+        for path in sorted(src.rglob("*.rs")) if src.exists() else []:
+            src_rel = path.relative_to(ROOT).as_posix()
+            src_lines = path.read_text(errors="replace").splitlines()
+            for lineno, line in enumerate(src_lines, 1):
                 if "forbid(unsafe_code)" in line or not _comment_free(line):
                     continue
-                key = f"{rel}:{lineno}"
+                key = f"{src_rel}:{lineno}"
                 if FORBIDDEN_RE.search(line):
                     if key in baseline.get("forbidden_patterns", {}):
                         legacy_count += 1
