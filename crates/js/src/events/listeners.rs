@@ -245,16 +245,15 @@ pub(crate) fn forward_dom_event_to_workers(
             let Some(Some(worker)) = host.workers.get_mut(worker_id as usize) else {
                 continue;
             };
-            if worker.terminated {
-                continue;
-            }
             // RFC 8259 §7: escape control characters and quotes via `module_quote` (#2179).
             let message = format!(
                 "{{\"__megi_dom_event\":{{\"type\":{},\"token\":{}}}}}",
                 crate::runtime::module_quote(event_type),
                 token
             );
-            worker.to_worker.push_back(message);
+            // #2157: enforce MAX_WORKER_MESSAGES on DOM event forwarding so bursty page
+            // dispatches cannot overflow the worker's inbox/outbox.
+            let _ = worker.push_to_worker(message);
         }
     }
 }

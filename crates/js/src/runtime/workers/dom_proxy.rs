@@ -227,6 +227,7 @@ impl JsRuntime {
             let result_json = crate::runtime::json_state(&result, &mut self.context);
             let reply =
                 format!("{{\"__megi_dom_reply\":{{\"seq\":{seq},\"result\":{result_json}}}}}");
+            let mut queue_full = false;
             if let Ok(mut host) = host_cell(&mut self.context)
                 && let Some(worker) = host
                     .workers
@@ -234,7 +235,11 @@ impl JsRuntime {
                     .and_then(|slot| slot.as_mut())
             {
                 worker.dom_nodes = worker_nodes;
-                worker.to_worker.push_back(reply);
+                // #2157: share MAX_WORKER_MESSAGES backpressure on DOM proxy replies too.
+                queue_full = !worker.push_to_worker(reply);
+            }
+            if queue_full {
+                return Err(JsError::Runtime("worker message queue is full".to_string()));
             }
             return Ok(Some(JsValue::undefined()));
         }

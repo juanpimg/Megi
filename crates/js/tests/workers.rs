@@ -536,3 +536,48 @@ fn worker_dom_event_escapes_control_characters_in_event_type() {
         r#"ready|got:"a\nb\r\t\u0007\"\\c""#
     );
 }
+
+#[test]
+fn worker_dom_event_forwarding_respects_max_worker_messages() {
+    // #2157: forward_dom_event_to_workers and dom_proxy must enforce MAX_WORKER_MESSAGES
+    // (256) on the worker inbox instead of letting unbounded events overflow the outbox.
+    let mut runtime = runtime_with_worker(
+        "document.getElementById('x').then(function (el) { \
+           el.addEventListener('click', function (e) { postMessage(e.type); }); \
+           postMessage('ready'); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<button id=x>x</button>'; \
+             window.__delivered = 0; window.__errors = []; \
+             var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { if (e.data === 'click') { __delivered += 1; } }; \
+             w.onerror = function (e) { __errors.push(e.message); };",
+            "page.js",
+        )
+        .expect("setup");
+    runtime.run_worker_tasks(64).expect("setup tasks");
+    runtime
+        .eval(
+            "var btn = document.getElementById('x'); \
+             for (var i = 0; i < 400; i++) { btn.dispatchEvent(new Event('click')); }",
+            "page.js",
+        )
+        .expect("dispatch burst");
+    for _ in 0..10 {
+        runtime.run_worker_tasks(64).expect("pump");
+    }
+    runtime.run_microtasks().expect("microtasks");
+    let delivered: usize = runtime
+        .eval("__delivered", "page.js")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let errors = runtime.eval("__errors.join('|')", "page.js").unwrap();
+    assert_eq!(
+        delivered, 256,
+        "inbox must cap pending DOM events at MAX_WORKER_MESSAGES (256)"
+    );
+    assert_eq!(errors, "", "worker must not fail with queue full: {errors}");
+}
