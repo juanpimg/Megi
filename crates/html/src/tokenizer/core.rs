@@ -135,7 +135,8 @@ impl Tokenizer {
         }
         let (inserted, errors, inserted_line_starts, inserted_has_wide) =
             preprocess_str_with_line_starts(html);
-        self.errors.extend(errors);
+        let remaining = super::MAX_PARSE_ERRORS.saturating_sub(self.errors.len());
+        self.errors.extend(errors.into_iter().take(remaining));
         if inserted.is_empty() {
             return;
         }

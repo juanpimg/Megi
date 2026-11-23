@@ -333,8 +333,7 @@ impl Tokenizer {
                     };
                 }
                 Some(cp) if (cp as u8).is_ascii_alphabetic() && cp <= 0x7F => {
-                    self.temp_buffer
-                        .push((cp as u8).to_ascii_lowercase() as u32);
+                    self.push_temp((cp as u8).to_ascii_lowercase() as u32);
                     self.emit_char(cp);
                 }
                 _ => {
@@ -450,8 +449,7 @@ impl Tokenizer {
                     };
                 }
                 Some(cp) if (cp as u8).is_ascii_alphabetic() && cp <= 0x7F => {
-                    self.temp_buffer
-                        .push((cp as u8).to_ascii_lowercase() as u32);
+                    self.push_temp((cp as u8).to_ascii_lowercase() as u32);
                     self.emit_char(cp);
                 }
                 _ => {
@@ -462,5 +460,26 @@ impl Tokenizer {
             _ => return false,
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Tokenizer;
+    use super::super::types::TokenizerConfig;
+
+    #[test]
+    fn script_double_escape_temp_buffer_respects_cap() {
+        let html = format!(
+            "<script><!--<script{}",
+            "a".repeat(super::super::MAX_TOKEN_BYTES + 1024)
+        );
+        let mut tok = Tokenizer::from_str_input(&html, TokenizerConfig::default());
+        let mut max_len = 0;
+        while !matches!(tok.tokens.last(), Some(super::super::Token::Eof)) {
+            tok.step();
+            max_len = max_len.max(tok.temp_buffer.len());
+        }
+        assert!(max_len <= super::super::MAX_TOKEN_BYTES, "max_len={max_len}");
     }
 }

@@ -152,7 +152,7 @@ impl Tokenizer {
                     self.tokens.push(Token::Eof);
                 }
                 _ => {
-                    self.pending_pi_data.push('?');
+                    push_pi_data_bounded(&mut self.pending_pi_data, 0x3F, MAX_PI_DATA_BYTES);
                     self.reconsume = true;
                     self.state = TokenizerState::ProcessingInstructionData;
                 }
@@ -177,5 +177,20 @@ mod tests {
         assert_eq!(data, "abcd", "the 4-byte code point must be dropped");
         push_pi_data_bounded(&mut data, 'a' as u32, cap);
         assert_eq!(data, "abcda");
+    }
+
+    #[test]
+    fn pi_questionable_respects_max_pi_data_bytes() {
+        let html = format!("<?pi {}x", "?".repeat(super::MAX_PI_DATA_BYTES + 100));
+        let mut tok = super::Tokenizer::from_str_input(
+            &html,
+            super::types::TokenizerConfig::default(),
+        );
+        let mut max_len = 0;
+        while !matches!(tok.tokens.last(), Some(super::Token::Eof)) {
+            tok.step();
+            max_len = max_len.max(tok.pending_pi_data.len());
+        }
+        assert!(max_len <= super::MAX_PI_DATA_BYTES, "max_len={max_len}");
     }
 }
