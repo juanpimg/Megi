@@ -244,6 +244,9 @@
       headerText += this._requestHeaders[i][0] + ":" + this._requestHeaders[i][1] + "\n";
     }
     var payload = (method === "GET" || method === "HEAD") ? "" : serializeRequestBody(body);
+    // #2135: tell the native bridge to decode this payload as raw bytes rather
+    // than UTF-8 (needed for ArrayBuffer / typed-array request bodies).
+    var isBinaryPayload = method !== "GET" && method !== "HEAD" && isBinaryRequestBody(body);
     var timeoutLimit = this._timeout;
     var hasUploadPayload = payload.length > 0 && method !== "GET" && method !== "HEAD";
 
@@ -252,10 +255,12 @@
       // directly: real status/body and, crucially, CSP connect-src enforcement
       // (#1904). A CSP/network error propagates to the caller like the spec's
       // synchronous NetworkError.
-      var raw = __megi_fetch_native(url, method, headerText, payload);
+      var raw = __megi_fetch_native(url, method, headerText, payload, undefined, isBinaryPayload);
       this._readyState = 4;
-      this.status = raw.status;
-      this.statusText = raw.statusText;
+      // #2134: `status`/`statusText` are getter-only accessors reading these
+      // internal slots; assigning the accessors is a silent no-op in sloppy mode.
+      this._status = typeof raw.status === "number" ? raw.status : 0;
+      this._statusText = raw.statusText || "";
       this._responseText = raw.bodyText;
       this._responseBytes = raw.bodyBytes;
       this._responseBuffer = raw.bodyBytes ? raw.bodyBytes.slice().buffer : new ArrayBuffer(0);
@@ -281,7 +286,7 @@
       var startedAt = Date.now();
       var raw;
       try {
-        raw = __megi_fetch_native(url, method, headerText, payload);
+        raw = __megi_fetch_native(url, method, headerText, payload, undefined, isBinaryPayload);
       } catch (err) {
         if (self._aborted || self._requestSeq !== seq) {
           return;

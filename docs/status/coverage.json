@@ -3,8 +3,8 @@
   "overall": {
     "implemented": 69,
     "partial": 1,
-    "known": 70,
-    "percent": 99,
+    "known": 75,
+    "percent": 92,
     "unverified": [],
     "invalid_states": []
   },
@@ -48,22 +48,22 @@
       "id": "F6",
       "implemented": 11,
       "partial": 0,
-      "known": 11,
-      "percent": 100
+      "known": 13,
+      "percent": 85
     },
     {
       "id": "F7",
       "implemented": 8,
       "partial": 1,
-      "known": 9,
-      "percent": 89
+      "known": 10,
+      "percent": 80
     },
     {
       "id": "X",
       "implemented": 3,
       "partial": 0,
-      "known": 3,
-      "percent": 100
+      "known": 5,
+      "percent": 60
     }
   ],
   "missing": [
@@ -75,6 +75,56 @@
       "state": "partial",
       "evidence": "none",
       "issue": 989,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "X-AVIF",
+      "area": "X",
+      "name": "Decodificación de imágenes AVIF",
+      "source": "issue #1895",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1895,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "X-PERF-REALSITES",
+      "area": "X",
+      "name": "Rendimiento acceptable en sitios reales complejos",
+      "source": "issue #1899",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1899,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F6-JS-BUDGET-REAL",
+      "area": "F6",
+      "name": "Presupuesto JS suficiente para sitios reales",
+      "source": "issue #1881",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1881,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F6-GETCOMPUTEDSTYLE-PERF",
+      "area": "F6",
+      "name": "getComputedStyle eficiente (sin re-serializar 42 propiedades por llamada)",
+      "source": "issue #1868",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1868,
+      "reason": "no requiere evidencia"
+    },
+    {
+      "id": "F7-FIND-IN-PAGE-PERF",
+      "area": "F7",
+      "name": "Find-in-page sin doble render por carácter",
+      "source": "issue #1830",
+      "state": "missing",
+      "evidence": "none",
+      "issue": 1830,
       "reason": "no requiere evidencia"
     }
   ]

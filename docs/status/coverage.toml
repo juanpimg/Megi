@@ -544,7 +544,7 @@ source = "issue #989"
 state = "partial"
 evidence = "none"
 issue = 989
-reason = "structured tree + AccessKit adapter + widget states + tree validator with focus fallback + AT Focus/Click routing + accesskit_consumer walk + local-patch native-style widget overlays + AtBus surrogate with announcement log; real AT-SPI/UIA bus and OS-native widgets still unavailable in CI"
+reason = "structured tree + AccessKit adapter + widget states + tree validator with focus fallback + AT Focus/Click routing + accesskit_consumer walk + local-patch native-style widget overlays + AtBus surrogate with announcement log; focus-target building is O(F+A+L) per frame; real AT-SPI/UIA bus and OS-native widgets still unavailable in CI"
 
 [[capability]]
 id = "F7-ISOLATION"
@@ -578,3 +578,53 @@ name = "Campañas largas de fuzzing (16 targets)"
 source = "PROGRESS.md cross-cutting"
 state = "done"
 evidence = "python_test:tools/test_soak_fuzz.py::test_deep_sharded_rotation_fits_the_default_budget"
+
+[[capability]]
+id = "X-AVIF"
+area = "X"
+name = "Decodificación de imágenes AVIF"
+source = "issue #1895"
+state = "missing"
+evidence = "none"
+issue = 1895
+reason = "ImageFormat enum (crates/image/src/lib.rs:125-136) only knows Png/Gif/Jpeg/WebP/Unknown; detect_format has no AVIF/HEIF signature. Real sites (ecosia.org) fail to render AVIF images."
+
+[[capability]]
+id = "X-PERF-REALSITES"
+area = "X"
+name = "Rendimiento acceptable en sitios reales complejos"
+source = "issue #1899"
+state = "missing"
+evidence = "none"
+issue = 1899
+reason = "microsoft.com takes 61 s to render in release vs 0.3 s for example.com; no budget or fix lands this gap."
+
+[[capability]]
+id = "F6-JS-BUDGET-REAL"
+area = "F6"
+name = "Presupuesto JS suficiente para sitios reales"
+source = "issue #1881"
+state = "missing"
+evidence = "none"
+issue = 1881
+reason = "Default per-document JS instruction budget is too low for real sites; they abort before rendering even though the engine otherwise works."
+
+[[capability]]
+id = "F6-GETCOMPUTEDSTYLE-PERF"
+area = "F6"
+name = "getComputedStyle eficiente (sin re-serializar 42 propiedades por llamada)"
+source = "issue #1868"
+state = "missing"
+evidence = "none"
+issue = 1868
+reason = "getComputedStyle re-serializes 42 properties on every call; scripts that poll styles on animation frames are dominated by this cost."
+
+[[capability]]
+id = "F7-FIND-IN-PAGE-PERF"
+area = "F7"
+name = "Find-in-page sin doble render por carácter"
+source = "issue #1830"
+state = "missing"
+evidence = "none"
+issue = 1830
+reason = "Find-in-page re-renders twice per typed character; interactive search on large documents is unusably slow."
