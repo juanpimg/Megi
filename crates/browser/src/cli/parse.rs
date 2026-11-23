@@ -105,18 +105,10 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                             index += 1;
                             raw.refresh_ms = Some(interval);
                         }
-                        Err(_)
-                            if value.starts_with('-')
-                                || value.contains("://")
-                                || value.starts_with("data:") =>
-                        {
-                            // Looks like a flag or URL, not a value: use default.
-                            raw.refresh_ms = Some(crate::refresh::DEFAULT_REFRESH_MS);
-                        }
                         Err(_) => {
-                            return Err(ShellError::Usage(format!(
-                                "invalid --refresh-ms value `{value}` (expected a number)"
-                            )));
+                            // Not an integer: leave it unconsumed (e.g. flag, URL, or local path)
+                            // and fall back to the default interval.
+                            raw.refresh_ms = Some(crate::refresh::DEFAULT_REFRESH_MS);
                         }
                     }
                 } else {

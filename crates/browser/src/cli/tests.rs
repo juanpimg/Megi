@@ -154,6 +154,14 @@ fn parses_zoom_and_refresh_flags() {
     let disabled = parse_cli(args(&["data:,x", "--refresh-ms", "0"])).expect("parse");
     assert_eq!(disabled.refresh_ms, None);
 
+    let with_path = parse_cli(args(&["--refresh-ms", "Cargo.toml"])).expect("parse");
+    assert_eq!(with_path.refresh_ms, Some(crate::refresh::DEFAULT_REFRESH_MS));
+    assert!(
+        with_path.input.starts_with("file://") && with_path.input.ends_with("/Cargo.toml"),
+        "expected resolved file:// URL, got {}",
+        with_path.input
+    );
+
     assert!(parse_cli(args(&["data:,x", "--zoom", "4"])).is_err());
     assert!(parse_cli(args(&["data:,x", "--zoom", "0.4"])).is_err());
     assert!(parse_cli(args(&["data:,x", "--zoom", "abc"])).is_err());
