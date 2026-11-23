@@ -172,6 +172,20 @@ pub fn run_ipc_worker_stream<R: Read, W: Write>(
     reader: &mut R,
     writer: &mut W,
 ) -> Result<(), IpcError> {
+    run_ipc_worker_stream_with(reader, writer, crate::worker::render_document_with_options)
+}
+
+fn run_ipc_worker_stream_with<R: Read, W: Write, F>(
+    reader: &mut R,
+    writer: &mut W,
+    mut render_fn: F,
+) -> Result<(), IpcError>
+where
+    F: FnMut(
+        &crate::worker::RenderRequest,
+        &megi_webview::render::RenderOptions,
+    ) -> Result<crate::worker::RenderFrame, String>,
+{
     loop {
         let request: IpcRenderRequest = match read_message_checked(reader)? {
             Some(request) => request,
@@ -190,8 +204,20 @@ pub fn run_ipc_worker_stream<R: Read, W: Write>(
             form_post: None,
         };
         let options = megi_webview::render::RenderOptions::default();
-        let response = match crate::worker::render_document_with_options(&render_request, &options)
-        {
+        let render_result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            render_fn(&render_request, &options)
+        })) {
+            Ok(result) => result,
+            Err(payload) => {
+                let reason = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".to_string());
+                Err(format!("render worker panicked: {reason}"))
+            }
+        };
+        let response = match render_result {
             Ok(frame) => IpcRenderResponse {
                 generation: frame.generation,
                 png_bytes: frame.png_bytes,
@@ -369,6 +395,55 @@ mod tests {
             write_message(&mut sink, &payload),
             Err(IpcError::TooLarge(_))
         ));
+    }
+
+    #[test]
+    fn ipc_worker_stream_catches_panics_and_continues() {
+        let req1 = IpcRenderRequest {
+            generation: 1,
+            input: "data:text/html,<p>panic</p>".to_string(),
+            css_width: 320,
+            css_height: 240,
+            base_override: None,
+            scripting: false,
+            find_query: None,
+        };
+        let req2 = IpcRenderRequest {
+            generation: 2,
+            input: "data:text/html,<p>ok</p>".to_string(),
+            css_width: 320,
+            css_height: 240,
+            base_override: None,
+            scripting: false,
+            find_query: None,
+        };
+        let mut input = Vec::new();
+        write_message(&mut input, &req1).unwrap();
+        write_message(&mut input, &req2).unwrap();
+
+        let mut output = Vec::new();
+        run_ipc_worker_stream_with(&mut &input[..], &mut output, |req, options| {
+            if req.generation == 1 {
+                panic!("simulated renderer panic");
+            }
+            crate::worker::render_document_with_options(req, options)
+        })
+        .expect("worker stream should survive panic");
+
+        let mut cursor = &output[..];
+        let resp1: IpcRenderResponse = read_message(&mut cursor).unwrap();
+        assert_eq!(resp1.generation, 1);
+        assert!(
+            resp1
+                .error
+                .as_deref()
+                .is_some_and(|msg| msg.contains("simulated renderer panic")),
+            "expected panic error, got {:?}",
+            resp1.error
+        );
+        let resp2: IpcRenderResponse = read_message(&mut cursor).unwrap();
+        assert_eq!(resp2.generation, 2);
+        assert!(resp2.error.is_none());
     }
 }
 
