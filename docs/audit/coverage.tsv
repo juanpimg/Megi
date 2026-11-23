@@ -135,7 +135,7 @@ crates/browser/src/present.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/browser/src/reader.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/refresh.rs	206	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/scale.rs	173	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/scroll.rs	281	src	F2	juanpimg	2026-11-24	covered	upstream merge	Re-read after main merge
+crates/browser/src/scroll.rs	284	src	F2	juanpimg	2026-11-24	covered	upstream merge	Re-read after main merge
 crates/browser/src/session.rs	42	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/json.rs	304	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/lock.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -224,8 +224,8 @@ crates/css/src/cascade.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mo
 crates/css/src/cascade/chunk1.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk2.rs	390	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk3.rs	477	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/cascade/chunk4.rs	472	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	Preserve all 128 parent-key bits; hash declarations by name+value
-crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test for parent-key aliasing
+crates/css/src/cascade/chunk4.rs	472	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	Preserve all parent-key bits
+crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test
 crates/css/src/color.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk1.rs	418	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk2.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
