@@ -358,6 +358,8 @@ pub enum PseudoClass {
     PlaceholderShown,
     /// `:modal` — `<dialog open>` opened modally into the top layer (`data-megi-modal`).
     Modal,
+    /// `:link` / `:any-link` — matches an element with an `href` attribute (Selectors 4 §3.6.1).
+    Link,
     /// `:lang(<range>)` — nearest ancestor-or-self `lang`, hyphen-prefix match (#1523).
     Lang(String),
     /// `::backdrop` — pseudo-element behind a top-layer modal `<dialog>`.
