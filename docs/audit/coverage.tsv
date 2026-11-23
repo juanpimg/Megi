@@ -9,7 +9,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	484	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	489	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/coverage.yml	76	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -338,7 +338,7 @@ crates/css/tests/transform.rs	281	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/display/src/lib.rs	501	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/display/src/lib.rs	500	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/tests/contract.rs	16	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/Cargo.toml	25	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by line: binary
@@ -1071,7 +1071,7 @@ crates/render/src/backgrounds/collect.rs	74	src	F2	wave-max-mod	2026-11-19	cover
 crates/render/src/backgrounds/load.rs	236	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/browser_host.rs	369	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read getComputedStyle used values
+crates/render/src/browser_host.rs	473	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read getComputedStyle used values
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset/charset_gbk.rs	51	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
@@ -1106,7 +1106,7 @@ crates/render/src/scripts/execution.rs	240	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/scripts/lifecycle.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/modules.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/network.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/providers.rs	296	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
+crates/render/src/scripts/providers.rs	294	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
 crates/render/src/scripts/tests.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/types.rs	414	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
