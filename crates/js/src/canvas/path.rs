@@ -45,12 +45,21 @@ impl CanvasSurface {
     /// Fills the current path with `fill_style` (Canvas 2D `fill`).
     pub fn fill_path(&mut self) {
         let arcs = std::mem::take(&mut self.arcs);
+        if self.width == 0 || self.height == 0 {
+            return;
+        }
+        let max_x = self.width as i64 - 1;
+        let max_y = self.height as i64 - 1;
         let color = self.fill_style;
         for (cx, cy, radius) in arcs {
-            let x0 = (cx - radius).floor() as i64;
-            let x1 = (cx + radius).ceil() as i64;
-            let y0 = (cy - radius).floor() as i64;
-            let y1 = (cy + radius).ceil() as i64;
+            if !cx.is_finite() || !cy.is_finite() || !radius.is_finite() || radius <= 0.0 {
+                continue;
+            }
+            // #2154: HTML Canvas 2D — clip fill bounding box to the backing surface.
+            let x0 = ((cx - radius).floor() as i64).max(0);
+            let x1 = ((cx + radius).ceil() as i64).min(max_x);
+            let y0 = ((cy - radius).floor() as i64).max(0);
+            let y1 = ((cy + radius).ceil() as i64).min(max_y);
             let rr = radius * radius;
             for py in y0..=y1 {
                 for px in x0..=x1 {

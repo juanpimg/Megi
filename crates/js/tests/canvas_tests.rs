@@ -237,3 +237,22 @@ fn canvas_width_setter_reflects_and_sizes_backing_surface() {
     let surface = surfaces.values().next().expect("surface");
     assert_eq!((surface.width, surface.height), (6, 4));
 }
+
+#[test]
+fn fill_arc_with_huge_radius_clips_to_surface() {
+    // #2154: fill() on an arc with a huge radius must clip to the canvas surface.
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 2; c.height = 2; \
+             document.body.appendChild(c); \
+             var ctx = c.getContext('2d'); \
+             ctx.fillStyle = '#ff0000'; \
+             ctx.beginPath(); ctx.arc(0, 0, 1e12, 0, Math.PI * 2); ctx.fill(); \
+             var d = ctx.getImageData(0, 0, 1, 1).data; \
+             String(d[0]) + ',' + String(d[3]);",
+            "t",
+        )
+        .expect("canvas script");
+    assert_eq!(out, "255,255");
+}
