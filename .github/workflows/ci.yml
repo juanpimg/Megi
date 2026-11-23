@@ -86,6 +86,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
+      # whatwg_spec.py (imported by the tools tests below) needs lxml to parse the
+      # cached WHATWG spec pages; setup-python does not install it.
+      - name: Install Python test dependencies
+        run: python3 -m pip install lxml
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Coverage freshness (capability manifest + artifacts)
