@@ -72,7 +72,7 @@ mod woff1;
 // [`decode_web_font`] to turn WOFF2 bytes into sfnt bytes and
 // [`FontDatabase::load_font_data_family`] to register the result under the CSS
 // `font-family` alias: alias resolution participates in the normal CSS family list,
-// weight/style selection and per-glyph fallback. WOFF1, subsetting and color fonts are
+// weight/style selection and per-glyph fallback. Subsetting and color fonts are
 // not supported (documented limitations in [`web`]).
 
 pub use db::FontDatabase;

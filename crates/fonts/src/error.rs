@@ -39,7 +39,7 @@ impl fmt::Display for FontError {
                 write!(f, "no font face matched families [{families}]")
             }
             Self::InvalidFont { reason } => write!(f, "invalid font data: {reason}"),
-            Self::InvalidWebFont { reason } => write!(f, "invalid WOFF2 data: {reason}"),
+            Self::InvalidWebFont { reason } => write!(f, "invalid web-font data: {reason}"),
             Self::Io { path, reason } => write!(f, "cannot read font file {path}: {reason}"),
             Self::InvalidSize { size_px } => {
                 write!(f, "font-size must be finite and > 0, got {size_px}")

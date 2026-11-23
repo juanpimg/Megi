@@ -22,8 +22,9 @@
 //! decoder, segmentation, loop filter, token partitions, intra prediction, IDCT and
 //! YUV420→RGB); `megi_image::decode` returns its pixels and corrupt payloads keep typed
 //! errors. Static extended containers (`VP8X` + `VP8 `/`VP8L`) are supported, including
-//! uncompressed `ALPH` alpha planes; animated containers (`ANIM`/`ANMF`) and compressed
-//! alpha (`ALPH` method 1) stay typed `UnsupportedFeature` errors for now.
+//! uncompressed `ALPH` alpha planes; animated containers (`ANIM`/`ANMF`) are decoded
+//! (first frame via `decode` / `decode_webp`, all frames via `decode_animated_webp`).
+//! Compressed alpha (`ALPH` method 1) stays a typed `UnsupportedFeature` error for now.
 
 use crate::RgbaImage;
 use crate::error::ImageError;

@@ -106,33 +106,41 @@ fn parse_hsl_function(arguments: &str, with_alpha: bool) -> Option<Color> {
     }
     let parse_angle = |raw: &str| -> Option<f32> {
         let raw = raw.trim().to_ascii_lowercase();
-        if let Some(deg) = raw.strip_suffix("deg") {
-            deg.trim().parse::<f32>().ok()
+        let angle = if let Some(deg) = raw.strip_suffix("deg") {
+            deg.trim().parse::<f32>().ok()?
         } else if let Some(rad) = raw.strip_suffix("rad") {
-            rad.trim().parse::<f32>().ok().map(|v| v.to_degrees())
+            rad.trim().parse::<f32>().ok()?.to_degrees()
         } else if let Some(turn) = raw.strip_suffix("turn") {
-            turn.trim().parse::<f32>().ok().map(|v| v * 360.0)
+            turn.trim().parse::<f32>().ok()? * 360.0
         } else {
-            raw.parse::<f32>().ok()
-        }
+            raw.parse::<f32>().ok()?
+        };
+        angle.is_finite().then_some(angle)
     };
     let hue = parse_angle(parts[0])?.rem_euclid(360.0);
     let saturation = parts[1]
         .strip_suffix('%')?
         .trim()
         .parse::<f32>()
-        .ok()?
+        .ok()
+        .filter(|v| v.is_finite())?
         .clamp(0.0, 100.0)
         / 100.0;
     let lightness = parts[2]
         .strip_suffix('%')?
         .trim()
         .parse::<f32>()
-        .ok()?
+        .ok()
+        .filter(|v| v.is_finite())?
         .clamp(0.0, 100.0)
         / 100.0;
     let alpha = if with_alpha {
-        parts[3].trim().parse::<f32>().ok()?.clamp(0.0, 1.0)
+        parts[3]
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .filter(|v| v.is_finite())?
+            .clamp(0.0, 1.0)
     } else {
         1.0
     };
@@ -388,5 +396,15 @@ mod tests {
         );
         let half = parse_color("rgba(0, 0, 255, 0.5)").expect("rgba");
         assert_eq!((half.b, half.a), (255, 128));
+    }
+
+    #[test]
+    fn test_hsl_rejects_non_finite() {
+        assert_eq!(parse_color("hsl(NaN, 50%, 50%)"), None);
+        assert_eq!(parse_color("hsl(inf, 50%, 50%)"), None);
+        assert_eq!(parse_color("hsl(0, NaN%, 50%)"), None);
+        assert_eq!(parse_color("hsl(0, 50%, inf%)"), None);
+        assert_eq!(parse_color("hsla(0, 50%, 50%, NaN)"), None);
+        assert_eq!(parse_color("hsla(0, 50%, 50%, inf)"), None);
     }
 }
