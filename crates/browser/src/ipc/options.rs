@@ -258,15 +258,17 @@ mod tests {
         ));
         let shared = Arc::new(Mutex::new(jar));
 
-        let mut source = RenderOptions::default();
-        source.time_ms = 500.0;
-        source.no_network = true;
-        source.cookies = false; // jar alone must still enable IPC cookie forwarding
-        source.cookie_jar = Some(shared);
-        source.origin = Some("https://app.example".to_owned());
-        source.max_images = 7;
-        source.max_document_bytes = 123_456;
-        source.device_pixel_ratio = 2.0;
+        let source = RenderOptions {
+            time_ms: 500.0,
+            no_network: true,
+            cookies: false, // jar alone must still enable IPC cookie forwarding
+            cookie_jar: Some(shared),
+            origin: Some("https://app.example".to_owned()),
+            max_images: 7,
+            max_document_bytes: 123_456,
+            device_pixel_ratio: 2.0,
+            ..RenderOptions::default()
+        };
 
         let wire = IpcRenderOptions::from_render_options(&source);
         let json = serde_json::to_string(&wire).expect("serialize wire options");
@@ -301,11 +303,13 @@ mod tests {
         assert!(parent_jar.store_set_cookie(&origin_url, "prefs=dark; Path=/"));
         let shared = Arc::new(Mutex::new(parent_jar));
 
-        let mut source = RenderOptions::default();
-        source.time_ms = 250.0;
-        source.origin = Some("https://site.test".to_owned());
-        source.cookie_jar = Some(shared);
-        source.max_images = 3;
+        let source = RenderOptions {
+            time_ms: 250.0,
+            origin: Some("https://site.test".to_owned()),
+            cookie_jar: Some(shared),
+            max_images: 3,
+            ..RenderOptions::default()
+        };
 
         let req = IpcRenderRequest {
             generation: 1,
@@ -344,8 +348,10 @@ mod tests {
 
     #[test]
     fn worker_stream_applies_time_ms_to_keyframes_frame() {
-        let mut source = RenderOptions::default();
-        source.time_ms = 1000.0;
+        let source = RenderOptions {
+            time_ms: 1000.0,
+            ..RenderOptions::default()
+        };
         let req = IpcRenderRequest {
             generation: 1,
             input: "data:text/html,<style>@keyframes k{from{background:rgb(255,0,0)}to{background:rgb(0,0,255)}}html,body{margin:0}div{animation:k 1s linear forwards;width:60px;height:60px}</style><div></div>".to_owned(),
