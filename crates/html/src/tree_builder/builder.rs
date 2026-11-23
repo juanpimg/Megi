@@ -133,6 +133,45 @@ impl TreeBuilder {
         old_node_id
     }
 
+    /// Drops stale NodeIds from the open-elements stack after a host script ran.
+    ///
+    /// #2133: a `ScriptExecutor` may call the public `Document::remove_subtree` on
+    /// an ancestor that is still open. That frees the arena slot, so every later
+    /// `doc.node(id)` on the stack (scope checks, adoption agency, counters) would
+    /// panic. After a script executes we prune those ids and rebuild the mirrored
+    /// `open_ids`/`open_html_counts`/`open_foreign_count` bookkeeping from the
+    /// surviving elements, so the rest of the parser only sees live handles.
+    pub(super) fn prune_stale_open_elements(&mut self) {
+        let surviving: Vec<NodeId> = self
+            .open_elements
+            .iter()
+            .copied()
+            .filter(|id| self.doc.try_node(*id).is_some())
+            .collect();
+        if surviving.len() == self.open_elements.len() {
+            return;
+        }
+        self.open_elements = surviving;
+        self.open_ids.clear();
+        self.open_html_counts.clear();
+        self.open_foreign_count = 0;
+        for &id in &self.open_elements {
+            self.open_ids.insert(id);
+            // Only live ids remain, and every one was pushed via
+            // push_open_element, so the mirrored counters are rebuilt exactly.
+            if let Some(el) = self.doc.try_node(id).and_then(|node| node.as_element()) {
+                if el.namespace != Namespace::Html {
+                    self.open_foreign_count += 1;
+                } else {
+                    *self
+                        .open_html_counts
+                        .entry(el.local_name.to_owned())
+                        .or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
     /// Returns the number of currently-open HTML-namespace elements with local name `name`.
     pub(super) fn open_html_count(&self, name: &str) -> u32 {
         self.open_html_counts.get(name).copied().unwrap_or(0)
@@ -154,7 +193,15 @@ impl TreeBuilder {
     /// checks only ever match HTML-namespace elements by local name, so the counter is a
     /// faithful mirror of the only thing they test.
     pub(super) fn adjust_open_html_count(&mut self, node_id: NodeId, delta: i32) {
-        let Some(el) = self.doc.node(node_id).as_element() else {
+        // #2133: a host ScriptExecutor may remove an open ancestor via the public
+        // `Document::remove_subtree` while a script runs. The parser's open-elements
+        // stack then holds a stale NodeId; popping it must not panic. `try_node`
+        // tolerates that case and we simply skip the mirrored counter adjustment.
+        let Some(el) = self
+            .doc
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+        else {
             return;
         };
         if el.namespace != Namespace::Html {
