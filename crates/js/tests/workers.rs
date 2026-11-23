@@ -581,3 +581,39 @@ fn worker_dom_event_forwarding_respects_max_worker_messages() {
     );
     assert_eq!(errors, "", "worker must not fail with queue full: {errors}");
 }
+
+#[test]
+fn worker_get_elements_by_tag_name_returns_valid_node_tokens() {
+    // #2155: getElementsByTagName must register matched nodes in worker_nodes and
+    // return those proxy tokens, matching getElementById so element operations work.
+    let mut runtime = runtime_with_worker(
+        "Promise.all([document.getElementById('a'), document.getElementsByTagName('p')]).then(function (pair) { \
+           var byId = pair[0]; \
+           var byTag = pair[1]; \
+           Promise.all([byId.textContent, byTag[0].textContent, byTag[1].textContent, byTag[1].setAttribute('data-tag', 'ok')]).then(function (vals) { \
+             postMessage(vals[0] + '|' + vals[1] + '|' + vals[2] + '|' + (byId.__megi_node_id === byTag[0].__megi_node_id)); \
+           }); \
+         });",
+    );
+    runtime
+        .eval(
+            "document.body.innerHTML = '<p id=a>hello</p><div>skip</div><p id=b>world</p>'; \
+             window.__seen = ''; \
+             var w = new Worker('worker.js'); \
+             w.onmessage = function (e) { __seen = e.data; };",
+            "page.js",
+        )
+        .expect("setup");
+    runtime.run_worker_tasks(128).expect("tasks");
+    runtime.run_microtasks().expect("microtasks");
+    assert_eq!(
+        runtime.eval("__seen", "page.js").expect("seen"),
+        "hello|hello|world|true"
+    );
+    assert_eq!(
+        runtime
+            .eval("document.getElementById('b').getAttribute('data-tag')", "page.js")
+            .expect("attr"),
+        "ok"
+    );
+}
