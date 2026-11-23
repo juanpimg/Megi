@@ -23,6 +23,10 @@ pub(crate) struct StyleSummary {
     pub(crate) media_skipped: usize,
     /// The `max_stylesheets` cap was hit and the warning already pushed (#654).
     pub(crate) sheets_capped: bool,
+    /// Pre-parsed external `<link>` sheets (including their `@import`s) keyed by URL cache key,
+    /// so timeline evaluation can reconstruct external `@keyframes` even if scripts add `<style>` (#2160).
+    #[cfg(feature = "js")]
+    pub(crate) external_sheets: super::imports::ExternalSheetCache,
 }
 
 /// Combines HTTP `Content-Security-Policy` headers with any `<meta http-equiv="Content-Security-Policy">`
@@ -151,17 +155,59 @@ pub(crate) fn resolve_styles_with_state_and_transitions(
     })
 }
 
-fn resolve_styles_with_collection(
+#[cfg(test)]
+thread_local! {
+    static CASCADE_PASS_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static PRE_LAYOUT_RUN_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn resolve_document_cascade(
     doc: &Document,
     collection: &megi_css::StyleCollection,
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
+    #[cfg(test)]
+    CASCADE_PASS_COUNT.with(|c| c.set(c.get() + 1));
+    megi_css::resolve_document_styles_from_collection(doc, collection)
+}
+
+#[cfg(feature = "js")]
+pub(crate) fn layout_snapshot(
+    doc: &Document,
+    styles: &HashMap<NodeId, ComputedStyle>,
+    pseudos: &megi_css::PseudoStyles,
+    viewport: megi_layout::Rect,
+) -> Option<megi_layout::LayoutBox> {
+    #[cfg(test)]
+    PRE_LAYOUT_RUN_COUNT.with(|c| c.set(c.get() + 1));
+    megi_layout::layout_document_with_pseudos(doc, styles, pseudos, viewport)
+}
+
+/// Resolves base cascaded styles without applying `::backdrop`, `<img>` hints,
+/// transitions, or `@keyframes` animations.
+pub(crate) fn resolve_base_styles_with_state(
+    doc: &Document,
+    collection: &megi_css::StyleCollection,
+    state: megi_css::StateContext,
+    viewport: (f32, f32),
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
+    megi_css::with_calc_viewport(viewport.0, viewport.1, || {
+        megi_css::state::with_state(state, || {
+            let _pass = megi_css::style_pass_scope();
+            resolve_document_cascade(doc, collection)
+        })
+    })
+}
+
+/// Applies post-cascade fixups (`::backdrop`, `<img>` hints, transitions, animations)
+/// onto already-resolved base styles.
+pub(crate) fn finalize_resolved_styles(
+    doc: &Document,
+    collection: &megi_css::StyleCollection,
+    styles: &mut HashMap<NodeId, ComputedStyle>,
+    pseudo_styles: &mut megi_css::PseudoStyles,
     time_ms: f64,
     transition_from: Option<&HashMap<NodeId, ComputedStyle>>,
-) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
-    // One shared selector-matching budget for the whole document: a per-element budget would
-    // grow the total cost with the element count (#1413).
-    let _pass = megi_css::style_pass_scope();
-    let (mut styles, mut pseudo_styles) =
-        megi_css::resolve_document_styles_from_collection(doc, collection);
+) {
     // `#1546`: resolve the `::backdrop` color for modal dialogs after the main cascade, since
     // the generic collector does not know about the HTML top layer.
     let root = doc.root();
@@ -240,15 +286,30 @@ fn resolve_styles_with_collection(
     }
 
     if let Some(from_styles) = transition_from {
-        megi_css::cascade::apply_transitions_to_styles(
-            doc,
-            from_styles,
-            &mut styles,
-            time_ms as f32,
-        );
+        megi_css::cascade::apply_transitions_to_styles(doc, from_styles, styles, time_ms as f32);
     }
-    megi_css::cascade::apply_animations_to_styles(doc, &mut styles, collection, time_ms as f32);
-    megi_css::apply_animations_to_pseudo_styles(&mut pseudo_styles, collection, time_ms as f32);
+    megi_css::cascade::apply_animations_to_styles(doc, styles, collection, time_ms as f32);
+    megi_css::apply_animations_to_pseudo_styles(pseudo_styles, collection, time_ms as f32);
+}
+
+fn resolve_styles_with_collection(
+    doc: &Document,
+    collection: &megi_css::StyleCollection,
+    time_ms: f64,
+    transition_from: Option<&HashMap<NodeId, ComputedStyle>>,
+) -> (HashMap<NodeId, ComputedStyle>, megi_css::PseudoStyles) {
+    // One shared selector-matching budget for the whole document: a per-element budget would
+    // grow the total cost with the element count (#1413).
+    let _pass = megi_css::style_pass_scope();
+    let (mut styles, mut pseudo_styles) = resolve_document_cascade(doc, collection);
+    finalize_resolved_styles(
+        doc,
+        collection,
+        &mut styles,
+        &mut pseudo_styles,
+        time_ms,
+        transition_from,
+    );
     (styles, pseudo_styles)
 }
 
@@ -309,6 +370,97 @@ mod calc_viewport_tests {
         assert!(
             matches!(width, megi_css::Length::Px(px) if (px - 200.0).abs() < 1.0),
             "calc(50vw) must resolve against the 400px viewport, got {width:?}"
+        );
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
+    fn timeline_listener_without_animations_skips_extra_cascades() {
+        let mut css = String::new();
+        for i in 0..50 {
+            css.push_str(&format!(".c{i} {{ color: #123456; }}\n"));
+        }
+        let mut divs = String::new();
+        for i in 0..50 {
+            divs.push_str(&format!("<div class='c{i}'>x</div>"));
+        }
+        let html = format!(
+            "<!doctype html><html><head><style>{css}</style></head><body>\
+             {divs}<div id='target'></div>\
+             <script>document.getElementById('target').addEventListener('animationstart', function() {{}});</script>\
+             </body></html>"
+        );
+        let url = format!(
+            "data:text/html;base64,{}",
+            megi_net::base64_encode(html.as_bytes())
+        );
+        let options = RenderOptions {
+            scripting: crate::ScriptingMode::Enabled,
+            encode_png: false,
+            ..RenderOptions::default()
+        };
+        CASCADE_PASS_COUNT.with(|c| c.set(0));
+        let _output = crate::render_url(&url, &options).expect("render");
+        let passes = CASCADE_PASS_COUNT.with(std::cell::Cell::get);
+        assert!(
+            passes <= 1,
+            "registering a timeline listener on an unchanged page without animations/transitions \
+             must not run extra CSS cascades (got {passes} cascades)"
+        );
+
+        // When animations DO exist and a script mutates the DOM, timeline evaluation plus final
+        // resource styling must share one post-script cascade (total <= 2, not 3).
+        let anim_html = "<!doctype html><html><head><style>\
+            @keyframes pop { from { opacity: 0; } to { opacity: 1; } }\
+            #box.go { animation: pop 200ms linear both; }\
+            </style></head><body><div id='box'></div><script>\
+            var b = document.getElementById('box');\
+            b.addEventListener('animationend', function() {});\
+            b.className = 'go';\
+            </script></body></html>";
+        let anim_url = format!(
+            "data:text/html;base64,{}",
+            megi_net::base64_encode(anim_html.as_bytes())
+        );
+        let anim_opts = RenderOptions {
+            time_ms: 500.0,
+            ..options
+        };
+        CASCADE_PASS_COUNT.with(|c| c.set(0));
+        let _anim_out = crate::render_url(&anim_url, &anim_opts).expect("anim render");
+        let anim_passes = CASCADE_PASS_COUNT.with(std::cell::Cell::get);
+        assert!(
+            anim_passes <= 2,
+            "timeline + post-script resource cascade must share one post-script resolution (got {anim_passes})"
+        );
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
+    fn repeated_get_bounding_client_rect_runs_pre_layout_once() {
+        let html = "<!doctype html><html><body style='margin:0'>\
+            <div id='b' style='width:80px;height:40px'></div><div id='out'></div>\
+            <script>\
+            var el = document.getElementById('b');\
+            var last = 0;\
+            for (var i = 0; i < 50; i++) { last = el.getBoundingClientRect().width; }\
+            document.getElementById('out').textContent = String(last);\
+            </script></body></html>";
+        let url = format!(
+            "data:text/html;base64,{}",
+            megi_net::base64_encode(html.as_bytes())
+        );
+        let options = RenderOptions {
+            scripting: crate::ScriptingMode::Enabled,
+            encode_png: false,
+            ..RenderOptions::default()
+        };
+        PRE_LAYOUT_RUN_COUNT.with(|c| c.set(0));
+        let _output = crate::render_url(&url, &options).expect("render");
+        let layout_runs = PRE_LAYOUT_RUN_COUNT.with(std::cell::Cell::get);
+        assert_eq!(
+            layout_runs, 1,
+            "50 getBoundingClientRect() queries must execute pre-script layout once, got {layout_runs}"
         );
     }
 }

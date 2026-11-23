@@ -377,4 +377,8 @@ pub struct StyleCollection {
     pub(crate) has_revert_layer: bool,
     /// Whether any compiled selector targets a pseudo-element (`::before`/`::after`).
     pub(crate) has_pseudo_rules: bool,
+    /// Whether any compiled rule declares an `animation*` property.
+    pub(crate) has_animations: bool,
+    /// Whether any compiled rule declares a `transition*` property.
+    pub(crate) has_transitions: bool,
 }

@@ -2,6 +2,9 @@
 //!
 //! Moved verbatim from `lib.rs`.
 
+#[cfg(feature = "js")]
+use std::collections::HashMap;
+
 use megi_core::Document;
 use megi_net::{ResourceLoader, Url};
 
@@ -9,6 +12,12 @@ use super::state_stylesheet_text::load_stylesheet_text;
 use super::styles::{StyleSummary, account_css_bytes};
 use crate::{RenderError, RenderOptions};
 use crate::{stylesheets, webfonts};
+
+/// Pre-parsed external `<link>` sheets (with their resolved `@import`s in cascade order)
+/// keyed by `Url::cache_key()`.
+#[cfg(feature = "js")]
+pub(crate) type ExternalSheetCache =
+    HashMap<String, Vec<(Option<megi_css::ImportRule>, megi_css::Stylesheet)>>;
 
 /// Mutable state shared by the recursive `@import` walk.
 struct ImportWalk<'a> {
@@ -127,6 +136,8 @@ pub(crate) fn build_author_stylesheet_collection(
         max_import_depth: 0,
         media_skipped: collected.media_skipped,
         sheets_capped: false,
+        #[cfg(feature = "js")]
+        external_sheets: HashMap::new(),
     };
     let mut walk = ImportWalk {
         loader,
@@ -185,6 +196,7 @@ pub(crate) fn build_author_stylesheet_collection(
                     false,
                     &mut walk,
                     &mut font_faces,
+                    None,
                 )?;
                 collection.add_stylesheet(&sheet, megi_css::Origin::Author);
             }
@@ -246,6 +258,8 @@ pub(crate) fn build_author_stylesheet_collection(
                         .cloned()
                         .map(|face| (url.clone(), face)),
                 );
+                #[cfg(feature = "js")]
+                let mut sheet_log = Vec::new();
                 walk_imports(
                     &mut collection,
                     &sheet,
@@ -255,8 +269,23 @@ pub(crate) fn build_author_stylesheet_collection(
                     *crossorigin,
                     &mut walk,
                     &mut font_faces,
+                    {
+                        #[cfg(feature = "js")]
+                        {
+                            Some(&mut sheet_log)
+                        }
+                        #[cfg(not(feature = "js"))]
+                        {
+                            None
+                        }
+                    },
                 )?;
                 collection.add_stylesheet(&sheet, megi_css::Origin::Author);
+                #[cfg(feature = "js")]
+                {
+                    sheet_log.push((None, sheet));
+                    summary.external_sheets.insert(url.cache_key(), sheet_log);
+                }
             }
         }
     }
@@ -282,6 +311,7 @@ fn walk_imports(
     use_cors: bool,
     walk: &mut ImportWalk<'_>,
     font_faces: &mut Vec<webfonts::LocatedFontFace>,
+    mut sheet_log: Option<&mut Vec<(Option<megi_css::ImportRule>, megi_css::Stylesheet)>>,
 ) -> Result<(), RenderError> {
     'imports: for import in &sheet.imports {
         // Bound total import entries (including skipped) to prevent unbounded
@@ -407,8 +437,12 @@ fn walk_imports(
             use_cors,
             walk,
             font_faces,
+            sheet_log.as_deref_mut(),
         )?;
         collection.add_import_stylesheet(import, &imported, megi_css::Origin::Author);
+        if let Some(log) = sheet_log.as_deref_mut() {
+            log.push((Some(import.clone()), imported));
+        }
     }
     Ok(())
 }

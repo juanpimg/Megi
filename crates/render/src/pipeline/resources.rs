@@ -3,11 +3,12 @@
 //! The stage body is moved verbatim from `lib.rs`; only the surrounding function
 //! signature and the state (un)packing were added to keep the file within size caps.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use super::imports::stylesheet_signature;
-use super::state::{ParsedDocumentInput, ResourceStageOutput, ScriptContext};
-use super::styles::collect_styles;
+use super::state::{ParsedDocumentInput, ResourceStageOutput, ScriptContext, style_dom_signature};
+use super::styles::{collect_styles, finalize_resolved_styles};
 use crate::RenderError;
 use crate::images::ImageLimits;
 use crate::{backgrounds, frames, images, inline_svg, webfonts};
@@ -45,6 +46,7 @@ pub(crate) fn run_resource_stage<'a>(
         csp,
         media_context,
         reusable_stylesheets,
+        cached_post_styles,
         mut pre_warnings,
         transition_from_styles,
         pre_scripted_frames,
@@ -69,16 +71,17 @@ pub(crate) fn run_resource_stage<'a>(
     warnings.extend(inline_svg_report.warnings.iter().cloned());
 
     let styles_start = Instant::now();
+    let post_sheet_sig = stylesheet_signature(&document);
     let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
         Some((collection, summary, fonts, stylesheet_signature_before))
-            if stylesheet_signature(&document) == stylesheet_signature_before =>
+            if post_sheet_sig == stylesheet_signature_before =>
         {
             warnings.extend(pre_warnings);
             (collection, summary, fonts)
         }
         _ => {
             warnings.append(&mut pre_warnings);
-            collect_styles(
+            let (collection, summary, fonts) = collect_styles(
                 &document,
                 &base_url,
                 &mut loader,
@@ -86,20 +89,42 @@ pub(crate) fn run_resource_stage<'a>(
                 &media_context.clone(),
                 csp.as_ref(),
                 &mut warnings,
-            )?
+            )?;
+            (Arc::new(collection), summary, fonts)
         }
     };
-    let (styles, pseudo_styles) = super::styles::resolve_styles_with_state_and_transitions(
-        &document,
-        &stylesheet_collection,
-        megi_css::StateContext::new(),
-        options.time_ms,
-        (
-            options.viewport.width as f32,
-            options.viewport.height as f32,
-        ),
-        transition_from_styles.as_deref(),
-    );
+    let post_dom_sig = style_dom_signature(&document);
+    let cached_hit = cached_post_styles
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+        .filter(|entry| entry.stylesheet_sig == post_sheet_sig && entry.dom_sig == post_dom_sig);
+    let (styles, pseudo_styles) = if let Some(cached) = cached_hit {
+        let mut styles = Arc::try_unwrap(cached.styles).unwrap_or_else(|a| (*a).clone());
+        let mut pseudo_styles =
+            Arc::try_unwrap(cached.pseudo_styles).unwrap_or_else(|a| (*a).clone());
+        finalize_resolved_styles(
+            &document,
+            &stylesheet_collection,
+            &mut styles,
+            &mut pseudo_styles,
+            options.time_ms,
+            transition_from_styles.as_deref(),
+        );
+        (styles, pseudo_styles)
+    } else {
+        super::styles::resolve_styles_with_state_and_transitions(
+            &document,
+            &stylesheet_collection,
+            megi_css::StateContext::new(),
+            options.time_ms,
+            (
+                options.viewport.width as f32,
+                options.viewport.height as f32,
+            ),
+            transition_from_styles.as_deref(),
+        )
+    };
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
