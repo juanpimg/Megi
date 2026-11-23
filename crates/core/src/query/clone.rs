@@ -58,12 +58,17 @@ impl Document {
             while let Some(child_id) = child {
                 steps += 1;
                 if steps > max_steps || cloned_count >= MAX_CLONE_NODES.min(available) {
+                    // #2142: subtree_size saturates at MAX_CLONE_NODES+1, so a huge
+                    // source chain passes the precheck — roll back everything cloned
+                    // so the destination arena keeps its original slot count.
+                    self.remove_subtree(root);
                     return Err(DomError::NodeLimitExceeded);
                 }
                 let next = source.try_node(child_id).and_then(|node| node.next_sibling);
                 let cloned = self.import_shallow(source, child_id);
                 if !self.append_child(cloned_id, cloned) {
                     self.remove_subtree(cloned);
+                    self.remove_subtree(root);
                     return Err(DomError::HierarchyRequest {
                         parent: cloned_id,
                         child: cloned,

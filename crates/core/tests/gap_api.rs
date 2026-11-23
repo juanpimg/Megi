@@ -69,3 +69,29 @@ fn text_content_caps_single_text_node() {
         result.len()
     );
 }
+
+/// A failed deep clone must not leave orphaned nodes in the destination (#2142).
+#[test]
+fn failed_clone_rolls_back_destination() {
+    use megi_core::{Document, Namespace};
+    let mut src = Document::new();
+    let html = src.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    src.append_child(src.root(), html);
+    let mut parent = html;
+    // 131072 > MAX_CLONE_NODES (65536): a chain that bypasses the saturated
+    // subtree_size precheck and fails mid-clone.
+    for _ in 0..131_072 {
+        let child = src.create_element(Namespace::Html, "div".to_owned(), vec![]);
+        src.append_child(parent, child);
+        parent = child;
+    }
+    let mut dst = Document::new();
+    let before = dst.len();
+    let result = dst.clone_node_into(&src, html, true);
+    assert!(result.is_err(), "oversized chain must fail");
+    assert_eq!(
+        dst.len(),
+        before,
+        "failed clone must not leak destination nodes"
+    );
+}
