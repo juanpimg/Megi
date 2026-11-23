@@ -421,15 +421,22 @@ fn ws_bridge_ping_sends_single_pong_and_preserves_mixed_case_scheme_url() {
         let _ = stream.write_all(&[0x89, 0x00]);
         let _ = stream.flush();
         let mut pongs = 0usize;
-        for _ in 0..4 {
+        // Keep reading until the page's text frame arrives (bounded by a wall-clock
+        // deadline): a CI runner may delay the JS `open` handler well past the socket
+        // timeout, and breaking on the first timeout made this test flaky.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while std::time::Instant::now() < deadline {
             match read_client_frame(&mut stream) {
                 Ok(Some((0xA, _))) => pongs += 1,
                 Ok(Some((0x1, payload))) => {
                     let echo = build_text_frame(&payload);
                     let _ = stream.write_all(&echo);
                     let _ = stream.flush();
+                    break;
                 }
-                _ => break,
+                Ok(Some((0x8, _))) => break,
+                Ok(Some(_)) => {}
+                Ok(None) | Err(_) => {}
             }
         }
         (head_str, pongs)
