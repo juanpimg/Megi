@@ -168,6 +168,38 @@ mod unit_tests {
     use super::*;
 
     #[test]
+    fn restored_scroll_survives_window_creation_1823() {
+        // #1823: the session restores a scroll offset with a synthetic content
+        // height of `offset + 1` and a 1px viewport. Window creation must keep
+        // that offset while adopting the real viewport, until the first frame
+        // reports the real content height.
+        let restored_offset = 450u32;
+        let viewport = 800u32;
+        let session = ScrollState::new(restored_offset + 1, 1);
+        assert_eq!(session.offset(), restored_offset);
+
+        // ensure_window rebuild pattern (frontend.rs).
+        let mut scroll = ScrollState::new(session.offset().saturating_add(viewport), viewport);
+        scroll.scroll_to(session.offset());
+        assert_eq!(
+            scroll.offset(),
+            restored_offset,
+            "offset survived window creation"
+        );
+
+        // First frame reports the real content height: the offset is reclamped
+        // against it, not reset to zero.
+        scroll.set_content_height(3000);
+        assert_eq!(scroll.offset(), restored_offset);
+
+        // A short page clamps the restored offset down to the new maximum.
+        let mut short = ScrollState::new(restored_offset + viewport, viewport);
+        short.scroll_to(restored_offset);
+        short.set_content_height(900);
+        assert_eq!(short.offset(), 100);
+    }
+
+    #[test]
     fn clamps_offset_to_content_and_viewport() {
         let mut state = ScrollState::new(1000, 400);
         assert_eq!(state.max_offset(), 600);
