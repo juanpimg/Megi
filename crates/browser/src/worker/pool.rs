@@ -414,7 +414,10 @@ mod tests {
                     failed_msgs.push(message);
                 }
             }
-            if !failed_msgs.is_empty() {
+            if failed_msgs
+                .iter()
+                .any(|m| m.contains("simulated worker panic on eviction"))
+            {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
