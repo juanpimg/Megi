@@ -153,7 +153,16 @@ impl WindowApp {
         self.scale_factor = window.scale_factor();
         let size = window.inner_size();
         self.metrics = window_metrics_zoomed(size.width, size.height, self.scale_factor, self.zoom);
-        self.scroll = ScrollState::new(1, self.page_viewport_height());
+        // #1823: `WindowApp::new` restored the session's scroll with a synthetic
+        // content height of `offset + 1` and a 1px viewport. Replacing it with a
+        // fresh state here dropped the offset, so every restart opened at the top.
+        // Keep the restored offset by rebuilding with a provisional content height
+        // of `offset + viewport`; the first real frame's `set_content_height`
+        // then clamps it against the actual document height.
+        let restored_offset = self.scroll.offset();
+        let viewport = self.page_viewport_height();
+        self.scroll = ScrollState::new(restored_offset.saturating_add(viewport), viewport);
+        self.scroll.scroll_to(restored_offset);
         #[cfg(feature = "a11y")]
         {
             // Must happen before the window becomes visible, per accesskit_winit docs.
