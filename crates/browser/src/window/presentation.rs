@@ -86,18 +86,54 @@ impl WindowApp {
         let chrome_scale = self.metrics.scale as f32;
         let chrome_history = self.address_history();
         let chrome_completion = self.address.autocomplete(&chrome_history);
-        // F7-A11Y: snapshot the focused widget's visual before borrowing the surface mutably.
-        let focus_widget = self.focused_control().map(|control| {
+        // F7-A11Y / #2199: snapshot focused, pressed, and locally dirty widgets before
+        // borrowing the surface mutably.
+        struct WidgetOverlayItem {
+            rect: crate::links::CssRect,
+            visual: crate::forms::WidgetVisual,
+            kind: crate::forms::FormControlKind,
+            text: String,
+            checked: bool,
+            caret: Option<usize>,
+            disabled: bool,
+        }
+        let focused_id = self.focused_control().map(|control| control.form_id);
+        let mut widget_overlays: Vec<WidgetOverlayItem> = Vec::new();
+        for control in &self.forms {
+            let is_focused = focused_id == Some(control.form_id);
+            let is_pressed = self.release_button == Some(control.form_id);
+            let is_dirty = self.live_forms.is_dirty(control.form_id);
+            if !is_focused && !is_pressed && !is_dirty {
+                continue;
+            }
             let visual = crate::forms::widget_visual(
                 control.kind,
                 control.checked,
-                true,
+                is_focused,
                 self.hover_form == Some(control.form_id as usize),
-                false,
+                is_pressed,
                 control.disabled,
             );
-            (control.rect, visual)
-        });
+            let (text, caret) = if is_focused && control.kind.is_text_editable() {
+                if let Some(editor) = &self.editor {
+                    (editor.value().to_owned(), Some(editor.caret()))
+                } else {
+                    (control.value.clone(), None)
+                }
+            } else {
+                (crate::forms::control_display_text(control).to_owned(), None)
+            };
+            widget_overlays.push(WidgetOverlayItem {
+                rect: control.rect,
+                visual,
+                kind: control.kind,
+                text,
+                checked: control.checked,
+                caret,
+                disabled: control.disabled,
+            });
+        }
+        widget_overlays.sort_by_key(|item| item.visual.focus_ring);
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -215,16 +251,23 @@ impl WindowApp {
                 self.download_panel.selected,
             );
         }
-        // F7-A11Y: paint a deterministic native-style frame for the focused form control.
-        if let Some((rect, visual)) = focus_widget {
-            chrome::draw_native_widget(
+        // F7-A11Y / #2199: paint deterministic local widget patches for focused/dirty controls.
+        for widget in &widget_overlays {
+            chrome::draw_native_widget_with_content(
                 &mut buffer,
                 width,
                 height,
                 chrome_scale,
                 self.scroll.offset(),
-                rect,
-                visual,
+                widget.rect,
+                widget.visual,
+                chrome::NativeWidgetContent {
+                    kind: widget.kind,
+                    text: &widget.text,
+                    checked: widget.checked,
+                    caret: widget.caret,
+                    disabled: widget.disabled,
+                },
             );
         }
         if let Some(dialog) = &self.save_dialog {

@@ -82,23 +82,22 @@ impl WindowApp {
 
     /// `Ctrl+Shift+S`: saves the rendered DOM as an HTML download (doctype included).
     pub(super) fn save_frame_html(&mut self) {
-        let Some(document) = self.document.clone() else {
+        let Some(url) = self.nav.current().cloned().or_else(|| {
+            megi_webview::net::Url::parse(&self.input)
+                .map_err(|error| {
+                    self.notify(format!("cannot save HTML: invalid URL ({error})"));
+                })
+                .ok()
+        }) else {
+            return;
+        };
+        let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
+        let Some(document) = self.document.as_deref() else {
             self.notify("no page to save yet".to_string());
             return;
         };
-        let url = match self.nav.current().cloned() {
-            Some(url) => url,
-            None => match megi_webview::net::Url::parse(&self.input) {
-                Ok(url) => url,
-                Err(error) => {
-                    self.notify(format!("cannot save HTML: invalid URL ({error})"));
-                    return;
-                }
-            },
-        };
-        let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
+        let result = crate::download::save_html(&dir, &url, document);
         self.download.begin("page.html");
-        let result = crate::download::save_html(&dir, &url, &document);
         self.finish_download(result);
     }
 
@@ -119,11 +118,14 @@ impl WindowApp {
 
     /// Extracts the active document into reader mode (`Ctrl+Shift+R`) and re-renders it.
     pub(super) fn open_reader(&mut self) {
-        let Some(document) = self.document.clone() else {
-            self.notify("reader mode needs a rendered page".to_string());
-            return;
+        let article = match self.document.as_deref() {
+            Some(document) => crate::reader::extract(document),
+            None => {
+                self.notify("reader mode needs a rendered page".to_string());
+                return;
+            }
         };
-        let Some(article) = crate::reader::extract(&document) else {
+        let Some(article) = article else {
             self.notify("reader mode found no article on this page".to_string());
             return;
         };

@@ -431,4 +431,6 @@ pub use downloads_panel::draw_downloads_panel;
 
 #[path = "chrome/native_widget_overlay.rs"]
 mod native_widget_overlay;
-pub use native_widget_overlay::draw_native_widget;
+pub use native_widget_overlay::{
+    NativeWidgetContent, draw_native_widget, draw_native_widget_with_content,
+};

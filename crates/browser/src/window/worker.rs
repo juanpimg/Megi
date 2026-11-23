@@ -140,6 +140,7 @@ impl WindowApp {
         self.focus.blur();
         self.editor = None;
         self.document = None;
+        self.live_forms.reset();
         self.doc_title = None;
         self.close_find();
         self.dropdown = None;
@@ -316,7 +317,6 @@ impl WindowApp {
                     self.frame_warnings = frame.warnings;
                     self.frame_script_errors = frame.script_errors;
                     self.forms = frame.forms.clone();
-                    self.document = Some(Arc::clone(&frame.document));
                     self.find_rects = frame.find_rects.clone();
                     if self.find_editing && !self.find.query().is_empty() {
                         self.find.set_matches(frame.find_matches.clone());
@@ -348,6 +348,10 @@ impl WindowApp {
                     {
                         self.input = final_url.as_str();
                     }
+                    // Take unique ownership of the frame's Document (`strong_count == 1`) so live
+                    // form edits mutate in-place via `Arc::make_mut` without cloning the DOM (#2199).
+                    self.document = self.store.take_frame_document();
+                    self.live_forms.on_frame_applied();
                 }
                 None => {
                     self.render_pending = false;

@@ -1,6 +1,16 @@
-//! Framebuffer compositing for native-style widget overlays (F7-A11Y / #2197).
+//! Framebuffer compositing for native-style widget overlays (F7-A11Y / #2197, #2199).
 
 use super::*;
+
+/// Dynamic control state rendered into the widget's local patch overlay (#2199).
+#[derive(Clone, Copy, Debug)]
+pub struct NativeWidgetContent<'a> {
+    pub kind: crate::forms::FormControlKind,
+    pub text: &'a str,
+    pub checked: bool,
+    pub caret: Option<usize>,
+    pub disabled: bool,
+}
 
 /// Draws a native-style widget overlay (focus/selection frame) at a page-CSS rectangle.
 /// The rectangle is mapped to physical pixels using the chrome offset and scroll, matching
@@ -16,6 +26,54 @@ pub fn draw_native_widget(
     scroll_y: u32,
     rect: crate::links::CssRect,
     visual: crate::forms::WidgetVisual,
+) {
+    draw_native_widget_inner(
+        dest,
+        dest_width,
+        dest_height,
+        scale,
+        scroll_y,
+        rect,
+        visual,
+        None,
+    );
+}
+
+/// [`draw_native_widget`] with local text/caret/checkmark rendering so form edits do not require
+/// re-rendering the entire page (#2199).
+#[allow(clippy::too_many_arguments)]
+pub fn draw_native_widget_with_content(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    scroll_y: u32,
+    rect: crate::links::CssRect,
+    visual: crate::forms::WidgetVisual,
+    content: NativeWidgetContent<'_>,
+) {
+    draw_native_widget_inner(
+        dest,
+        dest_width,
+        dest_height,
+        scale,
+        scroll_y,
+        rect,
+        visual,
+        Some(content),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_native_widget_inner(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    scroll_y: u32,
+    rect: crate::links::CssRect,
+    visual: crate::forms::WidgetVisual,
+    content: Option<NativeWidgetContent<'_>>,
 ) {
     if dest_width == 0 || dest_height == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
         return;
@@ -54,6 +112,9 @@ pub fn draw_native_widget(
         rect.height,
     );
     native_widgets::paint_native_widget(&mut pixmap, local, scale, visual);
+    if let Some(content) = content {
+        native_widgets::paint_native_widget_content(&mut pixmap, local, scale, content);
+    }
 
     for row in 0..patch_height {
         let source_start = (row * patch_width) as usize;

@@ -273,6 +273,8 @@ pub(super) struct WindowApp {
     pub(super) save_dialog: Option<super::save_as::SaveDialogState>,
     /// DOM snapshot of the frame on screen (source for editing re-renders).
     pub(super) document: Option<Arc<megi_webview::core::Document>>,
+    /// O(1) in-place DOM form patcher and JS UI-event debouncer (#2199).
+    pub(super) live_forms: crate::forms::LiveFormPatcher,
     /// Pending button id whose pressed state must be released after the next frame.
     pub(super) release_button: Option<u32>,
     /// Find-in-page state (query, hits, current hit).

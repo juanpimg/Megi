@@ -37,11 +37,11 @@ impl WindowApp {
     ///
     /// `force` re-sends a full tree even if the signature is unchanged (used on AT activation).
     pub(super) fn publish_accessibility_tree(&mut self, force: bool) {
-        let Some(document) = self.document.clone() else {
+        let focused = self.focused_dom_node();
+        let Some(document) = self.document.as_deref() else {
             return;
         };
-        let focused = self.focused_dom_node();
-        let snapshot = crate::a11y::snapshot(&document, document.root());
+        let snapshot = crate::a11y::snapshot(document, document.root());
         let signature = crate::a11y_backend::snapshot_signature(&snapshot, focused);
         if force {
             self.accessibility_publisher.invalidate();
