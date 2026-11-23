@@ -143,7 +143,14 @@ jobs:
         run: |
           cargo check -p megi-webview --no-default-features
           cargo test -p megi-webview --no-default-features
-          ! cargo tree -p megi-webview --no-default-features -e normal | grep -Eqi 'boa|winit|softbuffer'
+          # #2138: capture cargo tree output first so a failing `cargo tree`
+          # (broken manifest, missing package) cannot be mistaken for an empty
+          # tree and let the `! grep` check pass. `set -e` above then aborts.
+          tree_output="$(cargo tree -p megi-webview --no-default-features -e normal)"
+          if printf '%s\n' "$tree_output" | grep -Eqi 'boa|winit|softbuffer'; then
+            echo "light webview links a forbidden crate" >&2
+            exit 1
+          fi
       - name: Workspace tests
         run: |
           set -o pipefail
