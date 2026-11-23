@@ -118,5 +118,31 @@ class RenderCommandTests(unittest.TestCase):
         self.assertEqual(result["result"], "PASS")
 
 
+class RobustnessTests(unittest.TestCase):
+    def test_non_numeric_failure_counts_mark_site_degraded(self) -> None:
+        self.assertEqual(
+            real_site_check.classify({"display_items": 10, "images_failed": "n/a"}),
+            "DEGRADADO",
+        )
+        self.assertEqual(
+            real_site_check.classify({"display_items": 10, "scripts_failed": "n/a"}),
+            "DEGRADADO",
+        )
+        self.assertEqual(
+            real_site_check.classify({"display_items": 10, "images_failed": None, "scripts_failed": None}),
+            "PASS",
+        )
+
+    def test_result_tolerates_non_dict_and_non_numeric_timings_us(self) -> None:
+        res_int = real_site_check._result(
+            {"id": "x"}, "PASS", {"timings_us": 123}, "", Path("x.png"), "snap"
+        )
+        self.assertEqual(res_int["time_ms"], 0.0)
+        res_str = real_site_check._result(
+            {"id": "x"}, "PASS", {"timings_us": {"total": "n/a"}}, "", Path("x.png"), "snap"
+        )
+        self.assertEqual(res_str["time_ms"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
