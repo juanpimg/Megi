@@ -266,3 +266,49 @@ fn import_call_inside_string_and_comment_is_not_rewritten() {
         "import('./SHOULD_NOT_LOAD.js')"
     );
 }
+
+#[test]
+fn dynamic_import_enforces_runtime_budget_2184() {
+    // #2184: runtime `import(expr)` (`dynamic_import_native`) must inherit the active
+    // execution `Budget` from the runtime/context rather than resetting to `Budget::default()`.
+    let (mut runtime, modules) = runtime_with_modules();
+    add_module(
+        &modules,
+        "file:///app/dyn.js",
+        "let total = 0;\nfor (let i = 0; i < 20; i++) { total += 1; }\nglobalThis.__dynTotal = total;\nexport const v = total;",
+    );
+    let strict = Budget {
+        loop_iterations: 10,
+        ..Budget::SMALL
+    };
+    runtime.set_budget(strict);
+    // Direct control loop fails with Budget.
+    let direct_err = runtime
+        .eval_module(
+            "let total = 0;\nfor (let i = 0; i < 20; i++) { total += 1; }\nexport const v = total;",
+            "ctrl.js",
+            "file:///app/ctrl.js",
+            &strict,
+        )
+        .expect_err("direct loop must exceed strict budget");
+    assert!(matches!(direct_err, JsError::Budget(_)), "{direct_err:?}");
+
+    // Non-literal dynamic import routes through `dynamic_import_native` and must also fail
+    // with `JsError::Budget` rather than running with `Budget::default()`.
+    let dyn_err = runtime
+        .eval_module(
+            "const target = './dyn.js';\nimport(target).then(m => { globalThis.__dynExport = m.v; });",
+            "app.js",
+            "file:///app/app.js",
+            &strict,
+        )
+        .expect_err("dynamic import must respect strict budget");
+    assert!(matches!(dyn_err, JsError::Budget(_)), "{dyn_err:?}");
+    let _ = runtime.run_microtasks();
+    assert_eq!(
+        runtime
+            .eval("typeof globalThis.__dynTotal", "check")
+            .unwrap(),
+        "undefined"
+    );
+}

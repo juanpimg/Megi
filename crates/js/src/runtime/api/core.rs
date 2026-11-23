@@ -73,6 +73,7 @@ impl JsRuntime {
     /// Replaces the execution budget used by subsequent `eval` calls.
     pub fn set_budget(&mut self, budget: Budget) {
         self.budget = budget;
+        apply_budget(&mut self.context, &budget);
     }
 
     /// Returns the current budget.
