@@ -147,7 +147,14 @@ jobs:
         run: |
           cargo check -p megi-webview --no-default-features
           cargo test -p megi-webview --no-default-features
-          ! cargo tree -p megi-webview --no-default-features -e normal | grep -Eqi 'boa|winit|softbuffer'
+          # #2138: capture cargo tree output first so a failing `cargo tree`
+          # (broken manifest, missing package) cannot be mistaken for an empty
+          # tree and let the `! grep` check pass. `set -e` above then aborts.
+          tree_output="$(cargo tree -p megi-webview --no-default-features -e normal)"
+          if printf '%s\n' "$tree_output" | grep -Eqi 'boa|winit|softbuffer'; then
+            echo "light webview links a forbidden crate" >&2
+            exit 1
+          fi
       - name: Workspace tests
         run: |
           set -o pipefail
@@ -326,11 +333,16 @@ jobs:
       - name: cargo geiger (forbid-only check)
         run: |
           set -e
-          : > /tmp/geiger.json
+          # #2171: one JSON document per crate would concatenate into invalid
+          # JSON. Write each to its own file, then combine into a single array.
+          rm -rf /tmp/geiger-parts && mkdir -p /tmp/geiger-parts
+          i=0
           for manifest in crates/*/Cargo.toml; do
             echo "=== cargo geiger --manifest-path $manifest ==="
-            cargo geiger --manifest-path "$PWD/$manifest" --all-features --all-targets --forbid-only --output-format Json >> /tmp/geiger.json
+            cargo geiger --manifest-path "$PWD/$manifest" --all-features --all-targets --forbid-only --output-format Json > "/tmp/geiger-parts/$i.json"
+            i=$((i + 1))
           done
+          python3 -c 'import json,glob; json.dump([json.load(open(f)) for f in sorted(glob.glob("/tmp/geiger-parts/*.json"), key=lambda p:int(p.rsplit("/",1)[1][:-5]))], open("/tmp/geiger.json","w"))'
       - name: Upload geiger report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
