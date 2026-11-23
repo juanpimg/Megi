@@ -324,3 +324,92 @@ pub(crate) fn render_view(
         }
     }
 }
+
+/// Coalesces find-in-page query changes into a single render (F7-FIND-IN-PAGE-PERF / #1830).
+///
+/// Find highlights are computed from the document during the render worker pass, so every
+/// keystroke would otherwise trigger a full re-fetch + re-layout + re-encode cycle. A burst of
+/// query changes schedules one render after the debounce window; clearing the query renders
+/// immediately so stale highlights disappear without waiting.
+#[derive(Clone, Debug)]
+pub struct FindRenderCoalescer {
+    debounce: Debounce,
+    pending: bool,
+}
+
+impl FindRenderCoalescer {
+    pub const fn new(delay: Duration) -> Self {
+        Self {
+            debounce: Debounce::new(delay),
+            pending: false,
+        }
+    }
+
+    /// Records a query change; re-arms the debounce without rendering yet.
+    pub fn on_query_changed(&mut self, now: Instant) -> Instant {
+        self.pending = true;
+        self.debounce.schedule(now)
+    }
+
+    /// True when a scheduled render is due; consumes the pending flag.
+    pub fn take_due(&mut self, now: Instant) -> bool {
+        if self.pending && self.debounce.take_due(now) {
+            self.pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Clearing the query must clear stale highlights immediately: cancels the debounced
+    /// render and returns true once.
+    pub fn take_due_immediate(&mut self) -> bool {
+        self.debounce.clear();
+        std::mem::take(&mut self.pending)
+    }
+
+    pub const fn deadline(&self) -> Option<Instant> {
+        self.debounce.deadline()
+    }
+}
+
+#[cfg(test)]
+mod find_coalescer_tests {
+    use super::*;
+
+    #[test]
+    fn find_query_changes_coalesce_into_one_render() {
+        // #1830: typing 10 characters in Ctrl+F triggered 10 full re-renders. The
+        // coalescer must schedule a single render for a burst of query changes.
+        let mut coalescer = FindRenderCoalescer::new(Duration::from_millis(120));
+        let start = Instant::now();
+        for i in 0..10 {
+            let now = start + Duration::from_millis(i * 20);
+            coalescer.on_query_changed(now);
+            assert!(!coalescer.take_due(now), "not due during the burst");
+        }
+        assert!(
+            coalescer.take_due(start + Duration::from_millis(300)),
+            "one render is due after the debounce elapses"
+        );
+        assert!(
+            !coalescer.take_due(start + Duration::from_millis(400)),
+            "a second poll must not schedule another render"
+        );
+    }
+
+    #[test]
+    fn find_query_cleared_renders_immediately() {
+        let mut coalescer = FindRenderCoalescer::new(Duration::from_millis(120));
+        let start = Instant::now();
+        coalescer.on_query_changed(start);
+        assert!(
+            coalescer.take_due_immediate(),
+            "clearing the query must clear highlights now"
+        );
+        assert!(
+            !coalescer.take_due(start),
+            "the pending render was cancelled"
+        );
+    }
+}

@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 70,
+    "implemented": 71,
     "partial": 1,
     "known": 75,
-    "percent": 93,
+    "percent": 95,
     "unverified": [],
     "invalid_states": []
   },
@@ -53,10 +53,10 @@
     },
     {
       "id": "F7",
-      "implemented": 8,
+      "implemented": 9,
       "partial": 1,
       "known": 10,
-      "percent": 80
+      "percent": 90
     },
     {
       "id": "X",
@@ -105,16 +105,6 @@
       "state": "missing",
       "evidence": "none",
       "issue": 1881,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F7-FIND-IN-PAGE-PERF",
-      "area": "F7",
-      "name": "Find-in-page sin doble render por carácter",
-      "source": "issue #1830",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1830,
       "reason": "no requiere evidencia"
     }
   ]
