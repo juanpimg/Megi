@@ -480,23 +480,19 @@ fn append_text_and_insert_text_before_cap_coalescing() {
     let div = doc.create_element(Namespace::Html, "div", vec![]);
     doc.append_child(doc.root(), div);
     let chunk = "a".repeat(1024 * 1024);
-    let mut last_id = None;
+    let mut id = None;
     for _ in 0..20 {
-        last_id = doc.append_text(div, &chunk);
+        id = doc.append_text(div, &chunk);
     }
-    let NodeKind::Text(ref data) = doc.node(last_id.unwrap()).kind else {
-        panic!("expected text")
-    };
-    assert!(data.len() <= Document::MAX_TEXT_CONTENT_BYTES);
-
+    assert!(
+        matches!(&doc.node(id.unwrap()).kind, NodeKind::Text(d) if d.len() <= Document::MAX_TEXT_CONTENT_BYTES)
+    );
     let marker = doc.create_element(Namespace::Html, "span", vec![]);
     doc.append_child(div, marker);
-    let mut prev_id = None;
     for _ in 0..20 {
-        prev_id = doc.insert_text_before(marker, &chunk);
+        id = doc.insert_text_before(marker, &chunk);
     }
-    let NodeKind::Text(ref data) = doc.node(prev_id.unwrap()).kind else {
-        panic!("expected text")
-    };
-    assert!(data.len() <= Document::MAX_TEXT_CONTENT_BYTES);
+    assert!(
+        matches!(&doc.node(id.unwrap()).kind, NodeKind::Text(d) if d.len() <= Document::MAX_TEXT_CONTENT_BYTES)
+    );
 }
