@@ -155,3 +155,34 @@ class TestCheckArchPredicates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOversizedTestFiles(unittest.TestCase):
+    """#2253: AGENTS.md §4 caps every .rs file, including crates/*/tests/."""
+
+    def test_scan_includes_tests_directory_for_size(self):
+        # A synthetic oversized test file must be reported, proving the linter
+        # scans crates/*/tests/ and not only crates/*/src/.
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "docs").mkdir()
+            (root / "docs" / "architecture-deps.toml").write_text('[edges]\n')
+            (root / "Cargo.toml").write_text('[workspace]\nmembers = ["crates/dummy"]\n')
+            crate = root / "crates" / "dummy"
+            (crate / "src").mkdir(parents=True)
+            (crate / "tests").mkdir()
+            (crate / "Cargo.toml").write_text('[package]\nname = "megi-dummy"\n')
+            (crate / "src" / "lib.rs").write_text("// src\n")
+            (crate / "tests" / "big.rs").write_text("fn x() {}\n" * 501)
+            old_root = check_arch.ROOT
+            try:
+                check_arch.ROOT = root
+                violations, _ = check_arch.scan()
+            finally:
+                check_arch.ROOT = old_root
+        self.assertTrue(
+            any("crates/dummy/tests/big.rs" in v and "lines (max" in v for v in violations),
+            f"oversized test file not reported: {violations}",
+        )
