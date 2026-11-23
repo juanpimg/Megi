@@ -342,7 +342,14 @@ pub(crate) fn parse_gradient_stop_position(
     if form == GradientForm::Conic {
         let lower = token.trim().to_ascii_lowercase();
         if let Some(value) = lower.strip_suffix('%') {
-            return value.trim().parse::<f32>().ok().map(Length::Percent);
+            // #2140: reject non-finite percentages (1e400%, NaN%) before they
+            // reach gradient painting — same rule as Length::parse.
+            return value
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .filter(|percent| percent.is_finite())
+                .map(Length::Percent);
         }
         // A unitless zero is accepted for angles (tolerant parsing).
         if lower.parse::<f32>().ok() == Some(0.0) {
