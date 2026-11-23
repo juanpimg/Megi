@@ -607,5 +607,106 @@ class GateFreshnessTests(unittest.TestCase):
         self.assertTrue(ok, reason)
 
 
+class CoverageReportAndSpecCacheTests(unittest.TestCase):
+    def test_coverage_report_malformed_lcov_exits_2_without_traceback(self) -> None:
+        import contextlib
+        import io
+
+        path = Path(__file__).with_name("coverage_report.py")
+        spec = importlib.util.spec_from_file_location("coverage_report", path)
+        coverage_report = importlib.util.module_from_spec(spec)
+        sys.modules["coverage_report"] = coverage_report
+        spec.loader.exec_module(coverage_report)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "bad.info"
+            bad.write_text("SF:src/lib.rs\nLF:oops\nLH:0\nend_of_record\n", encoding="utf-8")
+            old_argv = sys.argv
+            sys.argv = ["coverage_report.py", str(bad), "--min", "60"]
+            stderr = io.StringIO()
+            try:
+                with contextlib.redirect_stderr(stderr):
+                    rc = coverage_report.main()
+            finally:
+                sys.argv = old_argv
+            self.assertEqual(rc, 2)
+            self.assertIn("error:", stderr.getvalue())
+            self.assertIn("LF", stderr.getvalue())
+
+    def test_whatwg_spec_concurrent_force_fetches_do_not_collide(self) -> None:
+        import os
+        import threading
+        from unittest import mock
+
+        path = Path(__file__).with_name("whatwg_spec.py")
+        spec = importlib.util.spec_from_file_location("whatwg_spec", path)
+        whatwg_spec = importlib.util.module_from_spec(spec)
+        sys.modules["whatwg_spec"] = whatwg_spec
+        spec.loader.exec_module(whatwg_spec)
+
+        payload = b'{"&amp;": {"characters": "&"}}'
+
+        class FakeResp:
+            def __init__(self, data: bytes) -> None:
+                self._data = data
+                self._sent = False
+                self.status = 200
+
+            def read(self, _n: int = -1) -> bytes:
+                if self._sent:
+                    return b""
+                self._sent = True
+                return self._data
+
+            def __enter__(self) -> "FakeResp":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            barrier = threading.Barrier(2)
+            real_replace = os.replace
+            results: list[tuple[str, object]] = []
+            lock = threading.Lock()
+
+            def synchronized_replace(src: object, dst: object) -> None:
+                barrier.wait(timeout=5)
+                real_replace(src, dst)
+
+            def worker() -> None:
+                try:
+                    cached = whatwg_spec.ensure_cached("entities.json", force=True)
+                    with lock:
+                        results.append(("ok", str(cached)))
+                except Exception as exc:  # noqa: BLE001
+                    with lock:
+                        results.append(("err", repr(exc)))
+
+            with (
+                mock.patch.object(whatwg_spec, "CACHE_DIR", cache_dir),
+                mock.patch.object(
+                    whatwg_spec.urllib.request,
+                    "urlopen",
+                    side_effect=lambda *_a, **_kw: FakeResp(payload),
+                ),
+                mock.patch.object(whatwg_spec.os, "replace", side_effect=synchronized_replace),
+            ):
+                t1 = threading.Thread(target=worker)
+                t2 = threading.Thread(target=worker)
+                t1.start()
+                t2.start()
+                t1.join(timeout=5)
+                t2.join(timeout=5)
+
+            self.assertEqual(len(results), 2, results)
+            self.assertTrue(
+                all(kind == "ok" for kind, _ in results),
+                f"concurrent force fetches must both succeed, got {results}",
+            )
+            self.assertEqual((cache_dir / "entities.json").read_bytes(), payload)
+
+
 if __name__ == "__main__":
     unittest.main()

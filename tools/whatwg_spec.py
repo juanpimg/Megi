@@ -45,6 +45,7 @@ DEFAULT_FETCH_TARGETS = [
 
 
 import os
+import tempfile
 import time
 
 MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
@@ -69,7 +70,7 @@ def ensure_cached(
         url,
         headers={"User-Agent": "MegiBrowserEngine-SpecTool/0.1 (+https://github.com/juanpimg/Megi)"},
     )
-    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp_path: Optional[Path] = None
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             status = getattr(resp, "status", 200)
@@ -85,12 +86,22 @@ def ensure_cached(
                 data.extend(chunk)
                 if len(data) > MAX_SPEC_BYTES:
                     raise ValueError(f"Spec download exceeds {MAX_SPEC_BYTES} bytes")
-        tmp.write_bytes(data)
-        # Atomic replace so a concurrent fetch cannot leave a half-written cache file.
-        os.replace(tmp, target)
+        # Unique temp file per caller so concurrent `fetch --force` invocations do not
+        # unlink or overwrite each other's staging file before os.replace (#2204).
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=CACHE_DIR,
+            prefix=f".{filename}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tf:
+            tmp_path = Path(tf.name)
+            tf.write(data)
+            tf.flush()
+        os.replace(tmp_path, target)
     finally:
-        if tmp.exists():
-            tmp.unlink(missing_ok=True)
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
     # Revalidate the cached file before returning it.
     if not target.exists() or target.stat().st_size == 0 or target.stat().st_size > MAX_SPEC_BYTES:
         raise ValueError(f"Cached spec {target} failed size validation")
