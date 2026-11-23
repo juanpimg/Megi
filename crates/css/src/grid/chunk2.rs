@@ -230,7 +230,12 @@ pub(crate) fn parse_minmax(body: &str, font_size: f32, root_font_size: f32) -> O
     let max = if max.eq_ignore_ascii_case("auto") {
         TrackMax::Auto
     } else if let Some(fraction) = max.strip_suffix("fr").or_else(|| max.strip_suffix("FR")) {
-        TrackMax::Fraction(fraction.trim().parse::<f32>().ok()?.max(0.0))
+        let value = fraction.trim().parse::<f32>().ok()?;
+        // #2139: reject non-finite <flex> values like 1e400fr (CSS Grid §7).
+        if !value.is_finite() {
+            return None;
+        }
+        TrackMax::Fraction(value.max(0.0))
     } else {
         TrackMax::Fixed(Length::parse(max, font_size, root_font_size)?)
     };
