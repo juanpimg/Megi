@@ -109,6 +109,22 @@ impl NavigationState {
         NavigationOutcome::Pushed
     }
 
+    /// Commits a form submission navigation (#1824). Unlike [`Self::navigate_to`], a
+    /// submission always pushes a new entry even when the action URL equals the current
+    /// one: each submit is a distinct history step, so `back` must return to the form
+    /// page (or the previous submission result).
+    pub fn submit_navigation(&mut self, url: Url) -> NavigationOutcome {
+        // Form submissions are never same-URL no-ops.
+        self.history.truncate(self.index + 1);
+        self.history.push(url);
+        if self.history.len() > MAX_HISTORY {
+            let excess = self.history.len() - MAX_HISTORY;
+            self.history.drain(..excess);
+        }
+        self.index = self.history.len() - 1;
+        NavigationOutcome::Pushed
+    }
+
     /// Replaces the current entry (used for server redirects of the requested URL).
     ///
     /// Returns `false` when the history is empty (nothing to replace) or when the URL is
@@ -259,6 +275,37 @@ mod tests {
             state.back().map(Url::as_str).as_deref(),
             Some("https://example.com/a")
         );
+    }
+
+    #[test]
+    fn form_post_pushes_a_new_history_entry_even_when_reposting_the_current_url() {
+        // #1824: a POST to the current action URL must create a history entry so `back`
+        // returns to the form page. `navigate_to` alone is a no-op on the same URL, so a
+        // dedicated method is needed for form submissions.
+        let mut state = NavigationState::new();
+        state.navigate_to(url("https://example.com/form"));
+        assert_eq!(state.len(), 1);
+
+        assert_eq!(
+            state.submit_navigation(url("https://example.com/result")),
+            NavigationOutcome::Pushed
+        );
+        assert_eq!(state.len(), 2);
+        assert_eq!(
+            state.back().map(Url::as_str).as_deref(),
+            Some("https://example.com/form")
+        );
+        assert_eq!(
+            state.forward().map(Url::as_str).as_deref(),
+            Some("https://example.com/result")
+        );
+
+        // Reposting to the same action URL must still push (each submission is a step).
+        assert_eq!(
+            state.submit_navigation(url("https://example.com/result")),
+            NavigationOutcome::Pushed
+        );
+        assert_eq!(state.len(), 3);
     }
 
     #[test]

@@ -129,6 +129,15 @@ impl WindowApp {
             // POST navigation: send the urlencoded body through the worker/render pipeline
             // (#1538) so the response document is what gets displayed.
             if let Some((content_type, body)) = submission.post_request() {
+                let Ok(action) = megi_webview::net::Url::parse(&submission.action) else {
+                    return false;
+                };
+                // #1824: a POST is a real navigation: push a history entry (even when the
+                // action equals the current URL) and reset per-page state, so `back`
+                // returns to the form page and scroll/find/forms are not stale.
+                self.nav.submit_navigation(action.clone());
+                self.session_autosave.mark_dirty(Instant::now());
+                self.clear_page_state();
                 let request = self.store.begin_form_post_request(
                     &submission.action,
                     self.metrics.css_width,
