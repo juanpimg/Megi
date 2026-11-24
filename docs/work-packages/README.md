@@ -15,6 +15,7 @@
 | `tools/wp_dashboard.py` | ✅ implementado | dashboard de cierres reales y throughput semanal |
 | `tools/test_wp_dashboard.py` | ✅ implementado | tests del dashboard |
 | `tools/check_milestone.py` | ✅ implementado | verifica criterios M0–M12 contra `progress.toml` |
+| `tools/test_check_milestone.py` | ✅ implementado | tests del verificador de hitos |
 | `.github/workflows/wp-refill.yml` | ✅ implementado | recompletado diario de la cola |
 | `docs/work-packages/SCHEMA.md` | ✅ implementado | campos, perfiles y ciclo del agente |
 | `docs/work-packages/depth-inventory.toml` | ✅ implementado | inventario real de subsets pendientes |
@@ -61,7 +62,7 @@ python3 tools/wp_plan.py --claim WP-DEPTH-m0-01
 python3 tools/wp_plan.py --done WP-DEPTH-m0-01 --metric "criterio M0#4 cubierto"
 python3 tools/wp_dashboard.py --write
 python3 tools/wp_dashboard.py --check
-python3 -m unittest tools.test_wp_schema tools.test_wp_generate tools.test_wp_plan tools.test_wp_dashboard
+python3 -m unittest tools.test_wp_schema tools.test_wp_generate tools.test_wp_plan tools.test_wp_dashboard tools.test_check_milestone
 ```
 
 ## Ciclo del agente

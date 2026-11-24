@@ -1441,7 +1441,7 @@ docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-c
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
 docs/work-packages/BOARD.md	65	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/README.md	84	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/README.md	85	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	51	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/depth-inventory.toml	487	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -2070,6 +2070,7 @@ tools/soak_fuzz.sh	159	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
+tools/test_check_milestone.py	32	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -2087,7 +2088,7 @@ tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_update_progress.py	82	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	progress generator tests reviewed
 tools/test_vendor_wpt.py	111	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/test_wp_generate.py	279	tool	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_generate.py	270	tool	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_plan.py	131	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	43	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wpt_gate.py	144	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	gate tests reviewed

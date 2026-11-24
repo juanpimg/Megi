@@ -190,15 +190,6 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(data["impact"], 3)
         self.assertEqual(data["frequency"], 4)
 
-    def test_milestone_checker_is_red_then_green(self) -> None:
-        from tools import check_milestone
-        self._write("docs/status/progress.toml",
-                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = ["informe WPT"]\n')
-        self.assertNotEqual(check_milestone.check("M0", 1, root=self.root), 0)
-        self._write("docs/status/progress.toml",
-                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
-        self.assertEqual(check_milestone.check("M0", 1, root=self.root), 0)
-
     def test_js262_id_uses_the_spec_prefix(self) -> None:
         self._write("tests/test262/results/latest.json", json.dumps({"failures": [
             {"test": "built-ins/Array/foo.js", "expected": "PASS", "actual": "FAIL"},
