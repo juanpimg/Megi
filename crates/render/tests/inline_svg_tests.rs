@@ -209,6 +209,13 @@ fn inline_svg_limits_are_non_fatal_warnings() {
         output.stats.inline_svgs, 64,
         "replacement cap must match what the image loader will fetch"
     );
+    // #2250: the discarded inline SVGs are exposed as structured telemetry, not only in
+    // the free-form cap warning. 301 candidates with a 64 cap → at least 237 discarded.
+    assert!(
+        output.stats.inline_svgs_capped >= 237,
+        "capped inline SVGs must be reported, got {}",
+        output.stats.inline_svgs_capped
+    );
     assert!(
         output
             .stats

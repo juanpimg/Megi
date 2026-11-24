@@ -91,6 +91,7 @@
 
 #![forbid(unsafe_code)]
 
+mod avif;
 mod crc32;
 pub mod error;
 pub mod exif;
@@ -109,6 +110,7 @@ mod orientation_tests;
 #[cfg(test)]
 mod tests;
 
+pub use avif::decode_avif;
 pub use error::ImageError;
 pub use inflate::{
     InflateError, InflateLimits, StreamingInflater, adler32, inflate_deflate,
@@ -131,6 +133,8 @@ pub enum ImageFormat {
     Jpeg,
     /// Google WebP — lossless `VP8L` and lossy `VP8 ` keyframes are decoded.
     WebP,
+    /// AV1 Image File Format (`ftypavif` / `ftypavis`), decoded via avif-rust (ADR-005).
+    Avif,
     /// No known image signature.
     Unknown,
 }
@@ -148,6 +152,13 @@ pub fn detect_format(bytes: &[u8]) -> ImageFormat {
     }
     if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
         return ImageFormat::WebP;
+    }
+    // ISO BMFF: `ftyp` at offset 4, major brand at offset 8 (#1895).
+    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        let brand = &bytes[8..12];
+        if brand == b"avif" || brand == b"avis" {
+            return ImageFormat::Avif;
+        }
     }
     ImageFormat::Unknown
 }
@@ -361,6 +372,7 @@ pub fn decode_with_limits(bytes: &[u8], limits: &PngLimits) -> Result<RgbaImage,
             let image = webp::decode_webp(bytes, limits)?;
             apply_orientation(image, exif::orientation(bytes))
         }
+        ImageFormat::Avif => avif::decode_avif(bytes, limits),
         ImageFormat::Unknown => Err(ImageError::InvalidSignature),
     }
 }

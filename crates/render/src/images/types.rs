@@ -53,6 +53,8 @@ pub struct LoadedImages {
     pub loaded: usize,
     /// Images that failed (fetch error, too large, unsupported format, ...).
     pub failed: usize,
+    /// `<img>` references discarded solely because the `max_images` cap was reached (#2250).
+    pub capped: usize,
     /// Downloaded (compressed) image bytes actually accepted.
     pub downloaded_bytes: usize,
     /// Total decoded pixels (`width * height`) across distinct decoded bitmaps.

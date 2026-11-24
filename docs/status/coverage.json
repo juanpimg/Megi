@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 72,
+    "implemented": 73,
     "partial": 1,
     "known": 75,
-    "percent": 96,
+    "percent": 97,
     "unverified": [],
     "invalid_states": []
   },
@@ -60,10 +60,10 @@
     },
     {
       "id": "X",
-      "implemented": 3,
+      "implemented": 4,
       "partial": 0,
       "known": 5,
-      "percent": 60
+      "percent": 80
     }
   ],
   "missing": [
@@ -75,16 +75,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 989,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "X-AVIF",
-      "area": "X",
-      "name": "Decodificación de imágenes AVIF",
-      "source": "issue #1895",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1895,
       "reason": "no requiere evidencia"
     },
     {

@@ -52,6 +52,7 @@ pub fn load_images_with_context(
         sizes: HashMap::new(),
         loaded: 0,
         failed: 0,
+        capped: 0,
         downloaded_bytes: 0,
         decoded_pixels: 0,
         svgs_rendered: 0,
@@ -65,6 +66,7 @@ pub fn load_images_with_context(
     let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
     let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
+        result.capped = sources.len() - limits.max_images;
         warnings.push(format!(
             "page references {} images; loading only the first {} (cap)",
             sources.len(),
@@ -174,6 +176,7 @@ pub fn load_images_with_context(
                 | megi_image::ImageFormat::Jpeg
                 | megi_image::ImageFormat::Gif
                 | megi_image::ImageFormat::WebP
+                | megi_image::ImageFormat::Avif
         ) {
             let decoded = match limits.max_image_dim {
                 Some(max_dim) => megi_image::decode_scaled(&resource.bytes, max_dim),
@@ -255,7 +258,7 @@ pub fn load_images_with_context(
             let format = megi_image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
-                "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"
+                "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP, AVIF and SVG are decoded)"
             ));
         }
     }
