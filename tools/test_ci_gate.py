@@ -53,5 +53,13 @@ class CargoTreeGateTests(unittest.TestCase):
         self.assertNotIn("gate_rc=0", fixed.stdout)
 
 
+class ToolsTestListTests(unittest.TestCase):
+    def test_audit_matrix_tests_run_in_ci(self):
+        # The negative-matrix contract tests (docs/audit/negative-matrix.toml)
+        # must be part of the explicit unittest list in the docs job: a module
+        # that is not listed never protects merges, however green it is locally.
+        self.assertIn("tools.test_audit_negative_matrix", CI.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

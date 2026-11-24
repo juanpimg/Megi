@@ -108,6 +108,7 @@ jobs:
         run: >-
           python3 -m unittest
           tools.test_audit_coverage
+          tools.test_audit_negative_matrix
           tools.test_update_coverage
           tools.test_png_check
           tools.test_real_site_check
