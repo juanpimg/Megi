@@ -136,6 +136,18 @@ class WptGateTest(unittest.TestCase):
         self.assertIn("results[0]", message)
         self.assertIn("subtest", message)
 
+    def test_baseline_allowlist_entry_must_be_table(self) -> None:
+        """A non-table baseline entry must be rejected by the loader, not crash check_gate."""
+        saved = baseline(allow=["bad"])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "baseline.json"
+            path.write_text(json.dumps(saved), encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                wpt_gate.load_baseline(path)
+        message = str(caught.exception)
+        self.assertIn("allowlist[0]", message)
+        self.assertIn("key", message)
+
     def test_rebaseline_writes_toml_that_gate_accepts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

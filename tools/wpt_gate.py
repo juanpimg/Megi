@@ -98,6 +98,9 @@ def load_baseline(path: Path) -> dict:
     passed, total = payload.get("passed"), payload.get("total")
     if not isinstance(passed, int) or not isinstance(total, int):
         raise ValueError(f"{path}: baseline passed/total must be integers")
+    for index, entry in enumerate(allowlist):
+        if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
+            raise ValueError(f"{path}: baseline allowlist[{index}] needs a string key")
     return {
         "epoch": _epoch(payload.get("epoch"), str(path)),
         "passed": passed, "total": total, "allowlist": allowlist,
