@@ -41,14 +41,16 @@ manifest. CI uses `--check --no-gate --no-count` (the conformance job already ru
 
 Regenerating after changing the manifest:
     python3 tools/update_progress.py --write
+
+Modularity (AGENTS.md §4): measurement lives in `tools/progress_stats.py` and artifact
+rendering in `tools/progress_render.py`; this file is the CLI/orchestrator. Every public
+function of both modules is re-exported here so callers and tests keep working unchanged.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import re
-import subprocess
 import sys
 try:
     import tomllib
@@ -64,12 +66,38 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 import wpt_gate  # noqa: E402
 import wpt_report  # noqa: E402
-from xml.sax.saxutils import escape as _xml_escape
+# Re-exports: the public API of the generator stays in this module for existing callers.
+from progress_render import (  # noqa: E402
+    FONT,
+    render_badge,
+    render_badges,
+    render_markdown,
+    render_progress_svg,
+    update_manifest,
+)
+from progress_stats import (  # noqa: E402
+    STATUS_DIR,
+    bar,
+    comma,
+    count_crates,
+    count_rust_lines,
+    count_tests,
+    criteria_percent,
+    git_commit_date,
+    git_short_head,
+    md_escape,
+    milestone_counts,
+    overall_percent,
+    parse_rounds,
+    phase_color,
+    read_coverage,
+    render_wpt_headline,
+    run,
+    unsafe_forbidden_crates,
+    wpt_fields,
+    xml_escape,
+)
 
-def xml_escape(text: str) -> str:
-    return _xml_escape(str(text), {"\"": "&quot;", "'": "&apos;"})
-
-STATUS_DIR = Path("docs/status")
 BADGE_FILES = {
     "tests": "badge-tests.svg",
     "conformance": "badge-conformance.svg",
@@ -83,114 +111,6 @@ GATE_SUITES = {
     "serializer": "HTML Serializer Total",
     "css_syntax": "CSS Syntax Total",
 }
-FONT = "DejaVu Sans, Verdana, sans-serif"
-
-
-def run(root: Path, args: list[str], timeout: int = 600) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            args,
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        print(f"warning: command timed out after {timeout}s: {' '.join(args)}", file=sys.stderr)
-        return subprocess.CompletedProcess(args, 1, "", "timeout")
-
-
-def git_short_head(root: Path) -> str:
-    result = run(root, ["git", "rev-parse", "--short", "HEAD"], 30)
-    return result.stdout.strip() or "uncommitted"
-
-
-def git_commit_date(root: Path) -> str:
-    result = run(root, ["git", "log", "-1", "--format=%cs"], 30)
-    return result.stdout.strip() or "unknown"
-
-
-def count_crates(root: Path) -> int:
-    return sum(1 for path in sorted((root / "crates").glob("*/Cargo.toml")) if path.is_file())
-
-
-def count_rust_lines(root: Path) -> int:
-    result = run(root, ["git", "ls-files", "*.rs"], 60)
-    paths = [root / line for line in result.stdout.splitlines() if line.strip()]
-    if not paths:
-        paths = sorted(root.glob("crates/**/*.rs"))
-    total = 0
-    for path in paths:
-        try:
-            total += len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
-        except OSError:
-            continue
-    return total
-
-
-def unsafe_forbidden_crates(root: Path) -> list[str]:
-    """Returns the crates whose root module forbids unsafe code.
-
-    Binary-only crates (`bench`) carry the attribute in `main.rs`, so both roots are
-    checked; the first file that exists wins.
-    """
-    # Accept forbid(unsafe_code) alone or as one term among several (e.g.
-    # forbid(unsafe_code, warnings)) (#601).
-    pattern = re.compile(r"#!\s*\[\s*forbid\s*\([^)]*unsafe_code[^)]*\)\s*\]")
-    crates = []
-    for cargo in sorted((root / "crates").glob("*/Cargo.toml")):
-        forbidden = False
-        for root_module in ("lib.rs", "main.rs"):
-            module = cargo.parent / "src" / root_module
-            if not module.is_file():
-                continue
-            text = module.read_text(encoding="utf-8", errors="ignore")
-            if pattern.search(text):
-                forbidden = True
-        if forbidden:
-            crates.append(cargo.parent.name)
-    return crates
-
-
-def count_tests(
-    root: Path, cache_path: Path, head: str, manifest_tests: int, no_count: bool
-) -> tuple[int, bool]:
-    """Counts workspace tests, caching by HEAD.
-
-    Returns `(count, measured)`: `measured` is `False` when the value comes from the
-    manifest (`--no-count`) or from the fallback after a failed `cargo test --list`, so the
-    caller can avoid claiming the count was verified at `HEAD`.
-    """
-    if no_count:
-        return manifest_tests, False
-    if head == "uncommitted":
-        # Never cache under the sentinel head.
-        result = run(root, ["cargo", "test", "--workspace", "--", "--list"], timeout=900)
-        count = sum(1 for line in result.stdout.splitlines() if line.rstrip().endswith(": test"))
-        if count == 0:
-            print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
-            return manifest_tests, False
-        return count, True
-    # A cached count is only valid for a clean tree at this HEAD (#1394): an
-    # uncommitted test addition/removal would otherwise be stamped with a count
-    # that never existed on any pushed commit.
-    tree_dirty = bool(run(root, ["git", "status", "--porcelain"]).stdout.strip())
-    if cache_path.is_file() and not tree_dirty:
-        try:
-            cache = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cache.get("head") == head and isinstance(cache.get("tests"), int):
-                return int(cache["tests"]), True
-        except (OSError, ValueError):
-            pass
-    result = run(root, ["cargo", "test", "--workspace", "--", "--list"], timeout=900)
-    count = sum(1 for line in result.stdout.splitlines() if line.rstrip().endswith(": test"))
-    if count == 0:
-        print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
-        return manifest_tests, False
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({"head": head, "tests": count}, indent=2) + "\n", encoding="utf-8")
-    return count, True
 
 
 def run_gate(root: Path, manifest_gate: dict[str, str]) -> dict[str, str]:
@@ -213,495 +133,6 @@ def run_gate(root: Path, manifest_gate: dict[str, str]) -> dict[str, str]:
     return gate
 
 
-def parse_rounds(changelog: Path, limit: int = 6) -> list[tuple[str, str]]:
-    rounds: list[tuple[str, str]] = []
-    if not changelog.is_file():
-        return rounds
-    for line in changelog.read_text(encoding="utf-8", errors="ignore").splitlines():
-        match = re.match(r"^### Round (\d+) — (.+?)(?: \(\d{4}-\d{2}-\d{2}\))?\s*$", line)
-        if match:
-            rounds.append((match.group(1), match.group(2).strip()))
-        if len(rounds) >= limit:
-            break
-    return rounds
-
-
-def bar(percent: int, width: int = 20) -> str:
-    """Renders the bar, which only fills completely at 100 %.
-
-    Rounding used to give 99 % a full 20/20 bar, making an incomplete phase look done; floor
-    keeps 98-99 % visibly short of the last block.
-    """
-    filled = int(percent * width // 100)
-    if percent < 100:
-        filled = min(filled, width - 1)
-    filled = max(0, min(width, filled))
-    return "█" * filled + "░" * (width - filled)
-
-
-def criteria_percent(phase: dict) -> int:
-    """Percentage of a milestone's acceptance criteria that are verified.
-
-    The manifest stores no hand-written percentage: `items` are verified criteria and
-    `pending` are unverified ones, so the bar is a count, never an estimate.
-    """
-    met = len(phase.get("items", []))
-    total = met + len(phase.get("pending", []))
-    return 100 * met // total if total else 0
-
-
-def overall_percent(phases: list[dict]) -> int:
-    """Verified acceptance criteria / all criteria across M0–M12 (no estimates)."""
-    met = sum(len(p.get("items", [])) for p in phases)
-    total = met + sum(len(p.get("pending", [])) for p in phases)
-    return 100 * met // total if total else 0
-
-
-def milestone_counts(phases: list[dict]) -> tuple[int, int]:
-    """(milestones closed, milestones in the roadmap)."""
-    closed = sum(1 for p in phases if not p.get("pending", []) and p.get("items", []))
-    return closed, len(phases)
-
-
-def phase_color(percent: int) -> str:
-    if percent >= 95:
-        return "#2ea043"
-    if percent >= 85:
-        return "#1f6feb"
-    if percent >= 70:
-        return "#d29922"
-    return "#da3633"
-
-
-def comma(value: int) -> str:
-    return f"{value:,}"
-
-
-def md_escape(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
-
-
-def render_wpt_headline(report: dict, epoch: dict | None = None) -> str:
-    """Plan §4.5 headline: honest P/T + dirs + full non-zero distribution."""
-    epoch = epoch or report.get("epoch", {})
-    revision = str(epoch.get("wpt_revision", "unknown"))[:7]
-    counts = report["counts"]
-    dirs = report.get("run_info", {}).get("dirs") or sorted(
-        {str(Path(r["test"]).parent) for r in report["results"]}
-    )
-    details = [
-        f"{counts[field]} {label}"
-        for field, label in (("fail", "FAIL"), ("timeout", "TIMEOUT"),
-                             ("notrun", "NOTRUN"), ("error", "harness_error"))
-        if counts.get(field, 0)
-    ]
-    headline = f"WPT {revision} — {counts['pass']}/{report['total']} subtests pasados"
-    headline += f" (dirs: {len(dirs)}"
-    if details:
-        headline += "; " + ", ".join(details)
-    return headline + ")"
-
-
-def wpt_fields(report: dict) -> dict:
-    """The manifest/[wpt] projection of a generated WPT report."""
-    counts = report["counts"]
-    return {
-        "revision": report["epoch"]["wpt_revision"],
-        "manifest_sha256": report["epoch"]["manifest_sha256"],
-        **counts,
-        "passed": counts["pass"],
-        "total": report["total"],
-        "dirs": len(report["run_info"]["dirs"]),
-        "allowlist": 0,
-        "distribution": "; ".join(
-            f"{label}={counts[field]}" for field, label in (
-                ("pass", "PASS"), ("fail", "FAIL"), ("timeout", "TIMEOUT"),
-                ("notrun", "NOTRUN"), ("error", "harness_error"),
-            )
-        ),
-        "headline": render_wpt_headline(report, report["epoch"]),
-        "status": "PASS",
-    }
-
-
-def render_markdown(data: dict) -> str:
-    stats, gate, phases = data["stats"], data["gate"], data["phases"]
-    coverage = data.get("coverage")
-    overall = overall_percent(phases)
-    closed, total_milestones = milestone_counts(phases)
-    met = sum(len(p.get("items", [])) for p in phases)
-    total_criteria = met + sum(len(p.get("pending", [])) for p in phases)
-    lines: list[str] = []
-    lines.append("# Megi — Progress\n")
-    lines.append("<!-- Generated by tools/update_progress.py — do not edit by hand. -->\n")
-    lines.append(
-        "![Tests](docs/status/badge-tests.svg) "
-        "![Conformance](docs/status/badge-conformance.svg) "
-        "![Crates](docs/status/badge-crates.svg) "
-        "![unsafe](docs/status/badge-unsafe.svg) "
-        "![WPT](docs/status/badge-wpt.svg)\n"
-    )
-    headline = (
-        f"hitos cerrados **{closed}/{total_milestones}** · "
-        f"criterios verificados **{met}/{total_criteria}** (**{overall}%**)"
-    )
-    lines.append(
-        f"**Snapshot** — commit `{stats['head']}` ({stats['date']}) · "
-        f"{headline} · **{comma(stats['tests'])}** tests · "
-        f"conformance **{gate['status']}** · **{stats['crates']}** crates · "
-        f"**{comma(stats['rust_lines'])}** lines of Rust\n"
-    )
-    lines.append(
-        "> Generated from `docs/status/progress.toml` plus measured repository data "
-        "(git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, "
-        "crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance "
-        "criteria with cited evidence; no phase estimate is involved.\n"
-    )
-    lines.append(
-        "[Progress map SVG](docs/status/progress.svg) · "
-        "[Capability coverage report](docs/status/coverage.html) "
-        f"({coverage['implemented']}/{coverage['known']} implemented; separate, "
-        "self-referential report) · "
-        "[Real-site render check](docs/status/real-sites.html).\n"
-        if coverage
-        else "[Progress map SVG](docs/status/progress.svg)\n"
-    )
-
-    lines.append("## Hitos M0–M12 — criterios verificados\n")
-    lines.append(
-        "> A milestone closes only when every acceptance criterion is verified. "
-        "See the approved roadmap: "
-        "[spec v2 §4.1](docs/superpowers/specs/2026-11-24-megi-ambition-design.md) and "
-        "[master plan](docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md).\n"
-    )
-    lines.append("| Hito | Objetivo | Criterios verificados | % |")
-    lines.append("|---|---|---|---|")
-    for phase in phases:
-        percent = criteria_percent(phase)
-        done_n = len(phase.get("items", []))
-        total_n = done_n + len(phase.get("pending", []))
-        lines.append(
-            f"| **{phase['id']}** | {md_escape(phase.get('title', ''))} | "
-            f"`{bar(percent)}` {done_n}/{total_n} | {percent}% |"
-        )
-    lines.append(f"| | **Roadmap** | `{bar(overall)}` {met}/{total_criteria} | **{overall}%** |\n")
-
-    lines.append("## Detalle de criterios por hito\n")
-    for phase in phases:
-        percent = criteria_percent(phase)
-        lines.append(f"### {phase['id']} — {phase.get('title', '')} ({percent}%)\n")
-        items = phase.get("items", [])
-        pending = phase.get("pending", [])
-        lines.append("**Verificado**\n")
-        for item in items:
-            lines.append(f"- {item}")
-        if pending:
-            lines.append("\n**Pendiente**\n")
-            for item in pending:
-                lines.append(f"- {item}")
-        lines.append("")
-
-    lines.append("## Repository statistics (measured)\n")
-    lines.append("| Metric | Value |")
-    lines.append("|---|---|")
-    lines.append(f"| Commit | `{stats['head']}` ({stats['date']}) |")
-    lines.append(f"| Crates in the workspace | {stats['crates']} |")
-    lines.append(f"| Lines of Rust (tracked `.rs`) | {stats['rust_lines']} |")
-    lines.append(f"| Tests (`cargo test --workspace -- --list`) | {stats['tests']} |")
-    lines.append(
-        f"| Crates with `#![forbid(unsafe_code)]` | {stats['unsafe_forbidden']} / {stats['crates']} |"
-    )
-    lines.append(f"| Conformance gate | **{gate['status']}** |\n")
-
-    lines.append("## Conformance gate (4 suites)\n")
-    lines.append("| Suite | Result |")
-    lines.append("|---|---|")
-    lines.append(f"| HTML tokenizer | {gate.get('tokenizer', 'n/a')} |")
-    lines.append(f"| HTML tree construction | {gate.get('tree', 'n/a')} |")
-    lines.append(f"| HTML serializer | {gate.get('serializer', 'n/a')} |")
-    lines.append(f"| CSS Syntax (vendored WPT) | {gate.get('css_syntax', 'n/a')} |")
-    lines.append(
-        f"\nGate status: **{gate['status']}** (known failures allowlisted; see `tests/README` "
-        "and `crates/test_harness`).\n"
-    )
-
-    wpt = data.get("wpt") or {}
-    if wpt:
-        lines.append("## WPT honest P/T (seeded)\n")
-        lines.append("| Metric | Value |")
-        lines.append("|---|---|")
-        lines.append(f"| Headline | {wpt.get('headline', 'n/a')} |")
-        lines.append(f"| WPT commit (SHA pin) | `{wpt.get('revision', 'n/a')}` |")
-        lines.append(f"| Manifest SHA-256 | `{wpt.get('manifest_sha256', 'n/a')}` |")
-        lines.append(f"| Allowlist | {wpt.get('allowlist', '0')} |")
-        lines.append(
-            f"| Status | **{wpt.get('status', 'n/a')}** "
-            "(vendored CSS Syntax seed, not full WPT conformance) |\n"
-        )
-        lines.append(
-            "Capability coverage and WPT conformance are separate metrics; this P/T is generated "
-            "from `megi-test-harness --summary` and gated by `tools/wpt_gate.py`.\n"
-        )
-
-    lines.append("## Recent rounds\n")
-    for number, title in data["rounds"]:
-        lines.append(f"- **Round {number}** — {title}")
-    lines.append("")
-
-    lines.append("## Next up\n")
-    for item in data["next_up"]:
-        lines.append(f"- {item}")
-    lines.append("")
-
-    lines.append("## Regenerating this page\n")
-    lines.append("```bash")
-    lines.append("python3 tools/update_progress.py --write            # full (counts tests, runs gate)")
-    lines.append("python3 tools/update_progress.py --write --no-gate  # skip the conformance gate")
-    lines.append("python3 tools/update_progress.py --check --no-gate --no-count  # CI freshness")
-    lines.append("```\n")
-    lines.append(
-        f"_Last manifest update by: {data['last_updated_by']}. Generated artifacts: "
-        f"`PROGRESS.md`, `docs/status/progress.svg`, `docs/status/badge-*.svg`._"
-    )
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def render_progress_svg(data: dict) -> str:
-    stats, gate, phases = data["stats"], data["gate"], data["phases"]
-    overall = overall_percent(phases)
-    closed, total_milestones = milestone_counts(phases)
-    met = sum(len(p.get("items", [])) for p in phases)
-    total_criteria = met + sum(len(p.get("pending", [])) for p in phases)
-    width = 900
-    top = 132
-    row = 54
-    footer = 92
-    height = top + row * len(phases) + footer
-    parts: list[str] = []
-    parts.append(
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">'
-    )
-    parts.append(f"<title id='title'>Megi Browser Engine — hitos M0–M12</title>")
-    parts.append(
-        f"<desc id='desc'>{overall}% acceptance criteria verified; "
-        f"{closed}/{total_milestones} milestones closed; commit {xml_escape(stats['head'])}; "
-        f"{stats['crates']} crates; {stats['tests']} tests; conformance {gate['status']}</desc>"
-    )
-    parts.append(f'<rect width="{width}" height="{height}" fill="#ffffff"/>')
-    parts.append(
-        f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" fill="none" stroke="#d0d7de"/>'
-    )
-    parts.append(
-        f'<text x="28" y="46" font-family="{FONT}" font-size="26" font-weight="700" '
-        f'fill="#1f2328">Megi Browser Engine — progress</text>'
-    )
-    parts.append(
-        f'<text x="28" y="70" font-family="{FONT}" font-size="13" fill="#57606a">'
-        f'{xml_escape(data.get("subtitle", ""))}</text>'
-    )
-    parts.append(
-        f'<text x="{width - 28}" y="60" text-anchor="end" font-family="{FONT}" '
-        f'font-size="34" font-weight="700" fill="#1f2328">{overall}%</text>'
-    )
-    parts.append(
-        f'<text x="{width - 28}" y="80" text-anchor="end" font-family="{FONT}" '
-        f'font-size="12" fill="#57606a">'
-        f'criterios {met}/{total_criteria} · hitos {closed}/{total_milestones}</text>'
-    )
-    # Overall bar.
-    parts.append(
-        f'<rect x="28" y="92" width="{width - 56}" height="10" rx="5" fill="#d0d7de"/>'
-    )
-    parts.append(
-        f'<rect x="28" y="92" width="{round((width - 56) * overall / 100)}" height="10" '
-        f'rx="5" fill="{phase_color(overall)}"/>'
-    )
-    for index, phase in enumerate(phases):
-        percent = criteria_percent(phase)
-        y = top + index * row
-        color = phase_color(percent)
-        items = len(phase.get("items", []))
-        pending = len(phase.get("pending", []))
-        parts.append(
-            f'<text x="28" y="{y}" font-family="{FONT}" font-size="13" font-weight="700" '
-            f'fill="#1f2328">{xml_escape(phase.get("id", ""))}</text>'
-        )
-        parts.append(
-            f'<text x="66" y="{y}" font-family="{FONT}" font-size="13" fill="#1f2328">'
-            f'{xml_escape(phase.get("title", ""))}</text>'
-        )
-        parts.append(
-            f'<text x="{width - 28}" y="{y}" text-anchor="end" font-family="{FONT}" '
-            f'font-size="12" fill="#57606a">{items} verificados · {pending} pendientes</text>'
-        )
-        parts.append(
-            f'<rect x="28" y="{y + 14}" width="{width - 210}" height="16" rx="8" fill="#eaeef2"/>'
-        )
-        parts.append(
-            f'<rect x="28" y="{y + 14}" width="{round((width - 210) * percent / 100)}" '
-            f'height="16" rx="8" fill="{color}"/>'
-        )
-        parts.append(
-            f'<text x="{width - 28}" y="{y + 27}" text-anchor="end" font-family="{FONT}" '
-            f'font-size="13" font-weight="700" fill="{color}">{percent}%</text>'
-        )
-    footer_y = top + row * len(phases) + 8
-    parts.append(
-        f'<line x1="28" y1="{footer_y}" x2="{width - 28}" y2="{footer_y}" stroke="#d0d7de"/>'
-    )
-    parts.append(
-        f'<text x="28" y="{footer_y + 24}" font-family="{FONT}" font-size="12" fill="#57606a">'
-        f'commit {xml_escape(stats["head"])} ({xml_escape(stats["date"])}) · '
-        f'{stats["crates"]} crates · {comma(stats["tests"])} tests · '
-        f'conformance {xml_escape(gate["status"])} · '
-        f'{comma(stats["rust_lines"])} lines of Rust</text>'
-    )
-    generated_note = (
-        "Milestone bars: verified acceptance criteria from docs/status/progress.toml; "
-        "no estimates. Generated by tools/update_progress.py — do not edit."
-    )
-    parts.append(
-        f'<text x="28" y="{footer_y + 44}" font-family="{FONT}" font-size="11" fill="#8c959f">'
-        f"{xml_escape(generated_note)}</text>"
-    )
-    parts.append(
-        f'<text x="28" y="{footer_y + 62}" font-family="{FONT}" font-size="11" fill="#8c959f">'
-        f'Legend: green ≥95% · blue ≥85% · amber ≥70% · red &lt;70%</text>'
-    )
-    parts.append("</svg>")
-    return "\n".join(parts).rstrip() + "\n"
-
-
-def render_badge(label: str, value: str, color: str) -> str:
-    label_width = max(38, 8 + len(label) * 7)
-    value_width = max(30, 10 + len(value) * 7)
-    width = label_width + value_width
-    height = 20
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" role="img" aria-label="{xml_escape(label)}: '
-        f'{xml_escape(value)}">\n'
-        f'  <title>{xml_escape(label)}: {xml_escape(value)}</title>\n'
-        f'  <rect width="{label_width}" height="{height}" fill="#555555"/>\n'
-        f'  <rect x="{label_width}" width="{value_width}" height="{height}" fill="{color}"/>\n'
-        f'  <g fill="#ffffff" text-anchor="middle" font-family="{FONT}" font-size="11">\n'
-        f'    <text x="{label_width / 2:.0f}" y="14">{xml_escape(label)}</text>\n'
-        f'    <text x="{label_width + value_width / 2:.0f}" y="14">'
-        f'{xml_escape(value)}</text>\n'
-        f"  </g>\n"
-        f"</svg>\n"
-    )
-
-
-def render_badges(data: dict) -> dict[str, str]:
-    stats, gate = data["stats"], data["gate"]
-    conformance = "PASS" if gate["status"] == "PASS" else "FAIL"
-    conformance_color = "#2ea043" if gate["status"] == "PASS" else "#da3633"
-    unsafe_text = f"{stats['unsafe_forbidden']}/{stats['crates']}"
-    unsafe_color = "#2ea043" if stats["unsafe_forbidden"] == stats["crates"] else "#d29922"
-    badges = {
-        "tests": render_badge("tests", comma(stats["tests"]), "#1f6feb"),
-        "conformance": render_badge("conformance", f"{conformance} · 4 suites", conformance_color),
-        "crates": render_badge("crates", str(stats["crates"]), "#1f6feb"),
-        "unsafe": render_badge("#![forbid(unsafe)]", unsafe_text, unsafe_color),
-    }
-    wpt = data.get("wpt") or {}
-    if wpt:
-        passed, total = wpt.get("passed", "n/a"), wpt.get("total", "n/a")
-        color = "#2ea043" if wpt.get("status") == "PASS" else "#d29922"
-        badges["wpt"] = render_badge("wpt", f"{passed}/{total}", color)
-    return badges
-
-
-def update_manifest(text: str, stats: dict, gate: dict[str, str], wpt: dict | None = None) -> str:
-    """Rewrites only the generated `[stats]`, `[gate]` and `[wpt]` TOML blocks."""
-    stats_block = [
-        "[stats]",
-        f"tests = {stats['tests']}",
-        f'tests_commit = "{stats["tests_commit"]}"',
-        f'tests_date = "{stats["tests_date"]}"',
-        f"crates = {stats['crates']}",
-        f"rust_lines = {stats['rust_lines']}",
-        f"unsafe_forbidden_crates = {stats['unsafe_forbidden']}",
-        "",
-    ]
-    gate_block = [
-        "[gate]",
-        f'status = "{gate["status"]}"',
-        f'verified_commit = "{gate["verified_commit"]}"',
-        f'tokenizer = "{gate.get("tokenizer", "n/a")}"',
-        f'tree = "{gate.get("tree", "n/a")}"',
-        f'serializer = "{gate.get("serializer", "n/a")}"',
-        f'css_syntax = "{gate.get("css_syntax", "n/a")}"',
-        "",
-    ]
-    wpt_block: list[str] = []
-    if wpt:
-        distribution = "; ".join(
-            f"{label}={wpt.get(field, 0)}" for field, label in (
-                ("pass", "PASS"), ("fail", "FAIL"), ("timeout", "TIMEOUT"),
-                ("notrun", "NOTRUN"), ("error", "harness_error"),
-            )
-        )
-        wpt_block = [
-            "[wpt]",
-            f'revision = "{wpt.get("revision", "")}"',
-            f'manifest_sha256 = "{wpt.get("manifest_sha256", "")}"',
-            f'passed = {wpt.get("passed", 0)}',
-            f'total = {wpt.get("total", 0)}',
-            f'dirs = {wpt.get("dirs", 0)}',
-            f'allowlist = {wpt.get("allowlist", 0)}',
-            f'distribution = "{distribution}"',
-            f'headline = "{wpt.get("headline", "")}"',
-            f'status = "{wpt.get("status", "n/a")}"',
-            "",
-        ]
-    lines = text.splitlines()
-    output: list[str] = []
-    wpt_seen = not wpt_block
-    index = 0
-    while index < len(lines):
-        stripped = lines[index].strip()
-        if wpt_block and not wpt_seen and (
-            stripped.startswith("[[") or stripped.startswith("[area")
-            or stripped.startswith("[next_up")
-        ):
-            output.extend(wpt_block)
-            wpt_seen = True
-        if stripped == "[wpt]" and wpt_block:
-            output.extend(wpt_block)
-            wpt_seen = True
-            index += 1
-            while index < len(lines) and not lines[index].strip().startswith("["):
-                if lines[index].strip().startswith("#"):
-                    output.append(lines[index])
-                index += 1
-            continue
-        if stripped == "[stats]":
-            output.extend(stats_block)
-            index += 1
-            while index < len(lines) and not lines[index].strip().startswith("["):
-                # Preserve comment lines.
-                if lines[index].strip().startswith("#"):
-                    output.append(lines[index])
-                index += 1
-            continue
-        if stripped == "[gate]":
-            output.extend(gate_block)
-            index += 1
-            while index < len(lines) and not lines[index].strip().startswith("["):
-                if lines[index].strip().startswith("#"):
-                    output.append(lines[index])
-                index += 1
-            continue
-        output.append(lines[index])
-        index += 1
-    if wpt_block and not wpt_seen:
-        output.extend(wpt_block)
-    return "\n".join(output).rstrip() + "\n"
-
-
 SNAPSHOT_PATTERNS = [
     # Markdown snapshot line and stats-table row (commit + date).
     (re.compile(r"(?m)^(\*\*Snapshot\*\* — commit )`[0-9a-f]{7,40}` \([0-9-]+\)"), r"\1`<commit>` (<date>)"),
@@ -721,36 +152,6 @@ def normalize_snapshot(text: str) -> str:
     for pattern, replacement in SNAPSHOT_PATTERNS:
         text = pattern.sub(replacement, text)
     return text
-
-
-def read_coverage(root: Path) -> dict | None:
-    """Read the verifiable capability coverage produced by tools/update_coverage.py.
-
-    Returns None when the artifact is missing or malformed; callers then fall back to the
-    legacy phase average and label it as such instead of inventing a coverage number.
-    """
-    path = root / STATUS_DIR / "coverage.json"
-    if not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        overall = payload["overall"]
-        percent = int(overall["percent"])
-        implemented = int(overall["implemented"])
-        known = int(overall["known"])
-        if known < 0 or implemented < 0 or implemented > known or not 0 <= percent <= 100:
-            raise ValueError("inconsistent coverage numbers")
-        expected = 0 if known == 0 else (100 if implemented >= known else min(99, round(implemented * 100 / known)))
-        if percent != expected:
-            raise ValueError("coverage percent does not match implemented/known")
-        return {
-            "percent": percent,
-            "implemented": implemented,
-            "known": known,
-            "partial": int(overall.get("partial", 0)),
-        }
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
 
 
 def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, bytes]:
