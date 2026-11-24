@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 71,
+    "implemented": 72,
     "partial": 1,
     "known": 75,
-    "percent": 95,
+    "percent": 96,
     "unverified": [],
     "invalid_states": []
   },
@@ -46,10 +46,10 @@
     },
     {
       "id": "F6",
-      "implemented": 12,
+      "implemented": 13,
       "partial": 0,
       "known": 13,
-      "percent": 92
+      "percent": 100
     },
     {
       "id": "F7",
@@ -95,16 +95,6 @@
       "state": "missing",
       "evidence": "none",
       "issue": 1899,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "F6-JS-BUDGET-REAL",
-      "area": "F6",
-      "name": "Presupuesto JS suficiente para sitios reales",
-      "source": "issue #1881",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1881,
       "reason": "no requiere evidencia"
     }
   ]

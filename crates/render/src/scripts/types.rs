@@ -27,6 +27,19 @@ pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 pub const DEFAULT_MAX_TASKS: usize = 10_000;
 /// Default virtual-time budget of the event loop (milliseconds).
 pub const DEFAULT_MAX_VIRTUAL_TIME_MS: u64 = 1_000;
+/// Hard anti-DoS ceilings for real-site budgets (#1881). `for_real_sites()` and caller-supplied
+/// limits are clamped to these regardless of how large a site's scripts request.
+pub const HARD_MAX_TOTAL_LOOP_ITERATIONS: u64 = 50_000_000;
+pub const HARD_MAX_TASKS: usize = 200_000;
+pub const HARD_MAX_VIRTUAL_TIME_MS: u64 = 10_000;
+
+/// Real-site defaults (10x the conservative ones) for `megi-render` on complex pages.
+/// Still bounded by the hard ceilings above; the deterministic test harness keeps the
+/// conservative `ScriptingLimits::default()`.
+pub const REAL_SITE_MAX_TOTAL_LOOP_ITERATIONS: u64 = 10_000_000;
+pub const REAL_SITE_MAX_TASKS: usize = 50_000;
+pub const REAL_SITE_MAX_VIRTUAL_TIME_MS: u64 = 5_000;
+
 /// Virtual clock step used between timer batches (milliseconds).
 pub const VIRTUAL_TIME_STEP_MS: u64 = 1;
 /// Absolute virtual-time origin used for script execution.
@@ -93,6 +106,28 @@ pub struct ScriptingLimits {
     /// Maximum virtual time the event loop may advance (milliseconds). Timers whose delay
     /// would need more virtual time are left pending and the run is marked limited.
     pub max_virtual_time_ms: u64,
+}
+
+impl ScriptingLimits {
+    /// Budgets for real-world sites (#1881): 10x the conservative defaults, bounded by hard caps.
+    pub fn for_real_sites() -> Self {
+        Self {
+            total_loop_iterations: REAL_SITE_MAX_TOTAL_LOOP_ITERATIONS,
+            max_tasks: REAL_SITE_MAX_TASKS,
+            max_virtual_time_ms: REAL_SITE_MAX_VIRTUAL_TIME_MS,
+            ..Self::default()
+        }
+    }
+
+    /// Clamps any caller-supplied limits to the hard anti-DoS ceilings (#1881).
+    pub fn clamped(mut self) -> Self {
+        self.total_loop_iterations = self
+            .total_loop_iterations
+            .min(HARD_MAX_TOTAL_LOOP_ITERATIONS);
+        self.max_tasks = self.max_tasks.min(HARD_MAX_TASKS);
+        self.max_virtual_time_ms = self.max_virtual_time_ms.min(HARD_MAX_VIRTUAL_TIME_MS);
+        self
+    }
 }
 
 impl Default for ScriptingLimits {
@@ -410,5 +445,38 @@ mod tests {
     fn default_module_fetch_cap_allows_modern_bundles() {
         // #1896: qwant.com's SPA needs more than 256 small ES modules to initialise.
         const { assert!(DEFAULT_MAX_MODULE_FETCHES >= 1024) };
+    }
+}
+
+#[cfg(test)]
+mod real_site_budget_tests {
+    use super::*;
+
+    #[test]
+    fn real_site_budget_exceeds_the_conservative_default_but_respects_hard_caps() {
+        // #1881: BBC/css-tricks exhaust 1M loop iterations and 1000 ms of virtual time.
+        let real = ScriptingLimits::for_real_sites();
+        let conservative = ScriptingLimits::default();
+        assert!(real.total_loop_iterations > conservative.total_loop_iterations);
+        assert!(real.max_tasks > conservative.max_tasks);
+        assert!(real.max_virtual_time_ms > conservative.max_virtual_time_ms);
+        assert!(real.total_loop_iterations <= HARD_MAX_TOTAL_LOOP_ITERATIONS);
+        assert!(real.max_tasks <= HARD_MAX_TASKS);
+        assert!(real.max_virtual_time_ms <= HARD_MAX_VIRTUAL_TIME_MS);
+    }
+
+    #[test]
+    fn clamped_limits_never_exceed_hard_anti_dos_caps() {
+        let mut hostile = ScriptingLimits::for_real_sites();
+        hostile.total_loop_iterations = u64::MAX;
+        hostile.max_tasks = usize::MAX;
+        hostile.max_virtual_time_ms = u64::MAX;
+        let clamped = hostile.clamped();
+        assert_eq!(
+            clamped.total_loop_iterations,
+            HARD_MAX_TOTAL_LOOP_ITERATIONS
+        );
+        assert_eq!(clamped.max_tasks, HARD_MAX_TASKS);
+        assert_eq!(clamped.max_virtual_time_ms, HARD_MAX_VIRTUAL_TIME_MS);
     }
 }
