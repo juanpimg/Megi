@@ -35,20 +35,20 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 3347
-tests_commit = "ebdcb980"
+tests = 3349
+tests_commit = "f190a37c"
 tests_date = "2026-11-24"
 crates = 17
-rust_lines = 245697
+rust_lines = 245859
 unsafe_forbidden_crates = 17
 
 [gate]
 status = "PASS"
-verified_commit = "824d10bb"
+verified_commit = "f190a37c"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
-css_syntax = "30 / 30"
+css_syntax = "100 / 100"
 
 # --- M0 — Verdad y cimiento -------------------------------------------------------------
 [wpt]
