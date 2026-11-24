@@ -216,6 +216,7 @@ mod tests {
             find_rects: Vec::new(),
             document_html: String::new(),
             error: Some("render failed".to_owned()),
+            sandbox_mode: String::new(),
         };
         assert!(session.apply_response(err_resp).is_err());
         assert!(session.document().is_some());

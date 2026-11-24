@@ -65,6 +65,7 @@ fn process_frame_restores_dom_from_wire_response() {
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
         error: None,
+        sandbox_mode: String::new(),
     };
     let frame = ProcessFrame::from_response(response);
     assert_eq!(frame.response.generation, 3);
@@ -95,6 +96,7 @@ fn failed_response_uses_an_empty_document() {
         find_rects: Vec::new(),
         document_html: String::new(),
         error: Some("boom".to_owned()),
+        sandbox_mode: String::new(),
     };
     let frame = ProcessFrame::from_response(response);
     assert!(frame.document.get_element_by_id("anything").is_none());

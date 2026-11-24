@@ -7,6 +7,7 @@
 use super::*;
 use crate::site::SiteKey;
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
 
@@ -17,6 +18,8 @@ pub const MAX_PROCESS_RENDERERS: usize = 8;
 pub fn request_process_site(request: &IpcRenderRequest) -> SiteKey {
     crate::site::site_key(request.base_override.as_deref().unwrap_or(&request.input))
 }
+
+pub use super::sandbox::{request_sandbox_allows_network, request_sandbox_read_path};
 
 type TaggedResponse = (Option<u64>, Result<IpcRenderResponse, IpcError>);
 
@@ -208,6 +211,8 @@ impl ProcessRenderPool {
 
     fn spawn_renderer(
         &self,
+        allow_network: bool,
+        read_path: Option<&Path>,
     ) -> Result<
         (
             ProcessRenderer,
@@ -216,14 +221,21 @@ impl ProcessRenderPool {
         IpcError,
     > {
         match &self.executable {
-            Some(path) => ProcessRenderer::spawn_with_reader_from_args(path, &self.args),
-            None => ProcessRenderer::spawn_with_reader(),
+            Some(path) => ProcessRenderer::spawn_with_reader_from_args_with_network(
+                path,
+                &self.args,
+                allow_network,
+                read_path,
+            ),
+            None => ProcessRenderer::spawn_with_reader_with_network(allow_network, read_path),
         }
     }
 
     /// Queues a request to the process for its site, spawning one on first use.
     pub fn send(&mut self, request: IpcRenderRequest) -> Result<(), IpcError> {
         let site = request_process_site(&request);
+        let allow_network = request_sandbox_allows_network(&request);
+        let read_path = request_sandbox_read_path(&request);
         self.clock = self.clock.saturating_add(1);
         let existing = self.slots.iter().position(|slot| slot.site == site);
         // A child that exited (crash or killed renderer) must be replaced before reuse.
@@ -237,7 +249,8 @@ impl ProcessRenderPool {
         let index = match self.slots.iter().position(|slot| slot.site == site) {
             Some(index) => index,
             None if self.slots.len() < self.max => {
-                let (renderer, responses) = self.spawn_renderer()?;
+                let (renderer, responses) =
+                    self.spawn_renderer(allow_network, read_path.as_deref())?;
                 self.slots.push(Slot {
                     site: site.clone(),
                     backend: SlotBackend::Process(renderer),
@@ -256,7 +269,8 @@ impl ProcessRenderPool {
                     .min_by_key(|(_, slot)| slot.last_used)
                     .map(|(index, _)| index)
                     .expect("non-empty pool");
-                let (renderer, responses) = self.spawn_renderer()?;
+                let (renderer, responses) =
+                    self.spawn_renderer(allow_network, read_path.as_deref())?;
                 let old = std::mem::replace(
                     &mut self.slots[index],
                     Slot {

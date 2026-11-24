@@ -6,7 +6,7 @@
 # bench may import the crates listed below.
 edges.bench = ['core', 'css', 'fonts', 'html', 'image', 'layout', 'paint', 'render']
 # browser may import the crates listed below.
-edges.browser = ['webview']
+edges.browser = ['sandbox', 'webview']
 # core may import the crates listed below.
 edges.core = []
 # css may import the crates listed below.
@@ -31,6 +31,8 @@ edges.paint = ['core', 'css', 'display', 'fonts', 'image', 'layout', 'raster']
 edges.raster = ['core', 'display', 'fonts']
 # render may import the crates listed below.
 edges.render = ['core', 'css', 'display', 'fonts', 'html', 'image', 'js', 'layout', 'net', 'paint', 'raster', 'svg']
+# sandbox may import the crates listed below (leaf policy crate, no engine edges).
+edges.sandbox = []
 # svg may import the crates listed below.
 edges.svg = ['display', 'fonts', 'image']
 # test_harness may import the crates listed below.

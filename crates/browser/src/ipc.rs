@@ -19,9 +19,13 @@ pub use process::{
     renderer_scratch_dir,
 };
 mod regions;
+mod sandbox;
 mod session;
 mod validated;
-pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
+pub use process_pool::{
+    MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site, request_sandbox_allows_network,
+    request_sandbox_read_path,
+};
 pub use regions::{
     DocumentNodeOrdinals, DocumentOrdinalNodes, IpcFindMatch, IpcFormControl, IpcImageRegion,
     IpcLinkRegion, IpcRect, IpcSelectOption,
@@ -180,12 +184,20 @@ pub struct IpcRenderResponse {
     pub document_html: String,
     /// Render failure text (`Some` means the other fields are defaults).
     pub error: Option<String>,
+    /// Enforcement level obtained by this renderer before reading IPC (`M3#4`).
+    #[serde(default)]
+    pub sandbox_mode: String,
 }
 
-/// Entry point for `--megi-ipc-worker`: serves requests until the parent closes stdin.
-/// Only the serializable render payload crosses the boundary; DOM-dependent editing stays
-/// in the parent renderer (documented ADR-004 phase-3 limitation).
+/// Entry point for `--megi-ipc-worker`: serves framed requests until stdin closes.
 pub fn run_ipc_worker() -> Result<(), IpcError> {
+    // M3#4: restrict this process before any untrusted IPC frame is read. The parent only
+    // prepares the scratch cwd; the child decides its own mode, so no unsafe pre_exec is used.
+    let scratch = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let allow_network = std::env::var("MEGI_SANDBOX_ALLOW_NETWORK")
+        .map(|value| value != "0")
+        .unwrap_or(true);
+    sandbox::enforce_worker_sandbox(&scratch, allow_network);
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     let mut reader = stdin.lock();
@@ -286,6 +298,7 @@ where
                         .collect(),
                     document_html: crate::download::serialize_document(&frame.document),
                     error: None,
+                    sandbox_mode: sandbox::reported_sandbox_mode().to_owned(),
                 }
             }
             Err(error) => IpcRenderResponse {
@@ -306,6 +319,7 @@ where
                 find_rects: Vec::new(),
                 document_html: String::new(),
                 error: Some(error),
+                sandbox_mode: sandbox::reported_sandbox_mode().to_owned(),
             },
         };
         write_message(writer, &response)?;
@@ -380,6 +394,7 @@ mod tests {
             find_rects: Vec::new(),
             document_html: "<!DOCTYPE html><html><head></head><body></body></html>".to_owned(),
             error: None,
+            sandbox_mode: String::new(),
         };
         write_message(&mut buffer, &response).expect("write response");
         assert_eq!(

@@ -21,6 +21,7 @@ a11y = ["window", "dep:accesskit", "dep:accesskit_winit", "dep:accesskit_consume
 
 [dependencies]
 megi-webview = { workspace = true }
+megi-sandbox = { workspace = true }
 winit = { workspace = true, optional = true }
 softbuffer = { workspace = true, optional = true }
 accesskit = { version = "0.25", optional = true }

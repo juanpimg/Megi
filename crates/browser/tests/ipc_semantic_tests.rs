@@ -106,6 +106,7 @@ fn renderer_cannot_return_cookies_over_ipc() {
         find_rects: Vec::new(),
         document_html: String::new(),
         error: None,
+        sandbox_mode: String::new(),
     };
     let wire = serde_json::to_value(&response).expect("serialize response");
     assert!(

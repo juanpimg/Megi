@@ -37,6 +37,7 @@ fn valid_response(generation: u64) -> IpcRenderResponse {
         find_rects: Vec::new(),
         document_html: "<!doctype html><html><body></body></html>".to_owned(),
         error: None,
+        sandbox_mode: String::new(),
     }
 }
 

@@ -44,6 +44,26 @@ pub fn renderer_command(
     command
 }
 
+/// Same harness as [`renderer_command`] plus the sandbox network policy for this slot.
+/// The public helper above stays byte-identical for the environment-hardening tests.
+pub(crate) fn renderer_command_with_network(
+    executable: &Path,
+    args: &[String],
+    scratch: &Path,
+    allow_network: bool,
+    read_path: Option<&Path>,
+) -> std::process::Command {
+    let mut command = renderer_command(executable, args, scratch);
+    command.env(
+        "MEGI_SANDBOX_ALLOW_NETWORK",
+        if allow_network { "1" } else { "0" },
+    );
+    if let Some(path) = read_path {
+        command.env("MEGI_SANDBOX_READ_PATH", path);
+    }
+    command
+}
+
 /// Terminates the renderer's whole process group with SIGTERM (POSIX pgid == pid).
 #[cfg(unix)]
 pub fn kill_process_group(pid: u32) {
@@ -76,10 +96,21 @@ impl ProcessRenderer {
 
     /// Spawns a renderer with explicit argv (tests inject a real non-responding child).
     pub fn spawn_with_args(executable: &Path, args: &[String]) -> Result<Self, IpcError> {
+        Self::spawn_with_args_with_network(executable, args, true, None)
+    }
+
+    /// Spawns a renderer with an explicit per-slot network policy (M3#4).
+    pub(crate) fn spawn_with_args_with_network(
+        executable: &Path,
+        args: &[String],
+        allow_network: bool,
+        read_path: Option<&Path>,
+    ) -> Result<Self, IpcError> {
         let scratch = renderer_scratch_dir()?;
-        let mut child = renderer_command(executable, args, &scratch)
-            .spawn()
-            .map_err(|error| IpcError::Io(error.to_string()))?;
+        let mut child =
+            renderer_command_with_network(executable, args, &scratch, allow_network, read_path)
+                .spawn()
+                .map_err(|error| IpcError::Io(error.to_string()))?;
         let stdin = child
             .stdin
             .take()
@@ -113,9 +144,28 @@ impl ProcessRenderer {
         ),
         IpcError,
     > {
+        Self::spawn_with_reader_with_network(true, None)
+    }
+
+    /// In-process executable variant of [`Self::spawn_with_reader`] with a network policy.
+    pub(crate) fn spawn_with_reader_with_network(
+        allow_network: bool,
+        read_path: Option<&Path>,
+    ) -> Result<
+        (
+            Self,
+            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
+        ),
+        IpcError,
+    > {
         let executable =
             std::env::current_exe().map_err(|error| IpcError::Io(error.to_string()))?;
-        Self::spawn_with_reader_from(&executable)
+        Self::spawn_with_reader_from_args_with_network(
+            &executable,
+            &["--megi-ipc-worker".to_owned()],
+            allow_network,
+            read_path,
+        )
     }
 
     /// Like [`Self::spawn_with_reader`] but spawning an explicit executable (used by
@@ -143,7 +193,24 @@ impl ProcessRenderer {
         ),
         IpcError,
     > {
-        let mut renderer = Self::spawn_with_args(executable, args)?;
+        Self::spawn_with_reader_from_args_with_network(executable, args, true, None)
+    }
+
+    /// Like [`Self::spawn_with_reader_from_args`] with the slot's sandbox network policy.
+    pub(crate) fn spawn_with_reader_from_args_with_network(
+        executable: &Path,
+        args: &[String],
+        allow_network: bool,
+        read_path: Option<&Path>,
+    ) -> Result<
+        (
+            Self,
+            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
+        ),
+        IpcError,
+    > {
+        let mut renderer =
+            Self::spawn_with_args_with_network(executable, args, allow_network, read_path)?;
         let stdout = renderer
             .stdout
             .take()
@@ -232,7 +299,6 @@ pub fn render_png_in_process_with_options(
     css_height: u32,
     options: &megi_webview::render::RenderOptions,
 ) -> Result<Vec<u8>, IpcError> {
-    let mut renderer = ProcessRenderer::spawn()?;
     let request = IpcRenderRequest {
         generation: 1,
         input: input.to_owned(),
@@ -243,6 +309,15 @@ pub fn render_png_in_process_with_options(
         find_query: None,
         options: IpcRenderOptions::from_render_options(options),
     };
+    let allow_network = super::process_pool::request_sandbox_allows_network(&request);
+    let read_path = super::process_pool::request_sandbox_read_path(&request);
+    let executable = std::env::current_exe().map_err(|error| IpcError::Io(error.to_string()))?;
+    let mut renderer = ProcessRenderer::spawn_with_args_with_network(
+        &executable,
+        &["--megi-ipc-worker".to_owned()],
+        allow_network,
+        read_path.as_deref(),
+    )?;
     let response = renderer.render(request)?;
     renderer.kill();
     if let Some(error) = response.error {
