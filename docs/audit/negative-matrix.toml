@@ -1,0 +1,378 @@
+schema = 1
+generated_by = "tools/audit_negative_matrix.py"
+generated_at = "2026-11-24"
+current_os = "linux"
+command_template = "cargo test -p megi-browser --test {binary} {test_name} --locked"
+note = "M3#5 stays pending: only the local OS has runners; other slots are unsupported."
+runner_env = { TMPDIR = "/var/tmp", CARGO_TARGET_DIR = "inherited" }
+
+[threats]
+T1 = "HttpOnly/cross-site cookie leak"
+T2 = "Cookie injection from renderer"
+T3 = "File-grant escape"
+T5 = "Unresponsive renderer watchdog"
+T9 = "Renderer spawn hardening"
+F1 = "IPC validation (unknown field)"
+
+[os.linux]
+status = "pass"
+runner_available = true
+slot_count = 12
+
+[[os.linux.slots]]
+id = "NEG-T1-01"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "httponly_never_seeded_to_renderer"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests httponly_never_seeded_to_renderer --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T1-02"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "cookie_from_other_site_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests cookie_from_other_site_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T1-03"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "renderer_cannot_return_cookies_over_ipc"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_cannot_return_cookies_over_ipc --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T2-01"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_httponly_cookie_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_httponly_cookie_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T2-02"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_secure_cookie_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_secure_cookie_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T3-01"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "dotdot_escape_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests dotdot_escape_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T3-02"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "symlink_escape_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests symlink_escape_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T3-03"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "absolute_path_is_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests absolute_path_is_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T5-01"
+threat = "T5"
+binary = "watchdog_tests"
+test_name = "unresponsive_renderer_times_out_below_six_seconds"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test watchdog_tests unresponsive_renderer_times_out_below_six_seconds --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.02s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T9-01"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_environment_is_cleared_and_cwd_is_scratch"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_environment_is_cleared_and_cwd_is_scratch --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-T9-02"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_child_leads_its_own_process_group"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_child_leads_its_own_process_group --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[[os.linux.slots]]
+id = "NEG-F1-01"
+threat = "F1"
+binary = "ipc_validation_tests"
+test_name = "unknown_field_rejected"
+status = "pass"
+verify_cmd = "cargo test -p megi-browser --test ipc_validation_tests unknown_field_rejected --locked"
+exit_code = 0
+evidence = "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s"
+date = "2026-11-24"
+
+[os.macos]
+status = "unsupported"
+runner_available = false
+slot_count = 12
+
+[[os.macos.slots]]
+id = "NEG-T1-01"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "httponly_never_seeded_to_renderer"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests httponly_never_seeded_to_renderer --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T1-02"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "cookie_from_other_site_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests cookie_from_other_site_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T1-03"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "renderer_cannot_return_cookies_over_ipc"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_cannot_return_cookies_over_ipc --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T2-01"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_httponly_cookie_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_httponly_cookie_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T2-02"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_secure_cookie_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_secure_cookie_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T3-01"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "dotdot_escape_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests dotdot_escape_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T3-02"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "symlink_escape_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests symlink_escape_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T3-03"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "absolute_path_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests absolute_path_is_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T5-01"
+threat = "T5"
+binary = "watchdog_tests"
+test_name = "unresponsive_renderer_times_out_below_six_seconds"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test watchdog_tests unresponsive_renderer_times_out_below_six_seconds --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T9-01"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_environment_is_cleared_and_cwd_is_scratch"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_environment_is_cleared_and_cwd_is_scratch --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-T9-02"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_child_leads_its_own_process_group"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_child_leads_its_own_process_group --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[[os.macos.slots]]
+id = "NEG-F1-01"
+threat = "F1"
+binary = "ipc_validation_tests"
+test_name = "unknown_field_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_validation_tests unknown_field_rejected --locked"
+reason = "No local macos runner in this environment; M3#5 remains pending for this OS"
+
+[os.windows]
+status = "unsupported"
+runner_available = false
+slot_count = 12
+
+[[os.windows.slots]]
+id = "NEG-T1-01"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "httponly_never_seeded_to_renderer"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests httponly_never_seeded_to_renderer --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T1-02"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "cookie_from_other_site_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests cookie_from_other_site_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T1-03"
+threat = "T1"
+binary = "ipc_semantic_tests"
+test_name = "renderer_cannot_return_cookies_over_ipc"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_cannot_return_cookies_over_ipc --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T2-01"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_httponly_cookie_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_httponly_cookie_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T2-02"
+threat = "T2"
+binary = "ipc_semantic_tests"
+test_name = "renderer_forged_secure_cookie_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_semantic_tests renderer_forged_secure_cookie_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T3-01"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "dotdot_escape_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests dotdot_escape_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T3-02"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "symlink_escape_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests symlink_escape_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T3-03"
+threat = "T3"
+binary = "file_grant_tests"
+test_name = "absolute_path_is_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test file_grant_tests absolute_path_is_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T5-01"
+threat = "T5"
+binary = "watchdog_tests"
+test_name = "unresponsive_renderer_times_out_below_six_seconds"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test watchdog_tests unresponsive_renderer_times_out_below_six_seconds --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T9-01"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_environment_is_cleared_and_cwd_is_scratch"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_environment_is_cleared_and_cwd_is_scratch --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-T9-02"
+threat = "T9"
+binary = "spawn_hardening_tests"
+test_name = "renderer_child_leads_its_own_process_group"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test spawn_hardening_tests renderer_child_leads_its_own_process_group --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"
+
+[[os.windows.slots]]
+id = "NEG-F1-01"
+threat = "F1"
+binary = "ipc_validation_tests"
+test_name = "unknown_field_rejected"
+status = "unsupported"
+verify_cmd = "cargo test -p megi-browser --test ipc_validation_tests unknown_field_rejected --locked"
+reason = "No local windows runner in this environment; M3#5 remains pending for this OS"

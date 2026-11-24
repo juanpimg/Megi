@@ -17,12 +17,12 @@ acceptance = "criterio M0#4 movido a items con evidencia en progress.toml"
 id = "m0-02"
 gap = "0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría"
 spec = "spec v2 §4.1 / progress.toml M0"
-verify_cmd = "python3 tools/check_milestone.py M0 5"
+verify_cmd = "python3 tools/check_milestone.py M0 7"
 metric = "depth_closed"
 milestone = "M0"
 impact = 3
 frequency = 3
-acceptance = "criterio M0#5 movido a items con evidencia en progress.toml"
+acceptance = "criterio M0#7 movido a items con evidencia en progress.toml"
 
 [[entry]]
 id = "m0-03"
