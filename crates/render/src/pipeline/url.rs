@@ -182,8 +182,11 @@ pub(crate) fn render_url_with_context(
         loaded.url.clone(),
         referrer_policy,
     )));
-    let parse =
+    let mut parse =
         megi_html::parse_document_with_options(&decoded.text, false, &options.parse_options);
+    // #2285: expand declarative shadow roots so their content participates in
+    // layout/paint (MDN and other modern sites use <template shadowroot>).
+    let _ = crate::shadow_dom::expand_declarative_shadow_roots(&mut parse.document);
     let source_mentions_svg = contains_ascii_case_insensitive(decoded.text.as_bytes(), b"<svg");
     let decode_parse_time = decode_start.elapsed();
 
