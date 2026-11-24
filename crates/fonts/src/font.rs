@@ -110,6 +110,8 @@ impl Font {
     }
 
     pub(crate) fn ttf_face(&self) -> Result<TtfFace<'_>, FontError> {
+        #[cfg(test)]
+        TTF_PARSE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         TtfFace::parse(&self.data, self.index).map_err(|err| FontError::InvalidFont {
             reason: format!("ttf-parser rejected face {}: {err}", self.index),
         })
@@ -375,6 +377,21 @@ impl Font {
             data,
         })
     }
+}
+
+/// Test-only counter of raw sfnt parses; `measure_text` must not re-parse a face per glyph.
+#[cfg(test)]
+pub(crate) static TTF_PARSE_COUNT: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(test)]
+pub(crate) fn reset_ttf_parse_count() {
+    TTF_PARSE_COUNT.store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[cfg(test)]
+pub(crate) fn ttf_parse_count() -> usize {
+    TTF_PARSE_COUNT.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 #[cfg(test)]

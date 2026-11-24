@@ -593,10 +593,9 @@ id = "X-PERF-REALSITES"
 area = "X"
 name = "Rendimiento acceptable en sitios reales complejos"
 source = "issue #1899"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/fonts/src/db/shape.rs::whitespace_never_scans_the_system_fallback_fonts"
 issue = 1899
-reason = "microsoft.com takes 61 s to render in release vs 0.3 s for example.com; no budget or fix lands this gap."
 
 [[capability]]
 id = "F6-JS-BUDGET-REAL"

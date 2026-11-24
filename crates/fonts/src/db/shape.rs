@@ -139,29 +139,62 @@ impl FontDatabase {
         Font::validate_size(size_px)?;
         let primary = self.font(families, weight, style, Stretch::Normal)?;
         let mut chain = self.fallback_chain(families, weight, style, primary);
-        let mut memo: HashMap<char, (usize, Option<u16>)> = HashMap::new();
-        let mut width = 0.0f32;
-        for ch in text.chars() {
-            let (font_index, glyph_id) = *memo.entry(ch).or_insert_with(|| {
-                for (index, font) in chain.iter().enumerate() {
-                    if let Some(glyph_id) = font.glyph_id(ch) {
-                        return (index, Some(glyph_id));
+        // Parse each face at most once per measurement; the old code re-parsed the raw
+        // sfnt bytes on every glyph lookup (#1899).
+        let mut resolved: HashMap<char, (usize, u16)> = HashMap::new();
+        let mut extras: Vec<Font> = Vec::new();
+        {
+            let faces: Vec<Option<ttf_parser::Face<'_>>> =
+                chain.iter().map(|font| font.ttf_face().ok()).collect();
+            for ch in text.chars() {
+                if resolved.contains_key(&ch) {
+                    continue;
+                }
+                if ch.is_control() {
+                    // Line breaks and other control characters have no visible glyph:
+                    // scanning every system font for one cost seconds on real sites (#1899).
+                    // Ordinary spaces keep their real advance from the face chain.
+                    resolved.insert(ch, (0, 0));
+                    continue;
+                }
+                let mut found = None;
+                for (index, face) in faces.iter().enumerate() {
+                    if let Some(gid) = face.as_ref().and_then(|face| face.glyph_index(ch)) {
+                        found = Some((index, gid.0));
+                        break;
                     }
                 }
-                if let Some((font, glyph_id)) =
+                if let Some(hit) = found {
+                    resolved.insert(ch, hit);
+                } else if let Some((font, gid)) =
                     self.find_fallback_face_for_char(ch, &chain, weight, style)
                 {
-                    let index = chain.len();
-                    chain.push(font);
-                    return (index, Some(glyph_id));
+                    let extra = extras.iter().position(|existing| *existing == font);
+                    let position = match extra {
+                        Some(position) => position,
+                        None => {
+                            extras.push(font);
+                            extras.len() - 1
+                        }
+                    };
+                    resolved.insert(ch, (chain.len() + position, gid));
+                } else {
+                    resolved.insert(ch, (0, 0));
                 }
-                (0, None)
-            });
-            let advance = match glyph_id {
-                Some(glyph_id) => chain[font_index].glyph_advance(u32::from(glyph_id), size_px)?,
-                None => chain[0].glyph_advance(0, size_px)?,
-            };
-            width += advance;
+            }
+        }
+        chain.extend(extras);
+        let faces: Vec<Option<ttf_parser::Face<'_>>> =
+            chain.iter().map(|font| font.ttf_face().ok()).collect();
+        let mut width = 0.0f32;
+        for ch in text.chars() {
+            let (index, gid) = resolved[&ch];
+            let advance = faces
+                .get(index)
+                .and_then(|face| face.as_ref())
+                .and_then(|face| face.glyph_hor_advance(ttf_parser::GlyphId(gid)))
+                .unwrap_or(0) as f32;
+            width += advance * (size_px / f32::from(chain[index].units_per_em.max(1)));
         }
         Ok(width)
     }
@@ -334,5 +367,29 @@ impl FontDatabase {
         style: FontStyle,
     ) -> Result<Font, FontError> {
         self.font(families, weight, style, Stretch::Normal)
+    }
+}
+
+#[cfg(test)]
+mod whitespace_fallback_tests {
+    use super::*;
+    use crate::font::{reset_ttf_parse_count, ttf_parse_count};
+
+    #[test]
+    fn whitespace_never_scans_the_system_fallback_fonts() {
+        // #1899: measuring a text run with a newline used to scan every system font
+        // looking for a glyph for '\n', taking seconds on microsoft.com.
+        let db = FontDatabase::new_with_bundled_fonts();
+        let families: &[&str] = &["Arial", "sans-serif"];
+        reset_ttf_parse_count();
+        let width = db
+            .measure_text(families, 400, FontStyle::Normal, 15.0, "What's\n  new?")
+            .expect("measure with newline");
+        let parses = ttf_parse_count();
+        assert!(width > 0.0);
+        assert!(
+            parses <= 16,
+            "whitespace triggered {parses} font parses (expected <= 16)"
+        );
     }
 }

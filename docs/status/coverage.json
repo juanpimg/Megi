@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 73,
+    "implemented": 74,
     "partial": 1,
     "known": 75,
-    "percent": 97,
+    "percent": 99,
     "unverified": [],
     "invalid_states": []
   },
@@ -60,10 +60,10 @@
     },
     {
       "id": "X",
-      "implemented": 4,
+      "implemented": 5,
       "partial": 0,
       "known": 5,
-      "percent": 80
+      "percent": 100
     }
   ],
   "missing": [
@@ -75,16 +75,6 @@
       "state": "partial",
       "evidence": "none",
       "issue": 989,
-      "reason": "no requiere evidencia"
-    },
-    {
-      "id": "X-PERF-REALSITES",
-      "area": "X",
-      "name": "Rendimiento acceptable en sitios reales complejos",
-      "source": "issue #1899",
-      "state": "missing",
-      "evidence": "none",
-      "issue": 1899,
       "reason": "no requiere evidencia"
     }
   ]
