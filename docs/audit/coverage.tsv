@@ -761,7 +761,7 @@ crates/layout/src/block/height.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/layout/src/block/intrinsic.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/margin.rs	155	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
 crates/layout/src/block/positioning.rs	290	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/block/sizing.rs	373	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/block/sizing.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/width.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -844,7 +844,7 @@ crates/layout/tests/inline_block.rs	143	test	F1	wave-max-mod	2026-11-19	covered	
 crates/layout/tests/positioning.rs	360	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/proptest_layout.rs	287	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/pseudo_elements.rs	183	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/replaced.rs	237	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/replaced.rs	278	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/tables/basic.rs	265	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/tables/collapse.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/tables/common.rs	209	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

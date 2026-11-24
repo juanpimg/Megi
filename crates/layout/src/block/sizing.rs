@@ -168,8 +168,19 @@ pub(crate) fn replaced_content_size(
 
     let min_w =
         resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width).map(to_content_h);
-    let max_w =
-        resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width).map(to_content_h);
+    // The UA stylesheet sets `max-width: 100%` on form controls to avoid
+    // overflow. For an atomic inline with an explicit author `width`, that
+    // percentage resolves against the narrow inline formatting context, not
+    // the element's containing block, and would clip a 496px input to ~20px
+    // (#2247). Ignore the UA percentage cap when the author gave an explicit
+    // width; author `max-width` (non-100% or explicit calc) still applies.
+    let ua_max_width_cap = matches!(style.max_width, megi_css::Length::Percent(100.0))
+        && !matches!(style.width, megi_css::Length::Auto);
+    let max_w = if ua_max_width_cap {
+        None
+    } else {
+        resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width).map(to_content_h)
+    };
     let min_h = resolve_min_height(style.min_height, style.calc_lengths.min_height, cb_height)
         .map(to_content_v);
     let max_h = resolve_max_height(style.max_height, style.calc_lengths.max_height, cb_height)

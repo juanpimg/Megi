@@ -235,3 +235,44 @@ fn test_input_size_attribute_sets_intrinsic_width() {
         replaced.dimensions.content.width
     );
 }
+
+/// #2247: an inline-block wrapper's shrink-to-fit must use the replaced
+/// child's explicit CSS width, not its small intrinsic size.
+#[test]
+fn test_inline_block_wrapper_uses_replaced_css_width() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html".to_owned(), vec![]);
+    doc.append_child(doc.root(), html);
+    let body = doc.create_element(Namespace::Html, "body".to_owned(), vec![]);
+    doc.append_child(html, body);
+    let wrapper = doc.create_element(Namespace::Html, "div".to_owned(), vec![]);
+    doc.append_child(body, wrapper);
+    let input = doc.create_element(Namespace::Html, "input".to_owned(), vec![]);
+    doc.append_child(wrapper, input);
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto));
+    styles.insert(wrapper, {
+        let mut s = ComputedStyle::initial();
+        s.display = Display::InlineBlock;
+        s
+    });
+    styles.insert(input, {
+        let mut s = ComputedStyle::initial();
+        s.width = Length::Px(496.0);
+        s
+    });
+
+    let tree = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout");
+    fn find_input(b: &LayoutBox) -> Option<f32> {
+        if matches!(b.box_type, BoxType::Replaced(_)) {
+            return Some(b.dimensions.content.width);
+        }
+        b.children.iter().find_map(find_input)
+    }
+    let w = find_input(&tree).expect("input box");
+    assert!(
+        (w - 496.0).abs() < 1.0,
+        "replaced child should keep CSS width 496 inside inline-block, got {w}"
+    );
+}
