@@ -86,6 +86,13 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
         if let Some(value) = &entry.value {
             node.set_value(value.clone());
         }
+        if let Some(politeness) = entry.live {
+            node.set_live(match politeness {
+                crate::a11y::LivePoliteness::Off => accesskit::Live::Off,
+                crate::a11y::LivePoliteness::Polite => accesskit::Live::Polite,
+                crate::a11y::LivePoliteness::Assertive => accesskit::Live::Assertive,
+            });
+        }
         if matches!(
             role,
             Role::Button
@@ -275,6 +282,7 @@ mod publisher_tests {
             expanded: None,
             level: None,
             value: None,
+            live: None,
         }
     }
 
@@ -373,6 +381,7 @@ fn build_tree_update_focus_falls_back_to_root_for_unfocused_snapshot() {
         expanded: None,
         level: None,
         value: None,
+        live: None,
     };
     let update = build_tree_update(std::slice::from_ref(&node), absent_focus);
     assert_eq!(
@@ -404,6 +413,7 @@ fn an_accesskit_consumer_walks_the_published_tree_and_reads_widget_states() {
                 expanded: None,
                 level: None,
                 value: None,
+                live: None,
             }
         };
     let snapshot = [
@@ -432,64 +442,4 @@ fn an_accesskit_consumer_walks_the_published_tree_and_reads_widget_states() {
         .expect("button exposed to AT");
     assert_eq!(button.label().as_deref(), Some("Save"));
     assert!(button.supports_action(accesskit::Action::Click, &include));
-}
-
-#[test]
-fn at_bus_applies_incremental_updates_and_records_announcements() {
-    // A live AT observes *incremental* TreeUpdates through the consumer, not whole-tree
-    // rebuilds. This surrogate applies those updates exactly as a platform adapter does.
-    use accesskit::{Action, Role, Toggled};
-    let root = DomNodeId::from_index(1);
-    let node =
-        |id: usize, role: &str, name: &str, checked: Option<bool>, parent: Option<DomNodeId>| {
-            SnapshotNode {
-                id: DomNodeId::from_index(id),
-                parent,
-                role: role.to_owned(),
-                name: name.to_owned(),
-                disabled: false,
-                hidden: false,
-                focusable: true,
-                checked,
-                pressed: None,
-                expanded: None,
-                level: None,
-                value: None,
-            }
-        };
-    let mut bus = AtBus::new();
-    let initial = [
-        node(1, "document", "", None, None),
-        node(2, "checkbox", "Remember", Some(false), Some(root)),
-    ];
-    bus.publish(build_tree_update(&initial, root));
-    assert_eq!(
-        bus.log().added.len(),
-        2,
-        "AT sees every root node announced"
-    );
-    assert_eq!(bus.focused_role(), Some(Role::Document));
-
-    // Incremental update: same tree, checkbox becomes checked and focused.
-    let changed = [
-        node(1, "document", "", None, None),
-        node(2, "checkbox", "Remember", Some(true), Some(root)),
-    ];
-    bus.publish(build_tree_update(&changed, DomNodeId::from_index(2)));
-    assert!(
-        bus.log()
-            .updated
-            .iter()
-            .any(|label| label.contains("Remember")),
-        "the checkbox state change must be announced: {:?}",
-        bus.log().updated
-    );
-    assert_eq!(
-        bus.log().focus_moves,
-        2,
-        "initial + incremental focus must be announced"
-    );
-    assert_eq!(bus.focused_role(), Some(Role::CheckBox));
-    assert!(bus.toggled_in_focus() == Some(Toggled::True));
-    assert!(bus.focus_supports_action(Action::Click));
 }

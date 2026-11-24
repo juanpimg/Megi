@@ -1,5 +1,6 @@
 //! Testable AT-bus surrogate for verifiable accessibility integration (F7-A11Y).
 
+use crate::a11y::LivePoliteness;
 use accesskit::TreeUpdate;
 use accesskit_consumer::{FilterResult, NodeRef, Tree, TreeChangeHandler};
 
@@ -14,6 +15,15 @@ pub struct AtChangeLog {
     pub removed: Vec<String>,
     /// Number of focus moves reported to the AT.
     pub focus_moves: usize,
+    /// ARIA live-region announcements a screen reader would speak, in order.
+    pub announcements: Vec<LiveAnnouncement>,
+}
+
+/// One announcement emitted by a polite or assertive live region.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LiveAnnouncement {
+    pub politeness: LivePoliteness,
+    pub text: String,
 }
 
 /// A deterministic AT-bus surrogate (F7-A11Y): applies the exact `TreeUpdate`s the shell
@@ -84,9 +94,14 @@ impl AtBus {
 impl TreeChangeHandler for AtChangeLog {
     fn node_added(&mut self, node: &NodeRef<'_>) {
         self.added.push(node_label(node));
+        self.announce(node, announcement_text(node));
     }
-    fn node_updated(&mut self, _old: &NodeRef<'_>, new: &NodeRef<'_>) {
+    fn node_updated(&mut self, old: &NodeRef<'_>, new: &NodeRef<'_>) {
         self.updated.push(node_label(new));
+        let text = announcement_text(new);
+        if text != announcement_text(old) {
+            self.announce(new, text);
+        }
     }
     fn focus_moved(&mut self, _old: Option<&NodeRef<'_>>, _new: Option<&NodeRef<'_>>) {
         self.focus_moves += 1;
@@ -101,4 +116,28 @@ fn node_label(node: &NodeRef<'_>) -> String {
         Some(label) if !label.is_empty() => format!("{:?}:{}", node.role(), label),
         _ => format!("{:?}", node.role()),
     }
+}
+
+impl AtChangeLog {
+    fn announce(&mut self, node: &NodeRef<'_>, text: String) {
+        let politeness = match node.live() {
+            accesskit::Live::Polite => LivePoliteness::Polite,
+            accesskit::Live::Assertive => LivePoliteness::Assertive,
+            accesskit::Live::Off => return,
+        };
+        if text.trim().is_empty() {
+            return;
+        }
+        self.announcements
+            .push(LiveAnnouncement { politeness, text });
+    }
+}
+
+/// Text a screen reader speaks for a live-region change: the accessible name first,
+/// then the value and finally the role as a deterministic fallback.
+fn announcement_text(node: &NodeRef<'_>) -> String {
+    node.label()
+        .filter(|label| !label.trim().is_empty())
+        .or_else(|| node.value().filter(|value| !value.trim().is_empty()))
+        .unwrap_or_else(|| format!("{:?}", node.role()))
 }

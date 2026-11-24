@@ -190,6 +190,8 @@ pub mod a11y_at_bus;
 pub mod a11y_backend;
 #[cfg(test)]
 mod a11y_backend_orphan_tests;
+#[cfg(test)]
+mod a11y_live_tests;
 pub mod chrome;
 pub mod cli;
 pub mod convert;
@@ -309,6 +311,7 @@ mod a11y_adapter_tests {
             expanded: None,
             level: None,
             value: None,
+            live: None,
         }
     }
 

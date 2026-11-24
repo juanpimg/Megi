@@ -23,6 +23,8 @@ pub struct SnapshotNode {
     pub level: Option<u8>,
     /// Current control value (`value` attribute or `aria-valuetext`).
     pub value: Option<String>,
+    /// ARIA live-region politeness; `None` when the node is not a live region.
+    pub live: Option<LivePoliteness>,
 }
 
 /// Builds a complete accessibility snapshot: visible, role-bearing nodes in document order with
@@ -52,6 +54,7 @@ pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
             }
             current = document.try_node(id).and_then(|n| n.parent);
         }
+        let live = live_politeness(document, node, &role);
         out.push(SnapshotNode {
             id: node,
             parent,
@@ -66,6 +69,7 @@ pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
             level: heading_level(document, node),
             value: attribute(document, node, "value")
                 .or_else(|| attribute(document, node, "aria-valuetext")),
+            live,
         });
     }
     out
@@ -174,4 +178,22 @@ pub fn focus_order(document: &Document, root: NodeId) -> Vec<NodeId> {
         out.push(node);
     }
     out
+}
+
+/// Resolves `aria-live` with the implicit politeness of alert/status/log roles.
+fn live_politeness(document: &Document, node: NodeId, role: &str) -> Option<LivePoliteness> {
+    if let Some(value) = attribute(document, node, "aria-live") {
+        let politeness = match value.trim().to_ascii_lowercase().as_str() {
+            "off" => LivePoliteness::Off,
+            "polite" => LivePoliteness::Polite,
+            "assertive" => LivePoliteness::Assertive,
+            _ => return None,
+        };
+        return Some(politeness);
+    }
+    match role {
+        "alert" => Some(LivePoliteness::Assertive),
+        "status" | "log" => Some(LivePoliteness::Polite),
+        _ => None,
+    }
 }
