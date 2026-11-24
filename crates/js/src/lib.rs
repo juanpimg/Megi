@@ -201,6 +201,8 @@
 //!
 #[cfg(feature = "js")]
 pub mod canvas;
+#[cfg(feature = "js")]
+mod crypto;
 pub mod error;
 #[cfg(feature = "js")]
 pub mod events;

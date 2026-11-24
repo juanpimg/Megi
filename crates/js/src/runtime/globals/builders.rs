@@ -80,6 +80,62 @@ pub(crate) fn build_performance(context: &mut Context) -> JsObject {
 
 /// Builds the `crypto` host object.
 pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
+    // Build `subtle` first: ObjectInitializer holds a mutable borrow of
+    // `context`, so only one initializer may be alive at a time.
+    let subtle = {
+        let mut subtle_init = ObjectInitializer::new(context);
+        subtle_init.function(
+            native(|_this, args, context| {
+                let algorithm = args
+                    .first()
+                    .map(|v| {
+                        v.to_string(context)
+                            .map(|s| s.to_std_string_escaped())
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                if algorithm != "sha-256" {
+                    return Err(js_error("subtle.digest: unsupported algorithm"));
+                }
+                let data = args.get(1).cloned().unwrap_or(JsValue::undefined());
+                let bytes: Vec<u8> = if let Some(s) = data.as_string() {
+                    // Our JS caller passes a BufferSource as a Latin-1 string.
+                    s.to_std_string_escaped()
+                        .chars()
+                        .filter_map(|c| u8::try_from(u32::from(c)).ok())
+                        .collect()
+                } else if let Some(obj) = data.as_object() {
+                    if let Ok(arr) = JsUint8Array::from_object(obj.clone()) {
+                        arr.to_vec(context).unwrap_or_default()
+                    } else {
+                        return Err(js_error("subtle.digest requires a BufferSource"));
+                    }
+                } else {
+                    return Err(js_error("subtle.digest requires a BufferSource"));
+                };
+                let digest = crate::crypto::sha256(&bytes);
+                let block = AlignedVec::from_iter(0, digest.iter().copied());
+                let buffer = JsArrayBuffer::from_byte_block(block, context)
+                    .map_err(|e| js_error(e.to_string()))?;
+                let promise = boa_engine::object::builtins::JsPromise::new(
+                    move |resolvers, ctx| {
+                        resolvers.resolve.call(
+                            &JsValue::undefined(),
+                            &[JsValue::from(buffer.clone())],
+                            ctx,
+                        )?;
+                        Ok(JsValue::undefined())
+                    },
+                    context,
+                )?;
+                Ok(JsValue::from(promise))
+            }),
+            js_string!("digest"),
+            2,
+        );
+        subtle_init.build()
+    };
     let mut init = ObjectInitializer::new(context);
     init.function(
         native(|_this, args, context| {
@@ -87,17 +143,19 @@ pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
             let obj = array
                 .as_object()
                 .ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
-            // #2251: Web Crypto §4.1.1 requires a cryptographically secure RNG.
-            // getrandom uses the OS CSPRNG (getrandom(2)/RtlGenRand/etc.).
-            let len = obj
-                .get(js_string!("length"), context)
+            // Web IDL: BufferSource only — a plain object has no byteLength.
+            // Web Crypto §4.1.1 caps a single call at 2^16 bytes.
+            let byte_length = obj
+                .get(js_string!("byteLength"), context)
                 .ok()
                 .and_then(|v| v.to_number(context).ok())
-                .unwrap_or(0.0) as usize;
-            let mut bytes = vec![0u8; len];
-            if let Err(error) = getrandom::fill(&mut bytes) {
-                return Err(js_error(format!("getRandomValues failed: {error}")));
+                .unwrap_or(f64::NAN);
+            if !byte_length.is_finite() || byte_length < 0.0 || byte_length > 65_536.0 {
+                return Err(js_error("getRandomValues requires a typed array"));
             }
+            let len = byte_length as usize;
+            let mut bytes = vec![0u8; len];
+            crate::crypto::fill_random(&mut bytes);
             for (i, byte) in bytes.into_iter().enumerate() {
                 let _ = obj.set(
                     js_string!(i.to_string()),
@@ -113,11 +171,9 @@ pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
     );
     init.function(
         native(|_this, _args, _context| {
-            // Generate a v4 UUID from the OS CSPRNG (#2251).
+            // Generate a v4 UUID from the OS CSPRNG (RFC 4122 §4.4).
             let mut bytes = [0u8; 16];
-            if let Err(error) = getrandom::fill(&mut bytes) {
-                return Err(js_error(format!("randomUUID failed: {error}")));
-            }
+            crate::crypto::fill_random(&mut bytes);
             bytes[6] = (bytes[6] & 0x0f) | 0x40;
             bytes[8] = (bytes[8] & 0x3f) | 0x80;
             let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
@@ -133,6 +189,11 @@ pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
         }),
         js_string!("randomUUID"),
         0,
+    );
+    init.property(
+        js_string!("subtle"),
+        JsValue::from(subtle),
+        Attribute::all(),
     );
     init.build()
 }
