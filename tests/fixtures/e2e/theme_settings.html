@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Theme settings</title></head>
+<body>
+<h1>Theme settings</h1>
+<button id="dark" type="button">Dark mode</button>
+<p>Theme: <span id="status">light</span></p>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('dark').addEventListener('click', function () {
+      document.body.classList.add('dark');
+      var dark = document.body.classList.contains('dark');
+      document.getElementById('status').textContent = dark ? 'dark' : 'light';
+      finish('pass:theme ' + document.getElementById('status').textContent);
+    });
+    document.getElementById('dark').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('theme failed: ' + error);
+    finish('fail:theme');
+  }
+})();
+</script>
+</body>
+</html>

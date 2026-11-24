@@ -72,6 +72,7 @@ def classify(stats: dict, site: dict | None = None) -> str:
         or status >= 400
         or _failure_count(stats.get("images_failed")) > 0
         or _failure_count(stats.get("scripts_failed")) > 0
+        or _failure_count(stats.get("console_errors")) > 0
     )
     if site and "min_items" in site and items < int(site["min_items"]):
         degraded = True
@@ -147,6 +148,7 @@ def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, sou
         "display_items": stats.get("display_items", 0),
         "status": stats.get("status"),
         "warnings": list(stats.get("warnings") or []),
+        "console_errors": _failure_count(stats.get("console_errors")),
         "images_failed": stats.get("images_failed", 0),
         "time_ms": _total_time_ms(stats),
         "issue": site.get("issue", 0),
@@ -169,7 +171,7 @@ def render_html(results: list[dict], mode: str = "snapshot", generated_at: str =
             f"<tr><td><b>{html.escape(str(item['name']))}</b><br><span class='meta'>{note}</span></td>"
             f"<td style='color:{color}'><b>{result}</b></td>"
             f"<td>{item.get('display_items', 0)}</td><td>{item.get('time_ms', 0)} ms</td>"
-            f"<td>{warnings}</td><td>{issue_link}</td>"
+            f"<td>{warnings}</td><td>{item.get('console_errors', 0)}</td><td>{issue_link}</td>"
             f"<td><a href='{html.escape(str(item['png']))}'><img src='{html.escape(str(item['png']))}' "
             f"alt='captura de {html.escape(str(item['name']))}' style='width:220px;border:1px solid #d0d7de'></a></td></tr>"
         )
@@ -187,11 +189,12 @@ th{{background:#f6f8fa}} .meta{{color:#57606a;font-size:12px}}
 generado por <code>tools/real_site_check.py</code> desde <code>docs/status/real_sites.toml</code>.
 Refrescar con <code>python3 tools/real_site_check.py --live</code> (red) o sin flags (instantáneas).</p>
 <div class="note">Esto es una comprobación de render de extremo a extremo, no una métrica de
-conformidad. Una página en blanco (<code>display_items = 0</code>) o avisos de imagen/layout se
-marcan como fallo aunque el pipeline haya terminado sin error. Las capturas son PNG reales
+conformidad. Una página en blanco (<code>display_items = 0</code>), avisos de imagen/layout o
+errores de consola (<code>console_errors &gt; 0</code>) marcan el sitio como DEGRADADO aunque el
+pipeline haya terminado sin error. Las capturas son PNG reales
 producidos por <code>render</code>. Para medir cobertura de capacidades, ver
 <a href="coverage.html">coverage.html</a>.</p>
-<table><tr><th>Sitio</th><th>Resultado</th><th>display_items</th><th>Tiempo</th><th>Avisos</th><th>Issue</th><th>Captura</th></tr>
+<table><tr><th>Sitio</th><th>Resultado</th><th>display_items</th><th>Tiempo</th><th>Avisos</th><th>console_errors</th><th>Issue</th><th>Captura</th></tr>
 {''.join(rows)}</table>
 <p class="meta">Datos: <a href="real-sites.json">real-sites.json</a></p>
 </body></html>

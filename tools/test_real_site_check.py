@@ -144,5 +144,70 @@ class RobustnessTests(unittest.TestCase):
         self.assertEqual(res_str["time_ms"], 0.0)
 
 
+class ConsoleErrorTests(unittest.TestCase):
+    """M1: console_errors from `render --json` must reach the report and the verdict."""
+
+    def test_console_error_degrades_an_otherwise_clean_site(self) -> None:
+        result = real_site_check.classify(
+            {
+                "display_items": 42,
+                "status": 200,
+                "warnings": [],
+                "images_failed": 0,
+                "scripts_failed": 0,
+                "console_errors": 1,
+            }
+        )
+        self.assertEqual(result, "DEGRADADO")
+
+    def test_result_carries_console_errors(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"},
+            "DEGRADADO",
+            {"display_items": 3, "console_errors": 2},
+            "",
+            Path("x.png"),
+            "snap",
+        )
+        self.assertEqual(result["console_errors"], 2)
+
+    def test_result_tolerates_missing_console_errors(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"}, "PASS", {"display_items": 3}, "", Path("x.png"), "snap"
+        )
+        self.assertEqual(result["console_errors"], 0)
+
+    def test_render_html_displays_console_errors(self) -> None:
+        item = {
+            "id": "x",
+            "name": "x.example",
+            "result": "DEGRADADO",
+            "display_items": 3,
+            "warnings": [],
+            "console_errors": 2,
+            "issue": 0,
+            "png": "real-sites/x.png",
+        }
+        html = real_site_check.render_html([item])
+        self.assertIn("console_errors", html)
+        self.assertIn(">2<", html)
+
+    def test_render_one_propagates_console_errors(self) -> None:
+        # The render CLI already emits `console_errors` in its JSON stats; the report
+        # must carry the value through instead of silently dropping it.
+        fake = mock.Mock(
+            returncode=0,
+            stdout='{"display_items": 5, "warnings": [], "status": 200, "console_errors": 1}',
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch.object(real_site_check.subprocess, "run", return_value=fake):
+                result = real_site_check.render_one(
+                    Path(root), {"id": "x", "name": "X", "snapshot": "x.html"}, live=False
+                )
+        self.assertEqual(result["console_errors"], 1)
+        self.assertEqual(result["result"], "DEGRADADO")
+
+
 if __name__ == "__main__":
     unittest.main()

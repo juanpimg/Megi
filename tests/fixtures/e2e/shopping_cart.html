@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shopping cart</title></head>
+<body>
+<h1>Shopping cart</h1>
+<button class="add" data-price="10" type="button">Add notebook</button>
+<button class="add" data-price="15" type="button">Add pen</button>
+<p>Total: <span id="total">0</span></p>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    var buttons = document.querySelectorAll('.add');
+    var total = 0;
+    for (var i = 0; i < buttons.length; i++) {
+      (function (button) {
+        button.addEventListener('click', function () {
+          total += Number(button.getAttribute('data-price'));
+        });
+      })(buttons[i]);
+    }
+    for (var j = 0; j < buttons.length; j++) {
+      buttons[j].dispatchEvent(new Event('click'));
+    }
+    document.getElementById('total').textContent = String(total);
+    finish('pass:cart total ' + total);
+  } catch (error) {
+    console.error('cart failed: ' + error);
+    finish('fail:cart');
+  }
+})();
+</script>
+</body>
+</html>

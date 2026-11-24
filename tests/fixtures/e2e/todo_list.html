@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Task list</title></head>
+<body>
+<h1>Task list</h1>
+<ul id="list"><li class="task">write spec</li></ul>
+<button id="add" type="button">Add task</button>
+<button class="complete" type="button">Complete first</button>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    var list = document.getElementById('list');
+    var added = document.createElement('li');
+    added.setAttribute('class', 'task');
+    added.textContent = 'run tests';
+    list.appendChild(added);
+    document.querySelector('.complete').addEventListener('click', function () {
+      document.querySelectorAll('.task')[0].classList.add('done');
+    });
+    document.querySelector('.complete').dispatchEvent(new Event('click'));
+    var tasks = document.querySelectorAll('.task');
+    var done = 0;
+    for (var i = 0; i < tasks.length; i++) {
+      if (tasks[i].classList.contains('done')) { done++; }
+    }
+    finish('pass:' + tasks.length + ' tasks ' + done + ' done');
+  } catch (error) {
+    console.error('task list failed: ' + error);
+    finish('fail:todo');
+  }
+})();
+</script>
+</body>
+</html>

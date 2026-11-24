@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sign in</title></head>
+<body>
+<h1>Sign in</h1>
+<label>User <input id="user" value="reader"></label>
+<label>Password <input id="pass" type="password" value="secret"></label>
+<button id="submit" type="button">Sign in</button>
+<span id="status">signed out</span>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('submit').addEventListener('click', function () {
+      var user = document.getElementById('user').value;
+      var pass = document.getElementById('pass').value;
+      if (!user || !pass) { throw new Error('missing credentials'); }
+      document.getElementById('status').textContent = 'signed in as ' + user;
+      finish('pass:' + document.getElementById('status').textContent);
+    });
+    document.getElementById('submit').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('sign in failed: ' + error);
+    finish('fail:sign-in');
+  }
+})();
+</script>
+</body>
+</html>

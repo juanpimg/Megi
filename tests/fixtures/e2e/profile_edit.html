@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Edit profile</title></head>
+<body>
+<h1>Edit profile</h1>
+<label>Display name <input id="name" value="Ada"></label>
+<button id="save" type="button">Save profile</button>
+<span id="confirm">unsaved</span>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('save').addEventListener('click', function () {
+      var name = document.getElementById('name').value;
+      if (!name) { throw new Error('empty name'); }
+      document.getElementById('confirm').textContent = 'profile saved';
+      finish('pass:' + document.getElementById('confirm').textContent);
+    });
+    document.getElementById('save').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('profile failed: ' + error);
+    finish('fail:profile');
+  }
+})();
+</script>
+</body>
+</html>

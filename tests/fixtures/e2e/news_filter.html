@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>News feed</title></head>
+<body>
+<h1>News feed</h1>
+<button id="tech" type="button">Tech</button>
+<article class="news" data-topic="tech">New browser engine</article>
+<article class="news" data-topic="tech">Chip launch</article>
+<article class="news" data-topic="sports">Match result</article>
+<article class="news" data-topic="sports">League table</article>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    var items = document.querySelectorAll('.news');
+    var count = 0;
+    document.getElementById('tech').addEventListener('click', function () {
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].getAttribute('data-topic') === 'tech') {
+          items[i].classList.add('visible');
+          count++;
+        }
+      }
+      finish('pass:' + count + ' tech stories');
+    });
+    document.getElementById('tech').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('filter failed: ' + error);
+    finish('fail:filter');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Docs search</title></head>
+<body>
+<h1>Docs search</h1>
+<input id="q" type="search" value="rust">
+<button id="go" type="button">Search</button>
+<ul>
+  <li class="story">Rust language</li>
+  <li class="story">Learn Rust</li>
+  <li class="story">The Rust book</li>
+  <li class="story">Python guide</li>
+  <li class="story">C++ notes</li>
+</ul>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    var query = document.getElementById('q').value;
+    var stories = document.querySelectorAll('.story');
+    var shown = 0;
+    for (var i = 0; i < stories.length; i++) {
+      if (stories[i].textContent.toLowerCase().indexOf(query) >= 0) {
+        stories[i].classList.add('match');
+        shown++;
+      }
+    }
+    document.getElementById('go').addEventListener('click', function () {
+      finish('pass:' + shown + ' results for ' + query);
+    });
+    document.getElementById('go').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('search failed: ' + error);
+    finish('fail:search');
+  }
+})();
+</script>
+</body>
+</html>

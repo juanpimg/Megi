@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Article reader</title></head>
+<body>
+<h1>Article reader</h1>
+<article id="body">A long article about the web platform and its many moving parts.</article>
+<button id="larger" type="button">A+</button>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('larger').addEventListener('click', function () {
+      document.getElementById('body').style.fontSize = '20px';
+      finish('pass:font size ' + document.getElementById('body').style.fontSize);
+    });
+    document.getElementById('larger').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('reader failed: ' + error);
+    finish('fail:reader');
+  }
+})();
+</script>
+</body>
+</html>

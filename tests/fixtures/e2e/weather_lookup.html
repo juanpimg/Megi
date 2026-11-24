@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Weather lookup</title></head>
+<body>
+<h1>Weather lookup</h1>
+<label>City <input id="city" value="Madrid"></label>
+<button id="lookup" type="button">Get forecast</button>
+<p>Forecast: <span id="forecast">—</span></p>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('lookup').addEventListener('click', function () {
+      var city = document.getElementById('city').value;
+      if (!city) { throw new Error('missing city'); }
+      var temp = '21C';
+      document.getElementById('forecast').textContent = temp;
+      finish('pass:forecast ' + temp);
+    });
+    document.getElementById('lookup').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('weather failed: ' + error);
+    finish('fail:weather');
+  }
+})();
+</script>
+</body>
+</html>
