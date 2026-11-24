@@ -1,0 +1,443 @@
+# Inventario de deuda de profundidad (spec v2 §4.3, fuente: docs/status/progress.toml).
+# Cada entrada es un criterio de aceptación pendiente, NO una estimación.
+# Regenerado desde el manifiesto de progreso; no editar a mano sin actualizar ese archivo.
+
+[[entry]]
+id = "m0-01"
+gap = "Informe WPT con `P/T` y SHA de la época — no hay artifact WPT en `docs/status/`"
+spec = "spec v2 §4.1 / progress.toml M0"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M0"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m0-02"
+gap = "0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría"
+spec = "spec v2 §4.1 / progress.toml M0"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M0"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m0-03"
+gap = "Release con verify + firma — `.github/workflows/release.yml` publica sha256, sin cosign"
+spec = "spec v2 §4.1 / progress.toml M0"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M0"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m1-01"
+gap = "10 fixtures E2E de tarea de usuario — no hay suite E2E versionada"
+spec = "spec v2 §4.1 / progress.toml M1"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M1"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m1-02"
+gap = "Corpus sin console_errors — `docs/status/real-sites.json`: 1/4 PASS, 3 DEGRADED"
+spec = "spec v2 §4.1 / progress.toml M1"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M1"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m2-01"
+gap = "Bidi y CJK completos — `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` §3 lo lista como pendiente"
+spec = "spec v2 §4.1 / progress.toml M2"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M2"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m2-02"
+gap = "Canvas 2D utilizable — no hay implementación en `crates/` (sólo `crates/js/tests/canvas_tests.rs`)"
+spec = "spec v2 §4.1 / progress.toml M2"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M2"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m2-03"
+gap = "Fixtures con md5 estable tras completar los solapes conocidos"
+spec = "spec v2 §4.1 / progress.toml M2"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M2"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m3-01"
+gap = "31+ targets de fuzz — hay 28 en `fuzz/fuzz_targets/`"
+spec = "spec v2 §4.1 / progress.toml M3"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M3"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m3-02"
+gap = "Sandbox enforced — sin selector Linux/macOS/Windows en el motor"
+spec = "spec v2 §4.1 / progress.toml M3"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M3"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m3-03"
+gap = "0 fugas cross-site y 12 pruebas negativas por SO — sin campaña publicada"
+spec = "spec v2 §4.1 / progress.toml M3"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M3"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m4-01"
+gap = "100+ subtests WPT de componentes — sin informe WPT publicado"
+spec = "spec v2 §4.1 / progress.toml M4"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M4"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m4-02"
+gap = "Service Worker fase 1 — no hay módulo SW en `crates/`"
+spec = "spec v2 §4.1 / progress.toml M4"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M4"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m4-03"
+gap = "WASM — sin soporte en el motor"
+spec = "spec v2 §4.1 / progress.toml M4"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M4"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m4-04"
+gap = "Demo offline con red cortada"
+spec = "spec v2 §4.1 / progress.toml M4"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M4"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m5-01"
+gap = "Auditoría de accesibilidad completa y publicada"
+spec = "spec v2 §4.1 / progress.toml M5"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M5"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m5-02"
+gap = "Impresión/PDF — sin implementación"
+spec = "spec v2 §4.1 / progress.toml M5"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M5"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m5-03"
+gap = "Diálogos y portapapeles nativos — sin implementación"
+spec = "spec v2 §4.1 / progress.toml M5"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M5"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m5-04"
+gap = "Sandbox enforced en Linux, macOS y Windows"
+spec = "spec v2 §4.1 / progress.toml M5"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M5"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m6-01"
+gap = "Canvas 2D completo — `crates/js/tests/canvas_tests.rs` cubre sólo la API mínima"
+spec = "spec v2 §4.1 / progress.toml M6"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M6"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m6-02"
+gap = "WebGL 1 por software — sin implementación"
+spec = "spec v2 §4.1 / progress.toml M6"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M6"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m6-03"
+gap = "AVIF/JPEG XL — sin decodificadores"
+spec = "spec v2 §4.1 / progress.toml M6"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M6"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m6-04"
+gap = "Audio y vídeo con códecs libres — sin implementación"
+spec = "spec v2 §4.1 / progress.toml M6"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M6"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m7-01"
+gap = "DevTools vía protocolo Firefox"
+spec = "spec v2 §4.1 / progress.toml M7"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M7"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m7-02"
+gap = "WebDriver BiDi"
+spec = "spec v2 §4.1 / progress.toml M7"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M7"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m7-03"
+gap = "Páginas `about:` de diagnóstico"
+spec = "spec v2 §4.1 / progress.toml M7"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M7"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m7-04"
+gap = "Perfilador usable"
+spec = "spec v2 §4.1 / progress.toml M7"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M7"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m8-01"
+gap = "JIT o migración de motor decidida por datos — Boa 0.22 sin decisión publicada"
+spec = "spec v2 §4.1 / progress.toml M8"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M8"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m8-02"
+gap = "HTTP/3/QUIC — sin implementación"
+spec = "spec v2 §4.1 / progress.toml M8"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M8"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m8-03"
+gap = "Paralelismo real de estilo/layout/paint — sin benchmarks publicados"
+spec = "spec v2 §4.1 / progress.toml M8"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M8"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m9-01"
+gap = "100/100 sitios PASS sin warnings — `docs/status/real-sites.json`: 1/4 PASS hoy"
+spec = "spec v2 §4.1 / progress.toml M9"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M9"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m9-02"
+gap = "Allowlists WPT/Test262 a 0 — sin informes publicados"
+spec = "spec v2 §4.1 / progress.toml M9"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M9"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m9-03"
+gap = "Auditoría externa y bus factor > 1"
+spec = "spec v2 §4.1 / progress.toml M9"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M9"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m9-04"
+gap = "Distribución multiplataforma firmada (sólo sha256 en release)"
+spec = "spec v2 §4.1 / progress.toml M9"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M9"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m10-01"
+gap = "WebGPU sobre perfil `performance`"
+spec = "spec v2 §4.1 / progress.toml M10"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M10"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m10-02"
+gap = "WebXR con adaptadores por dispositivo"
+spec = "spec v2 §4.1 / progress.toml M10"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M10"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m10-03"
+gap = "WebRTC completo (señalización, STUN/TURN, media)"
+spec = "spec v2 §4.1 / progress.toml M10"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M10"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m10-04"
+gap = "Extensiones con permisos y sync E2E"
+spec = "spec v2 §4.1 / progress.toml M10"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M10"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m10-05"
+gap = "Mobile publicado en Android e iOS"
+spec = "spec v2 §4.1 / progress.toml M10"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M10"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m11-01"
+gap = "Selectores de archivo y gestores de credenciales por SO"
+spec = "spec v2 §4.1 / progress.toml M11"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M11"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m11-02"
+gap = "Notificaciones y permisos por SO con matriz `enforced`"
+spec = "spec v2 §4.1 / progress.toml M11"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M11"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m11-03"
+gap = "Deep links e impresión nativa"
+spec = "spec v2 §4.1 / progress.toml M11"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M11"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m12-01"
+gap = "ADR público con datos de licencias DRM/EME y alternativas"
+spec = "spec v2 §4.1 / progress.toml M12"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M12"
+impact = 3
+frequency = 3
+
+[[entry]]
+id = "m12-02"
+gap = "Streams protegidos funcionando, o límite legal documentado"
+spec = "spec v2 §4.1 / progress.toml M12"
+verify_cmd = "python3 tools/update_progress.py --check"
+metric = "depth_closed"
+milestone = "M12"
+impact = 3
+frequency = 3

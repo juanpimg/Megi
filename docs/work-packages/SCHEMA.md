@@ -22,6 +22,8 @@ Un **work package (WP)** es la unidad atómica de trabajo para los agentes de IA
 
 Opcionales: `impact` (1–10), `frequency` (1–10). Prioridad = `impact × frequency`.
 
+| `profile` | str | `light` o `heavy`, derivado de `verify_cmd`: `cargo`/WPT/Test262/fuzz son `heavy`; Python/docs/git son `light`. Permite repartir trabajo entre una máquina grande y otra con poco disco. |
+
 ## Fuentes y generadores
 
 | Fuente | Generador | Métrica |
@@ -36,7 +38,7 @@ Opcionales: `impact` (1–10), `frequency` (1–10). Prioridad = `impact × freq
 
 ## Ciclo del agente
 
-1. `python3 tools/wp_plan.py --board` → elegir el WP de mayor prioridad.
+1. `python3 tools/wp_plan.py --board --profile light` (o `heavy`) → elegir el WP de mayor prioridad que quepa en tu máquina.
 2. Leer el plan del hito en `docs/superpowers/plans/`.
 3. TDD: test que falla → fix mínimo → test que pasa (`AGENTS.md` §5).
 4. Gate completo de `AGENTS.md` §6.
@@ -45,4 +47,4 @@ Opcionales: `impact` (1–10), `frequency` (1–10). Prioridad = `impact × freq
 
 ## Estado de implementación
 
-Hoy existen el esquema, la validación, el planificador y el tablero. Los parsers concretos de los siete generadores los añade `2026-11-24-work-package-engine-plan.md` (Tasks 1–4). Con artefactos ausentes, los generadores devuelven cero WPs: nunca inventan trabajo.
+Los siete generadores tienen parsers y validan cada WP antes de escribirlo. Sus artefactos son `tests/wpt/results/latest.json`, `tests/test262/results/latest.json`, `docs/status/real-sites.json`, `fuzz/artifacts/*.json`, `docs/audit/coverage.tsv`, `docs/work-packages/depth-inventory.toml` y `docs/work-packages/user-reports.json` (o `gh issue list`). Con artefactos ausentes, cada generador devuelve cero WPs: nunca inventan trabajo.
