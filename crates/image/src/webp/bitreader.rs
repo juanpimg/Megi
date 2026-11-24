@@ -124,21 +124,22 @@ pub(crate) fn read_huffman_code(
         let num_symbols = reader.read_bit()? + 1;
         let first_len_code = reader.read_bit()?;
         let first = reader.read_bits(if first_len_code == 0 { 1 } else { 8 })?;
-        if first >= u32::from(alphabet_size) {
-            return Err(ImageError::InvalidData {
-                reason: "VP8L simple Huffman symbol outside the alphabet",
-            });
-        }
+        // RFC 9649 §3.7.2.1.1: a simple code's symbols lie in [0..1] or [0..255]
+        // depending on `is_first_8bits`, independently of this code's alphabet
+        // size. libwebp's `ReadHuffmanCode` accepts `symbol > alphabet_size`:
+        // the symbol is still consumed from the bitstream, but its length lies
+        // outside the `alphabet_size` slice used to build the Huffman table and
+        // is therefore ignored (#2243). Size the table to the alphabet only and
+        // guard the writes so an out-of-range symbol is consumed, not stored.
         let mut lengths = vec![0u8; usize::from(alphabet_size)];
-        lengths[first as usize] = 1;
+        if let Some(slot) = lengths.get_mut(first as usize) {
+            *slot = 1;
+        }
         if num_symbols == 2 {
             let second = reader.read_bits(8)?;
-            if second >= u32::from(alphabet_size) {
-                return Err(ImageError::InvalidData {
-                    reason: "VP8L simple Huffman symbol outside the alphabet",
-                });
+            if let Some(slot) = lengths.get_mut(second as usize) {
+                *slot = 1;
             }
-            lengths[second as usize] = 1;
         }
         return Huffman::from_lengths(&lengths);
     }
@@ -221,4 +222,44 @@ pub(crate) fn read_huffman_code(
         }
     }
     Huffman::from_lengths(&lengths)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Writes LSB-first bits into bytes, mirroring BitReader::read_bit/read_bits.
+    fn pack_bits(bits: &[u32]) -> Vec<u8> {
+        let mut bytes = vec![0u8; bits.len().div_ceil(8)];
+        for (index, &bit) in bits.iter().enumerate() {
+            if bit != 0 {
+                bytes[index / 8] |= 1 << (index % 8);
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn simple_code_accepts_symbol_beyond_alphabet_size_2243() {
+        // A 2-symbol simple code on an alphabet of 40. The first symbol (9) is
+        // inside the alphabet; the second (248) is beyond it but is still a
+        // legal simple-code symbol per RFC 9649 §3.7.2.1.1 and libwebp.
+        let mut bits = vec![
+            1, // simple = 1
+            1, // num_symbols - 1 = 1 -> 2 symbols
+            1, // first_len_code = 1 -> first is 8 bits
+        ];
+        for index in 0..8 {
+            bits.push((9 >> index) & 1);
+        }
+        for index in 0..8 {
+            bits.push((248 >> index) & 1);
+        }
+        let bytes = pack_bits(&bits);
+        let mut reader = BitReader::new(&bytes);
+        let huffman = read_huffman_code(&mut reader, 40)
+            .expect("simple code with out-of-alphabet symbol must be accepted");
+        // Only symbol 9 is in range, so the table has exactly one symbol.
+        assert_eq!(huffman.single, Some(9));
+    }
 }
