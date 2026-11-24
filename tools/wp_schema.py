@@ -8,6 +8,7 @@ ID_PATTERN = re.compile(r"^WP-[A-Z0-9]+-[A-Za-z0-9._-]+$")
 REQUIRED_FIELDS = ("id", "source", "file", "expected", "actual", "spec",
                    "acceptance", "verify_cmd", "metric", "milestone")
 HEAVY_COMMAND = re.compile(r"\b(cargo|wpt|test262|fuzz)\b", re.IGNORECASE)
+ALLOWED_PROFILES = {"light", "heavy"}
 ALLOWED_METRICS = {
     "wpt_passed", "js262_passed", "sites_passed", "fuzz_crashes",
     "audit_pending", "depth_closed", "user_issues",
@@ -48,11 +49,16 @@ def validate_wp(data: dict) -> WorkPackage:
         raise ValueError("field has invalid format: id (expected WP-<SOURCE>-<key>)")
     if data["metric"] not in ALLOWED_METRICS:
         raise ValueError(f"field has unsupported value: metric (expected one of {sorted(ALLOWED_METRICS)})")
+    profile = str(data.get("profile") or "").strip().lower()
+    if not profile:
+        profile = classify_profile(data["verify_cmd"])
+    elif profile not in ALLOWED_PROFILES:
+        raise ValueError(f"field has unsupported value: profile (expected one of {sorted(ALLOWED_PROFILES)})")
     return WorkPackage(
         id=data["id"], source=data["source"], file=data["file"],
         expected=data["expected"], actual=data["actual"], spec=data["spec"],
         acceptance=data["acceptance"], verify_cmd=data["verify_cmd"],
         metric=data["metric"], milestone=data["milestone"],
         impact=int(data.get("impact", 1)), frequency=int(data.get("frequency", 1)),
-        profile=str(data.get("profile") or classify_profile(data["verify_cmd"])),
+        profile=profile,
     )

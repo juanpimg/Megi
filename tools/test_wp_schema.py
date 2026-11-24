@@ -40,4 +40,25 @@ class WorkPackageSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
         self.assertIn("metric", str(ctx.exception))
 
+    def test_missing_profile_is_derived_from_verify_cmd(self):
+        wp = wp_schema.validate_wp(self._valid())
+        self.assertEqual(wp.profile, "heavy")
+
+    def test_python_verify_cmd_derives_light_profile(self):
+        data = self._valid(); data["verify_cmd"] = "python3 tools/check_docs_links.py"
+        self.assertEqual(wp_schema.validate_wp(data).profile, "light")
+
+    def test_empty_profile_is_derived_from_verify_cmd(self):
+        data = self._valid(); data["profile"] = ""
+        self.assertEqual(wp_schema.validate_wp(data).profile, "heavy")
+
+    def test_uppercase_profile_is_normalized(self):
+        data = self._valid(); data["profile"] = "LIGHT"
+        self.assertEqual(wp_schema.validate_wp(data).profile, "light")
+
+    def test_unknown_profile_is_rejected(self):
+        data = self._valid(); data["profile"] = "typo"
+        with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+        self.assertIn("profile", str(ctx.exception))
+
 if __name__ == "__main__": unittest.main()

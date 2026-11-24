@@ -47,6 +47,66 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(result, "DEGRADADO")
 
 
+class BlankDomGateTests(unittest.TestCase):
+    """#2269: JS may run cleanly yet leave an empty post-script DOM (SPA blank)."""
+
+    def test_empty_post_script_dom_is_blank_even_with_display_items(self) -> None:
+        result = real_site_check.classify(
+            {
+                "display_items": 2,
+                "element_count": 0,
+                "body_text": "",
+                "status": 200,
+                "warnings": [],
+            }
+        )
+        self.assertEqual(result, "PÁGINA EN BLANCO")
+
+    def test_hydrated_dom_still_passes(self) -> None:
+        result = real_site_check.classify(
+            {
+                "display_items": 40,
+                "element_count": 12,
+                "body_text": "hydrated card",
+                "status": 200,
+                "warnings": [],
+            }
+        )
+        self.assertEqual(result, "PASS")
+
+    def test_allow_blank_site_may_have_empty_dom(self) -> None:
+        result = real_site_check.classify(
+            {
+                "display_items": 2,
+                "element_count": 0,
+                "body_text": "",
+                "status": 200,
+                "warnings": [],
+            },
+            {"allow_blank": True},
+        )
+        self.assertEqual(result, "PASS")
+
+    def test_result_carries_element_count_and_body_text(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"},
+            "PASS",
+            {"display_items": 3, "element_count": 12, "body_text": "hydrated card"},
+            "",
+            Path("x.png"),
+            "snap",
+        )
+        self.assertEqual(result["element_count"], 12)
+        self.assertEqual(result["body_text"], "hydrated card")
+
+    def test_result_defaults_element_count_and_body_text(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"}, "PASS", {"display_items": 3}, "", Path("x.png"), "snap"
+        )
+        self.assertEqual(result["element_count"], 0)
+        self.assertEqual(result["body_text"], "")
+
+
 class PathTests(unittest.TestCase):
     def test_png_path_is_relative_to_report(self) -> None:
         from pathlib import Path
