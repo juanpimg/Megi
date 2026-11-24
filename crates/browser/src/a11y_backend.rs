@@ -57,6 +57,9 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
         if !entry.name.is_empty() {
             node.set_label(entry.name.clone());
         }
+        if !entry.description.is_empty() {
+            node.set_description(entry.description.clone());
+        }
         if entry.disabled {
             node.set_disabled();
         }
@@ -283,6 +286,7 @@ mod publisher_tests {
             level: None,
             value: None,
             live: None,
+            description: String::new(),
         }
     }
 
@@ -382,6 +386,7 @@ fn build_tree_update_focus_falls_back_to_root_for_unfocused_snapshot() {
         level: None,
         value: None,
         live: None,
+        description: String::new(),
     };
     let update = build_tree_update(std::slice::from_ref(&node), absent_focus);
     assert_eq!(
@@ -414,6 +419,7 @@ fn an_accesskit_consumer_walks_the_published_tree_and_reads_widget_states() {
                 level: None,
                 value: None,
                 live: None,
+                description: String::new(),
             }
         };
     let snapshot = [

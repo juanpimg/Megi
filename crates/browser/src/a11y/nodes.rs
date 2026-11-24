@@ -114,6 +114,24 @@ pub fn name(document: &Document, node: NodeId) -> String {
         .join(" ")
 }
 
+/// Accessible description (`aria-describedby`): text of all referenced elements, joined in
+/// document order with single spaces. Unresolved or empty references are skipped.
+pub fn description(document: &Document, node: NodeId) -> String {
+    let Some(ids) = attribute(document, node, "aria-describedby") else {
+        return String::new();
+    };
+    ids.split_whitespace()
+        .filter_map(|id| document.get_element_by_id(id))
+        .map(|target| document.text_content(target))
+        .flat_map(|text| {
+            text.split_whitespace()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn is_closed_dialog(document: &Document, node: NodeId) -> bool {
     document
         .try_node(node)

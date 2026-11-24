@@ -21,6 +21,7 @@ fn node(id: usize, role: &str, parent: Option<DomNodeId>) -> SnapshotNode {
         level: None,
         value: None,
         live: None,
+        description: String::new(),
     }
 }
 
@@ -63,6 +64,7 @@ fn at_bus_applies_incremental_updates_and_records_announcements() {
                 level: None,
                 value: None,
                 live: None,
+                description: String::new(),
             }
         };
     let mut bus = AtBus::new();

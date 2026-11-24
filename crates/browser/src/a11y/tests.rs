@@ -210,6 +210,7 @@ fn widget_states_map_to_accesskit_nodes() {
         level: None,
         value: None,
         live: None,
+        description: String::new(),
     };
     let update = crate::a11y_backend::build_tree_update(std::slice::from_ref(&node), node.id);
     let (_, ak) = update.nodes.first().expect("one node");

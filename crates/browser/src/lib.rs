@@ -184,6 +184,8 @@
 
 /// Generated `file://` directory listings and load-error pages.
 pub mod a11y;
+#[cfg(test)]
+mod a11y_aria_tests;
 #[cfg(feature = "a11y")]
 pub mod a11y_at_bus;
 #[cfg(feature = "a11y")]
@@ -312,6 +314,7 @@ mod a11y_adapter_tests {
             level: None,
             value: None,
             live: None,
+            description: String::new(),
         }
     }
 

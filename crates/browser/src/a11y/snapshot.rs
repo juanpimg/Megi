@@ -25,6 +25,8 @@ pub struct SnapshotNode {
     pub value: Option<String>,
     /// ARIA live-region politeness; `None` when the node is not a live region.
     pub live: Option<LivePoliteness>,
+    /// Accessible description resolved from `aria-describedby`.
+    pub description: String,
 }
 
 /// Builds a complete accessibility snapshot: visible, role-bearing nodes in document order with
@@ -70,6 +72,7 @@ pub fn snapshot(document: &Document, root: NodeId) -> Vec<SnapshotNode> {
             value: attribute(document, node, "value")
                 .or_else(|| attribute(document, node, "aria-valuetext")),
             live,
+            description: description(document, node),
         });
     }
     out

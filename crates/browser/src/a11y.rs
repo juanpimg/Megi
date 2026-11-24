@@ -5,7 +5,8 @@
 //! snapshot (role/name/disabled/hidden) and the focus traversal used by `Tab`/`Shift+Tab`.
 //! Limits: no full ARIA spec (only the common roles/attributes), no screen-reader bridge,
 //! ARIA live-region announcements are exposed as `aria-live` politeness on AccessKit nodes and
-//! recorded by the AT-bus surrogate; no computed accessible-name algorithm beyond
+//! recorded by the AT-bus surrogate; `aria-describedby` resolves to accessible descriptions;
+//! no computed accessible-name algorithm beyond
 //! `aria-label` → `aria-labelledby` → text/attribute fallback.
 
 /// ARIA live-region politeness (`aria-live`, `role=alert/status/log`).
