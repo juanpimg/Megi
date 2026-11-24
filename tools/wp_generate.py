@@ -251,8 +251,12 @@ def generate(source: str, dry_run: bool = True, root: Path | None = None) -> lis
             if destination.exists():
                 continue
             fields = vars(wp).copy()
-            body = "".join(f'{key} = "{str(value).replace(chr(92), chr(92)*2).replace(chr(34), chr(92)+chr(34))}"\n'
-                           for key, value in fields.items())
+            # JSON basic strings are valid TOML basic strings and escape newlines,
+            # quotes and backslashes (site warnings contain real newlines).
+            body = "".join(
+                f"{key} = {json.dumps(str(value), ensure_ascii=False)}\n"
+                for key, value in fields.items()
+            )
             destination.write_text(body, encoding="utf-8")
     return wps
 

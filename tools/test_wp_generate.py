@@ -123,6 +123,17 @@ class GeneratorTests(unittest.TestCase):
             data = tomllib.load(handle)
         validate_wp(data)
 
+    def test_multiline_values_round_trip_as_valid_toml(self) -> None:
+        self._write("docs/status/real-sites.json", json.dumps({"results": [
+            {"id": "wikipedia", "name": "wikipedia", "result": "DEGRADADO",
+             "warnings": ["console.error: TypeError: x\n    at <main> (unknown:1)"], "issue": 0},
+        ]}))
+        self._generate("site", dry_run=False)
+        path = self.root / "docs/work-packages/queue/WP-SITE-wikipedia.toml"
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)  # fails today: raw newline inside a TOML string
+        self.assertIn("at <main>", validate_wp(data).actual)
+
     def test_duplicate_ids_are_not_written_twice(self) -> None:
         self._write("docs/work-packages/user-reports.json", json.dumps([
             {"number": 17, "title": "Broken site", "body": "x", "labels": ["broken_site"]},
