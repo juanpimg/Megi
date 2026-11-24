@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>example.com s.js corpus</title></head>
+<body>
+<p lang="en">English paragraph</p>
+<p lang="fr">Paragraphe francais</p>
+<div id="host"></div>
+<div id="result">pending</div>
+<script>
+// Offline adaptation of https://example.com/s.js: navigator.languages + DOM APIs.
+(function () {
+  function record(text) {
+    document.getElementById('result').textContent = text;
+  }
+  try {
+    var paragraphs = document.querySelectorAll('p');
+    var languages = navigator.languages;
+    var matched = languages.some(function (language) {
+      var prefix = language.split('-')[0];
+      return Array.prototype.some.call(paragraphs, function (paragraph) {
+        return paragraph.lang === prefix;
+      });
+    });
+    var host = document.getElementById('host');
+    host.insertAdjacentHTML('afterbegin', '<b id="injected">injected</b>');
+    host.prepend(document.createTextNode('prefix '));
+    record(matched ? 'pass:' + host.textContent.trim() : 'pass:no-match');
+  } catch (error) {
+    console.error('example_com_s corpus: ' + error);
+    record('fail:' + error);
+  }
+})();
+</script>
+</body>
+</html>

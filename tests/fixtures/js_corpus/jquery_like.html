@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>jQuery-like DOM corpus</title></head>
+<body>
+<div class="item" data-index="0">one</div>
+<div class="item" data-index="1">two</div>
+<div id="result">pending</div>
+<script>
+// jQuery-shaped real-site pattern: CSS selection, classList, listeners and events.
+(function () {
+  function record(text) {
+    document.getElementById('result').textContent = text;
+  }
+  try {
+    var items = document.querySelectorAll('.item');
+    Array.prototype.forEach.call(items, function (node, index) {
+      node.classList.add('seen');
+      node.setAttribute('data-order', String(index));
+    });
+    var first = items[0];
+    first.addEventListener('click', function () {
+      first.setAttribute('data-clicked', 'yes');
+    });
+    first.dispatchEvent(new Event('click'));
+    var seen = document.querySelectorAll('.item.seen').length;
+    record('pass:' + seen + ':' + first.getAttribute('data-clicked'));
+  } catch (error) {
+    console.error('jquery_like corpus: ' + error);
+    record('fail:' + error);
+  }
+})();
+</script>
+</body>
+</html>

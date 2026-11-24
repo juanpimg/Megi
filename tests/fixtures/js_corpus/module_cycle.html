@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Module cycle corpus</title></head>
+<body>
+<div id="result">pending</div>
+<script type="module">
+import { sum } from "./modules/cycle_a.js";
+// Top-level await selects the native Boa module path, whose live bindings
+// support cyclic graphs (the synchronous evaluator rejects cycles by design).
+await Promise.resolve();
+document.getElementById("result").textContent = "pass:" + sum();
+</script>
+</body>
+</html>

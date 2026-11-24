@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 75,
+    "implemented": 76,
     "partial": 0,
-    "known": 75,
+    "known": 76,
     "percent": 100,
     "unverified": [],
     "invalid_states": []
@@ -46,9 +46,9 @@
     },
     {
       "id": "F6",
-      "implemented": 13,
+      "implemented": 14,
       "partial": 0,
-      "known": 13,
+      "known": 14,
       "percent": 100
     },
     {

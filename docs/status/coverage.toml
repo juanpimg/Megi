@@ -622,3 +622,11 @@ source = "issue #1830"
 state = "done"
 evidence = "test:crates/browser/src/worker/render.rs::find_query_changes_coalesce_into_one_render"
 issue = 1830
+
+[[capability]]
+id = "F6-JS-CORPUS-REAL"
+area = "F6"
+name = "Corpus JS offline de sitios reales con clasificación binding/semántica"
+source = "docs/superpowers/plans/2026-11-24-engine-depth-plan.md Task 1"
+state = "done"
+evidence = "test:crates/render/tests/js_corpus_tests.rs::corpus_report_classifies_failures"

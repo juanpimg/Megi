@@ -1,0 +1,34 @@
+<!doctype html>
+<html class="client-js vector-feature-foo">
+<head><meta charset="utf-8"><title>Wikipedia null-conversion corpus</title></head>
+<body>
+<div id="result">pending</div>
+<script>
+// Offline adaptation of es.wikipedia.org/wiki/Rust inline-script-0: the archived
+// failure was "cannot convert 'null' or 'undefined' to object" when
+// document.cookie was not a string. document.cookie is empty here on purpose.
+(function () {
+  function record(text) {
+    document.getElementById('result').textContent = text;
+  }
+  try {
+    var className = document.documentElement.className;
+    var cookie = document.cookie.match(/(?:^|; )eswikimwclientpreferences=([^;]+)/);
+    if (cookie) {
+      cookie[1].split('%2C').forEach(function (pref) {
+        className = className.replace(
+          new RegExp('-clientpref-' + pref + '( |$)'),
+          '$1' + pref + '$2'
+        );
+      });
+    }
+    document.documentElement.className = className;
+    record('pass:' + className);
+  } catch (error) {
+    console.error('wikipedia_null corpus: ' + error);
+    record('fail:' + error);
+  }
+})();
+</script>
+</body>
+</html>
