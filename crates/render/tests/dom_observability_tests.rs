@@ -6,6 +6,8 @@
 //! uncommitted there; the two CLI tests below intentionally require them and
 //! panic with an explicit message until that change lands on `main`.
 
+#![cfg(feature = "js")]
+
 use std::path::PathBuf;
 use std::process::Command;
 
