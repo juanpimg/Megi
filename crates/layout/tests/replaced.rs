@@ -211,3 +211,27 @@ fn test_replaced_sizes_api_rejects_invalid_numbers() {
         assert!((replaced.dimensions.content.height - 35.0).abs() < 0.001);
     }
 }
+
+/// HTML `<input size="N">` gives a text field an intrinsic width of roughly
+/// N average character advances (#2247, google.com's search box uses size=57).
+#[test]
+fn test_input_size_attribute_sets_intrinsic_width() {
+    let (mut doc, mut styles, p) = setup();
+    let input = doc.create_element(
+        Namespace::Html,
+        "input",
+        vec![Attribute::new("size".to_owned(), "57".to_owned())],
+    );
+    doc.append_child(p, input);
+    styles.insert(input, ComputedStyle::initial());
+
+    let tree = layout_tree(&doc, &styles);
+    let line = &tree.children[0].children[0].children[0];
+    let replaced = &line.children[0];
+    assert!(matches!(replaced.box_type, BoxType::Replaced(_)));
+    assert!(
+        replaced.dimensions.content.width > 300.0,
+        "input size=57 should be much wider than the 20px default, got {}",
+        replaced.dimensions.content.width
+    );
+}
