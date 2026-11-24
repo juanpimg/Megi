@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 
 ID_PATTERN = re.compile(r"^WP-[A-Z0-9]+-[A-Za-z0-9._-]+$")
+MILESTONE_RE = re.compile(r"^M(?:[0-9]|1[0-2])$")
 REQUIRED_FIELDS = ("id", "source", "file", "expected", "actual", "spec",
                    "acceptance", "verify_cmd", "metric", "milestone")
 HEAVY_COMMAND = re.compile(r"\b(cargo|wpt|test262|fuzz)\b", re.IGNORECASE)
@@ -39,6 +40,16 @@ class WorkPackage:
     def priority(self) -> int:
         return self.impact * self.frequency
 
+def validate_priority_field(data: dict, name: str) -> int:
+    """Parse an integer priority factor in the documented 1..10 range."""
+    try:
+        value = int(data.get(name, 1))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"field has invalid value: {name} (expected integer 1..10)") from exc
+    if not 1 <= value <= 10:
+        raise ValueError(f"field has invalid value: {name} (expected 1..10, got {value})")
+    return value
+
 def validate_wp(data: dict) -> WorkPackage:
     for field in REQUIRED_FIELDS:
         if field not in data:
@@ -49,6 +60,10 @@ def validate_wp(data: dict) -> WorkPackage:
         raise ValueError("field has invalid format: id (expected WP-<SOURCE>-<key>)")
     if data["metric"] not in ALLOWED_METRICS:
         raise ValueError(f"field has unsupported value: metric (expected one of {sorted(ALLOWED_METRICS)})")
+    if not MILESTONE_RE.match(data["milestone"]):
+        raise ValueError(f"field has invalid format: milestone (expected M0..M12)")
+    impact = validate_priority_field(data, "impact")
+    frequency = validate_priority_field(data, "frequency")
     profile = str(data.get("profile") or "").strip().lower()
     if not profile:
         profile = classify_profile(data["verify_cmd"])
@@ -59,6 +74,6 @@ def validate_wp(data: dict) -> WorkPackage:
         expected=data["expected"], actual=data["actual"], spec=data["spec"],
         acceptance=data["acceptance"], verify_cmd=data["verify_cmd"],
         metric=data["metric"], milestone=data["milestone"],
-        impact=int(data.get("impact", 1)), frequency=int(data.get("frequency", 1)),
+        impact=impact, frequency=frequency,
         profile=profile,
     )
