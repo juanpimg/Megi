@@ -232,10 +232,12 @@ def cmd_check(path: Path) -> int:
                 continue
             if (slot.get("binary"), slot.get("test_name")) != (scenario.binary, scenario.test_name):
                 problems.append(f"{system}/{sid}: binary/test_name drift")
+            if slot.get("threat") != scenario.threat:
+                problems.append(f"{system}/{sid}: threat drift")
             if slot.get("verify_cmd") != verify_cmd(scenario):
                 problems.append(f"{system}/{sid}: verify_cmd drift")
             if slot.get("status") == "pass":
-                if slot.get("exit_code") != 0 or not slot.get("evidence"):
+                if slot.get("exit_code") != 0 or "test result: ok" not in (slot.get("evidence") or ""):
                     problems.append(f"{system}/{sid}: pass without executed-command evidence")
             elif slot.get("status") == "fail":
                 problems.append(f"{system}/{sid}: recorded failing test")

@@ -129,6 +129,50 @@ class NegativeMatrixContract(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def _tampered_first_linux_slot(self, field: str, value: str) -> Path:
+        text = MATRIX.read_text(encoding="utf-8")
+        marker = "\n[os.macos]\n"
+        linux_part, remaining = text.split(marker, 1)
+        blocks = linux_part.split("[[os.linux.slots]]")
+        self.assertEqual(len(blocks), 13, "unexpected matrix layout")
+        pattern = re.compile(rf'(?m)^{re.escape(field)} = "[^"]*"$')
+        self.assertRegex(blocks[1], pattern, f"no {field} in first linux slot")
+        blocks[1] = pattern.sub(f'{field} = "{value}"', blocks[1], count=1)
+        tampered = "[[os.linux.slots]]".join(blocks) + marker + remaining
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write(tampered)
+            return Path(handle.name)
+
+    def _check_tampered_matrix(self, field: str, value: str) -> str:
+        path = self._tampered_first_linux_slot(field, value)
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "tools/audit_negative_matrix.py",
+                    "--check",
+                    "--path",
+                    str(path),
+                ],
+                cwd=ROOT,
+                env=dict(os.environ, TMPDIR="/var/tmp"),
+                capture_output=True,
+                text=True,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 1, output)
+            return output
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_check_mode_rejects_pass_without_ok_evidence(self) -> None:
+        output = self._check_tampered_matrix("evidence", "warning: stale output")
+        self.assertIn("evidence", output)
+
+    def test_check_mode_rejects_threat_drift(self) -> None:
+        output = self._check_tampered_matrix("threat", "T9")
+        self.assertIn("threat drift", output)
+
     def test_generator_stays_within_line_budget(self) -> None:
         source = ROOT / "tools/audit_negative_matrix.py"
         self.assertLessEqual(len(source.read_text(encoding="utf-8").splitlines()), 400)
