@@ -35,4 +35,9 @@ class WorkPackageSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
         self.assertIn("acceptance", str(ctx.exception))
 
+    def test_metric_must_be_one_of_the_seven_declared(self):
+        data = self._valid(); data["metric"] = "made_up_metric"
+        with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+        self.assertIn("metric", str(ctx.exception))
+
 if __name__ == "__main__": unittest.main()

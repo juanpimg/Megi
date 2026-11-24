@@ -18,7 +18,8 @@ que el agente elija trabajo abierto) y pégalo como primer mensaje.
 You are working on Megi, a from-scratch browser engine in Rust (Edition 2024, 17 crates, pre-alpha v0.1.0, WHATWG/W3C conformance verified against html5lib-tests and WPT). Follow this workflow exactly.
 
 0) ORIENTATION — read before changing anything
-- Read README.md, docs/ARCHITECTURE.md (crate DAG + dependency policy §3.1), CONTRIBUTING.md §§5–6, and docs/GETTING-STARTED.md.
+- Read docs/AGENT-INDEX.md FIRST: it is the operating index (M0-M12 milestones, plans and reading order). If it disagrees with an older doc, the approved roadmap wins.
+- Then read README.md, docs/ARCHITECTURE.md (crate DAG + dependency policy §3.1), CONTRIBUTING.md §§5-6, docs/work-packages/SCHEMA.md, and the plan for the milestone you touch.
 - Run: git status --short && git fetch origin && git log --oneline -3. Re-check status before every commit: the tree may be moving in parallel.
 - Work from latest main, preferably in an isolated git worktree. Never overwrite someone else's uncommitted changes.
 - All 17 crates use #![forbid(unsafe_code)]. Do not add unsafe and do not bump the MSRV (rust-toolchain.toml pins 1.99.1).
@@ -26,9 +27,12 @@ You are working on Megi, a from-scratch browser engine in Rust (Edition 2024, 17
 - Never add a dependency that implements core HTML/CSS parsing, layout or painting (ARCHITECTURE §3.1). Ask first if a new dependency seems necessary.
 - Every .rs file must be <= 500 lines (target 400); split into submodules before adding code to a larger file. `python3 tools/check_arch.py` enforces the DAG and size limits in CI.
 
-1) PICK WORK
-- If given <issue>: run `gh issue list --repo juanpimg/Megi --state open --limit 100`, find it, run `gh issue view <issue>`, and restate its acceptance criteria before coding. Never trust hardcoded issue numbers from docs.
-- If no issue is given: pick one small open issue (prefer labels bug/good first issue/help wanted) and state which one and why.
+1) PICK WORK — the queue, not a random issue
+- Run `python3 tools/wp_plan.py --board --profile light` if you are on the small/low-disk machine, or `--profile heavy` on the powerful one. The WP `profile` comes from its verify command: cargo/WPT/Test262/fuzz are heavy; Python/docs/git are light.
+- Open the highest-priority WP file in docs/work-packages/queue/ and restate its acceptance, expected/actual and verify_cmd before coding. Never invent a WP that is not in the queue.
+- If the board is empty, run `python3 tools/wp_generate.py --all && python3 tools/wp_plan.py --board`. If there are no artifacts to parse, take the next unchecked task from the milestone plan named in docs/AGENT-INDEX.md (never invent work).
+- If given <issue>: verify it with `gh issue view <issue>` and restate its acceptance criteria, then continue with the WP flow.
+- At most 10 WPs may be in_progress; the planner prints a refill signal when the queue drops below 20. You prepare a PR; the human merges.
 
 2) TDD — IRON LAW: no production code before a failing test
 - Write ONE minimal test in the owning crate that asserts the desired observable behavior (not a mock).

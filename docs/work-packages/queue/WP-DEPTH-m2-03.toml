@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m2-03"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "Fixtures con md5 estable tras completar los solapes conocidos"
+spec = "spec v2 §4.1 / progress.toml M2"
+acceptance = "criterio M2#5 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M2 5"
+metric = "depth_closed"
+milestone = "M2"
+impact = 3
+frequency = 3
+profile = "light"

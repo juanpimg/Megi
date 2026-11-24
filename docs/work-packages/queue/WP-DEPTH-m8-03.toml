@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m8-03"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "Paralelismo real de estilo/layout/paint — sin benchmarks publicados"
+spec = "spec v2 §4.1 / progress.toml M8"
+acceptance = "criterio M8#5 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M8 5"
+metric = "depth_closed"
+milestone = "M8"
+impact = 3
+frequency = 3
+profile = "light"

@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m12-01"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "ADR público con datos de licencias DRM/EME y alternativas"
+spec = "spec v2 §4.1 / progress.toml M12"
+acceptance = "criterio M12#1 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M12 1"
+metric = "depth_closed"
+milestone = "M12"
+impact = 3
+frequency = 3
+profile = "light"

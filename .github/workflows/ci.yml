@@ -120,6 +120,10 @@ jobs:
           tools.test_fuzz_cache
           tools.test_image_docs
           tools.test_perf_measurer_doc
+          tools.test_wp_schema
+          tools.test_wp_generate
+          tools.test_wp_plan
+          tools.test_wp_dashboard
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)

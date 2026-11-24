@@ -1,5 +1,10 @@
-"""Tests for the WP planner: concurrency cap and priority ordering."""
+"""Tests for the WP planner: concurrency cap, priority, reflow and machine profile."""
+import contextlib
+import io
+import tempfile
 import unittest
+from pathlib import Path
+
 from tools import wp_plan
 from tools.wp_schema import WorkPackage
 
@@ -26,5 +31,101 @@ class PlannerTests(unittest.TestCase):
         for col in ("queued", "in_progress", "review", "done"):
             self.assertIn(col, board)
         self.assertIn("WP-WPT-x", board)
+
+    def test_profile_filter_selects_only_that_machine(self) -> None:
+        light = make_wp("WP-DEPTH-light")
+        heavy = make_wp("WP-WPT-heavy")
+        object.__setattr__(light, "profile", "light")
+        object.__setattr__(heavy, "profile", "heavy")
+        selected = wp_plan.select([heavy, light], [], limit=10, profile="light")
+        self.assertEqual([wp.id for wp in selected], ["WP-DEPTH-light"])
+
+    def test_refill_when_queue_below_twenty(self) -> None:
+        self.assertTrue(wp_plan.needs_refill(19))
+        self.assertFalse(wp_plan.needs_refill(20))
+
+    def test_planner_never_emits_merge_commands(self) -> None:
+        source = Path(wp_plan.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("git merge", source)
+        self.assertNotIn("gh pr merge", source)
+
+    def test_cli_board_and_select_use_real_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue = root / "docs/work-packages/queue"
+            queue.mkdir(parents=True)
+            (queue / "WP-DEPTH-test.toml").write_text(
+                'id = "WP-DEPTH-test"\nsource = "depth"\nfile = "docs/x.md"\n'
+                'expected = "ok"\nactual = "pending"\nspec = "spec v2 §4.3"\n'
+                'acceptance = "done"\nverify_cmd = "python3 tools/check_arch.py"\n'
+                'metric = "depth_closed"\nmilestone = "M0"\nimpact = 4\nfrequency = 2\n',
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                wp_plan.main(["--board", "--root", str(root)])
+            board = (root / "docs/work-packages/BOARD.md").read_text(encoding="utf-8")
+            self.assertIn("WP-DEPTH-test", board)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                wp_plan.main(["--select", "--root", str(root), "--profile", "light"])
+            self.assertIn("WP-DEPTH-test", output.getvalue())
+
+
+    def test_cap_accounts_for_active_work(self) -> None:
+        wps = [make_wp(f"WP-WPT-{i:03d}") for i in range(25)]
+        active = [f"WP-WPT-{i:03d}" for i in range(10)]
+        with contextlib.redirect_stdout(io.StringIO()):
+            selected = wp_plan.select(wps, active, limit=30)
+        self.assertEqual(len(selected), 0)  # 10 active + limit 30 must still respect MAX_IN_PROGRESS
+        self.assertEqual(len(wp_plan.select(wps, [], limit=-5)), 0)
+
+    def test_claim_writes_state_and_refuses_when_full(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue = root / "docs/work-packages/queue"
+            queue.mkdir(parents=True)
+            for i in range(11):
+                wid = f"WP-DEPTH-{i:02d}"
+                (queue / f"{wid}.toml").write_text(
+                    f'id = "{wid}"\nsource = "depth"\nfile = "docs/x.md"\n'
+                    'expected = "ok"\nactual = "pending"\nspec = "s"\nacceptance = "done"\n'
+                    'verify_cmd = "python3 tools/check_arch.py"\nmetric = "depth_closed"\n'
+                    'milestone = "M0"\nimpact = 3\nfrequency = 3\nprofile = "light"\n',
+                    encoding="utf-8",
+                )
+            for i in range(10):
+                self.assertEqual(wp_plan.main(["--claim", f"WP-DEPTH-{i:02d}", "--root", str(root)]), 0)
+            self.assertEqual(len(wp_plan.load_state(root)[0]), 10)
+            self.assertEqual(wp_plan.main(["--claim", "WP-DEPTH-10", "--root", str(root)]), 1)
+            self.assertNotIn("WP-DEPTH-10", wp_plan.load_state(root)[0])
+
+    def test_done_removes_queue_and_records_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            queue = root / "docs/work-packages/queue"
+            queue.mkdir(parents=True)
+            (queue / "WP-DEPTH-00.toml").write_text(
+                'id = "WP-DEPTH-00"\nsource = "depth"\nfile = "docs/x.md"\n'
+                'expected = "ok"\nactual = "pending"\nspec = "s"\nacceptance = "done"\n'
+                'verify_cmd = "python3 tools/check_arch.py"\nmetric = "depth_closed"\n'
+                'milestone = "M0"\nimpact = 3\nfrequency = 3\nprofile = "light"\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                wp_plan.main(["--claim", "WP-DEPTH-00", "--done", "WP-DEPTH-00",
+                              "--metric", "hito M0 cerrado", "--root", str(root)]), 0,
+            )
+            self.assertFalse((queue / "WP-DEPTH-00.toml").exists())
+            closed = wp_plan.load_closed(root)
+            self.assertEqual(closed["WP-DEPTH-00"]["metric"], "hito M0 cerrado")
+
+    def test_board_honors_profile_filter(self) -> None:
+        light = make_wp("WP-DEPTH-light")
+        heavy = make_wp("WP-WPT-heavy")
+        object.__setattr__(heavy, "profile", "heavy")
+        board = wp_plan.render_board([light, heavy], [], [], [], profile="light")
+        self.assertIn("WP-DEPTH-light", board)
+        self.assertNotIn("WP-WPT-heavy", board)
+
 
 if __name__ == "__main__": unittest.main()

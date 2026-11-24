@@ -12,7 +12,53 @@ _(empty)_
 
 ## queued
 
-_(empty — ejecuta `python3 tools/wp_generate.py --all` cuando los artefactos estén disponibles)_
+- WP-DEPTH-m0-01
+- WP-DEPTH-m0-02
+- WP-DEPTH-m0-03
+- WP-DEPTH-m1-01
+- WP-DEPTH-m1-02
+- WP-DEPTH-m10-01
+- WP-DEPTH-m10-02
+- WP-DEPTH-m10-03
+- WP-DEPTH-m10-04
+- WP-DEPTH-m10-05
+- WP-DEPTH-m11-01
+- WP-DEPTH-m11-02
+- WP-DEPTH-m11-03
+- WP-DEPTH-m12-01
+- WP-DEPTH-m12-02
+- WP-DEPTH-m2-01
+- WP-DEPTH-m2-02
+- WP-DEPTH-m2-03
+- WP-DEPTH-m3-01
+- WP-DEPTH-m3-02
+- WP-DEPTH-m3-03
+- WP-DEPTH-m4-01
+- WP-DEPTH-m4-02
+- WP-DEPTH-m4-03
+- WP-DEPTH-m4-04
+- WP-DEPTH-m5-01
+- WP-DEPTH-m5-02
+- WP-DEPTH-m5-03
+- WP-DEPTH-m5-04
+- WP-DEPTH-m6-01
+- WP-DEPTH-m6-02
+- WP-DEPTH-m6-03
+- WP-DEPTH-m6-04
+- WP-DEPTH-m7-01
+- WP-DEPTH-m7-02
+- WP-DEPTH-m7-03
+- WP-DEPTH-m7-04
+- WP-DEPTH-m8-01
+- WP-DEPTH-m8-02
+- WP-DEPTH-m8-03
+- WP-DEPTH-m9-01
+- WP-DEPTH-m9-02
+- WP-DEPTH-m9-03
+- WP-DEPTH-m9-04
+- WP-SITE-example
+- WP-SITE-rust
+- WP-SITE-wikipedia
 
 ## done
 
