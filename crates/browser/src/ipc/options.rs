@@ -37,6 +37,7 @@ impl IpcSameSite {
 
 /// Serializable RFC 6265 cookie entry synchronized between parent and child jars.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcCookie {
     pub name: String,
     pub value: String,
@@ -125,7 +126,7 @@ impl IpcCookie {
 
 /// Serializable render options forwarded from parent shell/CLI into child renderer processes.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct IpcRenderOptions {
     pub time_ms: f64,
     pub no_network: bool,

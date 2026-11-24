@@ -26,6 +26,8 @@ megi-js = { path = "../crates/js" }
 megi-svg = { path = "../crates/svg" }
 megi-layout = { path = "../crates/layout" }
 megi-paint = { path = "../crates/paint" }
+megi-browser = { path = "../crates/browser", default-features = false }
+serde_json = "1.0"
 
 [[bin]]
 name = "html_parse"
@@ -232,6 +234,28 @@ bench = false
 [[bin]]
 name = "svg_path"
 path = "fuzz_targets/svg_path.rs"
+test = false
+doc = false
+bench = false
+
+# M3 (round 03 / F1): untrusted IPC envelope, response validation and file grants.
+[[bin]]
+name = "ipc_wire"
+path = "fuzz_targets/ipc_wire.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ipc_response"
+path = "fuzz_targets/ipc_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "net_file_url"
+path = "fuzz_targets/net_file_url.rs"
 test = false
 doc = false
 bench = false

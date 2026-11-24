@@ -1,8 +1,8 @@
 name: Fuzz (nightly)
 
 # Nightly libFuzzer runs over every parser/renderer surface that consumes untrusted
-# input (31 harnesses): the 10 critical parsers/decoders run 10 minutes each, the other
-# 21 run 5 minutes. Pull requests and pushes to main get a fast "build every target"
+# input (34 harnesses): the 10 critical parsers/decoders run 10 minutes each, the other
+# 24 run 5 minutes. Pull requests and pushes to main get a fast "build every target"
 # job instead.
 # Not a substitute for a long-running fuzzing farm: the scheduled job is a daily
 # regression gate that keeps the harnesses compiling and catches shallow crashes.
@@ -95,7 +95,7 @@ jobs:
 
   fuzz:
     name: fuzz ${{ matrix.target }}
-    # Only the nightly schedule and explicit dispatches run the 31 libFuzzer budgets:
+    # Only the nightly schedule and explicit dispatches run the 34 libFuzzer budgets:
     # pushes to main are covered by the build gate above.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -217,6 +217,16 @@ jobs:
             seconds: 300
             extra: ""
           - target: svg_path
+            seconds: 300
+            extra: ""
+          # M3 (round 03 / F1): untrusted IPC wire framing, response validation and file grants.
+          - target: ipc_wire
+            seconds: 300
+            extra: ""
+          - target: ipc_response
+            seconds: 300
+            extra: ""
+          - target: net_file_url
             seconds: 300
             extra: ""
     steps:

@@ -48,6 +48,7 @@ fn sentinel_node_id() -> megi_webview::core::NodeId {
 /// Serializable hit region for a link, with a DOM ordinal instead of a raw `NodeId`
 /// (which is document-arena-specific and cannot cross the process boundary).
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcLinkRegion {
     pub x: f32,
     pub y: f32,
@@ -130,6 +131,7 @@ impl IpcLinkRegion {
 
 /// Serializable image hit region with a DOM ordinal (ADR-004 hit-region parity).
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcImageRegion {
     pub node_ordinal: Option<usize>,
     pub x: f32,
@@ -203,6 +205,7 @@ impl IpcImageRegion {
 
 /// Serializable find highlight rectangle.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcRect {
     pub x: f32,
     pub y: f32,
@@ -227,6 +230,7 @@ impl IpcRect {
 
 /// Serializable find match (text node ordinal + byte range).
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcFindMatch {
     pub node_ordinal: Option<usize>,
     pub start: usize,
@@ -283,6 +287,7 @@ impl IpcFindMatch {
 
 /// Serializable `<select>` option.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcSelectOption {
     pub label: String,
     pub value: String,
@@ -292,6 +297,7 @@ pub struct IpcSelectOption {
 
 /// Serializable form control with a DOM ordinal (ADR-004 form parity).
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcFormControl {
     pub form_id: u32,
     pub name: String,

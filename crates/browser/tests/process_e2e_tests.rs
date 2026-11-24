@@ -1,8 +1,6 @@
 //! Real E2E for the per-site renderer-process backend (ADR-004 / F7-ISOLATION).
 //! Spawns the actual `megi --megi-ipc-worker` child and drives it over the framed IPC.
 
-#![cfg(feature = "a11y")]
-
 use megi_browser::ipc::{IpcRenderRequest, IpcRenderResponse, ProcessRenderPool, ProcessRenderer};
 
 fn request(generation: u64, url: &str) -> IpcRenderRequest {
