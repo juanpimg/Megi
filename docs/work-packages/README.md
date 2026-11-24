@@ -1,6 +1,6 @@
 # Motor de Work Packages — guía operativa
 
-> Implementación disponible hoy: esquema y validación, siete generadores con parsers de artefactos, planificador con tope de concurrencia, recompletado diario y dashboard de throughput real. Fuente: spec §4.3 y `2026-11-24-work-package-engine-plan.md` (Tasks 1–4).
+> Implementación disponible hoy: esquema y validación, siete generadores con parsers de artefactos, planificador con tope de concurrencia, recompletado diario y dashboard de cierres reales, cola y distribución light/heavy. Fuente: spec §4.3 y `2026-11-24-work-package-engine-plan.md` (Tasks 1–4).
 
 ## Mapa de archivos
 
@@ -12,7 +12,7 @@
 | `tools/test_wp_generate.py` | ✅ implementado | tests de generadores |
 | `tools/wp_plan.py` | ✅ implementado | `select()`, `needs_refill()`, `claim()`, `done()` y `render_board()` |
 | `tools/test_wp_plan.py` | ✅ implementado | tests del planificador |
-| `tools/wp_dashboard.py` | ✅ implementado | dashboard de cierres reales y throughput semanal |
+| `tools/wp_dashboard.py` | ✅ implementado | dashboard de cierres reales, cola y distribución light/heavy |
 | `tools/test_wp_dashboard.py` | ✅ implementado | tests del dashboard |
 | `tools/check_milestone.py` | ✅ implementado | verifica criterios M0–M12 contra `progress.toml` |
 | `tools/test_check_milestone.py` | ✅ implementado | tests del verificador de hitos |
@@ -84,4 +84,4 @@ Cuando se combinan acciones en un mismo comando, `--board` y `--select` se eval�
 
 ## Dashboard
 
-`docs/status/work-packages.html` (generado por `wp_dashboard.py --write`) cuenta cierres desde `closed.toml`, exige commit y métrica declarados, y calcula throughput semanal con números reales, nunca estimados. `wp_dashboard.py --check` verifica que el artefacto generado esté al día.
+`docs/status/work-packages.html` (generado por `wp_dashboard.py --write`) cuenta cierres desde `closed.toml`, exige commit y métrica declarados, y muestra la cola y su distribución en perfiles light/heavy con números reales, nunca estimados. `wp_dashboard.py --check` verifica que el artefacto generado esté al día.

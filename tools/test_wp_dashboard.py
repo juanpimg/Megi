@@ -1,4 +1,4 @@
-"""Tests for the WP refill workflow and the real-throughput dashboard."""
+"""Tests for the WP refill workflow and the dashboard of real closure, queue and light/heavy counts."""
 import subprocess
 import tempfile
 import unittest
