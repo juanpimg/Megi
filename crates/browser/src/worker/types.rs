@@ -75,6 +75,10 @@ pub struct RenderFrame {
     pub find_matches: Vec<crate::find::FindMatch>,
     /// Highlight rectangles (page CSS coordinates) for those hits, from the layout tree.
     pub find_rects: Vec<crate::links::CssRect>,
+    /// `location.*` navigation requests made by page scripts (#1828).
+    pub location_actions: Vec<megi_webview::render::LocationAction>,
+    /// History API navigation requests made by page scripts (#1828).
+    pub history_actions: Vec<megi_webview::render::HistoryAction>,
 }
 
 /// Message sent from the worker back to the event loop.

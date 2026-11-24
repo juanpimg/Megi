@@ -194,6 +194,8 @@ fn worker_channel_applies_only_the_latest_generation() {
                 document: std::sync::Arc::new(megi_webview::core::Document::new()),
                 find_matches: Vec::new(),
                 find_rects: Vec::new(),
+                location_actions: Vec::new(),
+                history_actions: Vec::new(),
             })
         },
         || {},
@@ -228,6 +230,8 @@ fn worker_channel_applies_only_the_latest_generation() {
         document: std::sync::Arc::new(megi_webview::core::Document::new()),
         find_matches: Vec::new(),
         find_rects: Vec::new(),
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
     });
     assert!(!store.accept(stale), "stale generation must be dropped");
     let message = receiver

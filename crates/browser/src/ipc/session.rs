@@ -101,6 +101,10 @@ impl ProcessFrame {
                 .copied()
                 .map(IpcRect::into_rect)
                 .collect(),
+            // #1828: navigation requests are not transported over the IPC
+            // frame path yet; the in-process path consumes them.
+            location_actions: Vec::new(),
+            history_actions: Vec::new(),
         })
     }
 }
