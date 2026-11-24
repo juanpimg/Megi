@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 1.91, Boa 0.22, `unicode-bidi`/`unicode-linebreak`, `wasmi` (intérprete WASM puro Rust), `symphonia`+`rodio` (audio tardío), AccessKit ya presente.
 
+> **v2 (sin calendarización)**: las referencias a Q1–Q4 de este plan son hitos lógicos (M0–M9 del master plan v2), no fechas. Las cifras WPT son pisos, no techos: las épocas continúan hasta cubrir el árbol completo. Las carreras antes llamadas 'anti-objetivos' (JIT, WebGL, vídeo, SW completo) están ahora en `js-evolution`, `graphics-media` y `web-platform-extension`.
+
 **Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (§4.2, secuencia Q1–Q4).
 
 ## Global Constraints

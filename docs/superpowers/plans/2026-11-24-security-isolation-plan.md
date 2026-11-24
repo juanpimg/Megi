@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust 1.91, `serde`/`postcard` para el sobre IPC, PSL ya vendorizada en `crates/net/data/public_suffix_list.dat`, `landlock` + `rustix` para Linux, `bwrap` como fallback, fuzz con libFuzzer.
 
+> **v2 (sin calendarización)**: las referencias a Q1–Q4 de este plan son hitos lógicos (M0–M9 del master plan v2), no fechas. Las cifras WPT son pisos, no techos: las épocas continúan hasta cubrir el árbol completo. Las carreras antes llamadas 'anti-objetivos' (JIT, WebGL, vídeo, SW completo) están ahora en `js-evolution`, `graphics-media` y `web-platform-extension`.
+
 **Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (§4.3, catálogo T1–T10, decisión de eTLD+1 y sandbox por plataforma).
 
 ## Global Constraints

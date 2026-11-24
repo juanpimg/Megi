@@ -1,93 +1,102 @@
-# Megi Ambition — Master Implementation Plan
+# Megi Ambition — Master Implementation Plan (v2, sin calendarización)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ejecutar la estrategia de 12 meses del spec de ambición: medir con WPT real, cerrar explotos, profundizar el motor y convertir Megi en una alpha descargable y verificable, defendiendo cinco ejes ganables frente a Ladybird.
+**Goal:** Llevar Megi a un navegador 100 % utilizable en producción mediante hitos de capacidad encadenados y un motor de work packages que mantiene ocupados a los agentes de IA de forma continua.
 
-**Architecture:** Cuatro planes independientes (WPT, seguridad, motor, release/producto) que producen software verificable por separado. Este índice fija el orden, las dependencias entre planes y la regla de parada. Cada plan tiene sus propios tests y gate; ninguno se fusiona con CI roja.
+**Architecture:** Diez hitos (M0–M9) organizados por dependencias lógicas, sin fechas. Cada hito se cierra con una barra de aceptación medible. Nueve planes de subsistema producen software verificable de forma independiente. El motor de WPs regenera la cola de trabajo a partir de siete fuentes automáticas.
 
-**Tech Stack:** Rust 1.91 / 17 crates / Boa 0.22; Python 3.11 stdlib; GitHub Actions; cosign keyless; Landlock/rustix; wasmi/unicode-* (con enmienda ADR).
+**Tech Stack:** Rust 1.91 / 17+ crates / Boa 0.22; Python 3.11 stdlib; GitHub Actions; cosign; Landlock/rustix; wasmi; quinn/h3; symphonia; software WebGL; DevTools protocol.
 
-**Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md`
+**Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (v2)
 
 ## Global Constraints
 
-- Todo lo del spec: `#![forbid(unsafe_code)]` en 17 crates, MSRV 1.91, toolchain CI 1.99.1, sin JIT propio, sin WebGL, sin vídeo FFmpeg, sin motor JS propio, sin fundación en 12 meses.
-- Semántica de sitio = eTLD+1 con la PSL existente; sandbox real solo en Linux; reportes a borrador de GitHub Issue, sin backend.
-- **Regla de parada**: no iniciar la fase Q(n+1) de un eje hasta que el criterio de aceptación de Q(n) esté verde. Si Q1 del motor se retrasa, desplazar Q3 (SW/WASM), nunca Q2 (lo que el usuario ve).
-- Cada tarea termina con commit y gate verde; las ramas se limpian al merge con `tools/git_hygiene.sh` (sin `-D`).
+- `#![forbid(unsafe_code)]` en todos los crates `megi-*`; FFI solo en workspace separado con revisión dedicada.
+- MSRV 1.91, toolchain CI 1.99.1. Sin JIT/GPU en el perfil `deterministic` (por defecto en CI); perfil `performance` explícito cuando se active JIT/GPU.
+- Barra de producción del spec §2 es el destino; ningún plan puede rebajarla.
+- Máximo 10 WPs `in_progress`; el motor de WPs regenera la cola cuando una fuente se agota.
+- Cada tarea termina con commit y gate verde; nunca se fusiona con CI roja.
+- Los números publicados son **conseguidos**, nunca planeados.
 
 ## Review Focus
 
-1. **Cualquier plan publica una métrica autorreferencial como si fuera conformidad** → el plan WPT separa badge WPT de capability coverage y prohíbe agregarlos.
-2. **Un plan de seguridad se salta el orden F0→F1→F2→F3** → este índice bloquea F2/F3 hasta que T1/T2/T5/T9 estén verdes.
-3. **El motor abre demasiados frentes a la vez** → límite de 10 WPs activos y regla de parada Q1→Q2→Q3→Q4.
-4. **Release publica sin verificar o con artefacto no reproducible** → el plan de release añade job `verify` y test de doble build.
-5. **La gobernanza pierde trabajo en worktrees/ramas** → higiene que solo lista, nunca borra sin revisión.
+1. **Los agentes se quedan sin trabajo** → motor de WPs con siete fuentes y regla de relleno automático (plan `work-package-engine`).
+2. **La ambición se convierte en dispersión** → hitos con barra de aceptación y límite de 10 WPs activos.
+3. **JIT/GPU/hilos rompen los goldens** → perfiles `deterministic`/`performance` con tests en ambos.
+4. **Se reabren anti-objetivos de la v1 sin condición** → cada carrera diferida (JIT, WebGL, vídeo, SW completo, mobile) exige spike y entrada por hito.
+5. **Se publica una meta como logro** → separación estricta entre badges conseguidos y roadmap.
 
 ---
 
 ## Mapa de planes
 
-| Plan | Entregable verificable | Q1 | Q2 | Q3 | Q4 |
-|---|---|---|---|---|---|
-| `2026-11-24-wpt-harness-plan.md` | `WPT <sha>: 1.700/2.500` → `17.000/25.000` | Tasks 1–4 | Task 7 | — | rebaseline |
-| `2026-11-24-security-isolation-plan.md` | 0 fugas T1/T2, watchdog <6 s, sandbox Linux | Tasks 1–3 | Task 5 | Task 6 | Task 7 |
-| `2026-11-24-engine-depth-plan.md` | real-sites 4 PASS, replay 20/20 | Tasks 1–4 | Tasks 5–6 | Tasks 7–8 | Task 9 |
-| `2026-11-24-release-product-plan.md` | release verificada + canales + feedback | Tasks 1–3 | Tasks 4–5 | Task 6 | Task 7 |
+| Plan | Cubre hitos | Entregable verificable |
+|---|---|---|
+| `2026-11-24-wpt-harness-plan.md` | M0, continuo en M2/M4/M9 | WPT `P/T` por época, allowlist monotónica, badge separado |
+| `2026-11-24-security-isolation-plan.md` | M0, M3, M5 | 0 fugas T1/T2, sandbox por SO, network/image process |
+| `2026-11-24-engine-depth-plan.md` | M1, M2, M4 | E2E de tareas reales, bidi/CJK, Canvas 2D, SW fase 1, WASM |
+| `2026-11-24-release-product-plan.md` | M0, M5, M9 | release verificada, canales, feedback, gobernanza |
+| `2026-11-24-js-evolution-plan.md` | M8 | corpus Test262, JIT o migración, paralelismo JS |
+| `2026-11-24-graphics-media-plan.md` | M6 | Canvas 2D completo, WebGL software, imagen/vídeo/audio |
+| `2026-11-24-web-platform-extension-plan.md` | M4, M8 | SW completo, HTTP/3, storage/capabilities, offline |
+| `2026-11-24-devtools-platform-plan.md` | M7 | DevTools, WebDriver BiDi, about: pages, perfilado |
+| `2026-11-24-work-package-engine-plan.md` | continuo | cola auto-regenerada, generadores, priorización, dashboard |
 
-## Secuencia de ejecución
+## Encadenamiento de hitos
 
-### Ola 1 — Semanas 1–4 (BLOQUEANTE: medir y no publicar basura)
+```
+M0 (verdad y cimiento)
+ ├─ WPT Tasks 1-4 ────────────────┐
+ ├─ Seguridad Tasks 1-3 ─────────┤
+ └─ Release Tasks 1-2 ───────────┤
+                                 ▼
+M1 (interactividad) ◄─ Motor Tasks 1-4 + Release Task 3
+                                 ▼
+M2 (profundidad) ◄─ WPT Task 7 + Motor Tasks 5-6
+                                 ▼
+M3 (frontera seguridad) ◄─ Seguridad Tasks 4-6
+                                 ▼
+M4 (componentes) ◄─ Motor Tasks 7-8 + Web Platform Tasks 1-3
+                                 ▼
+M5 (plataforma nativa) ◄─ Seguridad Task 7 + Release Tasks 4-6
+                                 ▼
+M6 (gráficos/media) ◄─ Graphics-Media Tasks 1-6
+                                 ▼
+M7 (herramientas) ◄─ DevTools Tasks 1-5
+                                 ▼
+M8 (motor ofensivo) ◄─ JS Evolution + Web Platform Tasks 4-6
+                                 ▼
+M9 (producción) ◄─ Production readiness + auditoría externa
 
-1. **Seguridad Task 1** (docs que mienten) y **Task 2/3** (T1/T2/T3/T5/T9). Escapa de Q1 y es requisito de credibilidad.
-2. **WPT Tasks 1–4** (pin, shim, runner, gate). Sin esto seguimos midiendo con 30 checks caseros.
-3. **Release Tasks 1–2** (verify + firma). Antes de cualquier publicación.
+El motor de WPs corre EN PARALELO desde el primer día y nunca se detiene.
+```
 
-Gate de ola: `cargo test --workspace`, harness PASS, `wpt_gate --check`, 0 fugas T1/T2, `update_progress --check`.
+**Regla de dependencia**: un hito puede iniciarse antes de cerrar el anterior **solo si no comparte archivos y su barra de aceptación no depende del anterior**. Si M1 se retrasa, M4 puede avanzar; M9 no, porque agrega todas las barras.
 
-### Ola 2 — Meses 2–3
+---
 
-4. **Motor Tasks 1–4** (corpus JS, event loop, formularios, SSE).
-5. **Release Task 3** (canales continuous/beta).
+## Barras de cierre por hito
 
-Gate de ola: `real-sites` sin console_errors en example.com/HN; POST loopback 200; continuous publicado ≥90 % de días.
+| Hito | Cierre (todo verde) |
+|---|---|
+| M0 | WPT report publicado con SHA; 0 fugas T1/T2; watchdog <6 s; release con verify + cosign |
+| M1 | 10 fixtures E2E pasan; corpus JS sin fallos de binding no clasificados; real-sites sin console_errors |
+| M2 | WPT época 2 con allowlist reducida; fixtures bidi/canvas/md5 estables; solapes conocidos cerrados |
+| M3 | 0 fugas cross-site; 31+ targets fuzz; 12 pruebas negativas de sandbox; site-a no puede pedir site-b |
+| M4 | 100+ subtests shadow-dom; offline demo con red cortada; WASM export correcto |
+| M5 | a11y auditada; sandbox enforced en Linux/macOS/Windows; impresión y descargas E2E |
+| M6 | corpus de media E2E; WebGL WPT; AVIF/JPEG XL; audio/vídeo reproducibles |
+| M7 | suites DevTools y WebDriver BiDi pasan; about: pages; perfilador usable |
+| M8 | benchmarks publicados; JIT o motor alternativo decidido por datos; sin regresión no declarada |
+| M9 | barra completa del spec §2; 100/100 sitios; allowlists a 0; auditoría externa; bus factor >1 |
 
-### Ola 3 — Meses 4–6
+---
 
-6. **WPT Task 7** (época 2, puente getComputedStyle).
-7. **Seguridad Task 5** (sandbox Linux).
-8. **Motor Tasks 5–6** (bidi/CJK, Canvas 2D).
-9. **Release Tasks 4–5** (feedback y welcome page).
+## Autorevisión
 
-Gate de ola: WPT 6.000/9.000; 12 pruebas negativas de sandbox; fixtures bidi/canvas con md5 estable.
-
-### Ola 4 — Meses 7–9
-
-10. **Motor Tasks 7–8** (Shadow DOM, SW fase 1, WASM).
-11. **Seguridad Task 6** (network process).
-
-Gate de ola: ≥100 subtests shadow-dom; `sw_offline` funciona con red cortada; site-a no puede pedir site-b.
-
-### Ola 5 — Meses 10–12
-
-12. **Motor Task 9** (replay, huella, aceptación final).
-13. **Seguridad Task 7** (SiteInstance y matriz).
-14. **Release Task 6–7** (gobernanza y formatos, con puerta de tracción).
-
-Gate final: G1–G5 del spec verdes.
-
-## Métricas de éxito globales (del spec)
-
-- WPT `17.000/25.000` con SHA pegado y allowlist decreciente.
-- `real-sites.html`: 4 PASS / 0 DEGRADED, 0 errores JS, <2,5 s.
-- Replay 20/20; `unsafe_lines = 0` en `megi-*`; binario ≤40 MB; RSS ≤100 MB.
-- 31 targets de fuzz; 0 fugas cross-site; watchdog <6 s.
-- Release con checksum + cosign + attestation verificados; canales activos; SLA de triaje 72 h.
-
-## Autose revisión del plan
-
-- **Cobertura del spec**: G1 (WPT+real-sites) → WPT 1–7 y motor 9; G2 (tareas reales) → motor 1–4; G3 (seguridad) → seguridad 1–7; G4 (determinismo) → motor 9; G5 (producto) → release 1–7. Cubierto.
-- **Preguntas del builder check**: T1–T10 en spec §3; denominador por época en spec §4.1; eTLD+1 en §4.3; destino de reportes en §4.4; sandbox por plataforma en §4.3. Ninguna queda sin respuesta.
-- **Consistencia de tipos**: `subtest_key`, `WptReport`, `Validated<T>`, `CookiePolicyError`, `FileGrantTable`, `SiteInstance`, `PersistentEventLoop`, `FormBody` se definen una sola vez en el plan que los introduce y se consumen por su nombre.
-- **Proporción**: el plan es más largo que el spec porque descompone cuatro subsistemas en tareas ejecutables; cada tarea conserva solo firmas, tests y comandos, no transcribe el código.
+- **Cobertura del spec**: §2 (barra de producción) → M9 + todos los planes; §4.1 (hitos) → tabla de encadenamiento; §4.3 (motor de WPs) → plan dedicado; §4.2 (carreras diferidas) → planes js-evolution, graphics-media, web-platform-extension, devtools-platform; §5 (profesionalización) → release-product + gobernanza. Cubierto.
+- **Sin calendarización**: no hay meses ni fechas en los hitos; solo dependencias lógicas. Correcto.
+- **Sin topes funcionales**: 25.000 subtests pasa a ser piso, no techo; anti-objetivos v1 pasan a hitos M5–M8. Correcto.
+- **Consistencia**: los mismos nombres de tipos y barras se usan en los planes de subsistema. Correcto.
+- **Proporción**: el master es un índice; los detalles están en los nueve planes. Correcto.

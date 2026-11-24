@@ -1553,9 +1553,15 @@ docs/superpowers/plans/2026-11-18-auditoria-linea-por-linea-megi.md	47	docs	F3	w
 docs/superpowers/plans/2026-11-18-js-host-bridge.md	134	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-18-megi-modular-restructuring.md	225	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-19-maximal-modularity.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/plans/2026-11-24-engine-depth-plan.md	367	docs	F3			pending		
+docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md	102	docs	F3			pending		
+docs/superpowers/plans/2026-11-24-release-product-plan.md	289	docs	F3			pending		
+docs/superpowers/plans/2026-11-24-security-isolation-plan.md	306	docs	F3			pending		
+docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3			pending		
 docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-18-js-host-bridge-design.md	81	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md	451	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/specs/2026-11-24-megi-ambition-design.md	157	docs	F3			pending		
 fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt

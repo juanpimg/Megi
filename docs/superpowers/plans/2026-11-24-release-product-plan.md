@@ -8,6 +8,8 @@
 
 **Tech Stack:** GitHub Actions, `cosign` keyless (OIDC), `actions/attest-build-provenance`, `gh` CLI, `git-cliff` ya presente, `SOURCE_DATE_EPOCH` + tar reproducible.
 
+> **v2 (sin calendarización)**: las referencias a Q1–Q4 de este plan son hitos lógicos (M0–M9 del master plan v2), no fechas. Las cifras WPT son pisos, no techos: las épocas continúan hasta cubrir el árbol completo. Las carreras antes llamadas 'anti-objetivos' (JIT, WebGL, vídeo, SW completo) están ahora en `js-evolution`, `graphics-media` y `web-platform-extension`.
+
 **Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (§4.4, decisiones del builder check sobre destino de reportes).
 
 ## Global Constraints
