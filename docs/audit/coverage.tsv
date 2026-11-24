@@ -2099,7 +2099,7 @@ tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	400	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
 tools/progress_stats.py	277	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
-tools/real_site_check.py	262	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/real_site_check.py	274	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	163	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
@@ -2117,7 +2117,7 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	213	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/test_real_site_check.py	273	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2125,8 +2125,8 @@ tools/test_update_progress.py	82	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	364	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	created/re-read during exhaustive obsolete-doc audit
-tools/test_wp_plan.py	175	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/test_wp_schema.py	43	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_plan.py	188	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test del falso aviso de reposición con --profile heavy
+tools/test_wp_schema.py	64	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding profile TDD tests
 tools/test_wpt_gate.py	153	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	gate tests reviewed
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	325	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2135,7 +2135,7 @@ tools/vendor_wpt.py	320	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offl
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	447	tool	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_plan.py	191	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_schema.py	58	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: el aviso de reposición usa la cola total sin filtrar
+tools/wp_schema.py	64	tool	F3	jp	2026-11-24	covered	#2290	re-read after profile validation change
 tools/wpt_gate.py	214	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	monotonic P/T gate reviewed
 tools/wpt_report.py	206	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	report generator reviewed
