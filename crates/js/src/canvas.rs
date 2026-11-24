@@ -11,6 +11,9 @@ use megi_core::NodeId;
 mod color;
 pub use color::rgba_to_css;
 mod path;
+mod state;
+pub use path::Subpath;
+pub use state::{Affine2D, CanvasState, LinearGradient};
 
 /// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
 pub const MAX_CANVAS_DIM: u32 = 4096;
@@ -145,9 +148,20 @@ pub struct CanvasSurface {
     /// Number of pixel blends performed (bounded by the surface area after clipping). Useful
     /// for budget accounting and regression tests (#1618).
     pub operations: u64,
-    /// Current path as filled circles (x, y, radius). Bounded to avoid unbounded growth
-    /// from scripts calling arc() in a loop (#1959).
-    pub arcs: Vec<(f64, f64, f64)>,
+    /// Current path subpaths in surface space (#1959, M2 Canvas 2D).
+    pub subpaths: Vec<Subpath>,
+    /// Line width for `stroke()` (WHATWG HTML §4.12.5.1.18).
+    pub line_width: f64,
+    /// Current 2D affine transformation matrix.
+    pub transform: Affine2D,
+    /// Saved drawing states (`save()` / `restore()`).
+    pub state_stack: Vec<CanvasState>,
+    /// Linear gradients created via `createLinearGradient()`.
+    pub gradients: Vec<LinearGradient>,
+    /// Active fill gradient index (overrides `fill_style` when `Some`).
+    pub fill_gradient: Option<usize>,
+    /// Active stroke gradient index (overrides `stroke_style` when `Some`).
+    pub stroke_gradient: Option<usize>,
 }
 
 /// Maximum number of path primitives retained by a canvas context (#1959).
@@ -182,7 +196,13 @@ impl CanvasSurface {
             },
             global_alpha: 1.0,
             operations: 0,
-            arcs: Vec::new(),
+            subpaths: Vec::new(),
+            line_width: 1.0,
+            transform: Affine2D::IDENTITY,
+            state_stack: Vec::new(),
+            gradients: Vec::new(),
+            fill_gradient: None,
+            stroke_gradient: None,
         })
     }
 
@@ -219,14 +239,31 @@ impl CanvasSurface {
         self.pixels[index + 3] = (out_a * 255.0).round().min(255.0) as u8;
     }
 
-    /// Fills a rectangle with `fill_style` (CSS `fillRect`).
+    /// Fills a rectangle with `fill_style` / `fill_gradient` (CSS `fillRect`).
     pub fn fill_rect(&mut self, x: f64, y: f64, w: f64, h: f64) {
+        if !self.transform.is_identity() {
+            if ![x, y, w, h].into_iter().all(f64::is_finite) || w <= 0.0 || h <= 0.0 {
+                return;
+            }
+            let sub = Subpath {
+                points: vec![
+                    self.transform.apply(x, y),
+                    self.transform.apply(x + w, y),
+                    self.transform.apply(x + w, y + h),
+                    self.transform.apply(x, y + h),
+                ],
+                closed: true,
+            };
+            self.fill_polygons(&[sub]);
+            return;
+        }
         let Some((x0, y0, x1, y1)) = self.clip_rect(x, y, w, h) else {
             return;
         };
-        let color = self.fill_style;
         for py in y0..y1 {
+            let cy = py as f64 + 0.5;
             for px in x0..x1 {
+                let color = self.resolve_fill_color(px as f64 + 0.5, cy);
                 self.blend(px, py, color);
             }
         }
@@ -352,6 +389,11 @@ impl CanvasStore {
 
     pub fn get(&self, node: NodeId) -> Option<&CanvasSurface> {
         self.surfaces.get(&node)
+    }
+
+    /// Clones a single surface snapshot (used by `drawImage`).
+    pub fn snapshot_surface(&self, node: NodeId) -> Option<CanvasSurface> {
+        self.surfaces.get(&node).cloned()
     }
 
     /// Runs `f` with a mutable borrow of an existing surface, if any.

@@ -2,6 +2,7 @@ use super::*;
 
 // Gap-fill DOM/BOM bindings (split verbatim from the former monolithic gap_apis.rs).
 mod canvas;
+mod canvas_paths;
 mod frames;
 mod install;
 mod nodes;
