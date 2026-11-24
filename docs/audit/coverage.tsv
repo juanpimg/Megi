@@ -2102,7 +2102,7 @@ tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	400	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
 tools/progress_stats.py	277	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
-tools/real_site_check.py	280	tool	F3	jp	2026-11-24	covered	#2290	
+tools/real_site_check.py	274	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
@@ -2120,17 +2120,17 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	286	tool	F3	jp	2026-11-24	covered	#2290	
+tools/test_real_site_check.py	273	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_update_progress.py	82	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	progress generator tests reviewed
+tools/test_update_progress.py	139	tool	F3	jp	2026-11-24	covered	#2290	progress generator tests reviewed
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
 tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
-tools/test_wpt_gate.py	181	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding baseline allowlist entry regression test
+tools/test_wpt_gate.py	169	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding subtest validation regression test
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	325	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2140,5 +2140,5 @@ tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read dur
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
-tools/wpt_gate.py	220	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding baseline allowlist entry validation
-tools/wpt_report.py	206	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	report generator reviewed
+tools/wpt_gate.py	217	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding string test/subtest validation
+tools/wpt_report.py	230	tool	F3	jp	2026-11-24	covered	#2290	report generator reviewed

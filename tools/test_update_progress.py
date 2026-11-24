@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from tools import update_progress, wpt_report
 
 
 def report(counts: dict, total: int, dirs: list[str]) -> dict:
     return {
+        "schema": "megi-wpt-report/1",
         "total": total,
         "counts": counts,
         "results": [{"test": f"tests/wpt/{d}/x.html", "subtest": f"s{i}", "status": "PASS"}
                     for i, d in enumerate(dirs)],
         "run_info": {"dirs": dirs},
-        "epoch": {"wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426"},
+        "epoch": {
+            "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
+            "manifest_sha256": "0" * 64,
+        },
     }
+
+
+def write_report(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 class UpdateProgressWptTest(unittest.TestCase):
@@ -76,6 +89,50 @@ class UpdateProgressWptTest(unittest.TestCase):
     def test_parse_summary_rejects_missing_section(self) -> None:
         with self.assertRaises(ValueError):
             wpt_report.parse_summary("no WPT section here\n")
+
+    def test_load_report_rejects_incomplete_shape(self) -> None:
+        # A report with only a schema must fail with a ValueError naming the first
+        # missing key, never a KeyError/TypeError later in wpt_fields().
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wpt.json"
+            write_report(path, {"schema": "megi-wpt-report/1"})
+            with self.assertRaises(ValueError) as caught:
+                wpt_report.load_report(path)
+        self.assertIn("epoch", str(caught.exception))
+
+    def test_load_report_rejects_incomplete_epoch(self) -> None:
+        # The test fixture itself must carry manifest_sha256; a report without it
+        # used to reach wpt_fields() and only fail there with a KeyError.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wpt.json"
+            data = report({"pass": 1, "fail": 0, "timeout": 0, "notrun": 0, "error": 0}, 1,
+                          ["tests/wpt/css/css-syntax"])
+            del data["epoch"]["manifest_sha256"]
+            write_report(path, data)
+            with self.assertRaises(ValueError) as caught:
+                wpt_report.load_report(path)
+        self.assertIn("manifest_sha256", str(caught.exception))
+
+    def test_build_artifacts_reports_incomplete_wpt_report(self) -> None:
+        # build_artifacts(no_gate=True) promises "error: WPT report: ..." instead of
+        # a traceback when docs/status/wpt.json is incomplete (#2290).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status = root / update_progress.STATUS_DIR
+            status.mkdir(parents=True)
+            write_report(status / "wpt.json", {"schema": "megi-wpt-report/1"})
+            (status / "progress.toml").write_text(
+                '[stats]\ntests = 0\n\n[gate]\nstatus = "PASS"\n', encoding="utf-8"
+            )
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as caught:
+                    update_progress.build_artifacts(root, no_count=True, no_gate=True)
+        self.assertEqual(
+            caught.exception.code,
+            f"error: WPT report: {status / 'wpt.json'}: report needs epoch (a dict)",
+        )
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":

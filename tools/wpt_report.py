@@ -66,10 +66,34 @@ def parse_summary(output: str) -> tuple[list[tuple[str, str]], int, int]:
 
 
 def load_report(path: Path) -> dict:
-    """Read a previously generated report (used by --no-gate progress generation)."""
+    """Read a previously generated report (used by --no-gate progress generation).
+
+    Validate the full shape consumed by progress_stats.wpt_fields() so a truncated
+    report fails here with a ValueError naming the key, not with a KeyError/TypeError
+    during rendering (#2290).
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("schema") != "megi-wpt-report/1":
         raise ValueError(f"unsupported WPT report schema in {path}")
+
+    def need(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError(f"{path}: report needs {message}")
+
+    epoch = data.get("epoch")
+    need(isinstance(epoch, dict), "epoch (a dict)")
+    counts = data.get("counts")
+    need(isinstance(counts, dict), "counts (a dict)")
+    need(isinstance(data.get("results"), list), "results (a list)")
+    run_info = data.get("run_info")
+    need(isinstance(run_info, dict), "run_info (a dict)")
+    total = data.get("total")
+    need(isinstance(total, int) and not isinstance(total, bool), "total (an int)")
+    need(isinstance(epoch.get("wpt_revision"), str), "epoch.wpt_revision (a str)")
+    need(isinstance(epoch.get("manifest_sha256"), str), "epoch.manifest_sha256 (a str)")
+    need(isinstance(counts.get("pass"), int) and not isinstance(counts.get("pass"), bool),
+         "counts.pass (an int)")
+    need(isinstance(run_info.get("dirs"), list), "run_info.dirs (a list)")
     return data
 
 
