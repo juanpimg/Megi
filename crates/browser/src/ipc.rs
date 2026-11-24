@@ -7,12 +7,17 @@
 use std::io::{Read, Write};
 
 mod cookie_policy;
+mod file_grant;
 mod options;
 mod process;
 mod process_pool;
 pub use cookie_policy::{CookiePolicyError, seeded_cookies_for, validate_cookie_from_renderer};
+pub use file_grant::{FileGrant, FileGrantTable, GrantError, MAX_GRANTED_FILE_BYTES};
 pub use options::{IpcCookie, IpcRenderOptions, IpcSameSite};
-pub use process::{ProcessRenderer, render_png_in_process, render_png_in_process_with_options};
+pub use process::{
+    ProcessRenderer, render_png_in_process, render_png_in_process_with_options, renderer_command,
+    renderer_scratch_dir,
+};
 mod regions;
 mod session;
 pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
@@ -25,6 +30,9 @@ pub use session::{ProcessFrame, ProcessRenderSession};
 /// Maximum accepted IPC payload (256 MiB: a 4096×4096 RGBA frame plus metadata).
 pub const MAX_IPC_PAYLOAD: usize = 256 * 1024 * 1024;
 
+/// A renderer that has not answered within this deadline is killed (plan Task 3 / T5).
+pub const RENDER_WATCHDOG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Errors from the IPC framing layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IpcError {
@@ -36,13 +44,15 @@ pub enum IpcError {
     InvalidPayload(String),
     /// An underlying I/O error.
     Io(String),
+    /// The watchdog killed a renderer that did not answer in [`RENDER_WATCHDOG_TIMEOUT`].
+    Watchdog(u64),
 }
 
 impl IpcError {
-    /// True when this error means the renderer process is gone (EOF or broken pipe) and the
-    /// pool must drop the slot and spawn a fresh process for the next request.
+    /// True when this error means the renderer process is gone (EOF, broken pipe or a
+    /// watchdog kill) and the pool must drop the slot and spawn a fresh process.
     pub fn is_fatal(&self) -> bool {
-        matches!(self, Self::Truncated | Self::Io(_))
+        matches!(self, Self::Truncated | Self::Io(_) | Self::Watchdog(_))
     }
 }
 
@@ -53,6 +63,9 @@ impl std::fmt::Display for IpcError {
             Self::TooLarge(length) => write!(f, "IPC payload too large ({length} bytes)"),
             Self::InvalidPayload(reason) => write!(f, "invalid IPC payload: {reason}"),
             Self::Io(reason) => write!(f, "IPC I/O error: {reason}"),
+            Self::Watchdog(generation) => {
+                write!(f, "renderer watchdog timeout for generation {generation}")
+            }
         }
     }
 }
