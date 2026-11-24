@@ -1854,7 +1854,6 @@ dependencies = [
 name = "megi-raster"
 version = "0.1.0"
 dependencies = [
- "megi-core",
  "megi-display",
  "megi-fonts",
 ]

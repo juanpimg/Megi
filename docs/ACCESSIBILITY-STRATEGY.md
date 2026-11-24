@@ -1,7 +1,7 @@
 # ADR-002 — Backend de accesibilidad de plataforma (F7-A11Y)
 
-- **Estado**: **ACEPTADO (ADR-002, 2026-11-20)** — decisión de arquitectura registrada para la Fase 7.
-- **Contexto**: `crates/js` expone un árbol de accesibilidad determinista (`A11yNode`, `AccessibilityTree`, `window.__megiAccessibilityTree()`) con roles, nombres accesibles, estados y jerarquía. Sin embargo F7-A11Y sigue marcada como `partial`: falta el puente que publique ese árbol a la API de accesibilidad del sistema operativo (AT-SPI en Linux, UI Automation en Windows, NSAccessibility en macOS) para que lectores de pantalla y tecnologías asistivas puedan consumirlo.
+- **Estado**: **ACEPTADO (ADR-002, 2026-11-20) — IMPLEMENTADO**. Backend `accesskit` 0.25 en `crates/browser` (feature `a11y`), con adaptadores y enrutado de foco/click; F7-A11Y queda `partial` sólo por el bus AT real (AT-SPI/UIA) en CI y los widgets nativos.
+- **Contexto**: `crates/js` expone un árbol de accesibilidad determinista (`A11yNode`, `AccessibilityTree`, `window.__megiAccessibilityTree()`) con roles, nombres accesibles, estados y jerarquía. El puente a la API de accesibilidad del sistema operativo (AT-SPI en Linux, UI Automation en Windows, NSAccessibility en macOS) ya está implementado mediante `accesskit`; F7-A11Y sigue `partial` únicamente por la verificación en CI con un bus AT real y los widgets nativos.
 
 ## Decisión
 
@@ -23,7 +23,7 @@ Autorizar **`accesskit` 0.25.x** (y sus adaptadores de plataforma `accesskit_uni
 
 - **`atspi` directo (cliente D-Bus)**: es una biblioteca de *cliente*, no de *servidor*; no permite publicar un árbol propio sin reimplementar interfaces. Descartado.
 - **FFI a ATK/UIA manual**: incompatible con `#![forbid(unsafe_code)]` y con la política de dependencias de bajo nivel. Descartado.
-- **Sólo el snapshot JS**: útil para pruebas, pero no expone nada a tecnologías asistivas; es el estado actual (`partial`). Insuficiente.
+- **Sólo el snapshot JS**: útil para pruebas, pero no expone nada a tecnologías asistivas. Descartado como estado final; hoy se complementa con el backend AccessKit.
 
 ## Consecuencias
 

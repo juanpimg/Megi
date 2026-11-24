@@ -20,7 +20,7 @@ This guide helps you build, test, and run Megi locally.
     libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
     libxcb-shm0-dev libxcb-randr0-dev
   ```
-  The rest of the workspace (parsers, layout, paint, net, image, js, svg, render, tests) can be built/tested without these system libraries by excluding `shell` where needed.
+  The rest of the workspace (parsers, layout, paint, net, image, js, svg, render, tests) can be built/tested without these system libraries by excluding `megi-browser` where needed.
 
 ## Clone
 
