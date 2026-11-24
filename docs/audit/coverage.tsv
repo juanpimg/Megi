@@ -1094,17 +1094,17 @@ crates/render/src/inline_svg.rs	273	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/render/src/lib.rs	276	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/main.rs	357	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/render/src/pipeline/final_stage.rs	341	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/final_stage.rs	343	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/imports.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/options.rs	392	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/output.rs	224	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/resources.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/script.rs	453	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/state.rs	403	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/resources.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/script.rs	455	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/state.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/state_stylesheet_text.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/styles.rs	466	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
 crates/render/src/pipeline/svg.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/url.rs	325	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/url.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts.rs	108	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/classic.rs	331	src	F2	wave2	2026-11-19	covered	#1969 via PR #1989	Re-read after doc-comment lint fix
 crates/render/src/scripts/event_loop.rs	259	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
