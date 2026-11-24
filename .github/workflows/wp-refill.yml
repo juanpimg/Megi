@@ -41,10 +41,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           summary=$(python3 -c 'import sys, pathlib; sys.path.insert(0, "tools"); from tools import wp_dashboard as w; d = w.collect(pathlib.Path(".")); print("closed=%d queued=%d light=%d heavy=%d" % (d["closed"], d["queued"], d["light"], d["heavy"]))')
-          issue=$(gh issue list --state open --label wp-board --json number --jq '.[0].number' || true)
+          issue=$(gh issue list --state open --search "in:title Work package board" --json number --jq '.[0].number' || true)
           if [ -z "$issue" ]; then
-            gh issue create --title "Work package board — through 2026" \
-              --label wp-board --body "Cola regenerada por \`wp-refill.yml\`. Estado real: $summary"
+            gh issue create --title "Work package board — estado real" \
+              --body "Cola regenerada por \`wp-refill.yml\`. Estado real: $summary"
           else
             gh issue comment "$issue" --body "Reposición automática: $summary"
           fi

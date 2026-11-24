@@ -215,7 +215,10 @@ def generate_user(root: Path) -> list[WorkPackage]:
             reports = []
     out = []
     for report in reports:
-        labels = {str(label).lower() for label in report.get("labels", [])}
+        labels = {
+            str(label.get("name", "")).lower() if isinstance(label, dict) else str(label).lower()
+            for label in report.get("labels", [])
+        }
         if not labels & USER_LABELS:
             continue
         number = str(report["number"])
@@ -254,11 +257,29 @@ def generate(source: str, dry_run: bool = True, root: Path | None = None) -> lis
             # JSON basic strings are valid TOML basic strings and escape newlines,
             # quotes and backslashes (site warnings contain real newlines).
             body = "".join(
-                f"{key} = {json.dumps(str(value), ensure_ascii=False)}\n"
+                f"{key} = {value if isinstance(value, int) else json.dumps(str(value), ensure_ascii=False)}\n"
                 for key, value in fields.items()
             )
             destination.write_text(body, encoding="utf-8")
     return wps
+
+
+def generate_all(root: Path, dry_run: bool = True) -> tuple[list[WorkPackage], list[str]]:
+    """Run all seven sources; one broken artifact must not stop the others."""
+    wps: list[WorkPackage] = []
+    errors: list[str] = []
+    for source in SOURCES:
+        try:
+            produced = generate(source, dry_run=dry_run, root=root)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors.append(f"{source}: {exc}")
+            print(f"{source}: ERROR {exc}")
+            continue
+        wps.extend(produced)
+        print(f"{source}: {len(produced)} work packages")
+        for wp in produced:
+            print(f"  {wp.id} [{wp.profile}] P{wp.priority} → {wp.metric}")
+    return wps, errors
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,15 +291,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=None)
     args = parser.parse_args(argv)
     selected = "all" if args.all else args.source
-    sources = SOURCES if selected == "all" else (selected,)
-    total = 0
-    for source in sources:
-        wps = generate(source, dry_run=args.dry_run, root=args.root)
-        total += len(wps)
-        print(f"{source}: {len(wps)} work packages")
-        for wp in wps:
-            print(f"  {wp.id} [{wp.profile}] P{wp.priority} → {wp.metric}")
-    print(f"total: {total}")
+    root = args.root or Path(__file__).resolve().parent.parent
+    if selected == "all":
+        wps, errors = generate_all(root, dry_run=args.dry_run)
+        print(f"total: {len(wps)}")
+        return 1 if errors else 0
+    wps = generate(selected, dry_run=args.dry_run, root=root)
+    print(f"{selected}: {len(wps)} work packages")
+    for wp in wps:
+        print(f"  {wp.id} [{wp.profile}] P{wp.priority} → {wp.metric}")
+    print(f"total: {len(wps)}")
     return 0
 
 

@@ -1436,8 +1436,8 @@ docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
 docs/work-packages/BOARD.md	65	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/README.md	54	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/SCHEMA.md	50	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/depth-inventory.toml	443	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/SCHEMA.md	52	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/depth-inventory.toml	487	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -2038,6 +2038,7 @@ tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/check_arch.py	173	tool	F3	jp	2026-11-19	covered	#1759	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+tools/check_milestone.py	57	tool	F3	wp-engine	2026-11-24	covered	#2294	read during WP review fix pass
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/coverage_report.py	136	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2060,15 +2061,15 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	148	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_soak_fuzz.py	139	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_wp_dashboard.py	65	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/test_wp_generate.py	162	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/test_wp_plan.py	74	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/test_wp_schema.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+tools/test_wp_generate.py	203	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_plan.py	131	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_schema.py	43	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	783	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/wp_dashboard.py	102	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/wp_generate.py	286	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_plan.py	106	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_schema.py	52	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+tools/wp_generate.py	308	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_plan.py	186	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_schema.py	58	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit

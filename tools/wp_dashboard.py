@@ -30,11 +30,18 @@ def _git(root: Path, *args: str) -> str:
 
 def collect(root: Path) -> dict:
     subjects = _git(root, "log", "--format=%s").splitlines()
-    closed_ids: list[str] = []
-    for subject in subjects:
-        for wid in WP_ID.findall(subject):
-            if wid not in closed_ids:
-                closed_ids.append(wid)
+    mentioned = {wid for subject in subjects for wid in WP_ID.findall(subject)}
+    path = root / "docs/work-packages/closed.toml"
+    records = {}
+    if path.is_file():
+        with path.open("rb") as handle:
+            records = tomllib.load(handle)
+    # A commit subject alone does not close a WP: it must have been closed with
+    # a recorded metric movement and a commit that mentions its ID.
+    closed_ids = sorted(
+        wid for wid, fields in records.items()
+        if wid in mentioned and str(fields.get("metric", "")).strip()
+    )
     queue = root / "docs/work-packages/queue"
     wps = []
     if queue.is_dir():
@@ -72,7 +79,7 @@ def render(data: dict) -> str:
     lines.append("<h2>Work packages cerrados</h2><ul>")
     lines += [f"<li>{html.escape(wid)}</li>" for wid in data["closed_ids"]] or ["<li>(none)</li>"]
     lines.append("</ul>")
-    lines.append(f"<p><small>HEAD {html.escape(str(data['head']))} · generado por tools/wp_dashboard.py</small></p>")
+    lines.append("<p><small>Generado por tools/wp_dashboard.py desde closed.toml y la cola real.</small></p>")
     lines.append("</body></html>")
     return "\n".join(lines) + "\n"
 

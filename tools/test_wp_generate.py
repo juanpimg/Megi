@@ -1,4 +1,6 @@
 """Tests for the seven WP generators (spec §4.3), including machine profile."""
+import contextlib
+import io
 import json
 import tempfile
 import tomllib
@@ -156,6 +158,45 @@ class GeneratorTests(unittest.TestCase):
         wps = {wp.id: wp for wp in self._generate("depth")}
         self.assertEqual(wps["WP-DEPTH-docs-only"].profile, "light")
         self.assertEqual(wps["WP-DEPTH-compile"].profile, "heavy")
+
+
+    def test_user_labels_as_github_objects(self) -> None:
+        self._write("docs/work-packages/user-reports.json", json.dumps([
+            {"number": 18, "title": "Crash", "body": "x", "labels": [{"name": "crash"}]},
+        ]))
+        self.assertEqual([wp.id for wp in self._generate("user")], ["WP-USER-18"])
+
+    def test_one_bad_artifact_does_not_stop_other_sources(self) -> None:
+        self._write("fuzz/artifacts/broken.json", "{not json")
+        self._write("docs/status/real-sites.json", json.dumps({"results": [
+            {"id": "example", "result": "DEGRADADO", "warnings": ["error"]},
+        ]}))
+        with contextlib.redirect_stdout(io.StringIO()):
+            wps, errors = wp_generate.generate_all(self.root, dry_run=True)
+        self.assertTrue(any(wp.id.startswith("WP-SITE-") for wp in wps))
+        self.assertTrue(errors)
+        self.assertIn("fuzz", errors[0])
+
+    def test_numeric_fields_are_serialised_as_numbers(self) -> None:
+        self._write("docs/work-packages/depth-inventory.toml",
+                    '[[entry]]\nid = "x"\ngap = "g"\nspec = "s"\n'
+                    'verify_cmd = "python3 tools/check_arch.py"\n'
+                    'metric = "depth_closed"\nmilestone = "M0"\nimpact = 3\nfrequency = 4\n')
+        self._generate("depth", dry_run=False)
+        path = self.root / "docs/work-packages/queue/WP-DEPTH-x.toml"
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+        self.assertEqual(data["impact"], 3)
+        self.assertEqual(data["frequency"], 4)
+
+    def test_milestone_checker_is_red_then_green(self) -> None:
+        from tools import check_milestone
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = ["informe WPT"]\n')
+        self.assertNotEqual(check_milestone.check("M0", 1, root=self.root), 0)
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
+        self.assertEqual(check_milestone.check("M0", 1, root=self.root), 0)
 
 
 if __name__ == "__main__":

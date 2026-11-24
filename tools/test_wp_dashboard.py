@@ -44,6 +44,12 @@ class DashboardTests(unittest.TestCase):
             'milestone = "M1"\nimpact = 3\nfrequency = 3\nprofile = "light"\n',
             encoding="utf-8",
         )
+        closed_path = self.root / "docs/work-packages/closed.toml"
+        closed_path.write_text(
+            '[WP-DEPTH-m0-01]\nid = "WP-DEPTH-m0-01"\nmetric = "M0 report"\ncommit = "abc1234"\n'
+            '[WP-SITE-example]\nid = "WP-SITE-example"\nmetric = "site PASS"\ncommit = "abc1234"\n',
+            encoding="utf-8",
+        )
         data = wp_dashboard.collect(self.root)
         self.assertEqual(data["closed"], 2)
         self.assertEqual(data["queued"], 1)
@@ -52,6 +58,29 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("WP-DEPTH-m0-01", html)
         self.assertIn(">2<", html)
 
+    def test_commit_mention_alone_does_not_close_a_wp(self) -> None:
+        self._git("init")
+        self._git("config", "user.email", "test@megi.local")
+        self._git("config", "user.name", "Megi Test")
+        self._git("commit", "--allow-empty", "-m", "docs: mention WP-X-999 in passing")
+        data = wp_dashboard.collect(self.root)
+        self.assertEqual(data["closed"], 0)
+
+    def test_closed_wp_requires_a_recorded_metric(self) -> None:
+        self._git("init")
+        self._git("config", "user.email", "test@megi.local")
+        self._git("config", "user.name", "Megi Test")
+        self._git("commit", "--allow-empty", "-m", "feat(wp): WP-X-1 closed")
+        closed_dir = self.root / "docs/work-packages"
+        closed_dir.mkdir(parents=True)
+        (closed_dir / "closed.toml").write_text(
+            '[WP-X-1]\nid = "WP-X-1"\nmetric = "sites_passed 1->2"\ncommit = "abc1234"\n',
+            encoding="utf-8",
+        )
+        data = wp_dashboard.collect(self.root)
+        self.assertEqual(data["closed"], 1)
+        self.assertEqual(data["closed_ids"], ["WP-X-1"])
+
     def test_no_estimated_numbers(self) -> None:
         data = {"closed": 1, "queued": 0, "closed_ids": ["WP-X-1"],
                 "light": 0, "heavy": 0, "head": "abc1234"}
@@ -59,6 +88,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("estimate", html)
         self.assertNotIn("aprox", html)
         self.assertNotIn("~", html)
+        self.assertNotIn("abc1234", html)  # no volatile HEAD hash in the artifact
 
 
 if __name__ == "__main__":

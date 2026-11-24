@@ -38,12 +38,14 @@ Opcionales: `impact` (1–10), `frequency` (1–10). Prioridad = `impact × freq
 
 ## Ciclo del agente
 
-1. `python3 tools/wp_plan.py --board --profile light` (o `heavy`) → elegir el WP de mayor prioridad que quepa en tu máquina.
+1. `python3 tools/wp_plan.py --board --profile light` (o `heavy`) → elegir el WP de mayor prioridad que quepa en tu máquina. `python3 tools/wp_plan.py --select --profile light` imprime hasta 10 WPs **descontando los ya en curso** (tope duro de 10).
 2. Leer el plan del hito en `docs/superpowers/plans/`.
 3. TDD: test que falla → fix mínimo → test que pasa (`AGENTS.md` §5).
 4. Gate completo de `AGENTS.md` §6.
-5. Commit atómico con el ID del WP: `feat(wpt): WP-WPT-… fix …`.
-6. El humano revisa y fusiona. Los agentes **nunca** fusionan.
+5. Reservar antes de empezar: `python3 tools/wp_plan.py --claim WP-…` (falla si ya hay 10 en curso). Esto evita que dos agentes hagan el mismo WP.
+6. Commit atómico con el ID del WP: `feat(wpt): WP-WPT-… fix …`. El comando de verificación debe pasar **después** del cambio; los WPs `depth` usan `python3 tools/check_milestone.py <M> <n>`, que exige mover el criterio de `pending` a `items` con evidencia en `progress.toml`.
+7. Cerrar: `python3 tools/wp_plan.py --done WP-… --metric "qué métrica se movió"`. Esto saca el WP de la cola y lo registra en `closed.toml`; el dashboard cuenta sólo cierres con métrica declarada y commit que mencione el ID. Un simple mensaje de commit menciona un ID no cierra nada.
+8. El humano revisa y fusiona. Los agentes **nunca** fusionan.
 
 ## Estado de implementación
 
