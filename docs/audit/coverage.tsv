@@ -56,7 +56,7 @@ crates/browser/src/a11y.rs	27	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mo
 crates/browser/src/a11y/nodes.rs	229	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/a11y/snapshot.rs	202	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/a11y/tests.rs	224	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/a11y_aria_tests.rs	60	src	F2			pending		
+crates/browser/src/a11y_aria_tests.rs	60	src	F2	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#1932	re-read
 crates/browser/src/a11y_backend.rs	451	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/a11y_backend_orphan_tests.rs	105	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
@@ -1553,11 +1553,11 @@ docs/superpowers/plans/2026-11-18-auditoria-linea-por-linea-megi.md	47	docs	F3	w
 docs/superpowers/plans/2026-11-18-js-host-bridge.md	134	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-18-megi-modular-restructuring.md	225	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-19-maximal-modularity.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-24-engine-depth-plan.md	367	docs	F3			pending		
-docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md	102	docs	F3			pending		
-docs/superpowers/plans/2026-11-24-release-product-plan.md	289	docs	F3			pending		
-docs/superpowers/plans/2026-11-24-security-isolation-plan.md	306	docs	F3			pending		
-docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3			pending		
+docs/superpowers/plans/2026-11-24-engine-depth-plan.md	367	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
+docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md	102	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
+docs/superpowers/plans/2026-11-24-release-product-plan.md	289	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
+docs/superpowers/plans/2026-11-24-security-isolation-plan.md	306	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
+docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-18-js-host-bridge-design.md	81	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md	451	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
