@@ -145,6 +145,19 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("WP-DEPTH-light", board)
         self.assertNotIn("WP-WPT-heavy", board)
 
+    def test_board_profile_filter_does_not_emit_false_refill_warning(self) -> None:
+        light = [make_wp(f"WP-DEPTH-light-{i:02d}", impact=2, frequency=3)
+                 for i in range(21)]
+        heavy = [make_wp(f"WP-WPT-heavy-{i:02d}", impact=3, frequency=3)
+                 for i in range(2)]
+        for wp in heavy:
+            object.__setattr__(wp, "profile", "heavy")
+        board = wp_plan.render_board(light + heavy, [], [], [], profile="heavy")
+        self.assertNotIn("Cola baja", board)
+        queued = board_column(board, "queued")
+        for wp in heavy:
+            self.assertIn(wp.id, queued)
+
     def test_board_after_done_shows_closed_wp_in_done_not_queued(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
