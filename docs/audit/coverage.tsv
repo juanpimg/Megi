@@ -619,9 +619,10 @@ crates/image/tests/webp_tests/lossless.rs	87	test	F1	wave-max-mod	2026-11-19	cov
 crates/image/tests/webp_tests/lossy.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/tests/webp_tests/main.rs	173	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/Cargo.toml	23	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/canvas.rs	375	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
+crates/js/src/canvas.rs	417	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
 crates/js/src/canvas/color.rs	18	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
-crates/js/src/canvas/path.rs	75	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
+crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
+crates/js/src/canvas/state.rs	393	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/canvas/tests.rs	143	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -660,8 +661,9 @@ crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	cov
 crates/js/src/runtime/frames/bridge.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/state.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis.rs	31	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas.rs	479	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas.rs	474	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas_paths.rs	445	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -709,6 +711,7 @@ crates/js/tests/browser_features_r24/history_location.rs	143	test	F1	wave-max-mo
 crates/js/tests/browser_features_r24/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/mutation_observer.rs	278	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/storage.rs	94	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/canvas_paths_tests.rs	150	test	F1	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/tests/canvas_tests.rs	293	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/cookie_tests.rs	85	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/create_element_ns_tests.rs	25	test	F1	merge-1996	2026-11-19	covered	#1939	re-read during merge
@@ -1144,7 +1147,7 @@ crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/background_layers_tests.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/backgrounds_tests.rs	365	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/browser_api_tests.rs	220	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/canvas_tests.rs	71	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/canvas_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1374,6 +1377,7 @@ docs/audit/findings/wave2/repro-w2-assets/vis-inherit.svg	1	docs	F3	wave-max-mod
 docs/audit/findings/wave2/repro-w2-ci/blank_gate.py	22	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-256-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-4-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/negative-matrix.toml	378	docs	F3	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 docs/audit/repros/browser/bad.gif	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.jpg	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.png	0	binary	-			exempt		not read line by line: binary
@@ -1781,6 +1785,7 @@ tests/fixtures/render/browser_api.html	65	fixture	F1	waveF1	2026-11-17	covered	#
 tests/fixtures/render/calc_gap.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_margin.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_width.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/canvas_paths.html	50	fixture	F1	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 tests/fixtures/render/cascade_layers.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/cascade_layers_nested.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/color_spaces.html	30	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -2088,6 +2093,7 @@ tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tools/audit_coverage.py	406	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/audit_negative_matrix.py	268	tool	F3	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2102,10 +2108,11 @@ tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	400	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
 tools/progress_stats.py	277	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
-tools/real_site_check.py	274	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/real_site_check.py	280	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
+tools/test_audit_negative_matrix.py	138	tool	F3	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_check_milestone.py	95	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
@@ -2120,7 +2127,7 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	273	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/test_real_site_check.py	286	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2130,7 +2137,7 @@ tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
 tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
-tools/test_wpt_gate.py	169	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding subtest validation regression test
+tools/test_wpt_gate.py	181	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding subtest validation regression test
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	325	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2140,5 +2147,5 @@ tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read dur
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
-tools/wpt_gate.py	217	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding string test/subtest validation
+tools/wpt_gate.py	220	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding string test/subtest validation
 tools/wpt_report.py	230	tool	F3	jp	2026-11-24	covered	#2290	report generator reviewed
