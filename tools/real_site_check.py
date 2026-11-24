@@ -84,8 +84,14 @@ def classify(stats: dict, site: dict | None = None) -> str:
         or _failure_count(stats.get("scripts_failed")) > 0
         or _failure_count(stats.get("console_errors")) > 0
     )
-    if site and "min_items" in site and items < int(site["min_items"]):
-        degraded = True
+    if site and "min_items" in site:
+        try:
+            minimum = int(site["min_items"])
+        except (TypeError, ValueError):
+            # Non-numeric sentinel (e.g. "n/a") must degrade rather than crash (#2202).
+            minimum = 0
+        if items < minimum:
+            degraded = True
     return "DEGRADADO" if degraded else "PASS"
 
 

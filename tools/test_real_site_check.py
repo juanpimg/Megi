@@ -46,6 +46,19 @@ class ClassifyTests(unittest.TestCase):
         )
         self.assertEqual(result, "DEGRADADO")
 
+    def test_min_items_nonnumeric_sentinel_is_ignored(self) -> None:
+        # #2202 / #2290: a non-numeric sentinel must degrade gracefully, not crash.
+        result = real_site_check.classify(
+            {"display_items": 10, "warnings": [], "status": 200}, {"min_items": "n/a"}
+        )
+        self.assertEqual(result, "PASS")
+
+    def test_min_items_none_is_ignored(self) -> None:
+        result = real_site_check.classify(
+            {"display_items": 10, "warnings": [], "status": 200}, {"min_items": None}
+        )
+        self.assertEqual(result, "PASS")
+
 
 class BlankDomGateTests(unittest.TestCase):
     """#2269: JS may run cleanly yet leave an empty post-script DOM (SPA blank)."""
