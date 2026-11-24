@@ -4,7 +4,7 @@
 
 **Goal:** Llevar Megi a un navegador 100 % utilizable en producción mediante hitos de capacidad encadenados y un motor de work packages que mantiene ocupados a los agentes de IA de forma continua.
 
-**Architecture:** Diez hitos (M0–M9) organizados por dependencias lógicas, sin fechas. Cada hito se cierra con una barra de aceptación medible. Nueve planes de subsistema producen software verificable de forma independiente. El motor de WPs regenera la cola de trabajo a partir de siete fuentes automáticas.
+**Architecture:** Trece hitos (M0–M12) organizados por dependencias lógicas, sin fechas. Cada hito se cierra con una barra de aceptación medible. Nueve planes de subsistema producen software verificable de forma independiente. El motor de WPs regenera la cola de trabajo a partir de siete fuentes automáticas.
 
 **Tech Stack:** Rust 1.91 / 17+ crates / Boa 0.22; Python 3.11 stdlib; GitHub Actions; cosign; Landlock/rustix; wasmi; quinn/h3; symphonia; software WebGL; DevTools protocol.
 
@@ -68,6 +68,12 @@ M7 (herramientas) ◄─ DevTools Tasks 1-5
 M8 (motor ofensivo) ◄─ JS Evolution + Web Platform Tasks 4-6
                                  ▼
 M9 (producción) ◄─ Production readiness + auditoría externa
+                                 ▼
+M10 (plataforma extendida) ◄─ Extended platform (WebGPU/WebXR/WebRTC, extensiones, sync, mobile)
+                                 ▼
+M11 (integración nativa) ◄─ Native integration (perfiles por SO)
+                                 ▼
+M12 (media/legal) ◄─ Media licensing (DRM/EME con datos, o límite documentado)
 
 El motor de WPs corre EN PARALELO desde el primer día y nunca se detiene.
 ```
@@ -90,6 +96,9 @@ El motor de WPs corre EN PARALELO desde el primer día y nunca se detiene.
 | M7 | suites DevTools y WebDriver BiDi pasan; about: pages; perfilador usable |
 | M8 | benchmarks publicados; JIT o motor alternativo decidido por datos; sin regresión no declarada |
 | M9 | barra completa del spec §2; 100/100 sitios; allowlists a 0; auditoría externa; bus factor >1 |
+| M10 | WebGPU/WebXR/WebRTC completos, extensiones, sync E2E y mobile publicado |
+| M11 | matriz `enforced` por SO para selectores, credenciales, notificaciones y permisos |
+| M12 | DRM/EME decidido con ADR público: funciona, o límite documentado con alternativas |
 
 ---
 
@@ -97,6 +106,6 @@ El motor de WPs corre EN PARALELO desde el primer día y nunca se detiene.
 
 - **Cobertura del spec**: §2 (barra de producción) → M9 + todos los planes; §4.1 (hitos) → tabla de encadenamiento; §4.3 (motor de WPs) → plan dedicado; §4.2 (carreras diferidas) → planes js-evolution, graphics-media, web-platform-extension, devtools-platform; §5 (profesionalización) → release-product + gobernanza. Cubierto.
 - **Sin calendarización**: no hay meses ni fechas en los hitos; solo dependencias lógicas. Correcto.
-- **Sin topes funcionales**: 25.000 subtests pasa a ser piso, no techo; anti-objetivos v1 pasan a hitos M5–M8. Correcto.
+- **Sin topes funcionales**: 25.000 subtests pasa a ser piso, no techo; anti-objetivos v1 pasan a hitos M5–M8, y M10–M12 cubren WebGPU/WebXR/WebRTC, extensiones, sync, mobile, integración nativa y la decisión legal sobre DRM. Correcto.
 - **Consistencia**: los mismos nombres de tipos y barras se usan en los planes de subsistema. Correcto.
 - **Proporción**: el master es un índice; los detalles están en los nueve planes. Correcto.

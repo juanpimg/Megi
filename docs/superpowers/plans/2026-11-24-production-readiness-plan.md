@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Cerrar el hito M9: llevar todas las barras de aceptación del spec a verde, publicar una alpha/beta/producto real y someter el proyecto a auditoría externa con bus factor > 1.
+**Goal:** Cerrar M9 y coordinar M10–M12: llevar todas las barras de aceptación del spec (incluida la plataforma extendida, la integración nativa y la decisión media/legal) a verde, publicar un producto real y someter el proyecto a auditoría externa con bus factor > 1.
 
 **Architecture:** Un arnés de aceptación agrega todas las métricas (WPT, Test262, sitios, fuzz, seguridad, rendimiento, distribución, a11y) y falla si falta alguna. Un panel público muestra el estado real. La auditoría externa y la formación de maintainers cierran el proyecto como profesional.
 

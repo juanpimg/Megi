@@ -36,8 +36,11 @@ No es una frase de marketing: es una barra de aceptación medible. Se alcanza cu
 | Distribución | Flatpak, .deb, .rpm, AppImage, DMG notarizado, instalador Windows firmado, mobile (Android/iOS) en progreso continuo; canales stable/beta/continuous con verificación criptográfica. |
 | Rendimiento | p95 de render frío ≤ 250 ms en el corpus declarado; RSS ≤ 100 MB; binario ≤ 40 MB **o** justificación publicada si una capacidad lo incrementa. |
 | Mantenibilidad | todo cambio con test, gate verde, docs actualizadas, y un bus factor > 1 (múltiples maintainers formados). |
+| Plataforma extendida (M10) | WebGPU/WebXR/WebRTC completos, extensiones, sync y mobile terminados |
+| Integración nativa (M11) | matriz `enforced` por SO para selectores, credenciales, notificaciones y permisos |
+| Media/legal (M12) | streams protegidos funcionan, **o** ADR público con el límite y alternativas |
 
-El estado actual está **lejos** de esta barra; cada hito declara qué parte de ella cierra.
+M9 es el hito de "producción en escritorio". **M10–M12 extienden la cobertura a todo lo técnicamente posible** y cierran el único frente que depende de decisiones legales. El estado actual está **lejos** de esta barra; cada hito declara qué parte de ella cierra.
 
 ---
 
@@ -74,8 +77,11 @@ Los hitos son **dependencias lógicas**, no calendario. Un hito se cierra cuando
 | M7 | **Herramientas de desarrollador** | DevTools (protocolo Firefox), WebDriver BiDi, `about:` pages, perfilado | suites de DevTools/WebDriver pasan |
 | M8 | **Motor ofensivo** | JIT de JS o migración de motor, WASM JIT, paralelismo real de estilo/layout/paint, HTTP/3 | benchmarks publicados; sin regresión de determinismo salvo declaración |
 | M9 | **Producción** | 100/100 sitios, allowlists a 0, distribución multiplataforma, auditoría externa, bus factor > 1 | barra completa de §2 |
+| M10 | **Plataforma extendida** | WebGPU, WebXR, WebRTC completo, extensiones, sincronización de cuenta y mobile terminado | suites WPT/WebGPU/WebXR/WebRTC pasan; extensiones y sync E2E; mobile publicado |
+| M11 | **Integración nativa** | Selectores de archivo, gestores de credenciales, notificaciones y permisos por SO, deep links, impresión nativa | matriz por SO `enforced`, tests E2E nativos |
+| M12 | **Cobertura media/legal** | Decisión con datos sobre DRM/EME y codecs propietarios; compatibilidad máxima alcanzable legalmente | ADR publicado; streams protegidos funcionan **o** límite documentado con alternativas |
 
-Los hitos **no se abandonan**: los que antes eran anti-objetivos ahora están en M5–M9 con condición de entrada explícita.
+Los hitos **no se abandonan**: los que antes eran anti-objetivos ahora están en M5–M12 con condición de entrada explícita. **M10–M12 son la extensión que cubre todo lo técnicamente posible**; lo único que puede quedar fuera es un bloqueo legal, y aun así se decide y se documenta en M12.
 
 ### 4.2 Decisiones que se mantienen (con matices)
 
@@ -88,6 +94,12 @@ Los hitos **no se abandonan**: los que antes eran anti-objetivos ahora están en
 - **Mobile**: se inicia como carrera paralela después de M5, sin fecha, con Android primero (winit ya lo soporta).
 - **No se rearquitectura el DAG por imitación**: se añaden crates por responsabilidad, con `check_arch.py` como guardián.
 - **El determinismo deja de ser absoluto cuando una capacidad lo requiera** (JIT, GPU, hilos): en ese caso se declara un perfil `deterministic` (por defecto en CI/goldens) y un perfil `performance` (explícito), con docs y tests para ambos.
+- **WebGPU y WebXR entran en M10**: WebGPU sobre `wgpu` en perfil `performance` (con backends software cuando no haya GPU) y WebXR con adaptadores por dispositivo; ambos con WPT y manejo explícito de "no soportado".
+- **WebRTC completo y extensiones entran en M10**: señalización, STUN/TURN, media y API de extensiones con permisos y aislamiento; la capa de permisos de M3 se reutiliza.
+- **Sincronización de cuenta entra en M10**: marcadores/historial/contraseñas con cifrado extremo a extremo y opt-in; sin servidor propio obligatorio (protocolo abierto).
+- **Mobile se termina en M10**: Android e iOS dejan de ser "progreso continuo" y pasan a barra de aceptación (render, input, ciclo de vida, distribución).
+- **Integración nativa entra en M11**: selectores de archivo, credenciales del SO, notificaciones, permisos, deep links e impresión nativa, con matriz por SO y degradación visible.
+- **DRM/EME se decide en M12 con datos**: se evalúan licencias (Widevine/PlayReady/FairPlay), coste, requisitos legales y alternativas. Si no se obtiene licencia, se publica un ADR con el límite y las alternativas (sin prometer lo que no se puede cumplir). Es el **único** tipo de hueco que puede quedar, y queda documentado, no oculto.
 
 ### 4.3 Motor de work packages (trabajo constante para agentes)
 
