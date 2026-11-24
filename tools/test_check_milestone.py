@@ -1,4 +1,6 @@
 """Tests for the milestone acceptance criterion checker (WP engine, spec §4.3)."""
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +28,31 @@ class MilestoneCheckerTests(unittest.TestCase):
         self._write("docs/status/progress.toml",
                     '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
         self.assertEqual(check_milestone.check("M0", 1, root=self.root), 0)
+
+    def test_missing_progress_file_fails_without_raising(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("docs/status/progress.toml not found", output.getvalue())
+
+    def test_unknown_milestone_fails(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = ["informe WPT"]\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M99", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("FAIL: milestone M99 not found", output.getvalue())
+
+    def test_out_of_range_criterion_fails(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = ["informe WPT"]\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 99, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("FAIL: criterion M0#99 does not exist", output.getvalue())
 
 
 if __name__ == "__main__":

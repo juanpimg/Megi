@@ -2108,7 +2108,7 @@ tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGE
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
-tools/test_check_milestone.py	32	tool	F3	jp	2026-11-24	covered	#2290	
+tools/test_check_milestone.py	59	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
