@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Checkout</title></head>
+<body>
+<h1>Checkout</h1>
+<p>Order total: <span id="amount">$25</span></p>
+<button id="pay" type="button">Confirm order</button>
+<p id="result">pending</p>
+<script>
+(function () {
+  function finish(text) { document.getElementById('result').textContent = text; }
+  try {
+    document.getElementById('pay').addEventListener('click', function () {
+      var amount = document.getElementById('amount').textContent;
+      if (!amount) { throw new Error('empty order'); }
+      finish('pass:order confirmed');
+    });
+    document.getElementById('pay').dispatchEvent(new Event('click'));
+  } catch (error) {
+    console.error('checkout failed: ' + error);
+    finish('fail:checkout');
+  }
+})();
+</script>
+</body>
+</html>
