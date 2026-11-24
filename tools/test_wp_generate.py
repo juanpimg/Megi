@@ -6,6 +6,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tools import wp_generate
 from tools.wp_schema import validate_wp
@@ -197,6 +198,81 @@ class GeneratorTests(unittest.TestCase):
         self._write("docs/status/progress.toml",
                     '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
         self.assertEqual(check_milestone.check("M0", 1, root=self.root), 0)
+
+    def test_js262_id_uses_the_spec_prefix(self) -> None:
+        self._write("tests/test262/results/latest.json", json.dumps({"failures": [
+            {"test": "built-ins/Array/foo.js", "expected": "PASS", "actual": "FAIL"},
+        ]}))
+        self.assertEqual([wp.id for wp in self._generate("js262")],
+                         ["WP-JS-built-ins-array-foo-js"])
+
+    def test_invalid_json_and_wrong_containers_are_ignored(self) -> None:
+        self._write("tests/wpt/results/latest.json", "{not json")
+        self._write("tests/test262/results/latest.json", json.dumps({"failures": "oops"}))
+        self._write("docs/status/real-sites.json", json.dumps({"results": {"id": "x"}}))
+        self._write("fuzz/artifacts/broken.json", json.dumps({"crashes": [42, None, "x"]}))
+        for source in ("wpt", "js262", "site", "fuzz"):
+            with self.subTest(source=source):
+                self.assertEqual(self._generate(source), [])
+
+    def test_non_dict_entries_are_discarded(self) -> None:
+        self._write("tests/wpt/results/latest.json", json.dumps({"failures": [
+            "bad", 7, {"test": "html/ok.html"},
+        ]}))
+        self._write("docs/status/real-sites.json", json.dumps({"results": [
+            "bad", {"id": "ok-site", "result": "DEGRADADO"},
+        ]}))
+        self._write("fuzz/artifacts/crash.json", json.dumps({"crashes": [
+            "bad", {"target": "parse", "id": "1"},
+        ]}))
+        self.assertEqual([wp.id for wp in self._generate("wpt")], ["WP-WPT-html-ok-html"])
+        self.assertEqual([wp.id for wp in self._generate("site")], ["WP-SITE-ok-site"])
+        self.assertEqual([wp.id for wp in self._generate("fuzz")], ["WP-FUZZ-parse-1"])
+
+    def test_bad_depth_inventory_is_ignored(self) -> None:
+        self._write("docs/work-packages/depth-inventory.toml", "[[entry]\nid = 1\n")
+        self.assertEqual(self._generate("depth"), [])
+
+    def test_non_numeric_depth_fields_are_ignored(self) -> None:
+        self._write(
+            "docs/work-packages/depth-inventory.toml",
+            '[[entry]]\nid = "x"\ngap = "g"\nspec = "s"\n'
+            'verify_cmd = "python3 tools/check_arch.py"\n'
+            'impact = "many"\nfrequency = "often"\n',
+        )
+        self.assertEqual(self._generate("depth"), [])
+
+    def test_depth_wrong_entry_type_is_ignored(self) -> None:
+        self._write("docs/work-packages/depth-inventory.toml", 'entry = "bad"\n')
+        self.assertEqual(self._generate("depth"), [])
+
+    def test_github_hyphen_label_is_accepted(self) -> None:
+        self._write("docs/work-packages/user-reports.json", json.dumps([
+            {"number": 19, "title": "Broken site", "body": "x",
+             "labels": [{"name": "broken-site"}]},
+        ]))
+        self.assertEqual([wp.id for wp in self._generate("user")], ["WP-USER-19"])
+
+    def test_gh_garbage_is_ignored(self) -> None:
+        with mock.patch("tools.wp_generate.subprocess.run") as run:
+            run.return_value = mock.Mock(returncode=0, stdout='{"oops": true}')
+            self.assertEqual(self._generate("user"), [])
+
+    def test_generate_all_deduplicates_colliding_ids(self) -> None:
+        self._write("tests/wpt/results/latest.json", json.dumps({"failures": [
+            {"test": "html/a.html", "subtest": "x"},
+            {"test": "html/a.html", "subtest": "x"},
+            {"test": "html/b.html", "subtest": "y"},
+        ]}))
+        with contextlib.redirect_stdout(io.StringIO()):
+            wps, errors = wp_generate.generate_all(self.root, dry_run=True)
+        self.assertEqual(errors, [])
+        self.assertEqual([wp.id for wp in wps],
+                         ["WP-WPT-html-a-html-x", "WP-WPT-html-b-html-y"])
+
+    def test_unknown_source_still_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self._generate("nope")
 
 
 if __name__ == "__main__":
