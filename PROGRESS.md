@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `d6df7706` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **22/64** (**34%**) · **3,362** tests · conformance **PASS** · **17** crates · **246,603** lines of Rust
+**Snapshot** — commit `ee185cbb` (2026-11-24) · hitos cerrados **2/13** · criterios verificados **26/64** (**40%**) · **3,368** tests · conformance **PASS** · **17** crates · **247,058** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -16,10 +16,10 @@
 
 | Hito | Objetivo | Criterios verificados | % |
 |---|---|---|---|
-| **M0** | Verdad y cimiento | `█████████████████░░░` 6/7 | 85% |
-| **M1** | Interactividad | `██████████░░░░░░░░░░` 2/4 | 50% |
+| **M0** | Verdad y cimiento | `████████████████████` 7/7 | 100% |
+| **M1** | Interactividad | `████████████████████` 4/4 | 100% |
 | **M2** | Profundidad declarativa | `████████░░░░░░░░░░░░` 2/5 | 40% |
-| **M3** | Frontera de seguridad | `████████░░░░░░░░░░░░` 2/5 | 40% |
+| **M3** | Frontera de seguridad | `████████████░░░░░░░░` 3/5 | 60% |
 | **M4** | Componentes y persistencia | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M5** | Plataforma nativa | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
@@ -29,11 +29,11 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `██████░░░░░░░░░░░░░░` 22/64 | **34%** |
+| | **Roadmap** | `████████░░░░░░░░░░░░` 26/64 | **40%** |
 
 ## Detalle de criterios por hito
 
-### M0 — Verdad y cimiento (85%)
+### M0 — Verdad y cimiento (100%)
 
 **Verificado**
 
@@ -43,22 +43,16 @@
 - Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`
 - Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`
 - F0: cookies same-site y no HttpOnly en el IPC; el renderer ya no devuelve cookies al parent — `cargo test -p megi-browser --test ipc_semantic_tests`
+- 0 fugas T1/T2/T3/T5/T9 auditadas (F0) — `docs/ISOLATION-STRATEGY.md` (Auditoría F0) + `cargo test -p megi-browser --test ipc_semantic_tests --test file_grant_tests --test spawn_hardening_tests --test watchdog_tests` + `python3 -m unittest tools.test_docs_consistency`
 
-**Pendiente**
-
-- 0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría
-
-### M1 — Interactividad (50%)
+### M1 — Interactividad (100%)
 
 **Verificado**
 
 - Shell con pestañas, historial, zoom, formularios y descargas — `crates/browser/src/{chrome,forms,download}.rs`
 - Render en hilo de trabajo con generación cancelable — `crates/browser/src/worker.rs`
-
-**Pendiente**
-
-- 10 fixtures E2E de tarea de usuario — no hay suite E2E versionada
-- Corpus sin console_errors — `docs/status/real-sites.json`: 1/4 PASS, 3 DEGRADED
+- 10 fixtures E2E de tarea de usuario — `cargo test -p megi-render --test e2e_task_fixtures` (10/10 PASS, 0 `console_errors`)
+- Corpus sin console_errors — `docs/status/real-sites.json` (4/4 sitios con `console_errors = 0`)
 
 ### M2 — Profundidad declarativa (40%)
 
@@ -73,16 +67,16 @@
 - Canvas 2D utilizable — no hay implementación en `crates/` (sólo `crates/js/tests/canvas_tests.rs`)
 - Fixtures con md5 estable tras completar los solapes conocidos
 
-### M3 — Frontera de seguridad (40%)
+### M3 — Frontera de seguridad (60%)
 
 **Verificado**
 
-- 28 targets de fuzz compilados — `find fuzz/fuzz_targets -name '*.rs' | wc -l`
+- 31+ targets de fuzz compilados (34 en `fuzz/fuzz_targets/`, incluyendo `ipc_wire`, `ipc_response`, `net_file_url`) — `find fuzz/fuzz_targets -name '*.rs' | wc -l`
 - Cookies SameSite con PSL vendored — `crates/net/src/`
+- F1: sobre IPC versionado (`MEGI` v1) y validación semántica `Validated<IpcRenderResponse>` — `cargo test -p megi-browser --test ipc_validation_tests --test process_e2e_tests`
 
 **Pendiente**
 
-- 31+ targets de fuzz — hay 28 en `fuzz/fuzz_targets/`
 - Sandbox enforced — sin selector Linux/macOS/Windows en el motor
 - 0 fugas cross-site y 12 pruebas negativas por SO — sin campaña publicada
 
@@ -205,10 +199,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `d6df7706` (2026-11-24) |
+| Commit | `ee185cbb` (2026-11-24) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 246603 |
-| Tests (`cargo test --workspace -- --list`) | 3362 |
+| Lines of Rust (tracked `.rs`) | 247058 |
+| Tests (`cargo test --workspace -- --list`) | 3368 |
 | Crates with `#![forbid(unsafe_code)]` | 17 / 17 |
 | Conformance gate | **PASS** |
 
@@ -246,10 +240,9 @@ Capability coverage and WPT conformance are separate metrics; this P/T is genera
 
 ## Next up
 
-- M0: publicar una auditoría de 0 fugas T1/T2 con 12 pruebas negativas por SO
-- M1: 10 fixtures E2E de tarea de usuario y refrescar el informe de sitios reales
-- M3: publicar el sandbox enforced en Linux, macOS y Windows
-- M4: ampliar el informe WPT de 30 a 100+ subtests de componentes
+- M2: completar Bidi/CJK y Canvas 2D utilizable
+- M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas
+- M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes
 - M6: spike de Canvas 2D / WebGL software antes de escribir código del motor
 
 ## Regenerating this page
