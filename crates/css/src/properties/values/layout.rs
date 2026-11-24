@@ -10,6 +10,9 @@ pub enum Display {
     None,
     Flex,
     Grid,
+    /// `display: contents` (CSS Display 3 §2.5): the element generates no box; its
+    /// children are hoisted into the parent box as if the element were removed.
+    Contents,
     ListItem,
     Table,
     InlineTable,
@@ -32,6 +35,7 @@ impl Display {
             "none" => Some(Self::None),
             "flex" => Some(Self::Flex),
             "grid" => Some(Self::Grid),
+            "contents" => Some(Self::Contents),
             "list-item" => Some(Self::ListItem),
             "table" => Some(Self::Table),
             "inline-table" => Some(Self::InlineTable),
