@@ -13,6 +13,24 @@ def make_wp(wid, impact=1, frequency=1):
         spec="§1", acceptance="test passes", verify_cmd="cargo test x",
         metric="wpt_passed", milestone="M0", impact=impact, frequency=frequency)
 
+def write_queue_wp(root, wid):
+    queue = root / "docs/work-packages/queue"
+    queue.mkdir(parents=True, exist_ok=True)
+    (queue / f"{wid}.toml").write_text(
+        f'id = "{wid}"\nsource = "depth"\nfile = "docs/x.md"\n'
+        'expected = "ok"\nactual = "pending"\nspec = "s"\nacceptance = "done"\n'
+        'verify_cmd = "python3 tools/check_arch.py"\nmetric = "depth_closed"\n'
+        'milestone = "M0"\nimpact = 3\nfrequency = 3\nprofile = "light"\n',
+        encoding="utf-8",
+    )
+    return queue
+
+def board_column(board, name):
+    marker = f"## {name}\n"
+    start = board.index(marker) + len(marker)
+    end = board.find("\n## ", start)
+    return board[start:] if end == -1 else board[start:end]
+
 class PlannerTests(unittest.TestCase):
     def test_max_ten_in_progress(self):
         wps = [make_wp(f"WP-WPT-{i:03d}") for i in range(25)]
@@ -126,6 +144,32 @@ class PlannerTests(unittest.TestCase):
         board = wp_plan.render_board([light, heavy], [], [], [], profile="light")
         self.assertIn("WP-DEPTH-light", board)
         self.assertNotIn("WP-WPT-heavy", board)
+
+    def test_board_after_done_shows_closed_wp_in_done_not_queued(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_queue_wp(root, "WP-DEPTH-00")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(wp_plan.main(["--claim", "WP-DEPTH-00", "--root", str(root)]), 0)
+                self.assertEqual(
+                    wp_plan.main(["--done", "WP-DEPTH-00", "--metric", "hito M0 cerrado",
+                                  "--board", "--root", str(root)]), 0,
+                )
+            board = (root / "docs/work-packages/BOARD.md").read_text(encoding="utf-8")
+            self.assertNotIn("WP-DEPTH-00", board_column(board, "queued"))
+            self.assertIn("WP-DEPTH-00", board_column(board, "done"))
+
+    def test_board_after_claim_shows_wp_in_progress_not_queued(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_queue_wp(root, "WP-DEPTH-00")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    wp_plan.main(["--claim", "WP-DEPTH-00", "--board", "--root", str(root)]), 0,
+                )
+            board = (root / "docs/work-packages/BOARD.md").read_text(encoding="utf-8")
+            self.assertIn("WP-DEPTH-00", board_column(board, "in_progress"))
+            self.assertNotIn("WP-DEPTH-00", board_column(board, "queued"))
 
 
 if __name__ == "__main__": unittest.main()

@@ -65,6 +65,8 @@ python3 tools/wp_dashboard.py --check
 python3 -m unittest tools.test_wp_schema tools.test_wp_generate tools.test_wp_plan tools.test_wp_dashboard tools.test_check_milestone
 ```
 
+Cuando se combinan acciones en un mismo comando, `--board` y `--select` se evalúan **después** de `--claim`/`--done`: el tablero muestra el WP recién reservado en `in_progress` o el recién cerrado en `done`.
+
 ## Ciclo del agente
 
 1. `wp_plan --board --profile light` (o `heavy`) → elegir el WP de mayor prioridad que quepa en tu máquina.
