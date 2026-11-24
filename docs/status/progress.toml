@@ -24,26 +24,26 @@ subtitle = "Hitos M0–M12 — criterios de aceptación verificables hacia un na
 
 # Highest-signal gaps, ordered by milestone dependency (not by date).
 next_up = [
-  "M2: completar Bidi/CJK y Canvas 2D utilizable",
+  "M2: completar Bidi/CJK y estabilizar md5 de fixtures con solapes conocidos",
   "M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas",
   "M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes",
-  "M6: spike de Canvas 2D / WebGL software antes de escribir código del motor",
+  "M6: spike de Canvas 2D avanzado / WebGL software antes de escribir código del motor",
 ]
 
 # ---------------------------------------------------------------------------------------
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 3376
-tests_commit = "adaf0f99"
+tests = 3384
+tests_commit = "8d2d3242"
 tests_date = "2026-11-24"
 crates = 17
-rust_lines = 247480
+rust_lines = 248835
 unsafe_forbidden_crates = 17
 
 [gate]
 status = "PASS"
-verified_commit = "adaf0f99"
+verified_commit = "8d2d3242"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -94,10 +94,10 @@ title = "Profundidad declarativa"
 items = [
   "Animaciones CSS `@keyframes`/`transition` en runtime — `crates/css/src/animation_runtime.rs`",
   "SVG con texto, gradientes y patterns — `crates/svg/src/`",
+  "Canvas 2D utilizable (rutas, ángulos `arc`, Bézier, transformaciones, `save`/`restore`, gradientes lineales y `drawImage`) — `crates/js/src/canvas/{path.rs,state.rs}`, `tests/fixtures/render/canvas_paths.html`; `cargo test -p megi-js --test canvas_paths_tests && cargo test -p megi-render --test canvas_tests`",
 ]
 pending = [
   "Bidi y CJK completos — `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` §3 lo lista como pendiente",
-  "Canvas 2D utilizable — no hay implementación en `crates/` (sólo `crates/js/tests/canvas_tests.rs`)",
   "Fixtures con md5 estable tras completar los solapes conocidos",
 ]
 

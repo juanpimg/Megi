@@ -29,7 +29,7 @@ Cargo.toml	78	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	256	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	regenerated with tools/update_progress.py after rebase
+PROGRESS.md	256	docs	F3	auto-round-05	2026-11-24	covered	M2/Canvas2D	regenerated with tools/update_progress.py after rebase
 README.md	190	docs	F3	jp	2026-11-24	covered	#2290	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -619,9 +619,10 @@ crates/image/tests/webp_tests/lossless.rs	87	test	F1	wave-max-mod	2026-11-19	cov
 crates/image/tests/webp_tests/lossy.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/tests/webp_tests/main.rs	173	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/Cargo.toml	23	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/canvas.rs	375	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
+crates/js/src/canvas.rs	417	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	putImageData replaces pixels
 crates/js/src/canvas/color.rs	18	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
-crates/js/src/canvas/path.rs	75	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
+crates/js/src/canvas/path.rs	375	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	upstream canvas primitives from main merge (#2035), re-read and verified
+crates/js/src/canvas/state.rs	393	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	
 crates/js/src/canvas/tests.rs	143	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -660,8 +661,9 @@ crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	cov
 crates/js/src/runtime/frames/bridge.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/state.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis.rs	31	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas.rs	479	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis.rs	32	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas.rs	474	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas_paths.rs	445	src	F2	auto-round-05	2026-11-24	covered	M2/Canvas2D	
 crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -709,6 +711,7 @@ crates/js/tests/browser_features_r24/history_location.rs	143	test	F1	wave-max-mo
 crates/js/tests/browser_features_r24/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/mutation_observer.rs	278	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/storage.rs	94	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/canvas_paths_tests.rs	150	test	F1	auto-round-05	2026-11-24	covered	M2/Canvas2D	
 crates/js/tests/canvas_tests.rs	293	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/cookie_tests.rs	85	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/create_element_ns_tests.rs	25	test	F1	merge-1996	2026-11-19	covered	#1939	re-read during merge
@@ -1144,7 +1147,7 @@ crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/background_layers_tests.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/backgrounds_tests.rs	365	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/browser_api_tests.rs	220	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/canvas_tests.rs	71	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/canvas_tests.rs	100	test	F1	auto-round-05	2026-11-24	covered	M2/Canvas2D	final formatted state, gates green
 crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1781,6 +1784,7 @@ tests/fixtures/render/browser_api.html	65	fixture	F1	waveF1	2026-11-17	covered	#
 tests/fixtures/render/calc_gap.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_margin.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_width.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/canvas_paths.html	50	fixture	F1	auto-round-05	2026-11-24	covered	M2/Canvas2D	
 tests/fixtures/render/cascade_layers.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/cascade_layers_nested.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/color_spaces.html	30	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
