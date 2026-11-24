@@ -266,6 +266,17 @@ class GeneratorTests(unittest.TestCase):
         self.assertTrue(errors)
         self.assertIn("fuzz", errors[0])
 
+    def test_main_returns_one_when_single_source_has_errors(self) -> None:
+        self._write("tests/wpt/results/latest.json", "{not json")
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = wp_generate.main(["wpt", "--root", str(self.root)])
+        self.assertEqual(1, code)  # broken artifact must fail the CLI, not print-and-exit 0
+
+    def test_main_returns_zero_for_healthy_source_without_artifact(self) -> None:
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = wp_generate.main(["wpt", "--root", str(self.root)])
+        self.assertEqual(code, 0)
+
     def test_numeric_fields_are_serialised_as_numbers(self) -> None:
         self._write("docs/work-packages/depth-inventory.toml",
                     '[[entry]]\nid = "x"\ngap = "g"\nspec = "s"\n'

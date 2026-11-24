@@ -435,12 +435,13 @@ def main(argv: list[str] | None = None) -> int:
         wps, errors = generate_all(root, dry_run=args.dry_run)
         print(f"total: {len(wps)}")
         return 1 if errors else 0
-    wps = generate(selected, dry_run=args.dry_run, root=root)
+    errors: list[str] = []
+    wps = _run_source(selected, dry_run=args.dry_run, root=root, errors=errors)
     print(f"{selected}: {len(wps)} work packages")
     for wp in wps:
         print(f"  {wp.id} [{wp.profile}] P{wp.priority} → {wp.metric}")
     print(f"total: {len(wps)}")
-    return 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
