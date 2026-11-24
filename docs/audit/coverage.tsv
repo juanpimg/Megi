@@ -251,9 +251,9 @@ crates/css/src/media.rs	58	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/css/src/media/chunk1.rs	407	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/media/chunk2.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/parser.rs	75	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/parser/chunk1.rs	393	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/parser/chunk1.rs	406	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/parser/chunk2.rs	363	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/parser/chunk3.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/parser/chunk3.rs	152	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/calc.rs	263	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/computed.rs	21	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -697,7 +697,7 @@ crates/js/tests/browser_features_r24/storage.rs	94	test	F1	wave-max-mod	2026-11-
 crates/js/tests/canvas_tests.rs	293	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/cookie_tests.rs	85	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/create_element_ns_tests.rs	25	test	F1	merge-1996	2026-11-19	covered	#1939	re-read during merge
-crates/js/tests/crypto_security_tests.rs	44	test	F1	crypto-merge	2026-11-24	covered	#upstream	re-read
+crates/js/tests/crypto_security_tests.rs	44	test	F1	juanpimg	2026-11-24	covered	#2251	Integration test: getRandomValues/randomUUID use OS CSPRNG via getrandom
 crates/js/tests/custom_elements_tests.rs	54	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dialog_tests.rs	60	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dom_edges_tests.rs	487	test	F1	merge-2001	2026-11-20	covered	#1935	re-read after upstream merge
@@ -1187,7 +1187,7 @@ crates/render/tests/streaming_option_tests.rs	112	test	F1	wave-max-mod	2026-11-1
 crates/render/tests/svg_tests.rs	368	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/text_overflow_tests.rs	124	test	F1	juanpimg	2026-11-20	covered	#1929	text-overflow test files from PR 2053 merged into main
 crates/render/tests/tla_tests.rs	49	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/webfont_status_tests.rs	50	test	F1	status-fix	2026-11-24	covered	#2244	re-read
+crates/render/tests/webfont_status_tests.rs	50	test	F1	juanpimg	2026-11-24	covered	#2244	Integration test: HTTP 404 webfont body must be rejected with a status warning before WOFF2 decoding
 crates/render/tests/webfont_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
