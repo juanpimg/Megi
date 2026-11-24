@@ -71,6 +71,10 @@ const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
 /// A successfully loaded resource.
 #[derive(Clone, Debug)]
 pub struct Resource {
+    /// Final HTTP status (200 for non-HTTP schemes and cached/pushed entries).
+    /// Lets consumers reject error bodies (e.g. a 404 HTML page passed to a
+    /// font/image decoder) before wasting work (#2244).
+    pub status: u16,
     /// Final URL (after redirects for `http:`; the requested URL otherwise).
     pub url: Url,
     /// Raw resource bytes (identity-encoded: no decompression is applied).

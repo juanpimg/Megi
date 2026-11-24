@@ -225,6 +225,15 @@ pub fn load_webfonts_with_csp(
                     continue;
                 }
             };
+            // #2244: a 404 often returns an HTML error page; do not feed it to
+            // the WOFF2 decoder (which would report a misleading "unknown magic").
+            if resource.status >= 400 {
+                last_warning = Some(format!(
+                    "web font {url} for \"{}\" returned HTTP {}",
+                    face.family, resource.status
+                ));
+                continue;
+            }
             if resource.bytes.len() > limits.max_web_font_bytes {
                 last_warning = Some(format!(
                     "web font {url} is too large ({} bytes > {})",

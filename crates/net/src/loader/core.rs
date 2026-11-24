@@ -367,6 +367,7 @@ impl ResourceLoader {
             self.push_cache.insert(
                 key,
                 Arc::new(Resource {
+                    status: 200,
                     url: pushed.url,
                     content_type,
                     bytes: pushed.body,
