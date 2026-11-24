@@ -4,10 +4,10 @@ These three files are unmodified copies of the upstream [web-platform-tests](htt
 CSS Syntax tests. They are **vendored as conformance fixtures** so that a clean clone of Megi can run
 the CSS Syntax closed-loop gate offline (`cargo test -p megi-test-harness`) with no network access.
 
-- Upstream URL base: <https://raw.githubusercontent.com/web-platform-tests/wpt/master/css/css-syntax/>
-- Upstream branch: `master`
-- Fetched on: **2026-11-09** (UTC)
-- Retrieved with: `curl -fsSL <url>` (plain `master` snapshot, no pin; see hashes below)
+- Upstream: [web-platform-tests/wpt](https://github.com/web-platform-tests/wpt), pinned to commit
+  `ab2ef95d3a7c512a6e7321688c80e428086af426` (2019-01-25) — never `master`.
+- Byte verification: the three copies below match the raw files at that pinned commit, checked with
+  SHA-256 on 2026-11-24. `tools/vendor_wpt.py --check` re-verifies them offline on every CI run.
 - SHA-256 of the vendored copies:
 
 | File | Bytes | SHA-256 |
@@ -47,13 +47,16 @@ cargo run -p megi-test-harness -- --summary --strict   # any failure (even allow
 ## Refreshing the fixtures
 
 ```bash
-base=https://raw.githubusercontent.com/web-platform-tests/wpt/master/css/css-syntax
+pin=$(python3 -c 'import json;print(json.load(open("tests/wpt/WPT-REVISION.json"))["revision"])')
+base="https://raw.githubusercontent.com/web-platform-tests/wpt/$pin/css/css-syntax"
 for f in declarations-trim-whitespace.html input-preprocessing.html anb-parsing.html; do
   curl -fsSL "$base/$f" -o "tests/wpt/css/css-syntax/$f"
 done
-sha256sum tests/wpt/css/css-syntax/*.html
+python3 tools/vendor_wpt.py --check
 ```
 
-After refreshing, update the date/hashes above and re-run `cargo test -p megi-test-harness`; the
-extractors in `crates/test_harness/src/css_harness.rs` fail loudly if the expected number of
-upstream cases changes (10 `testParsing` cases, 67 `testANB` cases, the 8 curated An+B inputs).
+The pin comes from `tests/wpt/WPT-REVISION.json`; a refresh must keep it (or move it explicitly in
+a reviewed WP together with `tests/wpt/MANIFEST.json`). After refreshing, re-run
+`cargo test -p megi-test-harness`; the extractors in `crates/test_harness/src/css_harness.rs` fail
+loudly if the expected number of upstream cases changes (10 `testParsing` cases, 67 `testANB`
+cases, the 8 curated An+B inputs).

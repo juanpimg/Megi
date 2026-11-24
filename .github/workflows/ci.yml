@@ -124,6 +124,9 @@ jobs:
           tools.test_wp_generate
           tools.test_wp_plan
           tools.test_wp_dashboard
+          tools.test_vendor_wpt
+          tools.test_wpt_gate
+          tools.test_update_progress
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
@@ -222,6 +225,41 @@ jobs:
         with:
           name: conformance-log
           path: /tmp/conformance.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  wpt:
+    name: WPT SHA-pinned P/T gate
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # Offline: no WPT clone, no credentials; the pin and every vendored byte are checked in.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: ./.github/actions/install-system-deps
+      - name: Verify pinned WPT manifest (offline)
+        run: python3 tools/vendor_wpt.py --check
+      - name: Regenerate report from the real harness and compare
+        run: python3 tools/wpt_report.py --check
+      - name: Gate baseline and allowlist (monotonic P/T)
+        run: >-
+          python3 tools/wpt_gate.py --check
+          --report docs/status/wpt.json
+          --baseline tests/wpt/baseline.json
+          --allowlist tests/wpt/allowlist.toml
+      - name: Upload WPT report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: wpt-report
+          path: docs/status/wpt.json
           retention-days: 7
           if-no-files-found: ignore
 
@@ -482,6 +520,7 @@ jobs:
       - docs
       - quality
       - conformance
+      - wpt
       - release
       - msrv
       - minimal
@@ -497,7 +536,7 @@ jobs:
         run: |
           results="${{ needs.changes.result }} ${{ needs.docs.result }} \
           ${{ needs.quality.result }} ${{ needs.conformance.result }} \
-          ${{ needs.release.result }} ${{ needs.msrv.result }} \
+          ${{ needs.wpt.result }} ${{ needs.release.result }} ${{ needs.msrv.result }} \
           ${{ needs.minimal.result }} ${{ needs.package.result }} \
           ${{ needs.security.result }} ${{ needs.unsafe-audit.result }} \
           ${{ needs.workflow-lint.result }} ${{ needs.secret-scan.result }} \

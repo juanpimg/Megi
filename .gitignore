@@ -18,6 +18,12 @@
 !/tests/wpt/css/
 /tests/wpt/css/*
 !/tests/wpt/css/css-syntax/
+# SHA-pinned provenance + gate metadata (tracked; everything else under tests/wpt/ stays local).
+!/tests/wpt/WPT-REVISION.json
+!/tests/wpt/MANIFEST.json
+!/tests/wpt/NOTICE.md
+!/tests/wpt/baseline.json
+!/tests/wpt/allowlist.toml
 /tests/html5lib-tests/.git/
 
 # Python bytecode & virtual environments

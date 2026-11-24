@@ -37,7 +37,7 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 3336
-tests_commit = "17966361"
+tests_commit = "32fada8e"
 tests_date = "2026-11-24"
 crates = 17
 rust_lines = 244931
@@ -52,6 +52,17 @@ serializer = "230 / 230"
 css_syntax = "30 / 30"
 
 # --- M0 — Verdad y cimiento -------------------------------------------------------------
+[wpt]
+revision = "ab2ef95d3a7c512a6e7321688c80e428086af426"
+manifest_sha256 = "76c28f3a8e5c527494dc4ef864cb46ca3b7250d80a509d17baa40034c1a2c615"
+passed = 30
+total = 30
+dirs = 1
+allowlist = 0
+distribution = "PASS=30; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
+headline = "WPT ab2ef95 — 30/30 subtests pasados (dirs: 1)"
+status = "PASS"
+
 [[phase]]
 id = "M0"
 title = "Verdad y cimiento"

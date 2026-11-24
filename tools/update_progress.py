@@ -10,7 +10,8 @@ statistics:
     docs/status/badge-conformance.svg
     docs/status/badge-crates.svg
     docs/status/badge-unsafe.svg
-    docs/status/progress.toml      manifest with its generated [stats]/[gate] blocks
+    docs/status/badge-wpt.svg
+    docs/status/progress.toml      manifest with its generated [stats]/[gate]/[wpt] blocks
 
 Everything is Python 3 standard library (3.11+ for `tomllib`); no network, no third-party
 services, no external fonts. The script is idempotent: running it twice writes byte-identical
@@ -55,6 +56,14 @@ except ModuleNotFoundError:
     print("Python 3.11+ required (tomllib). Install Python 3.11 or newer.", file=sys.stderr)
     sys.exit(1)
 from pathlib import Path
+
+# Both entry points (``python3 tools/update_progress.py`` and ``import tools.update_progress``)
+# must find the sibling WPT helpers without adding a package dependency.
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+import wpt_gate  # noqa: E402
+import wpt_report  # noqa: E402
 from xml.sax.saxutils import escape as _xml_escape
 
 def xml_escape(text: str) -> str:
@@ -66,6 +75,7 @@ BADGE_FILES = {
     "conformance": "badge-conformance.svg",
     "crates": "badge-crates.svg",
     "unsafe": "badge-unsafe.svg",
+    "wpt": "badge-wpt.svg",
 }
 GATE_SUITES = {
     "tokenizer": "Tokenizer Total",
@@ -271,6 +281,49 @@ def md_escape(text: str) -> str:
     return text.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
 
 
+def render_wpt_headline(report: dict, epoch: dict | None = None) -> str:
+    """Plan §4.5 headline: honest P/T + dirs + full non-zero distribution."""
+    epoch = epoch or report.get("epoch", {})
+    revision = str(epoch.get("wpt_revision", "unknown"))[:7]
+    counts = report["counts"]
+    dirs = report.get("run_info", {}).get("dirs") or sorted(
+        {str(Path(r["test"]).parent) for r in report["results"]}
+    )
+    details = [
+        f"{counts[field]} {label}"
+        for field, label in (("fail", "FAIL"), ("timeout", "TIMEOUT"),
+                             ("notrun", "NOTRUN"), ("error", "harness_error"))
+        if counts.get(field, 0)
+    ]
+    headline = f"WPT {revision} — {counts['pass']}/{report['total']} subtests pasados"
+    headline += f" (dirs: {len(dirs)}"
+    if details:
+        headline += "; " + ", ".join(details)
+    return headline + ")"
+
+
+def wpt_fields(report: dict) -> dict:
+    """The manifest/[wpt] projection of a generated WPT report."""
+    counts = report["counts"]
+    return {
+        "revision": report["epoch"]["wpt_revision"],
+        "manifest_sha256": report["epoch"]["manifest_sha256"],
+        **counts,
+        "passed": counts["pass"],
+        "total": report["total"],
+        "dirs": len(report["run_info"]["dirs"]),
+        "allowlist": 0,
+        "distribution": "; ".join(
+            f"{label}={counts[field]}" for field, label in (
+                ("pass", "PASS"), ("fail", "FAIL"), ("timeout", "TIMEOUT"),
+                ("notrun", "NOTRUN"), ("error", "harness_error"),
+            )
+        ),
+        "headline": render_wpt_headline(report, report["epoch"]),
+        "status": "PASS",
+    }
+
+
 def render_markdown(data: dict) -> str:
     stats, gate, phases = data["stats"], data["gate"], data["phases"]
     coverage = data.get("coverage")
@@ -285,7 +338,8 @@ def render_markdown(data: dict) -> str:
         "![Tests](docs/status/badge-tests.svg) "
         "![Conformance](docs/status/badge-conformance.svg) "
         "![Crates](docs/status/badge-crates.svg) "
-        "![unsafe](docs/status/badge-unsafe.svg)\n"
+        "![unsafe](docs/status/badge-unsafe.svg) "
+        "![WPT](docs/status/badge-wpt.svg)\n"
     )
     headline = (
         f"hitos cerrados **{closed}/{total_milestones}** · "
@@ -370,6 +424,24 @@ def render_markdown(data: dict) -> str:
         f"\nGate status: **{gate['status']}** (known failures allowlisted; see `tests/README` "
         "and `crates/test_harness`).\n"
     )
+
+    wpt = data.get("wpt") or {}
+    if wpt:
+        lines.append("## WPT honest P/T (seeded)\n")
+        lines.append("| Metric | Value |")
+        lines.append("|---|---|")
+        lines.append(f"| Headline | {wpt.get('headline', 'n/a')} |")
+        lines.append(f"| WPT commit (SHA pin) | `{wpt.get('revision', 'n/a')}` |")
+        lines.append(f"| Manifest SHA-256 | `{wpt.get('manifest_sha256', 'n/a')}` |")
+        lines.append(f"| Allowlist | {wpt.get('allowlist', '0')} |")
+        lines.append(
+            f"| Status | **{wpt.get('status', 'n/a')}** "
+            "(vendored CSS Syntax seed, not full WPT conformance) |\n"
+        )
+        lines.append(
+            "Capability coverage and WPT conformance are separate metrics; this P/T is generated "
+            "from `megi-test-harness --summary` and gated by `tools/wpt_gate.py`.\n"
+        )
 
     lines.append("## Recent rounds\n")
     for number, title in data["rounds"]:
@@ -528,16 +600,22 @@ def render_badges(data: dict) -> dict[str, str]:
     conformance_color = "#2ea043" if gate["status"] == "PASS" else "#da3633"
     unsafe_text = f"{stats['unsafe_forbidden']}/{stats['crates']}"
     unsafe_color = "#2ea043" if stats["unsafe_forbidden"] == stats["crates"] else "#d29922"
-    return {
+    badges = {
         "tests": render_badge("tests", comma(stats["tests"]), "#1f6feb"),
         "conformance": render_badge("conformance", f"{conformance} · 4 suites", conformance_color),
         "crates": render_badge("crates", str(stats["crates"]), "#1f6feb"),
         "unsafe": render_badge("#![forbid(unsafe)]", unsafe_text, unsafe_color),
     }
+    wpt = data.get("wpt") or {}
+    if wpt:
+        passed, total = wpt.get("passed", "n/a"), wpt.get("total", "n/a")
+        color = "#2ea043" if wpt.get("status") == "PASS" else "#d29922"
+        badges["wpt"] = render_badge("wpt", f"{passed}/{total}", color)
+    return badges
 
 
-def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
-    """Rewrites only the generated `[stats]` and `[gate]` TOML blocks."""
+def update_manifest(text: str, stats: dict, gate: dict[str, str], wpt: dict | None = None) -> str:
+    """Rewrites only the generated `[stats]`, `[gate]` and `[wpt]` TOML blocks."""
     stats_block = [
         "[stats]",
         f"tests = {stats['tests']}",
@@ -558,11 +636,48 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
         f'css_syntax = "{gate.get("css_syntax", "n/a")}"',
         "",
     ]
+    wpt_block: list[str] = []
+    if wpt:
+        distribution = "; ".join(
+            f"{label}={wpt.get(field, 0)}" for field, label in (
+                ("pass", "PASS"), ("fail", "FAIL"), ("timeout", "TIMEOUT"),
+                ("notrun", "NOTRUN"), ("error", "harness_error"),
+            )
+        )
+        wpt_block = [
+            "[wpt]",
+            f'revision = "{wpt.get("revision", "")}"',
+            f'manifest_sha256 = "{wpt.get("manifest_sha256", "")}"',
+            f'passed = {wpt.get("passed", 0)}',
+            f'total = {wpt.get("total", 0)}',
+            f'dirs = {wpt.get("dirs", 0)}',
+            f'allowlist = {wpt.get("allowlist", 0)}',
+            f'distribution = "{distribution}"',
+            f'headline = "{wpt.get("headline", "")}"',
+            f'status = "{wpt.get("status", "n/a")}"',
+            "",
+        ]
     lines = text.splitlines()
     output: list[str] = []
+    wpt_seen = not wpt_block
     index = 0
     while index < len(lines):
         stripped = lines[index].strip()
+        if wpt_block and not wpt_seen and (
+            stripped.startswith("[[") or stripped.startswith("[area")
+            or stripped.startswith("[next_up")
+        ):
+            output.extend(wpt_block)
+            wpt_seen = True
+        if stripped == "[wpt]" and wpt_block:
+            output.extend(wpt_block)
+            wpt_seen = True
+            index += 1
+            while index < len(lines) and not lines[index].strip().startswith("["):
+                if lines[index].strip().startswith("#"):
+                    output.append(lines[index])
+                index += 1
+            continue
         if stripped == "[stats]":
             output.extend(stats_block)
             index += 1
@@ -582,6 +697,8 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str]) -> str:
             continue
         output.append(lines[index])
         index += 1
+    if wpt_block and not wpt_seen:
+        output.extend(wpt_block)
     return "\n".join(output).rstrip() + "\n"
 
 
@@ -660,6 +777,28 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         no_count,
     )
     gate = run_gate(root, manifest_gate) if not no_gate else dict(manifest_gate)
+    # Same rule as the conformance gate: measure on --write, reuse the manifest on --no-gate.
+    if no_gate:
+        # Cheap and offline: derive [wpt] from the committed report rather than trusting a
+        # possibly stale manifest block (the P/T must always match docs/status/wpt.json).
+        try:
+            wpt = wpt_fields(wpt_report.load_report(root / STATUS_DIR / "wpt.json"))
+        except (OSError, ValueError) as failure:
+            sys.exit(f"error: WPT report: {failure}")
+    else:
+        try:
+            report = wpt_report.build_report(root)
+            error = wpt_gate.check_gate(
+                report,
+                wpt_gate.load_baseline(root / "tests/wpt/baseline.json"),
+                wpt_gate.load_allowlist(root / "tests/wpt/allowlist.toml"),
+            )
+        except (OSError, ValueError) as failure:
+            sys.exit(f"error: WPT report/gate: {failure}")
+        if error:
+            sys.exit(f"error: WPT gate: {error}")
+        wpt_report.write_report(root, report)
+        wpt = wpt_fields(report)
     unsafe = unsafe_forbidden_crates(root)
     # Provenance: only claim the current commit for the test count / conformance gate when
     # they were actually measured here; with --no-count/--no-gate (or a failed count) keep
@@ -697,6 +836,7 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         "last_updated_by": manifest.get("last_updated_by", "unknown"),
         "subtitle": manifest.get("subtitle", ""),
         "coverage": read_coverage(root),
+        "wpt": wpt,
     }
 
     artifacts: dict[str, bytes] = {}
@@ -704,9 +844,10 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
     artifacts[str(STATUS_DIR / "progress.svg")] = render_progress_svg(data).encode("utf-8")
     badges = render_badges(data)
     for key, filename in BADGE_FILES.items():
-        artifacts[str(STATUS_DIR / filename)] = badges[key].encode("utf-8")
+        if key in badges:
+            artifacts[str(STATUS_DIR / filename)] = badges[key].encode("utf-8")
     artifacts[str(manifest_path.relative_to(root))] = update_manifest(
-        manifest_path.read_text(encoding="utf-8"), stats, gate
+        manifest_path.read_text(encoding="utf-8"), stats, gate, wpt
     ).encode("utf-8")
     data["stats"]["rust_lines"] = comma(stats["rust_lines"])  # only for logging
     return artifacts, stats, gate

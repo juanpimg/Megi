@@ -1,0 +1,42 @@
+[
+  {
+    "path": "css/css-syntax/README.md",
+    "sha256": "b1cecb03781bc57ea7fa0c36e59c44c92563bb04e0327cb8cff4c1c1d76339e3",
+    "bytes": 3920,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "documentation (not a WPT fixture)",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "css/css-syntax/anb-parsing.html",
+    "sha256": "e11b74d37e03deda5595ac3a26ecfcf10c4efeb08acfed9371ca56fffe5695db",
+    "bytes": 3336,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 8
+  },
+  {
+    "path": "css/css-syntax/declarations-trim-whitespace.html",
+    "sha256": "af6e5414e18c8ce42c3d0f8614837493e7495b5a7f8f84f8bddb9d2654d4c62d",
+    "bytes": 1975,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 9
+  },
+  {
+    "path": "css/css-syntax/input-preprocessing.html",
+    "sha256": "8792806053c83b90517e2c4b64fec98ba8b6146e15f19e1fa1078694aace6aa0",
+    "bytes": 1311,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 13
+  }
+]
