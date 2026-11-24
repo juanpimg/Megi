@@ -125,6 +125,38 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
     let element_proto = element_constructor
         .constructor()
         .get(js_string!("prototype"), context)?;
+    // #2245: Element.prototype must expose the DOM query methods so libraries
+    // that call `Element.prototype.querySelectorAll.call(el, sel)` work.
+    if let Some(proto) = element_proto.as_object() {
+        for (name, function, length) in [
+            (
+                "querySelector",
+                crate::runtime::node_query_selector
+                    as fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>,
+                1usize,
+            ),
+            (
+                "querySelectorAll",
+                crate::runtime::node_query_selector_all,
+                1,
+            ),
+        ] {
+            let _ = proto.set(
+                js_string!(name),
+                JsValue::from(
+                    boa_engine::object::FunctionObjectBuilder::new(
+                        context.realm(),
+                        native(function),
+                    )
+                    .name(name)
+                    .length(length)
+                    .build(),
+                ),
+                false,
+                context,
+            );
+        }
+    }
     let mut html_builder =
         boa_engine::object::ConstructorBuilder::new(context, native(element_illegal_constructor));
     html_builder.name("HTMLElement").length(0).constructor(true);
