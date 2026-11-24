@@ -1149,7 +1149,7 @@ crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#ma
 crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/document_cookie_tests.rs	113	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/dom_observability_tests.rs	169	test	F1	opencode-agent	2026-11-24	covered	#2269	read line by line: CLI JSON observability tests
+crates/render/tests/dom_observability_tests.rs	171	test	F1	jsfree-fix	2026-11-24	covered	CI-JSFREE-DOM-OBS	read line by line: CLI JSON observability tests
 crates/render/tests/e2e_task_fixtures.rs	162	test	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 crates/render/tests/encode_png_tests.rs	62	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/error_page_tests.rs	39	test	F1	docs-cleanup	2026-11-24	covered	#2255	
