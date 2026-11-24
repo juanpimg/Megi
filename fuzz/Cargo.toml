@@ -214,6 +214,28 @@ test = false
 doc = false
 bench = false
 
+# M3 (round 01): targeted surfaces not covered by the existing broad targets.
+[[bin]]
+name = "cookie_parse"
+path = "fuzz_targets/cookie_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "css_animation"
+path = "fuzz_targets/css_animation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "svg_path"
+path = "fuzz_targets/svg_path.rs"
+test = false
+doc = false
+bench = false
+
 # Keep symbols + ASan stack traces readable in crash reports (cargo-fuzz enables
 # `-Zsanitizer=address` internally; this only affects the fuzz binaries).
 [profile.release]

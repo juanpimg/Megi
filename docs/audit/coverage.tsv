@@ -1435,7 +1435,7 @@ docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-clean
 docs/work-packages/BOARD.md	19	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/README.md	54	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	48	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
+fuzz/Cargo.toml	242	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-TARGETS-31	new fuzz surface reviewed
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/mode2-oversize	0	exempt	-			exempt		not read line by line: exempt
@@ -1610,6 +1610,8 @@ fuzz/fuzz_targets/body_stream.rs	118	fuzz	F1	waveF1	2026-11-17	covered	#1421-#14
 fuzz/fuzz_targets/charset.rs	69	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/compression.rs	24	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/container_queries.rs	94	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/cookie_parse.rs	55	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-TARGETS-31	new fuzz surface reviewed
+fuzz/fuzz_targets/css_animation.rs	60	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-TARGETS-31	new fuzz surface reviewed
 fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_mutate.rs	107	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_tree.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -1631,6 +1633,7 @@ fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#14
 fuzz/fuzz_targets/render_pipeline.rs	87	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/selectors.rs	111	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/svg_parse.rs	90	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/svg_path.rs	57	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-TARGETS-31	new fuzz surface reviewed
 fuzz/fuzz_targets/text_boundary.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/webp.rs	71	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/woff2_decode.rs	26	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -2003,6 +2006,7 @@ tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file fro
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
+tools/test_fuzz_targets.py	63	tool	F3	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-TARGETS-31	new fuzz surface reviewed
 tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
