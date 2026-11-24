@@ -2109,7 +2109,7 @@ tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
-tools/coverage_report.py	136	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2137,7 +2137,7 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	286	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
-tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_update_progress.py	139	tool	F3	jp	2026-11-24	covered	#2290	progress generator tests reviewed
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation

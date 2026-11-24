@@ -636,6 +636,53 @@ class CoverageReportAndSpecCacheTests(unittest.TestCase):
             self.assertIn("error:", stderr.getvalue())
             self.assertIn("LF", stderr.getvalue())
 
+    @staticmethod
+    def _run_lcov_report(trace: str, *, minimum: str | None = "60") -> tuple[int, str]:
+        import subprocess
+
+        root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as tmp:
+            tracefile = Path(tmp) / "lcov.info"
+            tracefile.write_text(trace, encoding="utf-8")
+            argv = [sys.executable, "tools/coverage_report.py", str(tracefile)]
+            if minimum is not None:
+                argv += ["--min", minimum]
+            result = subprocess.run(
+                argv, cwd=root, capture_output=True, text=True, timeout=30, check=False
+            )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_coverage_report_rejects_more_lines_hit_than_found(self) -> None:
+        rc, output = self._run_lcov_report(
+            "SF:src/lib.rs\nLF:1\nLH:5\nFNF:1\nFNH:3\nend_of_record\n"
+        )
+        self.assertEqual(rc, 2, f"expected rc=2, got {rc}; output: {output!r}")
+        self.assertIn("error:", output)
+        self.assertIn("LH", output)
+
+    def test_coverage_report_rejects_more_functions_hit_than_found(self) -> None:
+        rc, output = self._run_lcov_report(
+            "SF:src/lib.rs\nLF:10\nLH:8\nFNF:1\nFNH:3\nend_of_record\n"
+        )
+        self.assertEqual(rc, 2, f"expected rc=2, got {rc}; output: {output!r}")
+        self.assertIn("error:", output)
+        self.assertIn("FNH", output)
+
+    def test_coverage_report_rejects_negative_counter(self) -> None:
+        rc, output = self._run_lcov_report(
+            "SF:src/lib.rs\nLF:10\nLH:-5\nFNF:1\nFNH:0\nend_of_record\n", minimum=None
+        )
+        self.assertEqual(rc, 2, f"expected rc=2, got {rc}; output: {output!r}")
+        self.assertIn("error:", output)
+        self.assertIn("LH", output)
+
+    def test_coverage_report_accepts_consistent_counters(self) -> None:
+        rc, output = self._run_lcov_report(
+            "SF:src/lib.rs\nLF:10\nLH:7\nFNF:2\nFNH:1\nend_of_record\n"
+        )
+        self.assertEqual(rc, 0, f"expected rc=0, got {rc}; output: {output!r}")
+        self.assertIn("lines 7/10 (70.00 %)", output)
+
     def test_whatwg_spec_concurrent_force_fetches_do_not_collide(self) -> None:
         import os
         import threading

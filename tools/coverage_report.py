@@ -54,15 +54,50 @@ def _parse_lcov_int(raw: str, prefix: str, path: Path, lineno: int) -> int:
 
 def parse_lcov(path: Path) -> Totals:
     totals = Totals()
+    # Counters are scoped to one SF…end_of_record trace. Validate each trace before
+    # folding it into the workspace totals so a hit count can never exceed the
+    # corresponding found count (which would inflate the coverage gate).
+    record: dict[str, tuple[int, int]] = {}
+
+    def finish_record() -> None:
+        nonlocal record
+        if not record:
+            return
+        lines_found = record.get("LF:", (0, 0))[0]
+        lines_hit, lines_hit_lineno = record.get("LH:", (0, 0))
+        functions_found = record.get("FNF:", (0, 0))[0]
+        functions_hit, functions_hit_lineno = record.get("FNH:", (0, 0))
+        if lines_hit > lines_found:
+            raise ValueError(
+                f"{path}:{lines_hit_lineno}: LH ({lines_hit}) exceeds LF ({lines_found})"
+            )
+        if functions_hit > functions_found:
+            raise ValueError(
+                f"{path}:{functions_hit_lineno}: FNH ({functions_hit}) exceeds "
+                f"FNF ({functions_found})"
+            )
+        totals.lines_found += lines_found
+        totals.lines_hit += lines_hit
+        totals.functions_found += functions_found
+        totals.functions_hit += functions_hit
+        record = {}
+
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if raw.startswith("LF:"):
-            totals.lines_found += _parse_lcov_int(raw, "LF:", path, lineno)
-        elif raw.startswith("LH:"):
-            totals.lines_hit += _parse_lcov_int(raw, "LH:", path, lineno)
-        elif raw.startswith("FNF:"):
-            totals.functions_found += _parse_lcov_int(raw, "FNF:", path, lineno)
-        elif raw.startswith("FNH:"):
-            totals.functions_hit += _parse_lcov_int(raw, "FNH:", path, lineno)
+        if raw.startswith("SF:"):
+            finish_record()
+            continue
+        for prefix in ("LF:", "LH:", "FNF:", "FNH:"):
+            if raw.startswith(prefix):
+                value = _parse_lcov_int(raw, prefix, path, lineno)
+                if value < 0:
+                    raise ValueError(
+                        f"{path}:{lineno}: {prefix.rstrip(':')} must be non-negative, got {value}"
+                    )
+                record[prefix] = (value, lineno)
+                break
+        if raw == "end_of_record":
+            finish_record()
+    finish_record()  # tolerate a tracefile whose last record lacks end_of_record
     return totals
 
 
