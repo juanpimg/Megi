@@ -428,7 +428,8 @@ class ValidatorHardeningTests(unittest.TestCase):
 
 
 class ProgressIntegrationTests(unittest.TestCase):
-    def test_progress_headline_uses_coverage(self) -> None:
+    def test_progress_headline_uses_verified_criteria(self) -> None:
+        """The headline is derived from acceptance criteria, not from phase estimates (#2294)."""
         data = {
             "stats": {
                 "head": "abc1234",
@@ -446,8 +447,8 @@ class ProgressIntegrationTests(unittest.TestCase):
                 "css_syntax": "1 / 1",
             },
             "phases": [
-                {"id": "F1", "title": "html", "percent": 100, "items": [], "pending": []},
-                {"id": "F7", "title": "shell", "percent": 99, "items": [], "pending": []},
+                {"id": "M0", "title": "basis", "items": ["a", "b"], "pending": ["c"]},
+                {"id": "M1", "title": "ui", "items": ["d"], "pending": ["e"]},
             ],
             "areas": [],
             "next_up": [],
@@ -456,13 +457,15 @@ class ProgressIntegrationTests(unittest.TestCase):
             "subtitle": "test",
             "coverage": {"percent": 60, "implemented": 6, "known": 10, "partial": 1, "unverified": []},
         }
+        # 3 verified / 5 criteria = 60 %, regardless of the (separate) 60 % coverage report.
         markdown = update_progress.render_markdown(data)
-        self.assertIn("60%", markdown)
-        self.assertIn("6/10", markdown)
-        self.assertNotIn("overall **99%**", markdown)
+        self.assertIn("hitos cerrados **0/2**", markdown)
+        self.assertIn("criterios verificados **3/5** (**60%**)", markdown)
+        self.assertNotIn("legacy phase average", markdown)
         svg = update_progress.render_progress_svg(data)
+        self.assertIn("criterios 3/5 · hitos 0/2", svg)
         self.assertIn("60%", svg)
-        self.assertIn("capability coverage", svg)
+        self.assertIn("Milestone bars", svg)
 
 
 class BadgeOwnershipTest(unittest.TestCase):
