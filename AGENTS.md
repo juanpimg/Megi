@@ -1,15 +1,44 @@
 # AGENTS.md — Reglas de arquitectura de Megi
 
 Eres un agente que trabaja en un motor web 100 % Rust, desde cero, con
-vocación de ser embebible. Estas reglas son obligatorias. Si no puedes
-cumplirlas, para y pregunta. Mantén este archivo por debajo de 200 líneas.
+vocación de ser embebible. **Este archivo es la ÚNICA fuente de reglas para
+agentes**: si otra guía lo contradice, manda este archivo. Reglas obligatorias.
+Si no puedes cumplirlas, para y pregunta. Mantén este archivo por debajo de 200 líneas.
+
+## 0. Estrategia vigente
+
+La estrategia vigente es la hoja de ruta aprobada (PR #2290, mergeado) hacia un
+navegador 100 % utilizable en producción. **Lee antes de trabajar**:
+`docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (spec v2) y
+`docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md` (master plan).
+El índice operativo es `docs/AGENT-INDEX.md`.
+
+- La barra de producción es la del **spec §2** (WPT con allowlist = 0, 100/100
+  sitios, estabilidad, seguridad, distribución, etc.); ningún plan puede
+  rebajarla. Los números publicados son **conseguidos**, nunca planeados.
+- Los hitos **M0–M12** son **dependencias lógicas, sin fechas**. Un hito se
+  cierra cuando su barra de aceptación está verde; otro puede empezar antes
+  solo si no comparte archivos y su barra no depende del anterior.
+- El trabajo se organiza en **work packages (WPs)**: esquema en
+  `docs/work-packages/SCHEMA.md`, cola en `docs/work-packages/BOARD.md`
+  (máx. 10 `in_progress`; se regenera sola; cada WP cerrado mueve una métrica).
+- Los planes ejecutables están en `docs/superpowers/plans/`; el master plan
+  hace de índice (sección «Mapa de planes»).
+- **NINGUNA afirmación de la versión anterior es válida**: Q1–Q4,
+  «anti-objetivos», «12 meses», topes como 25.000 subtests. Las carreras antes
+  diferidas son hitos con condición de entrada (M5–M12), no renuncias.
+- **Si un plan y el código discrepian, los planes/aprobación del dueño mandan
+  sobre docs históricos; si el código y un doc histórico discrepian, el código
+  manda.** Ante un plan vigente se actualiza el código; ante un doc histórico,
+  el código + sus tests son la verdad y se abre issue para el doc.
 
 ## 1. Orientación antes de tocar nada
-1. Lee `README.md`, `docs/ARCHITECTURE.md` (DAG y §3.1) y este archivo.
+1. Lee la sección 0, `README.md`, `docs/ARCHITECTURE.md` (DAG y §3.1) y este archivo.
 2. `git status --short`; NO pises cambios ajenos sin commitear. Trabaja en worktree.
-3. Verifica el código, no solo la documentación: `docs/GAPS.md` es histórico.
-   Si un doc y el código discrepian, el código + sus tests son la verdad; abre issue para el doc.
-4. No edites artefactos generados: `PROGRESS.md`, `docs/status/*`, `docs/audit/FINDINGS.md`.
+3. Verifica el código, no solo la documentación: `docs/GAPS.md`, `docs/ROADMAP.md`
+   y `docs/MILESTONES.md` son históricos; abre issue si están desactualizados.
+4. No edites artefactos generados: `PROGRESS.md`, `docs/status/*`,
+   `docs/audit/FINDINGS.md`, `docs/work-packages/BOARD.md` (regenerado por el motor).
 
 ## 2. Vetos absolutos
 - `#![forbid(unsafe_code)]` en los 17 crates. Cero `unsafe`.

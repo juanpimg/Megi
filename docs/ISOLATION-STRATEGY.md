@@ -1,6 +1,6 @@
 # ADR-004 — Aislamiento por pestaña / sitio (F7-ISOLATION)
 
-- **Estado**: **ACEPTADO (ADR-004, 2026-11-20) — IMPLEMENTADO**. Fases 1-3 entregadas; F7-ISOLATION figura `done` en `docs/status/coverage.toml` con evidencia `process_e2e_tests.rs`.
+- **Estado**: **ACEPTADO (ADR-004, 2026-11-20); decisión vigente, implementación PARCIAL**. Los procesos por sitio existen (`site.rs`, `worker/pool.rs`, `ipc/process.rs`, `process_e2e_tests.rs`), pero el spawn aún no usa `env_clear()` (amenazas T1/T2 del spec) y no hay sandbox de SO. **M3** cierra IPC/sandbox y **M5** cierra la matriz por plataforma. Ver `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` §3 y §4.3.
 - **Contexto**: `crates/browser` renderiza todas las pestañas a través de **un único worker** (`worker::spawn_worker`) que ya atrapa panics para que una página hostil no tumbe el proceso (`worker_panic_isolation_tests`). Eso es aislamiento de *fallos*, pero no de *origen*: dos pestañas de sitios distintos comparten el mismo realm JS, la misma caché y el mismo hilo de render. F7-ISOLATION exige que pestañas de sitios distintos no puedan compartir estado de render.
 
 ## Decisión (por fases)

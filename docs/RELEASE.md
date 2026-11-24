@@ -1,5 +1,7 @@
 # Release process
 
+> **Estado (2026-11-24): este documento describe el proceso actual, que aún no cumple la barra del roadmap aprobado.** `release.yml` publica por tag sin job de verificación de CI y el tarball no es reproducible. **M0** exige job `verify`, archivado con `SOURCE_DATE_EPOCH` y firma cosign; **M9** exige canales y auditoría. Fuente: `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` y `docs/superpowers/plans/2026-11-24-release-product-plan.md`.
+
 This document describes how Megi releases are versioned and published.
 
 ## Versioning
