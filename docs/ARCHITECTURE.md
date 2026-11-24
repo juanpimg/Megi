@@ -181,7 +181,7 @@ pub struct Node {
 
 En cumplimiento estricto de la directiva operativa del proyecto:
 - **Queda terminantemente prohibido** delegar la lógica nuclear del navegador (tokenización HTML, construcción del árbol DOM, tokenización/cascada CSS, cálculo de layout de cajas o construcción del árbol de renderizado) a librerías de motores existentes como `html5ever`, `markup5ever`, `lol_html`, `scraper`, `cssparser`, `selectors`, `stylo`, `taffy` o `blitz`.
-- Solo se autorizan **dependencias externas de bajo nivel** para transporte de red/criptografía, acceso a ventanas/buffers gráficos del sistema operativo, lectura de tablas tipográficas OpenType y serialización de fixtures de test. Tanto la **codificación** (PNG, `crates/paint`) como la **decodificación** (PNG + inflate, `crates/image`) de imagen y el resto de la lógica de pintado se implementan desde cero con `std` (ver §3.2).
+- Solo se autorizan **dependencias externas de bajo nivel** para transporte de red/criptografía, acceso a ventanas/buffers gráficos del sistema operativo, lectura de tablas tipográficas OpenType, serialización de fixtures de test y **decodificación AVIF (`avif-rust` 0.3, ADR-005, Rust puro, sin C/FFI)**. Tanto la **codificación** (PNG, `crates/paint`) como la **decodificación** (PNG + inflate, `crates/image`) de imagen y el resto de la lógica de pintado se implementan desde cero con `std` (ver §3.2).
 
 ### 3.1 Matriz de Dependencias Autorizadas por Subsistema
 

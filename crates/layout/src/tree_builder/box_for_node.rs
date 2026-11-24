@@ -279,7 +279,43 @@ pub(super) fn build_box_for_node(
                 if inherited_needed && child_style.is_none() {
                     child_style = Some(style_cache.anonymous_for(&own_style));
                 }
-                if let Some(child_box) = build_box_for_node(
+                // CSS Display 3 §2.5: `display: contents` generates no box for the
+                // element itself; its children are hoisted into this parent as if the
+                // wrapper were removed. This lets them become direct grid/flex items
+                // and inherit placement from the real container (e.g. MDN's
+                // `.layout__content { display: contents }` inside a named-area grid).
+                let child_is_contents = styles
+                    .get(&child_id)
+                    .is_some_and(|s| s.display == Display::Contents);
+                if child_is_contents {
+                    let mut grandchild = child_node.first_child;
+                    while let Some(grandchild_id) = grandchild {
+                        let gnode = doc.node(grandchild_id);
+                        let g_inherited = match &gnode.kind {
+                            NodeKind::Text(text) => !text.is_empty(),
+                            NodeKind::Element(_) => styles.get(&grandchild_id).is_none(),
+                            _ => false,
+                        };
+                        if g_inherited && child_style.is_none() {
+                            child_style = Some(style_cache.anonymous_for(&own_style));
+                        }
+                        if let Some(boxed) = build_box_for_node(
+                            doc,
+                            grandchild_id,
+                            styles,
+                            pseudo_styles,
+                            child_style.as_ref(),
+                            replaced_sizes,
+                            has_overflow_clip,
+                            style_cache,
+                            counters,
+                            depth + 1,
+                        ) {
+                            raw_children.push(boxed);
+                        }
+                        grandchild = gnode.next_sibling;
+                    }
+                } else if let Some(child_box) = build_box_for_node(
                     doc,
                     child_id,
                     styles,

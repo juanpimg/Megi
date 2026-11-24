@@ -238,3 +238,67 @@ fn test_content_distribution_end_and_space_evenly() {
     assert!((case.item(0).dimensions.content.x - 60.0).abs() < 0.01);
     assert!((case.item(1).dimensions.content.x - 180.0).abs() < 0.01);
 }
+
+#[test]
+fn display_contents_children_participate_in_parent_grid_placement() {
+    // CSS Display 3 §2.5: a `display: contents` element generates no box; its
+    // children are hoisted into the parent and become direct grid items. MDN's
+    // `.layout__content { display: contents }` relies on this so its header/body
+    // land in the named grid areas of the ancestor instead of a phantom item.
+    let (mut doc, mut styles, html) = setup();
+    let mut container = grid_container_style(Length::Px(300.0), Length::Auto);
+    container.grid_template_columns = template(vec![px(100.0), px(200.0)]);
+    container.grid_template_rows = template(vec![px(40.0), px(40.0)]);
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
+        rows: 2,
+        columns: 2,
+        cells: vec![
+            Some("side".to_owned()),
+            Some("header".to_owned()),
+            Some("side".to_owned()),
+            Some("body".to_owned()),
+        ],
+    });
+    let container_id = add_element(&mut doc, html, &mut styles, container);
+
+    // Direct child: sidebar in the named "side" area (column 1).
+    let mut side = item_style(Length::Auto, Length::Px(10.0));
+    side.grid_area = Some("side".to_owned());
+    let side_id = add_element(&mut doc, container_id, &mut styles, side);
+
+    // `display: contents` wrapper — must generate no box.
+    let mut wrapper = ComputedStyle::initial();
+    wrapper.display = Display::Contents;
+    let wrapper_id = add_element(&mut doc, container_id, &mut styles, wrapper);
+
+    let mut header = item_style(Length::Auto, Length::Px(10.0));
+    header.grid_area = Some("header".to_owned());
+    let header_id = add_element(&mut doc, wrapper_id, &mut styles, header);
+    let mut body = item_style(Length::Auto, Length::Px(10.0));
+    body.grid_area = Some("body".to_owned());
+    let body_id = add_element(&mut doc, wrapper_id, &mut styles, body);
+
+    let root =
+        layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout result");
+
+    // The wrapper must not produce a box.
+    assert!(
+        find_box_opt(&root, wrapper_id).is_none(),
+        "display:contents must not generate a box"
+    );
+    // Header/body must be placed in column 2 (x=100), owning their named areas.
+    let h = find_box(&root, header_id);
+    let b = find_box(&root, body_id);
+    let s = find_box(&root, side_id);
+    assert_eq!(s.dimensions.content.x, 0.0, "sidebar in column 1");
+    assert_eq!(
+        h.dimensions.content.x, 100.0,
+        "header must be hoisted into column 2"
+    );
+    assert_eq!(h.dimensions.content.y, 0.0, "header in row 0");
+    assert_eq!(
+        b.dimensions.content.x, 100.0,
+        "body must be hoisted into column 2"
+    );
+    assert_eq!(b.dimensions.content.y, 40.0, "body in row 1");
+}

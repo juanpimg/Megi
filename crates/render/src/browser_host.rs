@@ -285,6 +285,7 @@ fn display_css(display: Display) -> &'static str {
         Display::None => "none",
         Display::Flex => "flex",
         Display::Grid => "grid",
+        Display::Contents => "contents",
         Display::ListItem => "list-item",
         Display::Table => "table",
         Display::InlineTable => "inline-table",
