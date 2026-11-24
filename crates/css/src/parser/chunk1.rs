@@ -372,8 +372,21 @@ pub(crate) fn consume_block_contents_at(
                     {
                         rules.push(rule);
                     } else {
-                        // Skip unparseable token to recover
-                        stream.consume();
+                        // CSS Syntax §5.5.1 error recovery: drop the malformed
+                        // declaration/qualified-rule prelude up to the next `;` or the
+                        // block's closing `}`. Never consume the `}` here — the enclosing
+                        // loop needs it to close this block. Consuming it makes every
+                        // following top-level rule parse as a nested child of this rule
+                        // (legacy IE `*hack` declarations such as `*zoom:1`).
+                        while !matches!(
+                            stream.peek(),
+                            CssToken::Semicolon | CssToken::RightBrace | CssToken::Eof
+                        ) {
+                            stream.consume();
+                        }
+                        if stream.peek() == &CssToken::Semicolon {
+                            stream.consume();
+                        }
                     }
                 }
             }

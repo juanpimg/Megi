@@ -73,6 +73,42 @@ pub(crate) mod nesting_depth_tests {
 }
 
 #[cfg(test)]
+pub(crate) mod error_recovery_tests {
+    use super::*;
+    use crate::rule::Rule;
+
+    #[test]
+    fn invalid_star_hack_declaration_keeps_following_top_level_rules() {
+        // The legacy IE star hack `*zoom:1` is an invalid declaration that browsers
+        // silently ignore. It must not make the parser treat following top-level rules
+        // as nested children of the current rule (CSS Syntax §5.5.1 error recovery).
+        let sheet = parse_stylesheet(".cf{*zoom:1} .list{list-style-type:none}");
+        assert_eq!(
+            sheet.rules.len(),
+            2,
+            "star hack must not swallow the following top-level rule; got {:?}",
+            sheet.rules
+        );
+        let second = match &sheet.rules[1] {
+            Rule::Style(style) => style,
+            other => panic!("expected style rule, got {other:?}"),
+        };
+        assert!(
+            second
+                .declarations
+                .iter()
+                .any(|decl| decl.name == "list-style-type"),
+            ".list must survive with its list-style-type declaration"
+        );
+        assert_eq!(
+            second.child_rules.len(),
+            0,
+            ".list must be parsed as a top-level rule, not a nested child of .cf"
+        );
+    }
+}
+
+#[cfg(test)]
 pub(crate) mod keyframes_tests {
     use super::*;
 
