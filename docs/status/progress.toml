@@ -24,11 +24,10 @@ subtitle = "Hitos M0–M12 — criterios de aceptación verificables hacia un na
 
 # Highest-signal gaps, ordered by milestone dependency (not by date).
 next_up = [
-  "M0: publicar el informe WPT con P/T y SHA de la época importada",
-  "M0: sustituir el sha256 de release por verify + firma cosign",
-  "M1: 10 fixtures E2E de tarea de usuario y corpus sin console_errors (hoy 1/4 PASS)",
-  "M3: elevar de 28 a 31+ targets de fuzz y publicar el sandbox enforced",
-  "M4: 100+ subtests WPT de componentes y arrancar SW/WASM",
+  "M0: publicar una auditoría de 0 fugas T1/T2 con 12 pruebas negativas por SO",
+  "M1: 10 fixtures E2E de tarea de usuario y refrescar el informe de sitios reales",
+  "M3: publicar el sandbox enforced en Linux, macOS y Windows",
+  "M4: ampliar el informe WPT de 30 a 100+ subtests de componentes",
   "M6: spike de Canvas 2D / WebGL software antes de escribir código del motor",
 ]
 
@@ -36,11 +35,11 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 3336
-tests_commit = "32fada8e"
+tests = 3339
+tests_commit = "c403e466"
 tests_date = "2026-11-24"
 crates = 17
-rust_lines = 244931
+rust_lines = 245331
 unsafe_forbidden_crates = 17
 
 [gate]
@@ -70,11 +69,11 @@ items = [
   "Gate de conformidad PASS en 4 suites — `cargo run --release -p megi-test-harness -- --summary`",
   "17/17 crates con `#![forbid(unsafe_code)]` — `python3 tools/check_arch.py`",
   "Progreso publicado sin estimaciones de fase — `PROGRESS.md` derivado de criterios",
+  "Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`",
+  "Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`",
 ]
 pending = [
-  "Informe WPT con `P/T` y SHA de la época — no hay artifact WPT en `docs/status/`",
   "0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría",
-  "Release con verify + firma — `.github/workflows/release.yml` publica sha256, sin cosign",
 ]
 
 # --- M1 — Interactividad ----------------------------------------------------------------

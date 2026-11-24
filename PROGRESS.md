@@ -4,11 +4,11 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `32fada8e` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **19/63** (**30%**) · **3,336** tests · conformance **PASS** · **17** crates · **244,931** lines of Rust
+**Snapshot** — commit `c403e466` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **21/63** (**33%**) · **3,339** tests · conformance **PASS** · **17** crates · **245,331** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
-[Progress map SVG](docs/status/progress.svg) · [Capability coverage report](docs/status/coverage.html) (75/75 implemented; separate, self-referential report) · [Real-site render check](docs/status/real-sites.html).
+[Progress map SVG](docs/status/progress.svg) · [Capability coverage report](docs/status/coverage.html) (76/76 implemented; separate, self-referential report) · [Real-site render check](docs/status/real-sites.html).
 
 ## Hitos M0–M12 — criterios verificados
 
@@ -16,7 +16,7 @@
 
 | Hito | Objetivo | Criterios verificados | % |
 |---|---|---|---|
-| **M0** | Verdad y cimiento | `██████████░░░░░░░░░░` 3/6 | 50% |
+| **M0** | Verdad y cimiento | `████████████████░░░░` 5/6 | 83% |
 | **M1** | Interactividad | `██████████░░░░░░░░░░` 2/4 | 50% |
 | **M2** | Profundidad declarativa | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M3** | Frontera de seguridad | `████████░░░░░░░░░░░░` 2/5 | 40% |
@@ -29,23 +29,23 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `██████░░░░░░░░░░░░░░` 19/63 | **30%** |
+| | **Roadmap** | `██████░░░░░░░░░░░░░░` 21/63 | **33%** |
 
 ## Detalle de criterios por hito
 
-### M0 — Verdad y cimiento (50%)
+### M0 — Verdad y cimiento (83%)
 
 **Verificado**
 
 - Gate de conformidad PASS en 4 suites — `cargo run --release -p megi-test-harness -- --summary`
 - 17/17 crates con `#![forbid(unsafe_code)]` — `python3 tools/check_arch.py`
 - Progreso publicado sin estimaciones de fase — `PROGRESS.md` derivado de criterios
+- Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`
+- Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`
 
 **Pendiente**
 
-- Informe WPT con `P/T` y SHA de la época — no hay artifact WPT en `docs/status/`
 - 0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría
-- Release con verify + firma — `.github/workflows/release.yml` publica sha256, sin cosign
 
 ### M1 — Interactividad (50%)
 
@@ -204,10 +204,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `32fada8e` (2026-11-24) |
+| Commit | `c403e466` (2026-11-24) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 244931 |
-| Tests (`cargo test --workspace -- --list`) | 3336 |
+| Lines of Rust (tracked `.rs`) | 245331 |
+| Tests (`cargo test --workspace -- --list`) | 3339 |
 | Crates with `#![forbid(unsafe_code)]` | 17 / 17 |
 | Conformance gate | **PASS** |
 
@@ -245,11 +245,10 @@ Capability coverage and WPT conformance are separate metrics; this P/T is genera
 
 ## Next up
 
-- M0: publicar el informe WPT con P/T y SHA de la época importada
-- M0: sustituir el sha256 de release por verify + firma cosign
-- M1: 10 fixtures E2E de tarea de usuario y corpus sin console_errors (hoy 1/4 PASS)
-- M3: elevar de 28 a 31+ targets de fuzz y publicar el sandbox enforced
-- M4: 100+ subtests WPT de componentes y arrancar SW/WASM
+- M0: publicar una auditoría de 0 fugas T1/T2 con 12 pruebas negativas por SO
+- M1: 10 fixtures E2E de tarea de usuario y refrescar el informe de sitios reales
+- M3: publicar el sandbox enforced en Linux, macOS y Windows
+- M4: ampliar el informe WPT de 30 a 100+ subtests de componentes
 - M6: spike de Canvas 2D / WebGL software antes de escribir código del motor
 
 ## Regenerating this page
