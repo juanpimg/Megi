@@ -9,6 +9,8 @@ repository.workspace = true
 description = "Megi Engine — dependency-free PNG decoder and zlib/DEFLATE inflater (RGBA8)"
 
 [dependencies]
+# ADR-005: pure-Rust AVIF/AV1 decoder (MIT, no C/FFI), decode-only.
+avif-rust = "0.3"
 
 [lints]
 workspace = true
