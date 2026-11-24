@@ -52,6 +52,7 @@ pub fn load_images_with_context(
         sizes: HashMap::new(),
         loaded: 0,
         failed: 0,
+        capped: 0,
         downloaded_bytes: 0,
         decoded_pixels: 0,
         svgs_rendered: 0,
@@ -65,6 +66,7 @@ pub fn load_images_with_context(
     let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
     let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
+        result.capped = sources.len() - limits.max_images;
         warnings.push(format!(
             "page references {} images; loading only the first {} (cap)",
             sources.len(),

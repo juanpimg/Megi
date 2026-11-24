@@ -77,6 +77,8 @@ pub struct RenderStats {
     pub images_loaded: usize,
     /// Number of `<img>` images that failed (missing, too large, bad format, ...).
     pub images_failed: usize,
+    /// `<img>` references discarded solely by the `max_images` cap (#2250).
+    pub images_capped: usize,
     /// Downloaded (encoded) image bytes accepted by the caps.
     pub image_bytes: usize,
     /// Distinct `background-image`/`list-style-image` URLs loaded and decoded.
@@ -90,6 +92,8 @@ pub struct RenderStats {
     /// Inline `<svg>` elements replaced by synthetic `<img>` data URLs before layout (they
     /// are also counted by [`Self::images_loaded`]/[`Self::svgs_rendered`]).
     pub inline_svgs: usize,
+    /// Inline `<svg>` elements left untouched because a defensive limit fired (#2250).
+    pub inline_svgs_capped: usize,
     /// Web fonts successfully fetched, decoded and registered.
     pub fonts_loaded: usize,
     /// Web fonts skipped or failed (network, caps, decode, registration).
