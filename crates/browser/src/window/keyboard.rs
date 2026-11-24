@@ -402,14 +402,14 @@ impl WindowApp {
                 let mut query = self.find.query().to_owned();
                 query.pop();
                 self.find.set_results(query.clone(), Vec::new());
-                self.refresh_find_results();
+                self.on_find_query_changed(query.is_empty());
                 true
             }
             Key::Character(text) => {
                 let mut query = self.find.query().to_owned();
                 query.push_str(text);
-                self.find.set_results(query, Vec::new());
-                self.refresh_find_results();
+                self.find.set_results(query.clone(), Vec::new());
+                self.on_find_query_changed(query.is_empty());
                 true
             }
             _ => false,

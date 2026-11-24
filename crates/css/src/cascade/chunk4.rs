@@ -87,26 +87,48 @@ pub fn resolve_document_styles_with_viewport(
 /// Hashes an element's winning declarations (and its parent identity) into a 128-bit
 /// style-cache key.
 ///
-/// Winning declarations live in the immutable `StyleCollection` (or in the element's local
-/// inline-declaration buffer), so their addresses identify the values cheaply: hashing
-/// pointers avoids re-hashing every property name/value string per element. Map iteration
-/// order is unspecified, so per-declaration hashes are XOR-ed together. Two independent
-/// 64-bit mixes (different constants/rotations) make accidental collisions negligible.
+/// The parent key is mixed with **all 128 bits** preserved: folding its halves with XOR
+/// (and deriving the high half from the low one) collapsed the effective entropy to 64
+/// bits, so two distinct parents whose halves XOR-ed to the same value aliased to one
+/// cached `ComputedStyle`. That leaked a hidden ancestor's inherited `visibility` into
+/// unrelated visible subtrees (e.g. a real-world article page rendering blank).
+///
+/// Declarations are hashed by name and raw value rather than by pointer. Pointer hashing
+/// was cheaper but only identifies values when the address is stable and unique; hashing
+/// the actual strings is collision-safe and keeps the key independent of allocation layout.
+/// Map iteration order is unspecified, so per-declaration 128-bit hashes are XOR-ed together
+/// (order-independent) and mixed again into the parent seed.
 pub(crate) fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Declaration>) -> u128 {
-    let mut low = parent_key as u64 ^ (parent_key >> 64) as u64;
-    let mut high = low ^ 0xa5a5_5a5a_0123_4567;
-    for declaration in cascaded.values() {
-        let pointer = std::ptr::from_ref(*declaration) as usize as u64;
-        low ^= pointer
-            .wrapping_add(0x9e37_79b9_7f4a_7c15)
-            .rotate_left(17)
-            .wrapping_mul(0x100_0000_01b3);
-        high ^= pointer
-            .wrapping_add(0xd6e8_feb8_6659_fd93)
-            .rotate_left(29)
-            .wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    fn mix_u64(state: &mut u128, value: u64) {
+        *state ^= u128::from(value.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        *state = state
+            .rotate_left(31)
+            .wrapping_mul(u128::from(0x100_0000_01b3u64));
     }
-    u128::from(low) << 64 | u128::from(high)
+
+    fn hash_str(state: &mut u128, text: &str) {
+        let mut h = 0xcbf2_9ce4_8422_2325u64;
+        for byte in text.as_bytes() {
+            h ^= u64::from(*byte);
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
+        mix_u64(state, h);
+    }
+
+    // Seed with both halves of the parent key independently; never fold them together.
+    let mut key = u128::from(parent_key as u64 ^ 0x9e37_79b9_7f4a_7c15u64)
+        | (u128::from((parent_key >> 64) as u64 ^ 0xd6e8_feb8_6659_fd93u64) << 64);
+    for (name, declaration) in cascaded {
+        let mut decl_hash = 0xcbf2_9ce4_8422_2325u128;
+        hash_str(&mut decl_hash, name.as_str());
+        hash_str(&mut decl_hash, declaration.raw_value.as_str());
+        key ^= decl_hash.rotate_left(17).wrapping_mul(0x100_0000_01b3);
+    }
+    // Final avalanche so distinct declaration sets cannot cancel by XOR alone.
+    let mut out = key ^ (key >> 64);
+    out ^= out.rotate_left(29).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    out ^= out.rotate_left(51).wrapping_mul(0x94d0_49bb_1331_11eb);
+    out
 }
 
 /// Resolves the computed `background-color` for a `::backdrop` pseudo-element of `node_id`
