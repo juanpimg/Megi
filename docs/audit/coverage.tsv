@@ -101,13 +101,13 @@ crates/browser/src/find/state.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/browser/src/find/tests.rs	224	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms.rs	47	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/controls.rs	389	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/forms/edit.rs	421	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
+crates/browser/src/forms/edit.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/live.rs	332	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/forms/live_dom.rs	163	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/forms/live_tests.rs	345	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/forms/model.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/submit.rs	174	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/forms/tests.rs	499	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
+crates/browser/src/forms/tests.rs	499	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/widget.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/headless.rs	459	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -157,7 +157,7 @@ crates/browser/src/window/events.rs	495	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/browser/src/window/form_controls.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/frontend.rs	186	src	F2	juanpimg	2026-11-24	covered	upstream merge	Re-read after main merge
 crates/browser/src/window/input.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
+crates/browser/src/window/keyboard.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/presentation.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/tests.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1100,7 +1100,7 @@ crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/images/tests.rs	71	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	273	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/lib.rs	276	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/lib.rs	277	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/main.rs	425	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/render/src/pipeline/final_stage.rs	345	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1113,7 +1113,7 @@ crates/render/src/pipeline/state.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/pipeline/state_stylesheet_text.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/styles.rs	466	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
 crates/render/src/pipeline/svg.rs	212	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/url.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/url.rs	357	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts.rs	108	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/classic.rs	331	src	F2	wave2	2026-11-19	covered	#1969 via PR #1989	Re-read after doc-comment lint fix
 crates/render/src/scripts/event_loop.rs	259	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1124,6 +1124,7 @@ crates/render/src/scripts/network.rs	222	src	F2	wave-max-mod	2026-11-19	covered	
 crates/render/src/scripts/providers.rs	294	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
 crates/render/src/scripts/tests.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/types.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/shadow_dom.rs	85	src	F2	shadow-merge	2026-11-24	covered	#upstream	re-read
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/webfonts.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1191,6 +1192,7 @@ crates/render/tests/scripting_tests/fixtures.rs	186	test	F1	wave-max-mod	2026-11
 crates/render/tests/scripting_tests/http.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/scripting_tests/main.rs	14	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/server_push_tests.rs	243	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/shadow_dom_tests.rs	35	test	F1	shadow-merge	2026-11-24	covered	#upstream	re-read
 crates/render/tests/sri_tests.rs	355	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/streaming_option_tests.rs	112	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/svg_tests.rs	368	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
