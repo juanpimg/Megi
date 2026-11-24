@@ -34,11 +34,19 @@ def check(milestone: str, index: int, root: Path | None = None) -> int:
         return 1
     # A criterion is closed when it has moved out of `pending` into `items`.
     if index <= len(items):
-        print(f"PASS: {milestone}#{index} verified: {items[index - 1][:140]}")
+        evidence = items[index - 1]
+        if not isinstance(evidence, str) or not evidence.strip():
+            print(f"FAIL: {milestone}#{index} has no recorded evidence")
+            return 1
+        print(f"PASS: {milestone}#{index} verified: {evidence[:140]}")
         return 0
     pending_index = index - len(items)
     if pending_index <= len(pending):
-        print(f"FAIL: {milestone}#{index} still pending: {pending[pending_index - 1][:140]}")
+        evidence = pending[pending_index - 1]
+        if not isinstance(evidence, str) or not evidence.strip():
+            print(f"FAIL: {milestone}#{index} has no recorded evidence")
+            return 1
+        print(f"FAIL: {milestone}#{index} still pending: {evidence[:140]}")
     else:
         print(f"FAIL: {milestone}#{index} has no recorded evidence")
     return 1

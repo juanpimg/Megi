@@ -54,6 +54,42 @@ class MilestoneCheckerTests(unittest.TestCase):
         self.assertNotEqual(result, 0)
         self.assertIn("FAIL: criterion M0#99 does not exist", output.getvalue())
 
+    def test_empty_string_evidence_fails(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = [""]\npending = []\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("evidence", output.getvalue())
+
+    def test_whitespace_only_evidence_fails(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["   "]\npending = []\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("no recorded evidence", output.getvalue())
+
+    def test_table_evidence_fails_without_raising(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = [{text = "x"}]\npending = []\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("no recorded evidence", output.getvalue())
+
+    def test_empty_string_pending_fails(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = [""]\n')
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("no recorded evidence", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

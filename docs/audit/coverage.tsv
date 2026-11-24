@@ -2094,7 +2094,7 @@ tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/check_arch.py	173	tool	F3	jp	2026-11-19	covered	#1759	
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
-tools/check_milestone.py	57	tool	F3	wp-engine	2026-11-24	covered	#2294	read during WP review fix pass
+tools/check_milestone.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/coverage_report.py	136	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2108,7 +2108,7 @@ tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGE
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
-tools/test_check_milestone.py	59	tool	F3	jp	2026-11-24	covered	#2290	
+tools/test_check_milestone.py	95	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
