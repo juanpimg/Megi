@@ -1,6 +1,6 @@
 # ADR-001 — Estrategia JavaScript para la Fase 6 (`docs/JAVASCRIPT-STRATEGY.md`)
 
-- **Estado**: **ACEPTADO (ADR-001) — decisión del dueño registrada el 2026-11-10; Fase 6 completada (`WP-6.1`–`WP-6.7`)**
+- **Estado**: **ACEPTADO (ADR-001) — decisión vigente**. Boa 0.22 sigue siendo el motor; la evolución (JIT o migración) se decide con datos del corpus en **M8** del roadmap aprobado (`docs/superpowers/plans/2026-11-24-js-evolution-plan.md`). Las cifras de fases antiguas son históricas.
 - **Fecha**: 2026-11-10 (Europe/Madrid)
 - **Decisor**: dueño del proyecto · **Implementación**: Fase 6, plan WP-6.1–6.7
 - **Rama / HEAD**: `main` (HEAD vigente y métricas en `PROGRESS.md`)

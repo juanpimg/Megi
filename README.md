@@ -19,6 +19,16 @@
 
 ---
 
+## 🧭 Hoja de ruta vigente (aprobada)
+
+Megi avanza hacia un **navegador 100 % utilizable en producción** con conformidad WPT verificable. La estrategia es la hoja de ruta **M0–M12** (dependencias lógicas, sin fechas) del PR #2290:
+
+- [Estrategia y barra de producción](docs/superpowers/specs/2026-11-24-megi-ambition-design.md)
+- [Master plan — índice de hitos y planes](docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md)
+- [Índice operativo para agentes](docs/AGENT-INDEX.md) y [tablero de work packages](docs/work-packages/BOARD.md)
+
+Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subtests) **no son válidas**. Todo número publicado es conseguido y verificable; el estado vivo está en [`PROGRESS.md`](PROGRESS.md).
+
 ## 📈 Estado del Proyecto
 
 [![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](docs/status/coverage.html) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
