@@ -9,7 +9,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	507	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	511	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -18,6 +18,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	206	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/wp-refill.yml	50	ci	F3			pending		
 .gitignore	50	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 AGENTS.md	114	docs	F3	jp	2026-11-19	covered	#1759	
@@ -29,7 +30,7 @@ LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
 PROGRESS.md	251	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-README.md	197	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+README.md	198	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/bench/Cargo.toml	29	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1303,7 +1304,7 @@ deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata v
 docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	99	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/AI-QUICKSTART.md	86	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
@@ -1417,6 +1418,7 @@ docs/status/real-sites/hn.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/rust.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
+docs/status/work-packages.html	0	generated	-			exempt		not read line by line: generated
 docs/superpowers/plans/2026-11-24-devtools-platform-plan.md	66	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-engine-depth-plan.md	367	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/plans/2026-11-24-extended-platform-plan.md	88	docs	F3	docs-cleanup	2026-11-24	covered	#2290	re-read during agent-facing restructure
@@ -1432,9 +1434,57 @@ docs/superpowers/plans/2026-11-24-web-platform-extension-plan.md	66	docs	F3	docs
 docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
-docs/work-packages/BOARD.md	19	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/BOARD.md	65	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/README.md	54	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/SCHEMA.md	48	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/SCHEMA.md	50	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/depth-inventory.toml	443	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m0-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m1-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m1-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m10-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m10-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m10-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m10-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m10-05.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m11-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m11-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m11-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m12-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m12-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m2-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m2-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m2-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m3-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m3-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m3-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m4-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m4-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m4-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m4-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m5-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m5-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m5-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m5-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m6-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m6-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m6-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m6-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m7-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m7-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m7-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m7-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m8-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m8-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m8-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m9-01.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m9-02.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m9-03.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-SITE-rust.toml	13	docs	F3			pending		
+docs/work-packages/queue/WP-SITE-wikipedia.toml	13	docs	F3			pending		
 fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
@@ -2010,13 +2060,15 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	148	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_soak_fuzz.py	139	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_wp_generate.py	19	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/test_wp_plan.py	30	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_dashboard.py	65	tool	F3			pending		
+tools/test_wp_generate.py	162	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_plan.py	74	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	783	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/wp_generate.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_plan.py	25	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/wp_schema.py	44	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_dashboard.py	102	tool	F3			pending		
+tools/wp_generate.py	286	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_plan.py	106	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_schema.py	52	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
