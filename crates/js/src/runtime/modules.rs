@@ -89,9 +89,10 @@ pub(crate) fn transform_module(source: &str, url: &str) -> Result<ParsedModule, 
                 };
                 let binding = if head.is_empty() {
                     ImportBinding::SideEffect
-                } else if head.starts_with("* as ") {
+                } else if head.starts_with("* as ") || head.starts_with("*as ") {
                     ImportBinding::Namespace(
                         head.strip_prefix("* as ")
+                            .or_else(|| head.strip_prefix("*as "))
                             .map(str::trim)
                             .unwrap_or_else(|| head.trim())
                             .to_string(),

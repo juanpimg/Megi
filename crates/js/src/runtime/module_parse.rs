@@ -51,11 +51,18 @@ pub(crate) fn module_quote(value: &str) -> String {
 pub(crate) fn import_specifier(rest: &str) -> Option<(String, String)> {
     // Returns (binding head, specifier). Import declarations must be single-line.
     let rest = rest.trim().trim_end_matches(';').trim();
-    let split = rest
-        .rsplit_once(" from ")
-        // Minified modules omit whitespace between the named list and `from`
-        // (`import{x}from"./a.js"`); ES grammar allows it (#1936).
-        .or_else(|| rest.rsplit_once("}from"));
+    // `from` followed directly by a quote is legal and emitted by minifiers
+    // (`import*as ns from"spec"`, `import{x}from"spec"`). #2242/#1936.
+    let split = rest.rsplit_once(" from ").or_else(|| {
+        let bytes = rest.as_bytes();
+        let mut found = None;
+        for i in 0..bytes.len().saturating_sub(4) {
+            if &bytes[i..i + 4] == b"from" && matches!(bytes.get(i + 4), Some(b'"' | b'\'')) {
+                found = Some((&rest[..i], &rest[i + 4..]));
+            }
+        }
+        found
+    });
     if let Some((head, tail)) = split {
         let head = if head.starts_with('{') {
             head
