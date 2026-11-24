@@ -10,13 +10,13 @@
 
 > **v2 (sin calendarización)**: las referencias a Q1–Q4 de este plan son hitos lógicos (M0–M9 del master plan v2), no fechas. Las cifras WPT son pisos, no techos: las épocas continúan hasta cubrir el árbol completo. Las carreras antes llamadas 'anti-objetivos' (JIT, WebGL, vídeo, SW completo) están ahora en `js-evolution`, `graphics-media` y `web-platform-extension`.
 
-**Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (§4.2, secuencia Q1–Q4).
+**Spec:** `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` (§4.2 y hitos M1–M4).
 
 ## Global Constraints
 
 - `#![forbid(unsafe_code)]` en los 17 crates; ninguna dependencia con toolchain C en el motor sin enmienda ADR previa.
 - `wasmi`, `unicode-bidi`, `unicode-linebreak` y `symphonia` requieren enmienda explícita de `ARCHITECTURE.md` §3.1 antes de añadirse (licencia, MSRV, `cargo deny`).
-- WebGL, JIT, motor JS propio, vídeo con FFmpeg y Service Workers completos son anti-objetivos (spec §2.3).
+- WebGL, JIT, motor JS propio, vídeo con FFmpeg y Service Workers completos son carreras diferidas con condición de entrada (spec §4.2).
 - Todo cambio de render debe conservar goldens byte-idénticos salvo declaración explícita en el PR.
 - Reloj virtual y `Budget` para todo script; sin reloj de pared en el event loop.
 

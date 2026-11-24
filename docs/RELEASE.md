@@ -18,7 +18,7 @@ This document describes how Megi releases are versioned and published.
    - Ensure `main` is green in CI (fmt, clippy, tests, conformance gate, security/audit jobs).
    - Update [`CHANGELOG.md`](../CHANGELOG.md): move relevant "Unreleased"/round notes into a new `## [x.y.z] - YYYY-MM-DD` section with Added/Changed/Fixed/Performance/Security as applicable.
    - Update [`docs/status/progress.toml`](status/progress.toml) and generated status artifacts if the release reflects a documented snapshot.
-   - Verify docs that advertise counts/budgets still match reality (`README.md`, `docs/HANDOFF.md`, `docs/PERFORMANCE.md` as applicable).
+   - Verify docs that advertise counts/budgets still match reality (`README.md`, `docs/AGENT-INDEX.md`, `docs/PERFORMANCE.md` as applicable).
 2. **Version bump**
    - Bump `[workspace.package].version` (and crate/dependency versions kept in lockstep).
    - Run `cargo check --workspace --locked` and `cargo test --workspace --locked` (or the repo's required subset) to confirm the lockfile and manifests are consistent.

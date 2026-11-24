@@ -41,7 +41,7 @@ TEXT_EXTENSIONS = {
     ".hex", ".patch", ".gitattributes",
 }
 BINARY_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".rgba", ".bmp", ".woff2", ".ttf",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".rgba", ".bmp", ".woff", ".woff2", ".ttf",
     ".otf", ".wasm", ".gz", ".zip", ".bin",
 }
 # Third-party material: kept in the ledger so the exemption is a recorded

@@ -35,8 +35,8 @@ El índice operativo es `docs/AGENT-INDEX.md`.
 ## 1. Orientación antes de tocar nada
 1. Lee la sección 0, `README.md`, `docs/ARCHITECTURE.md` (DAG y §3.1) y este archivo.
 2. `git status --short`; NO pises cambios ajenos sin commitear. Trabaja en worktree.
-3. Verifica el código, no solo la documentación: `docs/GAPS.md`, `docs/ROADMAP.md`
-   y `docs/MILESTONES.md` son históricos; abre issue si están desactualizados.
+3. Verifica el código, no solo la documentación: `docs/GAPS.md` y `docs/ROADMAP.md`
+   son resúmenes; la verdad es el código y sus tests. Abre issue si están desactualizados.
 4. No edites artefactos generados: `PROGRESS.md`, `docs/status/*`,
    `docs/audit/FINDINGS.md`, `docs/work-packages/BOARD.md` (regenerado por el motor).
 

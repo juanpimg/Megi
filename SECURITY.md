@@ -92,7 +92,7 @@ after a fix is available.
   panics/aborts are security-relevant and must be reported privately (see
   above).
 - Remaining non-linear CPU paths and layout/paint recursion budgets are
-  tracked in [`docs/HANDOFF.md`](docs/HANDOFF.md) and measured by the
+  tracked in [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) and measured by the
   benchmark suite; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 - **Render pipeline limits** (`crates/render`): main document capped at 16 MiB,
   at most 32 external stylesheets, 1 MiB per stylesheet and 4 MiB of total

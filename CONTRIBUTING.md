@@ -113,7 +113,7 @@ La **hoja de ruta vigente** es la del roadmap aprobado (PR #2290): [`docs/superp
   - **Ronda 20 HECHO**: `conic-gradient`/`repeating-conic` + color hints + espacios `srgb|srgb-linear|oklab`, `calc()` mixto (`CalcLengths`), tipografía (`text-transform`/spacing/white-space) y **fix de custom properties** lazy/COW (`Option<Arc<HashMap>>`, fast path `needs_resolution`; A/B −14,9 % css resolve quiet).
 - **Estado por áreas**: el detalle vivo de capacidades está en `PROGRESS.md` y `docs/status/coverage.html`. La descripción por hitos **M0–M12** y sus barras de aceptación está en el master plan (sección «Barras de cierre por hito»). Los antiguos bloques «Fase 5/6/7» de este documento son históricos y no deben usarse para decidir qué hacer a continuación.
 
-Para decidir el siguiente trabajo usa siempre [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) y el master plan. Los documentos `docs/PHASE4-SUPPORT.md`, `docs/ROADMAP.md`, `docs/HANDOFF.md`, `docs/TOOLING.md` y `docs/MILESTONES.md` son **históricos**: consulta el código y `PROGRESS.md` para el estado real. Rendimiento en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) y fuzzing/seguridad en [`docs/FUZZING.md`](docs/FUZZING.md) y [`SECURITY.md`](SECURITY.md).
+Para decidir el siguiente trabajo usa siempre [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) y el master plan. El documento `docs/ROADMAP.md` es un resumen histórico: consulta el código y `PROGRESS.md` para el estado real. Rendimiento en [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) y fuzzing/seguridad en [`docs/FUZZING.md`](docs/FUZZING.md) y [`SECURITY.md`](SECURITY.md).
 
 ---
 

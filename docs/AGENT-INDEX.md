@@ -74,7 +74,7 @@ python3 tools/wp_plan.py --board
 
 | No mirar para decidir | Mirar en su lugar |
 |---|---|
-| `docs/GAPS.md`, `docs/ROADMAP.md`, `docs/MILESTONES.md`, `docs/HANDOFF.md`, `docs/TOOLING.md`, `docs/PHASE4-SUPPORT.md` (históricos) | spec v2 + master plan + `PROGRESS.md` + código |
+| `docs/GAPS.md`, `docs/ROADMAP.md` (resúmenes históricos) | spec v2 + master plan + `PROGRESS.md` + código |
 | `PROGRESS.md`, `docs/status/*` (generados) | fuentes: `docs/status/progress.toml`, `coverage.toml` |
 | `docs/audit/FINDINGS.md` (registro/generado) | `docs/audit/README.md` y hallazgos abiertos |
 

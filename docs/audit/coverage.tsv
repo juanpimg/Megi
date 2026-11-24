@@ -28,8 +28,8 @@ Cargo.toml	78	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	208	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-README.md	199	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+PROGRESS.md	251	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
+README.md	197	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/bench/Cargo.toml	29	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -360,7 +360,7 @@ crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/fonts/src/types.rs	183	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/web.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/woff1.rs	170	src	F2	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
-crates/fonts/tests/fixtures/DejaVuSans-woff1.woff	1337	test	F1	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
+crates/fonts/tests/fixtures/DejaVuSans-woff1.woff	0	binary	-	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 crates/fonts/tests/fixtures/OFL-OpenSans.txt	92	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/tests/fixtures/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
 crates/fonts/tests/fixtures/woff2-table-dir-oob.woff2	0	binary	-			exempt		not read line by line: binary
@@ -531,7 +531,7 @@ crates/image/tests/fixtures/jpeg/reduced_1024x768.rgba	0	binary	-			exempt		not 
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s2.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s4.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s8.rgba	0	binary	-			exempt		not read line by line: binary
-crates/image/tests/fixtures/lossless-sub8x8-palette.avif	12	test	F1	nullobj-merge	2026-11-24	covered	#upstream	re-read
+crates/image/tests/fixtures/lossless-sub8x8-palette.avif	0	binary	-	nullobj-merge	2026-11-24	covered	#upstream	re-read
 crates/image/tests/fixtures/png/basic.png	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/png/filters_rgb16.png	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/png/filters_rgb16.rgba	0	binary	-			exempt		not read line by line: binary
@@ -1302,150 +1302,41 @@ crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
+docs/AGENT-INDEX.md	99	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
-docs/CONTRIBUTOR-ONBOARDING.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/FUZZING.md	302	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/GAPS.md	147	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/HANDOFF.md	127	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ISOLATION-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	#2062	ADR-004 phased per-site isolation strategy doc from main
 docs/JAVASCRIPT-STRATEGY.md	259	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/MILESTONES.md	152	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/OUTREACH.md	150	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/PHASE4-SUPPORT.md	237	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/REAL-SITE-PERF.md	46	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
-docs/REAL_SITE_RELIABILITY.md	95	docs	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ROADMAP.md	548	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/TOOLING.md	790	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/architecture-baseline.json	110	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/architecture-deps.toml	39	docs	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 docs/audit/FINDINGS.md	254	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/README.md	102	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/coverage.tsv	0	generated	-			exempt		not read line by line: generated
-docs/audit/findings/f1/00-index.md	37	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/css-svg-html.md	17	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/js-shell.md	15	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/layout.md	19	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/net.md	15	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/paint-image.md	15	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f1/render-fonts-th-dom.md	14	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/findings/f1/00-index.md	107	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/f2/00-index.md	62	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/f4/00-perf-baseline.md	53	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/findings/f5/00-summary.md	79	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/audit/findings/f5/docs-audit.md	56	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f5/html-css.md	165	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f5/js-web-apis.md	167	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f5/net-security.md	268	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/f5/shell-a11y-i18n.md	231	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/f7/00-closeout.md	109	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave1.json	3420	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/00-baseline.md	36	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/07-closeout.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/FINAL-REVIEW.md	98	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/PUBLISHED.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/SECURITY-FIXES.md	21	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/advisories/w2-render-01.md	25	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/advisories/w2-st-1173-file-icon.md	22	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/advisories/w2-st-1176-tmp-writers.md	22	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f1-tests-fuzz-fixtures.md	313	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-assets.md	334	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-core.md	257	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-js.md	288	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-layout-paint.md	338	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-net.md	389	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-render.md	293	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f2-shell-tools.md	287	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f3-tooling-ci-docs.md	194	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f4-perf.md	183	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/f5-break-browser.md	175	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-03.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-04.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-05.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-06.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-07.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-09.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-10.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-11.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-assets-C1.md	36	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-browser-02.md	51	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-browser-03.md	63	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-ci-01.md	44	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-ci-03.md	48	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-01.md	38	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-02.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-03.md	35	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-04.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-05.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-06.md	36	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-07.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-08.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-09.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-10a.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-10b.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-11.md	34	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-12.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-core-13.md	36	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-001.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-003.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-004.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-005.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-006.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-008.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-js-009.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-004.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-005.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-006.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-007.md	35	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-008.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-009.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-010.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-011.md	33	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-012.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-013.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-014.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d02.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d03.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d04.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d05.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d06.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d07.md	27	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d08.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d09.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-net-d10.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-perf-01.md	47	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-perf-02.md	39	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-perf-03.md	42	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-perf-04.md	48	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-perf-05.md	47	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-render-02.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-render-04.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-render-10.md	30	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-st-headless-tabs.md	31	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-st-reader-quadratic.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-st-session-doc-drift.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-01.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-02.md	27	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-03.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-04.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-05.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-06.md	29	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-07.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/issues/w2-t-08.md	27	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-assets.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-browser.md	68	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-ci.md	71	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-core.md	61	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-f1.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-js.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-lp.md	187	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-net.md	68	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-render.md	90	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/meeting-st.md	77	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/findings/wave2/SECURITY-FIXES.md	78	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/findings/wave2/SOURCE-REPORTS.md	368	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/audit/findings/wave2/TRIAGE-RECORD.md	247	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/audit/findings/wave2/VERIFICATION-EVIDENCE.md	468	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/audit/findings/wave2/repro-f2-js/r3b.rs	27	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-f2-js/r4.rs	14	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-f2-js/r_main.rs	143	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1467,28 +1358,6 @@ docs/audit/findings/wave2/repro-w2-assets/vis-inherit.svg	1	docs	F3	wave-max-mod
 docs/audit/findings/wave2/repro-w2-ci/blank_gate.py	22	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-256-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-4-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verifier-template.md	13	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-assets-A.md	76	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-assets-B.md	77	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-browser-A.md	39	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-browser-B.md	26	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-ci-A.md	55	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-ci-B.md	72	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-core-A.md	52	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-core-B.md	93	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-core-B2.md	53	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-f1-A.md	28	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-f1-B.md	32	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-js-A.md	39	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-js-B.md	34	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-lp-A.md	48	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-lp-B.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-net-A.md	58	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-net-B.md	54	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-render-A.md	80	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-render-B.md	56	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-st-A.md	69	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/findings/wave2/verify-st-B.md	77	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/repros/browser/bad.gif	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.jpg	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.png	0	binary	-			exempt		not read line by line: binary
@@ -1548,11 +1417,6 @@ docs/status/real-sites/hn.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/rust.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
-docs/superpowers/plans/2026-11-17-honest-progress.md	111	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-18-auditoria-linea-por-linea-megi.md	47	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-18-js-host-bridge.md	134	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-18-megi-modular-restructuring.md	225	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-19-maximal-modularity.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-24-devtools-platform-plan.md	66	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-engine-depth-plan.md	367	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/plans/2026-11-24-extended-platform-plan.md	88	docs	F3	docs-cleanup	2026-11-24	covered	#2290	re-read during agent-facing restructure
@@ -1567,10 +1431,10 @@ docs/superpowers/plans/2026-11-24-security-isolation-plan.md	306	docs	F3	docs-cl
 docs/superpowers/plans/2026-11-24-web-platform-extension-plan.md	66	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
-docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/specs/2026-11-18-js-host-bridge-design.md	81	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md	451	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
+docs/work-packages/BOARD.md	19	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/README.md	54	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/SCHEMA.md	48	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
@@ -2145,8 +2009,14 @@ tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstre
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_real_site_check.py	148	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_soak_fuzz.py	139	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
-tools/test_update_coverage.py	712	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/test_wp_generate.py	19	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_plan.py	30	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_schema.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	783	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/wp_generate.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_plan.py	25	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/wp_schema.py	44	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
