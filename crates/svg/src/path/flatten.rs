@@ -121,7 +121,11 @@ pub(crate) fn arc_to_cubics(
     } else {
         (rx, ry)
     };
-    let sign = if large_arc != sweep { -1.0 } else { 1.0 };
+    // SVG implementation notes F.6.5 step 3: coefficient = -1 when
+    // large_arc-flag == sweep-flag, +1 otherwise. The previous predicate was
+    // inverted, turning near-straight chords with equal flags (`a726 726 0 0 0`
+    // in the Wikipedia wordmark, #2248) into full major arcs / black blobs.
+    let sign = if large_arc == sweep { -1.0 } else { 1.0 };
     let numerator = (rx * rx * ry * ry) - (rx * rx * y1 * y1) - (ry * ry * x1 * x1);
     let denominator = (rx * rx * y1 * y1) + (ry * ry * x1 * x1);
     let coefficient = if denominator <= f32::EPSILON {
