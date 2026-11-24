@@ -281,6 +281,7 @@ pub(crate) fn build_location(context: &mut Context) -> Result<JsObject, JsError>
         ("origin", location_origin_get as NativeFn, None),
         ("protocol", location_protocol_get as NativeFn, None),
         ("host", location_host_get as NativeFn, None),
+        ("hostname", location_hostname_get as NativeFn, None),
     ] {
         let get = accessor_fn(context, getter);
         let descriptor = match setter {
@@ -527,6 +528,9 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
     // WHATWG DOM: `document.nodeType` is 9 (DOCUMENT_NODE). jQuery's setDocument()
     // gates initialization on `9 === a.nodeType`, so omitting it aborts the library (#1880).
     let node_type = pick(context, node_node_type);
+    // #2245: document.location (alias of window.location) is read by paywall
+    // bundles as `document.location.protocol`.
+    let document_location = build_location(context).ok();
     let implementation = build_document_implementation(context);
     let cookie_get = pick(context, document_cookie_get);
     let cookie_set = pick(context, document_cookie_set);
@@ -619,6 +623,13 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         None,
         Attribute::all(),
     );
+    if let Some(document_location) = document_location {
+        init.property(
+            js_string!("location"),
+            JsValue::from(document_location),
+            Attribute::all(),
+        );
+    }
     init.accessor(
         js_string!("nodeType"),
         Some(node_type),

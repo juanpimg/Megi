@@ -79,6 +79,16 @@ pub(crate) fn location_host_get(
 ) -> JsResult<JsValue> {
     Ok(JsValue::from(js_string!(current_location(c)?.2)))
 }
+/// `location.hostname` — the host without the port (#2245).
+pub(crate) fn location_hostname_get(
+    _t: &JsValue,
+    _a: &[JsValue],
+    c: &mut Context,
+) -> JsResult<JsValue> {
+    let host = current_location(c)?.2;
+    let hostname = host.split(':').next().unwrap_or(&host);
+    Ok(JsValue::from(js_string!(hostname)))
+}
 pub(crate) fn location_pathname_get(
     _t: &JsValue,
     _a: &[JsValue],
