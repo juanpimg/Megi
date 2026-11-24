@@ -309,6 +309,25 @@ impl WindowApp {
     }
 
     /// Re-renders with the current query so the worker computes hits/highlight rectangles.
+    /// Records a find query change and schedules (or coalesces) the re-render (#1830).
+    pub(super) fn on_find_query_changed(&mut self, cleared: bool) {
+        if cleared {
+            // An empty query clears highlights immediately: no stale marks while waiting.
+            if self.find_render.take_due_immediate() || !self.find_rects.is_empty() {
+                self.refresh_find_results();
+            } else {
+                self.update_title();
+            }
+            return;
+        }
+        let now = std::time::Instant::now();
+        self.find_render.on_query_changed(now);
+        self.update_title();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
     pub(super) fn refresh_find_results(&mut self) {
         if self.find.query().is_empty() {
             self.find_rects.clear();

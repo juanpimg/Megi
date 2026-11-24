@@ -447,13 +447,26 @@ impl ApplicationHandler<UserEvent> for WindowApp {
             self.scroll.set_viewport_height(self.page_viewport_height());
             self.request_render();
         }
+        if self.find_render.take_due(now) {
+            // #1830: one render for the whole find-query typing burst.
+            self.refresh_find_results();
+        }
         if self.session_autosave.take_due(now) {
             self.save_session();
         }
-        let mut deadline = match (self.debounce.deadline(), self.refresh.deadline()) {
-            (Some(debounce), Some(refresh)) => Some(debounce.min(refresh)),
-            (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
-            (None, None) => None,
+        let mut deadline = match (
+            self.debounce.deadline(),
+            self.refresh.deadline(),
+            self.find_render.deadline(),
+        ) {
+            (Some(a), Some(b), Some(c)) => Some(a.min(b).min(c)),
+            (Some(a), Some(b), None) | (Some(a), None, Some(b)) | (None, Some(a), Some(b)) => {
+                Some(a.min(b))
+            }
+            (Some(deadline), None, None)
+            | (None, Some(deadline), None)
+            | (None, None, Some(deadline)) => Some(deadline),
+            (None, None, None) => None,
         };
         if let Some(session_deadline) = self.session_autosave.deadline() {
             deadline =
