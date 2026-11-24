@@ -13,7 +13,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/fuzz-nightly.yml	377	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-nightly.yml	387	ci	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 .github/workflows/fuzz-soak.yml	113	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -29,7 +29,7 @@ Cargo.toml	78	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	263	docs	F3	opencode-agent	2026-11-24	covered	#2269	regenerated with tools/update_progress.py after rebase
+PROGRESS.md	256	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	regenerated with tools/update_progress.py after rebase
 README.md	190	docs	F3	jp	2026-11-24	covered	#2290	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -115,15 +115,16 @@ crates/browser/src/headless.rs	459	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/i18n.rs	218	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/ipc.rs	478	src	F2	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	IPC transport module from main merge
+crates/browser/src/ipc.rs	485	src	F2	auto-round-03	2026-11-24	covered	M0/M1/F1	IPC transport module from main merge
 crates/browser/src/ipc/cookie_policy.rs	119	src	F2	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	strict per-site cookie policy, RFC6265 5.1.3/5.2.5, PSL eTLD+1
 crates/browser/src/ipc/file_grant.rs	114	src	F2	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
-crates/browser/src/ipc/options.rs	393	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
+crates/browser/src/ipc/options.rs	394	src	F2	auto-round-03	2026-11-24	covered	M0/M1/F1	re-read
 crates/browser/src/ipc/process.rs	252	src	F2	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	re-read
 crates/browser/src/ipc/process_pool.rs	464	src	F2	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	re-read
-crates/browser/src/ipc/regions.rs	437	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/src/ipc/regions.rs	443	src	F2	auto-round-03	2026-11-24	covered	M0/M1/F1	re-read
 crates/browser/src/ipc/session.rs	223	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/tests.rs	429	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/src/ipc/validated.rs	217	src	F2	auto-round-03	2026-11-24	covered	M0/M1/F1	
 crates/browser/src/lib.rs	363	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -178,7 +179,8 @@ crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/browser/tests/file_grant_tests.rs	119	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/ipc_semantic_tests.rs	134	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
-crates/browser/tests/process_e2e_tests.rs	163	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/tests/ipc_validation_tests.rs	165	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
+crates/browser/tests/process_e2e_tests.rs	161	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	re-read
 crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1324,7 +1326,7 @@ docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modula
 docs/FUZZING.md	300	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ISOLATION-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	#2062	ADR-004 phased per-site isolation strategy doc from main
+docs/ISOLATION-STRATEGY.md	51	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	ADR-004 phased per-site isolation strategy doc from main
 docs/JAVASCRIPT-STRATEGY.md	259	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1500,7 +1502,7 @@ docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3	wp-engine	2026-11-24	cov
 docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-rust.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-wikipedia.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-fuzz/Cargo.toml	242	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	three new fuzz bins reviewed
+fuzz/Cargo.toml	266	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	three new fuzz bins reviewed
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/mode2-oversize	0	exempt	-			exempt		not read line by line: exempt
@@ -1610,6 +1612,8 @@ fuzz/corpus/image_decode/palette8.png	0	exempt	-			exempt		not read line by line
 fuzz/corpus/image_decode/photo.webp	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/image_decode/progressive.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/image_decode/rgba8.png	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/seed0	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/seed0	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_eval/arithmetic.js	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_eval/dom-write.js	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_eval/events-timers.js	0	exempt	-			exempt		not read line by line: exempt
@@ -1631,6 +1635,7 @@ fuzz/corpus/layout_resolve/calc-vw	0	exempt	-			exempt		not read line by line: e
 fuzz/corpus/layout_resolve/grid	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/layout_tree/basic	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/layout_tree/with-css	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_file_url/seed0	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/http-date	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/mime-bytes	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/range	0	exempt	-			exempt		not read line by line: exempt
@@ -1691,10 +1696,13 @@ fuzz/fuzz_targets/hpack_decode.rs	74	fuzz	F1	waveF1	2026-11-17	covered	#1421-#14
 fuzz/fuzz_targets/html_parse.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/http_head.rs	12	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/image_decode.rs	62	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/ipc_response.rs	14	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
+fuzz/fuzz_targets/ipc_wire.rs	16	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
 fuzz/fuzz_targets/js_eval.rs	330	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/js_module.rs	100	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/layout_resolve.rs	39	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/layout_tree.rs	24	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/net_file_url.rs	31	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
 fuzz/fuzz_targets/net_surface.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/net_url.rs	44	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -2100,6 +2108,7 @@ tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759
 tools/test_check_milestone.py	32	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	57	tool	F3	dag-merge	2026-11-23	covered	#upstream	re-read
+tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 tools/test_fuzz_targets.py	63	tool	F3	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	target count test reviewed
@@ -2115,7 +2124,7 @@ tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_update_progress.py	82	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	progress generator tests reviewed
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/test_wp_generate.py	358	tool	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+tools/test_wp_generate.py	364	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_plan.py	175	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	43	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wpt_gate.py	153	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	gate tests reviewed
