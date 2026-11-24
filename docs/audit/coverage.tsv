@@ -125,7 +125,7 @@ crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/tests.rs	300	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/main.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/navigation.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/navigation.rs	438	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages.rs	24	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages/html.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages/i18n_tests.rs	25	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -153,7 +153,7 @@ crates/browser/src/window/accessibility.rs	254	src	F2	juanpimg	2026-11-20	covere
 crates/browser/src/window/desktop.rs	335	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	495	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/form_controls.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/form_controls.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/frontend.rs	186	src	F2	juanpimg	2026-11-24	covered	upstream merge	Re-read after main merge
 crates/browser/src/window/input.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/keyboard.rs	440	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -161,7 +161,7 @@ crates/browser/src/window/presentation.rs	298	src	F2	wave-max-mod	2026-11-19	cov
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/tests.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/ui.rs	422	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/worker.rs	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/worker.rs	395	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 crates/browser/src/worker/render.rs	415	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
