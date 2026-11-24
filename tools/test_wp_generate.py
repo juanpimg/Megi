@@ -134,7 +134,7 @@ class GeneratorTests(unittest.TestCase):
         self._generate("site", dry_run=False)
         path = self.root / "docs/work-packages/queue/WP-SITE-wikipedia.toml"
         with path.open("rb") as handle:
-            data = tomllib.load(handle)  # fails today: raw newline inside a TOML string
+            data = tomllib.load(handle)
         self.assertIn("at <main>", validate_wp(data).actual)
 
     def test_duplicate_ids_are_not_written_twice(self) -> None:
