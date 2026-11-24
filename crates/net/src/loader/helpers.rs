@@ -17,6 +17,7 @@ pub(super) fn slice_bytes(bytes: &[u8], range: ByteRange) -> Result<Vec<u8>, Fet
 pub(super) fn resource_from_response(response: Response) -> Resource {
     let content_type = mime::resolve_content_type(&response.headers, &response.body);
     Resource {
+        status: response.status,
         url: response.final_url,
         bytes: response.body,
         content_type,

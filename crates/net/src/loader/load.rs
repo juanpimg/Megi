@@ -14,6 +14,7 @@ impl ResourceLoader {
                 return Err(LoadError::Fetch(FetchError::ResponseTooLarge));
             }
             return Ok(Arc::new(Resource {
+                status: 200,
                 url: url.clone(),
                 bytes: data.bytes,
                 content_type: data.mime_type,
@@ -87,6 +88,7 @@ impl ResourceLoader {
             Scheme::Http | Scheme::Https => {
                 let response = crate::http::fetch_streaming(url, &self.options, on_data)?;
                 Ok(Resource {
+                    status: response.status,
                     url: response.final_url,
                     content_type: response
                         .headers
@@ -103,6 +105,7 @@ impl ResourceLoader {
                     on_data(chunk)?;
                 }
                 Ok(Resource {
+                    status: resource.status,
                     url: resource.url.clone(),
                     content_type: resource.content_type.clone(),
                     bytes: Vec::new(),

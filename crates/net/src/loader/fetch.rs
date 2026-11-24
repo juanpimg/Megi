@@ -34,6 +34,7 @@ impl ResourceLoader {
                 let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 Ok((
                     Resource {
+                        status: 200,
                         url: url.clone(),
                         content_type: mime::sniff(&bytes).mime_type().to_owned(),
                         bytes,
@@ -47,6 +48,7 @@ impl ResourceLoader {
                 let data = decode_data_url(url)?;
                 Ok((
                     Resource {
+                        status: 200,
                         url: url.clone(),
                         bytes: data.bytes,
                         content_type: data.mime_type,
@@ -287,6 +289,7 @@ impl ResourceLoader {
                     return Err(FetchError::UnconditionalNotModified.into());
                 }
                 Ok(Resource {
+                    status: response.status,
                     url: response.final_url,
                     content_type: mime::resolve_content_type(&response.headers, &response.body),
                     bytes: response.body,
@@ -296,6 +299,7 @@ impl ResourceLoader {
                 let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
                 let slice = slice_bytes(&bytes, range)?;
                 Ok(Resource {
+                    status: 200,
                     url: url.clone(),
                     content_type: mime::sniff(&slice).mime_type().to_owned(),
                     bytes: slice,
@@ -305,6 +309,7 @@ impl ResourceLoader {
                 let data = decode_data_url(url)?;
                 let slice = slice_bytes(&data.bytes, range)?;
                 Ok(Resource {
+                    status: 200,
                     url: url.clone(),
                     content_type: data.mime_type,
                     bytes: slice,
