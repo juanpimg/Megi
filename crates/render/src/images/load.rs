@@ -174,6 +174,7 @@ pub fn load_images_with_context(
                 | megi_image::ImageFormat::Jpeg
                 | megi_image::ImageFormat::Gif
                 | megi_image::ImageFormat::WebP
+                | megi_image::ImageFormat::Avif
         ) {
             let decoded = match limits.max_image_dim {
                 Some(max_dim) => megi_image::decode_scaled(&resource.bytes, max_dim),
@@ -255,7 +256,7 @@ pub fn load_images_with_context(
             let format = megi_image::detect_format(&resource.bytes);
             result.failed += 1;
             result.warnings.push(format!(
-                "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP-lossless and SVG are decoded)"
+                "skipping image {url}: unsupported format {format:?} (PNG, JPEG, GIF, WebP, AVIF and SVG are decoded)"
             ));
         }
     }

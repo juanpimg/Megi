@@ -404,3 +404,33 @@ fn image_byte_budget_counts_every_skipped_image() {
         output.stats.warnings
     );
 }
+
+#[test]
+fn avif_image_is_loaded_and_painted() {
+    // #1895: a real AVIF `<img>` must decode and paint instead of being discarded as
+    // `ImageFormat::Unknown` (the old behavior on ecosia.org).
+    let avif = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/image/tests/fixtures/lossless-sub8x8-palette.avif"),
+    )
+    .expect("avif fixture");
+    let page = "<!doctype html><html><body style=\"margin:0\">\
+                <img src=\"/photo.avif\" style=\"width:80px;height:80px\"></body></html>";
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/page.html".to_string(),
+        Response::ok("text/html", page.as_bytes().to_vec()),
+    );
+    routes.insert("/photo.avif".to_string(), Response::ok("image/avif", avif));
+    let server = TestServer::spawn(routes, 2);
+
+    let output = render_url(&server.url("/page.html"), &options()).expect("avif render");
+    assert_eq!(output.stats.images_loaded, 1, "AVIF must count as loaded");
+    assert_eq!(output.stats.images_failed, 0, "AVIF must not be skipped");
+    assert!(output.stats.image_bytes > 0, "AVIF bytes must be accounted");
+    let white = count_color(&output.pixmap, megi_css::Color::new(255, 255, 255, 255));
+    assert!(
+        white < 800 * 600,
+        "the AVIF must change pixels (white count {white})"
+    );
+}

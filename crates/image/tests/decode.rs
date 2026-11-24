@@ -336,3 +336,24 @@ fn all_generated_fixtures_are_detected_as_png() {
         assert_eq!(detect_format(png), ImageFormat::Png);
     }
 }
+
+#[test]
+fn avif_fixture_decodes_to_rgba() {
+    // #1895: a real AVIF file (MIT-licensed fixture from avif-rust) must decode to RGBA8.
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/lossless-sub8x8-palette.avif"
+    ))
+    .expect("avif fixture");
+    assert_eq!(
+        megi_image::detect_format(&bytes),
+        megi_image::ImageFormat::Avif
+    );
+    let image = megi_image::decode_avif(&bytes, &megi_image::PngLimits::default())
+        .expect("decode avif fixture");
+    assert!(image.width > 0 && image.height > 0);
+    assert_eq!(
+        image.data.len(),
+        image.width as usize * image.height as usize * 4
+    );
+}

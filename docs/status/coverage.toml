@@ -584,10 +584,9 @@ id = "X-AVIF"
 area = "X"
 name = "Decodificación de imágenes AVIF"
 source = "issue #1895"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/tests/images_tests.rs::avif_image_is_loaded_and_painted"
 issue = 1895
-reason = "ImageFormat enum (crates/image/src/lib.rs:125-136) only knows Png/Gif/Jpeg/WebP/Unknown; detect_format has no AVIF/HEIF signature. Real sites (ecosia.org) fail to render AVIF images."
 
 [[capability]]
 id = "X-PERF-REALSITES"

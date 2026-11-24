@@ -447,10 +447,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "avif-image-buffer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f064a888d7b2d2d78426fe473647c14281494f8994d1e4240d83cff37e5eafc"
+
+[[package]]
+name = "avif-rust"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3daa8cfa663a0fc9d75375b069fdf42bddc9965e367515d070f124bbc33828a4"
+dependencies = [
+ "avif-image-buffer",
+ "bin-rs",
+]
+
+[[package]]
 name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
+name = "bin-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76470098509d8c31d514e231dfd885a2477a8f6a0e500ec30e0b54f125d0ea49"
 
 [[package]]
 name = "bit-set"
@@ -1802,6 +1824,9 @@ dependencies = [
 [[package]]
 name = "megi-image"
 version = "0.1.0"
+dependencies = [
+ "avif-rust",
+]
 
 [[package]]
 name = "megi-js"
