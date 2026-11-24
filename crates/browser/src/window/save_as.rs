@@ -208,7 +208,13 @@ impl WindowApp {
             if let Ok(id) = self.download_manager.enqueue(&item.url, item.kind, None)
                 && self.download_manager.start(id).is_ok()
             {
-                let mut loader = megi_webview::net::ResourceLoader::new();
+                // #1829: reuse the session's cookies/Origin when saving page resources;
+                // a bare loader re-fetches anonymously and stores the login page.
+                let document_url = self.nav.current().cloned();
+                let mut loader = crate::images::loader_for_session_save(
+                    &self.render_options,
+                    document_url.as_ref(),
+                );
                 let outcome = loader
                     .load(&url)
                     .map_err(|error| error.to_string())

@@ -207,7 +207,11 @@ impl WindowApp {
 
     /// Fetches an image resource on demand and saves it as a download.
     pub(super) fn save_image_resource(&mut self, url: &megi_webview::net::Url) {
-        let mut loader = megi_webview::net::ResourceLoader::new();
+        // #1829: reuse the session's cookies/Origin so authenticated images are saved
+        // instead of the anonymous login page, and avoid a cold HTTP session.
+        let document_url = self.nav.current().cloned();
+        let mut loader =
+            crate::images::loader_for_session_save(&self.render_options, document_url.as_ref());
         match loader.load(url) {
             Ok(resource) => {
                 let dir = crate::download::resolve_download_dir(self.download_dir.as_deref());
