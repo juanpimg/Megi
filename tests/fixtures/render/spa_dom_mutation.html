@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>#2269 minimal SPA hydration fixture</title>
+<style>
+  html, body { margin: 0; padding: 0; background-color: #ffffff; }
+  #card { padding: 4px; font-size: 16px; }
+</style>
+</head>
+<body>
+<script>
+// WHATWG HTML §13.2.6: a classic script mutates the DOM after parsing its
+// insertion point. At the end of <body> the body element already exists.
+// With scripting disabled the body stays empty and body_text must be empty.
+var card = document.createElement("div");
+card.id = "card";
+card.textContent = "hydrated" + " card";
+document.body.appendChild(card);
+</script>
+</body>
+</html>

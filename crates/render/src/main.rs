@@ -13,6 +13,8 @@ use std::process::ExitCode;
 
 use megi_render::{RenderOptions, ScriptingLimits, ScriptingMode, Viewport, render_url};
 
+mod dom_summary;
+
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
 
@@ -280,10 +282,12 @@ fn metadata_json(input: &str, output: &megi_render::RenderOutput, args: &Args) -
     let stats = &output.stats;
     let timings = &stats.timings;
     let warnings: Vec<String> = stats.warnings.iter().map(|w| json_string(w)).collect();
+    let (element_count, body_text) = dom_summary::dom_summary(&output.document);
     format!(
         concat!(
             "{{\"input\":{},\"output\":{},\"width\":{},\"height\":{},",
             "\"document_url\":{},\"status\":{},\"charset\":{},",
+            "\"element_count\":{},\"body_text\":{},",
             "\"document_bytes\":{},\"png_bytes\":{},\"display_items\":{},\"hit_regions\":{},",
             "\"cookies_stored\":{},\"content_encoding\":{},\"referrer_policy\":{},",
             "\"images_loaded\":{},\"images_failed\":{},\"images_capped\":{},\"image_bytes\":{},\"svgs_rendered\":{},\"inline_svgs\":{},\"inline_svgs_capped\":{},",
@@ -308,6 +312,8 @@ fn metadata_json(input: &str, output: &megi_render::RenderOutput, args: &Args) -
             .status
             .map_or_else(|| "null".to_string(), |status| status.to_string()),
         json_string(&stats.charset),
+        element_count,
+        json_string(&body_text),
         stats.document_bytes,
         output.png.len(),
         stats.display_items,
