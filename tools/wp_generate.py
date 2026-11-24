@@ -19,7 +19,9 @@ from tools.wp_schema import WorkPackage, validate_wp  # noqa: E402
 
 SOURCES = ("wpt", "js262", "site", "fuzz", "audit", "depth", "user")
 QUEUE = Path("docs/work-packages/queue")
-USER_LABELS = {"crash", "broken_site"}
+USER_LABELS = {"crash", "broken_site", "broken-site"}
+# Spec §4.3 calls Test262 packages WP-JS-<key>; other sources use their own name.
+ID_PREFIXES = {"js262": "JS"}
 
 
 def slug(value: str) -> str:
@@ -27,18 +29,12 @@ def slug(value: str) -> str:
     return (text or "item")[:60].rstrip("-")
 
 
-def _artifact(root: Path, relative: str):
-    path = root / relative
-    if not path.is_file():
-        return None
-    return path
-
-
 def _wp(source: str, key: str, *, file: str, expected: str, actual: str,
         spec: str, acceptance: str, verify_cmd: str, metric: str,
         milestone: str, impact: int = 1, frequency: int = 1) -> WorkPackage:
+    prefix = ID_PREFIXES.get(source, source.upper())
     return validate_wp({
-        "id": f"WP-{source.upper()}-{slug(key)}",
+        "id": f"WP-{prefix}-{slug(key)}",
         "source": source,
         "file": file,
         "expected": expected,
@@ -53,22 +49,74 @@ def _wp(source: str, key: str, *, file: str, expected: str, actual: str,
     })
 
 
-def _json(root: Path, relative: str):
+def _artifact(root: Path, relative: str):
+    path = root / relative
+    if not path.is_file():
+        return None
+    return path
+
+
+def _note(issues: list[str] | None, message: str) -> None:
+    if issues is not None:
+        issues.append(message)
+
+
+def _json(root: Path, relative: str, issues: list[str] | None = None):
+    """Read JSON, reporting malformed artifacts instead of raising."""
     path = _artifact(root, relative)
-    return json.loads(path.read_text(encoding="utf-8")) if path else None
+    if path is None:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        _note(issues, f"{relative}: {exc}")
+        return None
 
 
-def generate_wpt(root: Path) -> list[WorkPackage]:
-    data = _json(root, "tests/wpt/results/latest.json")
-    if not data:
+def _entries(data, key: str | None, relative: str,
+             issues: list[str] | None = None) -> list[dict]:
+    """Return only dict entries from a JSON list, whatever the artifact shape."""
+    if data is None:  # no artifact at all is not an error
         return []
+    if isinstance(data, dict):
+        values = data.get(key, [])
+    elif key is None and isinstance(data, list):
+        values = data
+    else:
+        _note(issues, f"{relative}: expected a JSON object containing '{key}'")
+        return []
+    if not isinstance(values, list):
+        _note(issues, f"{relative}: '{key}' must be a list of objects")
+        return []
+    return [item for item in values if isinstance(item, dict)]
+
+
+def _text(value) -> str:
+    if isinstance(value, (list, tuple)):
+        return "; ".join(str(item)[:200] for item in value)
+    return str(value) if value is not None else ""
+
+
+def _safe_wp(issues: list[str] | None, **fields) -> WorkPackage | None:
+    """Skip an entry that cannot satisfy the schema; never abort the source."""
+    try:
+        return _wp(**fields)
+    except (ValueError, TypeError, AttributeError) as exc:
+        _note(issues, f"invalid entry skipped: {exc}")
+        return None
+
+
+def generate_wpt(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
+    relative = "tests/wpt/results/latest.json"
+    data = _json(root, relative, issues)
     verify = "cargo run --release -p megi-test-harness -- --summary"
     out = []
-    for failure in data.get("failures", []):
+    for failure in _entries(data, "failures", relative, issues):
         test = str(failure.get("test", "unknown"))
         subtest = str(failure.get("subtest", ""))
-        out.append(_wp(
-            "wpt", f"{test}-{subtest}",
+        wp = _safe_wp(
+            issues,
+            source="wpt", key=f"{test}-{subtest}",
             file=str(failure.get("file", f"tests/wpt/{test}")),
             expected=str(failure.get("expected", "PASS")),
             actual=str(failure.get("actual", "FAIL")),
@@ -77,19 +125,22 @@ def generate_wpt(root: Path) -> list[WorkPackage]:
             verify_cmd=verify, metric="wpt_passed",
             milestone=str(failure.get("milestone", "M0")),
             impact=5, frequency=4,
-        ))
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
-def generate_js262(root: Path) -> list[WorkPackage]:
-    data = _json(root, "tests/test262/results/latest.json")
-    if not data:
-        return []
+def generate_js262(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
+    relative = "tests/test262/results/latest.json"
+    data = _json(root, relative, issues)
     out = []
-    for failure in data.get("failures", []):
+    for failure in _entries(data, "failures", relative, issues):
         test = str(failure.get("test", "unknown"))
-        out.append(_wp(
-            "js262", test, file=str(failure.get("file", f"tests/test262/{test}")),
+        wp = _safe_wp(
+            issues,
+            source="js262", key=test,
+            file=str(failure.get("file", f"tests/test262/{test}")),
             expected=str(failure.get("expected", "PASS")),
             actual=str(failure.get("actual", "FAIL")),
             spec="spec v2 §2 — Test262 allowlist = 0",
@@ -97,48 +148,54 @@ def generate_js262(root: Path) -> list[WorkPackage]:
             verify_cmd="cargo test -p megi-js", metric="js262_passed",
             milestone=str(failure.get("milestone", "M8")),
             impact=4, frequency=3,
-        ))
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
-def generate_site(root: Path) -> list[WorkPackage]:
-    data = _json(root, "docs/status/real-sites.json")
-    if not data:
-        return []
+def generate_site(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
+    relative = "docs/status/real-sites.json"
+    data = _json(root, relative, issues)
     out = []
-    for site in data.get("results", []):
+    for site in _entries(data, "results", relative, issues):
         if str(site.get("result", "")).upper() == "PASS":
             continue
-        warnings = site.get("warnings") or []
         sid = str(site.get("id", "unknown"))
-        out.append(_wp(
-            "site", sid,
+        actual = _text(site.get("warnings")) or str(site.get("result", "DEGRADADO"))
+        wp = _safe_wp(
+            issues,
+            source="site", key=sid,
             file=f"tests/fixtures/real-sites/{sid}.html",
             expected="PASS sin warnings degradantes",
-            actual="; ".join(str(w)[:200] for w in warnings) or str(site.get("result", "DEGRADADO")),
+            actual=actual,
             spec="spec v2 §2 — 100/100 sitios PASS, sin console_errors",
             acceptance=f"{site.get('name', sid)} sin errores de consola y < 2,5 s",
             verify_cmd=f"cargo run --release -p megi-render -- tests/fixtures/real-sites/{sid}.html --json",
             metric="sites_passed",
             milestone=str(site.get("milestone", "M9")),
             impact=5, frequency=5,
-        ))
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
-def generate_fuzz(root: Path) -> list[WorkPackage]:
+def generate_fuzz(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
     folder = root / "fuzz/artifacts"
     if not folder.is_dir():
         return []
     out = []
     for path in sorted(folder.glob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        for crash in data.get("crashes", []):
+        relative = f"fuzz/artifacts/{path.name}"
+        data = _json(root, relative, issues)
+        for crash in _entries(data, "crashes", relative, issues):
             target = str(crash.get("target", "unknown"))
             cid = str(crash.get("id", path.stem))
-            out.append(_wp(
-                "fuzz", f"{target}-{cid}",
-                file=str(crash.get("file", f"fuzz/artifacts/{path.name}")),
+            wp = _safe_wp(
+                issues,
+                source="fuzz", key=f"{target}-{cid}",
+                file=str(crash.get("file", relative)),
                 expected="sin crashes en campaña de 1 M ejecuciones",
                 actual=str(crash.get("note", "crash report artifact")),
                 spec="spec v2 §2 — 0 crashes en fuzz",
@@ -146,11 +203,13 @@ def generate_fuzz(root: Path) -> list[WorkPackage]:
                 verify_cmd="cargo fuzz run", metric="fuzz_crashes",
                 milestone=str(crash.get("milestone", "M3")),
                 impact=5, frequency=2,
-            ))
+            )
+            if wp is not None:
+                out.append(wp)
     return out
 
 
-def generate_audit(root: Path) -> list[WorkPackage]:
+def generate_audit(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
     path = _artifact(root, "docs/audit/coverage.tsv")
     if not path:
         return []
@@ -167,70 +226,92 @@ def generate_audit(root: Path) -> list[WorkPackage]:
         if len(cols) <= status_i or cols[status_i] != "pending":
             continue
         file = cols[0]
-        out.append(_wp(
-            "audit", file, file=file,
+        wp = _safe_wp(
+            issues,
+            source="audit", key=file, file=file,
             expected="fila revisada y marcada covered",
             actual="pending en el ledger de auditoría",
             spec="spec v2 §5 — cada archivo leído antes de marcarlo cubierto",
             acceptance=f"leer {file} y registrar evidencia",
             verify_cmd="python3 tools/audit_coverage.py --check --strict",
             metric="audit_pending", milestone="M0", impact=2, frequency=2,
-        ))
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
-def generate_depth(root: Path) -> list[WorkPackage]:
-    path = _artifact(root, "docs/work-packages/depth-inventory.toml")
+def generate_depth(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
+    relative = "docs/work-packages/depth-inventory.toml"
+    path = _artifact(root, relative)
     if not path:
         return []
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        _note(issues, f"{relative}: {exc}")
+        return []
     out = []
-    for entry in data.get("entry", []):
-        verify = str(entry["verify_cmd"])
-        out.append(_wp(
-            "depth", str(entry["id"]), file=str(entry.get("file", "docs/status/progress.toml")),
+    for entry in _entries(data, "entry", relative, issues):
+        wp = _safe_wp(
+            issues,
+            source="depth", key=str(entry.get("id", "unknown")),
+            file=str(entry.get("file", "docs/status/progress.toml")),
             expected=str(entry.get("expected", "criterio verificado")),
             actual=str(entry.get("gap", "criterio pendiente")),
             spec=str(entry.get("spec", "spec v2 §4.1")),
             acceptance=str(entry.get("acceptance", "criterio cerrado con evidencia")),
-            verify_cmd=verify, metric="depth_closed",
+            verify_cmd=str(entry.get("verify_cmd", "")),
+            metric="depth_closed",
             milestone=str(entry.get("milestone", "M0")),
-            impact=int(entry.get("impact", 1)), frequency=int(entry.get("frequency", 1)),
-        ))
+            impact=entry.get("impact", 1), frequency=entry.get("frequency", 1),
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
-def generate_user(root: Path) -> list[WorkPackage]:
-    path = _artifact(root, "docs/work-packages/user-reports.json")
-    if path:
-        reports = json.loads(path.read_text(encoding="utf-8"))
+def generate_user(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
+    relative = "docs/work-packages/user-reports.json"
+    data = None
+    if _artifact(root, relative) is not None:
+        data = _json(root, relative, issues)
     else:
         try:
             result = subprocess.run(
                 ["gh", "issue", "list", "--state", "open", "--json", "number,title,body,labels"],
                 capture_output=True, text=True, timeout=30, check=False,
             )
-            reports = json.loads(result.stdout) if result.returncode == 0 else []
-        except (OSError, ValueError, subprocess.SubprocessError):
-            reports = []
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+            else:
+                _note(issues, f"gh issue list exited with {result.returncode}")
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            _note(issues, f"gh issue list: {exc}")
     out = []
-    for report in reports:
+    for report in _entries(data, None, "github issues", issues):
+        labels_value = report.get("labels") or []
+        if not isinstance(labels_value, (list, tuple, set, dict)):
+            labels_value = [labels_value]
         labels = {
             str(label.get("name", "")).lower() if isinstance(label, dict) else str(label).lower()
-            for label in report.get("labels", [])
+            for label in labels_value
         }
         if not labels & USER_LABELS:
             continue
-        number = str(report["number"])
-        out.append(_wp(
-            "user", number, file=f"docs/work-packages/user-reports.json",
+        wp = _safe_wp(
+            issues,
+            source="user", key=str(report.get("number", "unknown")),
+            file=relative,
             expected="reproducido y corregido, con issue cerrada",
             actual=str(report.get("body", "informe de usuario sin verificar")),
             spec="spec v2 §4.3 — WP-USER de errores de usuario",
             acceptance=str(report.get("title", "repro y arreglo con test")),
             verify_cmd="python3 tools/real_site_check.py",
             metric="user_issues", milestone="M9", impact=3, frequency=3,
-        ))
+        )
+        if wp is not None:
+            out.append(wp)
     return out
 
 
@@ -242,10 +323,24 @@ GENERATORS = {
 
 
 def generate(source: str, dry_run: bool = True, root: Path | None = None) -> list[WorkPackage]:
+    return _run_source(source, dry_run=dry_run, root=root)
+
+
+def _run_source(source: str, dry_run: bool, root: Path | None,
+                errors: list[str] | None = None) -> list[WorkPackage]:
     if source not in SOURCES:
         raise ValueError(f"unknown WP source: {source}")
     root = root or Path(__file__).resolve().parent.parent
-    wps = GENERATORS[source](root)
+    source_errors: list[str] = []
+    try:
+        wps = GENERATORS[source](root, source_errors)
+    except Exception as exc:  # a malformed artifact must never abort a source
+        source_errors.append(f"unexpected generator failure: {exc}")
+        wps = []
+    sink = errors if errors is not None else []
+    for message in source_errors:
+        sink.append(f"{source}: {message}")
+        print(f"{source}: ERROR {message}")
     if not dry_run:
         queue = root / QUEUE
         queue.mkdir(parents=True, exist_ok=True)
@@ -268,16 +363,19 @@ def generate_all(root: Path, dry_run: bool = True) -> tuple[list[WorkPackage], l
     """Run all seven sources; one broken artifact must not stop the others."""
     wps: list[WorkPackage] = []
     errors: list[str] = []
+    seen: set[str] = set()
     for source in SOURCES:
-        try:
-            produced = generate(source, dry_run=dry_run, root=root)
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            errors.append(f"{source}: {exc}")
-            print(f"{source}: ERROR {exc}")
-            continue
-        wps.extend(produced)
-        print(f"{source}: {len(produced)} work packages")
+        produced = _run_source(source, dry_run=dry_run, root=root, errors=errors)
+        unique = []
         for wp in produced:
+            if wp.id in seen:
+                print(f"  duplicate {wp.id} skipped")
+                continue
+            seen.add(wp.id)
+            unique.append(wp)
+        wps.extend(unique)
+        print(f"{source}: {len(unique)} work packages")
+        for wp in unique:
             print(f"  {wp.id} [{wp.profile}] P{wp.priority} → {wp.metric}")
     return wps, errors
 
