@@ -96,6 +96,21 @@ class GeneratorTests(unittest.TestCase):
         self._write_wpt_report([self._wpt_result(status="PASS")])
         self.assertEqual(self._generate("wpt"), [])
 
+    def test_wpt_report_without_subtest_is_reported_as_invalid_not_generator_failure(self) -> None:
+        """A forged key with a missing subtest must surface as an invalid report."""
+        result = self._wpt_result(status="FAIL")
+        result["test"] = ""
+        del result["subtest"]
+        result["key"] = hashlib.sha256(b"\0").hexdigest()
+        self._write_wpt_report([result])
+        self.assertEqual(self._generate("wpt"), [])
+        with contextlib.redirect_stdout(io.StringIO()):
+            _, errors = wp_generate.generate_all(self.root, dry_run=True)
+        wpt_errors = [error for error in errors if error.startswith("wpt:")]
+        self.assertTrue(wpt_errors, errors)
+        self.assertIn("invalid report", wpt_errors[0])
+        self.assertNotIn("unexpected generator failure", wpt_errors[0])
+
     def test_wpt_no_artifact_yields_no_wp(self) -> None:
         self.assertEqual(self._generate("wpt"), [])
 

@@ -66,6 +66,9 @@ def load_report(path: Path) -> dict:
     for index, result in enumerate(results):
         if not isinstance(result, dict):
             raise ValueError(f"{path}: results[{index}] must be an object")
+        for field in ("test", "subtest"):
+            if not isinstance(result.get(field), str):
+                raise ValueError(f"{path}: results[{index}] needs string {field}")
         status = result.get("status")
         if status not in STATUS_RANK:
             raise ValueError(f"{path}: results[{index}] has unknown status {status!r}")

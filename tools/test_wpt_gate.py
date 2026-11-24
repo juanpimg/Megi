@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -119,6 +120,21 @@ class WptGateTest(unittest.TestCase):
         current = report({})
         self.assertIn("passed", wpt_gate.check_gate(current, baseline(passed=3), []) or "")
         self.assertIn("total", wpt_gate.check_gate(current, baseline(total=3), []) or "")
+
+    def test_report_without_string_subtest_is_rejected(self) -> None:
+        """A forged key must not hide a missing/non-string subtest field."""
+        current = report({})
+        current["results"][0]["test"] = ""
+        del current["results"][0]["subtest"]
+        current["results"][0]["key"] = key("", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wpt.json"
+            path.write_text(json.dumps(current), encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                wpt_gate.load_report(path)
+        message = str(caught.exception)
+        self.assertIn("results[0]", message)
+        self.assertIn("subtest", message)
 
     def test_rebaseline_writes_toml_that_gate_accepts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
