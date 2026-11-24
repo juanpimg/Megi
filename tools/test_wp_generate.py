@@ -343,7 +343,13 @@ class GeneratorTests(unittest.TestCase):
             {"test": "html/a.html", "subtest": "x"},
             {"test": "html/b.html", "subtest": "y"},
         ]}))
-        with contextlib.redirect_stdout(io.StringIO()):
+        # CI-DOCS-TOOLS-GH: WPT ID dedup only; stub the unrelated GitHub lookup.
+        with contextlib.redirect_stdout(io.StringIO()), mock.patch(
+            "tools.wp_generate.subprocess.run"
+        ) as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=["gh", "issue", "list"], returncode=0, stdout="[]", stderr=""
+            )
             wps, errors = wp_generate.generate_all(self.root, dry_run=True)
         self.assertEqual(errors, [])
         self.assertEqual([wp.id for wp in wps],
