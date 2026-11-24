@@ -1284,18 +1284,19 @@ crates/svg/tests/style_inheritance.rs	160	test	F1	wave-max-mod	2026-11-19	covere
 crates/svg/tests/textpath_smil.rs	231	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/tests/textpath_use.rs	186	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/Cargo.toml	24	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/css_harness.rs	447	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/src/css_harness.rs	452	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
+crates/test_harness/src/css_harness/expanded.rs	105	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 crates/test_harness/src/js_executor.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/lib.rs	389	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/main.rs	42	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/run.rs	490	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/src/lib.rs	390	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
+crates/test_harness/src/main.rs	43	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
+crates/test_harness/src/run.rs	491	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/serializer_harness/mod.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/common.rs	43	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/tests/closed_loop/css_serializer.rs	125	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/tests/closed_loop/css_serializer.rs	136	test	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/tests/closed_loop/fixtures.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/main.rs	25	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tokenizer.rs	190	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2042,13 +2043,15 @@ tests/html5lib-tests/tree-construction/tricky01.dat	0	vendored	-			exempt		not r
 tests/html5lib-tests/tree-construction/void-in-phrasing.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit01.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not read line by line: vendored
-tests/wpt/MANIFEST.json	42	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
-tests/wpt/NOTICE.md	13	docs	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/MANIFEST.json	62	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/NOTICE.md	14	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/WPT-REVISION.json	6	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/allowlist.toml	2	manifest	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
-tests/wpt/baseline.json	9	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
-tests/wpt/css/css-syntax/README.md	62	docs	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/baseline.json	9	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/css/css-syntax/META.yml	5	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
+tests/wpt/css/css-syntax/README.md	74	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/anb-parsing.html	125	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tools/audit_coverage.py	406	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
@@ -2085,20 +2088,20 @@ tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0
 tools/test_soak_fuzz.py	139	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_update_progress.py	82	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	progress generator tests reviewed
-tools/test_vendor_wpt.py	111	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	vendor tests reviewed
+tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	203	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_plan.py	131	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	43	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-tools/test_wpt_gate.py	144	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	gate tests reviewed
+tools/test_wpt_gate.py	153	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	gate tests reviewed
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	924	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	299	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	offline vendor checker reviewed
+tools/vendor_wpt.py	320	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	308	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wp_plan.py	186	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wp_schema.py	58	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wpt_gate.py	214	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	monotonic P/T gate reviewed
-tools/wpt_report.py	205	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	report generator reviewed
+tools/wpt_report.py	206	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	report generator reviewed
