@@ -177,6 +177,7 @@ mod unit_tests {
         let viewport = 800u32;
         // A restored session carries the saved offset; `new` starts at 0 and only
         // clamps downward, so the saved offset is applied with `scroll_to`.
+
         let mut session = ScrollState::new(restored_offset + 1, 1);
         session.scroll_to(restored_offset);
         assert_eq!(session.offset(), restored_offset);
