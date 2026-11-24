@@ -8,6 +8,7 @@ use super::*;
 use crate::site::SiteKey;
 use std::collections::VecDeque;
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::Instant;
 
 /// Max simultaneous renderer processes (mirrors the thread pool cap).
 pub const MAX_PROCESS_RENDERERS: usize = 8;
@@ -58,6 +59,15 @@ impl SlotBackend {
         }
     }
 
+    /// Kills the whole renderer process group when the watchdog expires (T5).
+    fn kill_group(&mut self) {
+        match self {
+            Self::Process(renderer) => renderer.kill_group(),
+            #[cfg(test)]
+            Self::Mock { alive } => *alive = false,
+        }
+    }
+
     fn id(&self) -> u32 {
         match self {
             Self::Process(renderer) => renderer.id(),
@@ -72,6 +82,8 @@ struct Slot {
     backend: SlotBackend,
     responses: Receiver<Result<IpcRenderResponse, IpcError>>,
     pending: VecDeque<u64>,
+    /// Send time for each `pending` generation, in the same order (T5 watchdog).
+    sent_at: VecDeque<(u64, Instant)>,
     last_used: u64,
 }
 
@@ -79,8 +91,10 @@ impl Slot {
     fn take_pending(&mut self, generation: u64) {
         if self.pending.front() == Some(&generation) {
             self.pending.pop_front();
+            self.sent_at.pop_front();
         } else if let Some(pos) = self.pending.iter().position(|&g| g == generation) {
             self.pending.remove(pos);
+            self.sent_at.remove(pos);
         }
     }
 
@@ -93,19 +107,23 @@ impl Slot {
                 }
                 Ok(Err(error)) if error.is_fatal() => {
                     let first_gen = self.pending.pop_front();
+                    self.sent_at.pop_front();
                     out.push((first_gen, Err(error.clone())));
                     while let Some(generation) = self.pending.pop_front() {
+                        self.sent_at.pop_front();
                         out.push((Some(generation), Err(error.clone())));
                     }
                     return true;
                 }
                 Ok(Err(error)) => {
                     let generation = self.pending.pop_front();
+                    self.sent_at.pop_front();
                     out.push((generation, Err(error)));
                 }
                 Err(TryRecvError::Empty) => return false,
                 Err(TryRecvError::Disconnected) => {
                     while let Some(generation) = self.pending.pop_front() {
+                        self.sent_at.pop_front();
                         out.push((
                             Some(generation),
                             Err(IpcError::Io("renderer died".to_owned())),
@@ -128,6 +146,8 @@ pub struct ProcessRenderPool {
     retired_events: Vec<TaggedResponse>,
     /// Explicit renderer executable (integration tests); `None` uses `current_exe()`.
     executable: Option<std::path::PathBuf>,
+    /// Explicit renderer argv; defaults to `--megi-ipc-worker`.
+    args: Vec<String>,
 }
 
 impl ProcessRenderPool {
@@ -137,6 +157,15 @@ impl ProcessRenderPool {
 
     /// Pool whose renderers are spawned from `executable` (real-binary E2E tests).
     pub fn with_executable(max: usize, executable: Option<std::path::PathBuf>) -> Self {
+        Self::with_executable_and_args(max, executable, vec!["--megi-ipc-worker".to_owned()])
+    }
+
+    /// Like [`Self::with_executable`] with explicit argv (real non-responding children).
+    pub fn with_executable_and_args(
+        max: usize,
+        executable: Option<std::path::PathBuf>,
+        args: Vec<String>,
+    ) -> Self {
         Self {
             slots: Vec::new(),
             max: max.clamp(1, MAX_PROCESS_RENDERERS),
@@ -145,12 +174,14 @@ impl ProcessRenderPool {
             recoveries: 0,
             retired_events: Vec::new(),
             executable,
+            args,
         }
     }
 
     fn retire_slot(&mut self, mut slot: Slot, reason: &str) {
         let _ = slot.drain_into(&mut self.retired_events);
         while let Some(generation) = slot.pending.pop_front() {
+            let _ = slot.sent_at.pop_front();
             self.retired_events
                 .push((Some(generation), Err(IpcError::Io(reason.to_owned()))));
         }
@@ -170,6 +201,7 @@ impl ProcessRenderPool {
             backend: SlotBackend::Mock { alive },
             responses,
             pending: VecDeque::new(),
+            sent_at: VecDeque::new(),
             last_used: self.clock,
         });
     }
@@ -184,7 +216,7 @@ impl ProcessRenderPool {
         IpcError,
     > {
         match &self.executable {
-            Some(path) => ProcessRenderer::spawn_with_reader_from(path),
+            Some(path) => ProcessRenderer::spawn_with_reader_from_args(path, &self.args),
             None => ProcessRenderer::spawn_with_reader(),
         }
     }
@@ -211,6 +243,7 @@ impl ProcessRenderPool {
                     backend: SlotBackend::Process(renderer),
                     responses,
                     pending: VecDeque::new(),
+                    sent_at: VecDeque::new(),
                     last_used: self.clock,
                 });
                 self.slots.len() - 1
@@ -231,6 +264,7 @@ impl ProcessRenderPool {
                         backend: SlotBackend::Process(renderer),
                         responses,
                         pending: VecDeque::new(),
+                        sent_at: VecDeque::new(),
                         last_used: self.clock,
                     },
                 );
@@ -242,12 +276,37 @@ impl ProcessRenderPool {
         self.slots[index].last_used = self.clock;
         self.slots[index].backend.write_request(&request)?;
         self.slots[index].pending.push_back(request.generation);
+        self.slots[index]
+            .sent_at
+            .push_back((request.generation, Instant::now()));
         Ok(())
     }
 
     /// Drains all available responses and terminal failure notifications tagged with their
     /// in-flight request `generation` without blocking (#2191).
     pub fn drain_tagged(&mut self) -> Vec<TaggedResponse> {
+        // T5 watchdog: a request older than the deadline kills its renderer's whole
+        // process group and fails every in-flight generation before normal draining.
+        let now = Instant::now();
+        let mut timed_out = Vec::new();
+        for (index, slot) in self.slots.iter().enumerate() {
+            if let Some((_, sent)) = slot.sent_at.front()
+                && now.duration_since(*sent) >= RENDER_WATCHDOG_TIMEOUT
+            {
+                timed_out.push((index, slot.pending.iter().copied().collect::<Vec<u64>>()));
+            }
+        }
+        for (index, generations) in timed_out.into_iter().rev() {
+            let mut slot = self.slots.remove(index);
+            slot.backend.kill_group();
+            for generation in generations {
+                self.retired_events
+                    .push((Some(generation), Err(IpcError::Watchdog(generation))));
+            }
+            drop(slot);
+            self.recoveries = self.recoveries.saturating_add(1);
+        }
+
         let mut out = std::mem::take(&mut self.retired_events);
         let mut dead = Vec::new();
         for (index, slot) in self.slots.iter_mut().enumerate() {

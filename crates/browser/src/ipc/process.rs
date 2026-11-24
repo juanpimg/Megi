@@ -1,6 +1,57 @@
 //! Renderer-process lifecycle and framed I/O (ADR-004).
 
 use super::*;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static SCRATCH_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Creates a private scratch directory used as renderer cwd and grant root.
+pub fn renderer_scratch_dir() -> Result<PathBuf, IpcError> {
+    let path = std::env::temp_dir().join(format!(
+        "megi-ipc-{}-{}",
+        std::process::id(),
+        SCRATCH_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&path).map_err(|error| IpcError::Io(error.to_string()))?;
+    Ok(path)
+}
+
+/// Builds a renderer command with a scrubbed environment and its own process group.
+///
+/// Plan §Task 3 (T9): only a pinned `PATH` (plus an explicit `RUST_BACKTRACE` override)
+/// crosses `execve(2)`, and POSIX process group 0 makes the child its group leader so a
+/// watchdog can terminate the whole tree without unsafe FFI.
+pub fn renderer_command(
+    executable: &Path,
+    args: &[String],
+    scratch: &Path,
+) -> std::process::Command {
+    let mut command = std::process::Command::new(executable);
+    command.args(args).env_clear().env("PATH", "/usr/bin:/bin");
+    if let Ok(backtrace) = std::env::var("RUST_BACKTRACE") {
+        command.env("RUST_BACKTRACE", backtrace);
+    }
+    command
+        .current_dir(scratch)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    command.process_group(0);
+    command
+}
+
+/// Terminates the renderer's whole process group with SIGTERM (POSIX pgid == pid).
+#[cfg(unix)]
+pub fn kill_process_group(pid: u32) {
+    let _ = std::process::Command::new("/usr/bin/kill")
+        .args(["-TERM", &format!("-{pid}")])
+        .status();
+}
+
 /// A renderer process: the current executable launched with `--megi-ipc-worker` and
 /// driven over length-prefixed JSON on stdin/stdout (ADR-004 phase 3).
 pub struct ProcessRenderer {
@@ -19,12 +70,14 @@ impl ProcessRenderer {
 
     /// Spawns a renderer from an explicit executable path (used by integration tests that
     /// drive the real `megi --megi-ipc-worker` binary).
-    pub fn spawn_with_executable(executable: &std::path::Path) -> Result<Self, IpcError> {
-        let mut child = std::process::Command::new(executable)
-            .arg("--megi-ipc-worker")
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+    pub fn spawn_with_executable(executable: &Path) -> Result<Self, IpcError> {
+        Self::spawn_with_args(executable, &["--megi-ipc-worker".to_owned()])
+    }
+
+    /// Spawns a renderer with explicit argv (tests inject a real non-responding child).
+    pub fn spawn_with_args(executable: &Path, args: &[String]) -> Result<Self, IpcError> {
+        let scratch = renderer_scratch_dir()?;
+        let mut child = renderer_command(executable, args, &scratch)
             .spawn()
             .map_err(|error| IpcError::Io(error.to_string()))?;
         let stdin = child
@@ -68,7 +121,7 @@ impl ProcessRenderer {
     /// Like [`Self::spawn_with_reader`] but spawning an explicit executable (used by
     /// integration tests that drive the real `megi --megi-ipc-worker` binary).
     pub fn spawn_with_reader_from(
-        executable: &std::path::Path,
+        executable: &Path,
     ) -> Result<
         (
             Self,
@@ -76,7 +129,21 @@ impl ProcessRenderer {
         ),
         IpcError,
     > {
-        let mut renderer = Self::spawn_with_executable(executable)?;
+        Self::spawn_with_reader_from_args(executable, &["--megi-ipc-worker".to_owned()])
+    }
+
+    /// Like [`Self::spawn_with_reader_from`] with explicit argv for isolation tests.
+    pub fn spawn_with_reader_from_args(
+        executable: &Path,
+        args: &[String],
+    ) -> Result<
+        (
+            Self,
+            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
+        ),
+        IpcError,
+    > {
+        let mut renderer = Self::spawn_with_args(executable, args)?;
         let stdout = renderer
             .stdout
             .take()
@@ -121,6 +188,13 @@ impl ProcessRenderer {
     pub fn kill(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+
+    /// Terminates the renderer's process group, then reaps the direct child (T5 watchdog).
+    pub(crate) fn kill_group(&mut self) {
+        #[cfg(unix)]
+        kill_process_group(self.id());
+        self.kill();
     }
 }
 
