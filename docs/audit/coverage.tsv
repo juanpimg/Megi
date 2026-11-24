@@ -2101,7 +2101,7 @@ tools/progress_render.py	400	tool	F3	integration	2026-11-24	covered	#2294,#2295	
 tools/progress_stats.py	277	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
 tools/real_site_check.py	262	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/soak_fuzz.sh	163	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
