@@ -81,9 +81,72 @@ pub fn image_at(images: &[ImageRegion], x: f32, y: f32) -> Option<&ImageRegion> 
     images.iter().rev().find(|image| image.rect.contains(x, y))
 }
 
+/// Builds a resource loader for an on-demand save using the window's session state
+/// (#1829). A bare `ResourceLoader::new()` drops the cookie jar and CORS `Origin`, so
+/// authenticated images are re-fetched anonymously and the server returns a login page.
+/// Mirrors the subresource fetch setup in `megi_render`'s final stage.
+pub fn loader_for_session_save(
+    options: &megi_webview::render::RenderOptions,
+    document_url: Option<&megi_webview::net::Url>,
+) -> megi_webview::net::ResourceLoader {
+    use megi_webview::net::Scheme;
+
+    let mut fetch_options = options.fetch_options.clone();
+    fetch_options.cookie_jar = options.cookie_jar.clone();
+    if fetch_options.cookie_jar.is_none() && options.cookies {
+        fetch_options.cookie_jar = Some(std::sync::Arc::new(std::sync::Mutex::new(
+            megi_webview::net::CookieJar::new(),
+        )));
+    }
+    let origin = options.origin.clone().or_else(|| {
+        document_url.and_then(|url| match url.scheme() {
+            Scheme::Http | Scheme::Https => {
+                megi_webview::net::Origin::from_url(url).map(|origin| origin.as_str())
+            }
+            Scheme::File | Scheme::Data => None,
+        })
+    });
+    if let Some(origin) = origin {
+        fetch_options.origin = Some(origin);
+    }
+    let mut loader = megi_webview::net::ResourceLoader::with_options(fetch_options);
+    if let Some(url) = document_url {
+        loader.set_mixed_content_context(Some(url.scheme()));
+    }
+    loader
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_save_loader_inherits_cookie_jar_and_origin() {
+        // #1829: re-fetching an image for "Save image" must reuse the session's cookies
+        // and Origin, otherwise authenticated resources return the login page.
+        let jar = std::sync::Arc::new(std::sync::Mutex::new(megi_webview::net::CookieJar::new()));
+        let options = megi_webview::render::RenderOptions {
+            cookie_jar: Some(std::sync::Arc::clone(&jar)),
+            ..Default::default()
+        };
+        let url = megi_webview::net::Url::parse("https://app.test/page").expect("url");
+
+        let loader = loader_for_session_save(&options, Some(&url));
+        let fetch = loader.fetch_options();
+        assert!(
+            fetch.cookie_jar.is_some(),
+            "the session cookie jar must be reused"
+        );
+        assert_eq!(fetch.origin.as_deref(), Some("https://app.test"));
+    }
+
+    #[test]
+    fn session_save_loader_without_document_has_no_origin() {
+        let options = megi_webview::render::RenderOptions::default();
+        let loader = loader_for_session_save(&options, None);
+        assert!(loader.fetch_options().cookie_jar.is_none());
+        assert!(loader.fetch_options().origin.is_none());
+    }
 
     #[test]
     fn image_regions_are_extracted_from_a_rendered_page() {
