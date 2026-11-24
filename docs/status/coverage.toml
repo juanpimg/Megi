@@ -604,10 +604,9 @@ id = "F6-JS-BUDGET-REAL"
 area = "F6"
 name = "Presupuesto JS suficiente para sitios reales"
 source = "issue #1881"
-state = "missing"
-evidence = "none"
+state = "done"
+evidence = "test:crates/render/src/scripts/types.rs::real_site_budget_exceeds_the_conservative_default_but_respects_hard_caps"
 issue = 1881
-reason = "Default per-document JS instruction budget is too low for real sites; they abort before rendering even though the engine otherwise works."
 
 [[capability]]
 id = "F6-GETCOMPUTEDSTYLE-PERF"

@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use megi_render::{RenderOptions, ScriptingMode, Viewport, render_url};
+use megi_render::{RenderOptions, ScriptingLimits, ScriptingMode, Viewport, render_url};
 
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -33,8 +33,10 @@ options:
   --origin URL   CORS Origin override for subresource fetches (default: the
                  document origin; cross-origin CORS failures are non-fatal)
   --json         print machine-readable metadata to stdout
+  --script-budget small|real  JS budget profile (default: real; hard anti-DoS caps apply)
   -h, --help     print this help";
 
+#[derive(Debug)]
 struct Args {
     input: String,
     output: PathBuf,
@@ -46,6 +48,7 @@ struct Args {
     cookies: bool,
     origin: Option<String>,
     json: bool,
+    script_budget: ScriptBudgetProfile,
     max_image_dim: Option<u32>,
     time_ms: Option<f64>,
 }
@@ -64,6 +67,14 @@ fn main() -> ExitCode {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ScriptBudgetProfile {
+    #[default]
+    Real,
+    Small,
+}
+
+#[derive(Debug)]
 enum CliError {
     Usage(String),
     Render(String),
@@ -86,6 +97,10 @@ fn run() -> Result<(), CliError> {
         origin: args.origin.clone(),
         max_image_dim: args.max_image_dim,
         time_ms: args.time_ms.unwrap_or(0.0),
+        scripting_limits: match args.script_budget {
+            ScriptBudgetProfile::Small => ScriptingLimits::default().clamped(),
+            ScriptBudgetProfile::Real => ScriptingLimits::for_real_sites().clamped(),
+        },
         ..RenderOptions::default()
     };
 
@@ -162,6 +177,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut json = false;
     let mut max_image_dim = None;
     let mut time_ms = None;
+    let mut script_budget = ScriptBudgetProfile::Real;
     let mut args = args;
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -171,6 +187,20 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
             }
             "--no-network" => no_network = true,
             "--no-scripting" => no_scripting = true,
+            "--script-budget" => {
+                let value = args.next().ok_or_else(|| {
+                    CliError::Usage("--script-budget requires small|real".to_owned())
+                })?;
+                script_budget = match value.as_str() {
+                    "small" => ScriptBudgetProfile::Small,
+                    "real" => ScriptBudgetProfile::Real,
+                    other => {
+                        return Err(CliError::Usage(format!(
+                            "unknown --script-budget profile `{other}` (use small|real)"
+                        )));
+                    }
+                };
+            }
             "--cookies" => cookies = true,
             "--origin" => {
                 origin = Some(
@@ -230,6 +260,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         cookies,
         origin,
         json,
+        script_budget,
         max_image_dim,
         time_ms,
     })
@@ -354,4 +385,39 @@ fn json_string(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod script_budget_cli_tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> impl Iterator<Item = String> {
+        values.iter().map(|v| (*v).to_owned())
+    }
+
+    #[test]
+    fn script_budget_flag_defaults_to_real_and_parses_small() {
+        let default = parse_args(args(&["data:text/html,x", "/tmp/x.png"])).expect("default");
+        assert_eq!(default.script_budget, ScriptBudgetProfile::Real);
+        let small = parse_args(args(&[
+            "data:text/html,x",
+            "/tmp/x.png",
+            "--script-budget",
+            "small",
+        ]))
+        .expect("small");
+        assert_eq!(small.script_budget, ScriptBudgetProfile::Small);
+    }
+
+    #[test]
+    fn script_budget_flag_rejects_unknown_profiles() {
+        let err = parse_args(args(&[
+            "data:text/html,x",
+            "/tmp/x.png",
+            "--script-budget",
+            "huge",
+        ]))
+        .expect_err("unknown profile");
+        assert!(format!("{err:?}").contains("unknown --script-budget"));
+    }
 }
