@@ -1,7 +1,10 @@
 """Tests for the seven WP generators (spec §4.3), including machine profile."""
 import contextlib
+import hashlib
 import io
 import json
+import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -47,6 +50,91 @@ class GeneratorTests(unittest.TestCase):
         self.assertTrue(wps[0].id.startswith("WP-WPT-"))
         self.assertEqual(wps[0].metric, "wpt_passed")
         validate_wp(vars(wps[0]))
+
+    @staticmethod
+    def _wpt_result(subtest: str = "declarations-trim-whitespace.html: --foo-1",
+                    status: str = "FAIL") -> dict:
+        """One result in the exact shape of docs/status/wpt.json (`megi-wpt-report/1`)."""
+        test = "tests/wpt/css/css-syntax/declarations-trim-whitespace.html"
+        return {
+            "key": hashlib.sha256(f"{test}\0{subtest}".encode("utf-8")).hexdigest(),
+            "test": test, "subtest": subtest, "status": status,
+        }
+
+    def _write_wpt_report(self, results: list[dict]) -> None:
+        counts = {"pass": 0, "fail": 0, "timeout": 0, "notrun": 0, "error": 0}
+        field = {"PASS": "pass", "FAIL": "fail", "TIMEOUT": "timeout",
+                 "NOTRUN": "notrun", "harness_error": "error"}
+        for result in results:
+            counts[field[result["status"]]] += 1
+        self._write("docs/status/wpt.json", json.dumps({
+            "schema": "megi-wpt-report/1",
+            "epoch": {"wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
+                      "manifest_sha256": "76c28f3a8e5c527494dc4ef864cb46ca3b7250d80a509d17baa40034c1a2c615"},
+            "run_info": {"harness": "megi-test-harness --summary (CSS Syntax seed)",
+                         "scope": "3 vendored CSS Syntax fixtures; NOT full WPT conformance",
+                         "adopted_subtests": len(results),
+                         "dirs": ["tests/wpt/css/css-syntax"]},
+            "counts": counts, "total": len(results), "results": results,
+        }, ensure_ascii=False))
+
+    def test_wpt_real_report_failure_becomes_valid_wp(self) -> None:
+        result = self._wpt_result(status="FAIL")
+        self._write_wpt_report([result])
+        wps = self._generate("wpt")
+        self.assertEqual(len(wps), 1)
+        self.assertTrue(wps[0].id.startswith("WP-WPT-"))
+        self.assertEqual(wps[0].metric, "wpt_passed")
+        self.assertEqual(wps[0].file, result["test"])
+        self.assertEqual(wps[0].expected, "PASS")
+        self.assertIn(result["subtest"], wps[0].actual)
+        self.assertIn("FAIL", wps[0].actual)
+        self.assertIn("wpt_gate.py --check", wps[0].verify_cmd)
+        validate_wp(vars(wps[0]))
+
+    def test_wpt_real_report_all_pass_yields_no_wp(self) -> None:
+        self._write_wpt_report([self._wpt_result(status="PASS")])
+        self.assertEqual(self._generate("wpt"), [])
+
+    def test_wpt_no_artifact_yields_no_wp(self) -> None:
+        self.assertEqual(self._generate("wpt"), [])
+
+    def test_wpt_duplicate_failures_are_deduped_by_id(self) -> None:
+        failure = {"test": "html/syntax.html", "subtest": "comment",
+                   "expected": "PASS", "actual": "FAIL"}
+        self._write("tests/wpt/results/latest.json", json.dumps({"failures": [failure, failure]}))
+        self.assertEqual(len(self._generate("wpt")), 1)
+
+    def test_wpt_verify_command_goes_red_then_green(self) -> None:
+        """The emitted verify_cmd must actually fail on a failing subtest and pass once fixed."""
+        result = self._wpt_result(status="FAIL")
+        self._write_wpt_report([result])
+        wps = self._generate("wpt")
+        self.assertEqual(len(wps), 1)
+        self.assertIn("wpt_gate.py --check", wps[0].verify_cmd)
+        gate = Path(wp_generate.__file__).resolve().parent / "wpt_gate.py"
+        self._write("tests/wpt/baseline.json", json.dumps({
+            "epoch": {"wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
+                      "manifest_sha256": "76c28f3a8e5c527494dc4ef864cb46ca3b7250d80a509d17baa40034c1a2c615"},
+            "passed": 1, "total": 1, "allowlist": [],
+        }))
+        self._write("tests/wpt/allowlist.toml", "")
+
+        def run_gate() -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [sys.executable, str(gate), "--check",
+                 "--report", "docs/status/wpt.json",
+                 "--baseline", "tests/wpt/baseline.json",
+                 "--allowlist", "tests/wpt/allowlist.toml"],
+                cwd=self.root, capture_output=True, text=True, check=False,
+            )
+
+        red = run_gate()
+        self.assertEqual(red.returncode, 1, red.stdout + red.stderr)
+        self.assertIn(result["key"], red.stderr)  # names the real failing subtest
+        self._write_wpt_report([self._wpt_result(status="PASS")])
+        green = run_gate()
+        self.assertEqual(green.returncode, 0, green.stdout + green.stderr)
 
     def test_js262_failure_becomes_valid_wp(self) -> None:
         self._write(

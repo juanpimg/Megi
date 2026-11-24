@@ -16,12 +16,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tools.wp_schema import WorkPackage, validate_wp  # noqa: E402
+from tools.wpt_gate import load_report as load_wpt_report  # noqa: E402
 
 SOURCES = ("wpt", "js262", "site", "fuzz", "audit", "depth", "user")
 QUEUE = Path("docs/work-packages/queue")
 USER_LABELS = {"crash", "broken_site", "broken-site"}
 # Spec §4.3 calls Test262 packages WP-JS-<key>; other sources use their own name.
 ID_PREFIXES = {"js262": "JS"}
+WPT_REPORT = "docs/status/wpt.json"           # real report written by tools/wpt_report.py
+WPT_LEGACY_REPORT = "tests/wpt/results/latest.json"
+# The gate is RED for an unallowlisted failing subtest and GREEN once it passes: spec §4.3 rule 2.
+WPT_GATE_VERIFY = (
+    "python3 tools/wpt_gate.py --check --report docs/status/wpt.json "
+    "--baseline tests/wpt/baseline.json --allowlist tests/wpt/allowlist.toml"
+)
 
 
 def slug(value: str) -> str:
@@ -106,29 +114,62 @@ def _safe_wp(issues: list[str] | None, **fields) -> WorkPackage | None:
         return None
 
 
+def _dedup_by_id(wps: list[WorkPackage]) -> list[WorkPackage]:
+    """Keep the first WP per ID; stable so dry-run output is reproducible."""
+    seen: set[str] = set()
+    unique: list[WorkPackage] = []
+    for wp in wps:
+        if wp.id not in seen:
+            seen.add(wp.id)
+            unique.append(wp)
+    return unique
+
+
 def generate_wpt(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
-    relative = "tests/wpt/results/latest.json"
-    data = _json(root, relative, issues)
-    verify = "cargo run --release -p megi-test-harness -- --summary"
-    out = []
-    for failure in _entries(data, "failures", relative, issues):
+    """Feed WPs from the real `megi-wpt-report/1` and the legacy failure feed."""
+    out: list[WorkPackage] = []
+    relative = WPT_LEGACY_REPORT
+    for failure in _entries(_json(root, relative, issues), "failures", relative, issues):
         test = str(failure.get("test", "unknown"))
         subtest = str(failure.get("subtest", ""))
         wp = _safe_wp(
-            issues,
-            source="wpt", key=f"{test}-{subtest}",
+            issues, source="wpt", key=f"{test}-{subtest}",
             file=str(failure.get("file", f"tests/wpt/{test}")),
             expected=str(failure.get("expected", "PASS")),
             actual=str(failure.get("actual", "FAIL")),
             spec="spec v2 §2 — WPT allowlist = 0",
             acceptance=f"{test} {subtest} pasa sin allowlist",
-            verify_cmd=verify, metric="wpt_passed",
+            verify_cmd=WPT_GATE_VERIFY, metric="wpt_passed",
             milestone=str(failure.get("milestone", "M0")),
             impact=5, frequency=4,
         )
         if wp is not None:
             out.append(wp)
-    return out
+    report_path = _artifact(root, WPT_REPORT)
+    if report_path:
+        try:
+            report = load_wpt_report(report_path)  # validates epoch, keys and counts
+        except (ValueError, TypeError, OSError) as exc:
+            _note(issues, f"{WPT_REPORT}: invalid report: {exc}")
+        else:
+            for result in report["results"]:
+                status = str(result["status"])
+                if status == "PASS":
+                    continue
+                key = str(result["key"])
+                subtest = str(result["subtest"])
+                wp = _safe_wp(
+                    issues, source="wpt", key=f"{key[:12]}-{subtest}",
+                    file=str(result["test"]), expected="PASS",
+                    actual=f"{status} — {subtest} (key {key[:12]})",
+                    spec="spec v2 §2 — WPT allowlist = 0",
+                    acceptance=f"{subtest} (key {key[:12]}) pasa sin allowlist",
+                    verify_cmd=WPT_GATE_VERIFY, metric="wpt_passed",
+                    milestone="M0", impact=5, frequency=4,
+                )
+                if wp is not None:
+                    out.append(wp)
+    return _dedup_by_id(out)
 
 
 def generate_js262(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
@@ -333,7 +374,7 @@ def _run_source(source: str, dry_run: bool, root: Path | None,
     root = root or Path(__file__).resolve().parent.parent
     source_errors: list[str] = []
     try:
-        wps = GENERATORS[source](root, source_errors)
+        wps = _dedup_by_id(GENERATORS[source](root, source_errors))
     except Exception as exc:  # a malformed artifact must never abort a source
         source_errors.append(f"unexpected generator failure: {exc}")
         wps = []
