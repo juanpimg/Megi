@@ -466,8 +466,16 @@ pub(super) fn build_box_for_node(
                 let attribute_height = attribute_number("height");
                 layout_box.intrinsic_size = Some(from_api.unwrap_or_else(|| {
                     let (default_width, default_height) = replaced_default_size(&tag);
+                    // HTML §15.4: <input size=N> sizes a text field to roughly N
+                    // average character advances (~8px at the default font).
+                    // google.com's search box uses size=57 (#2247).
+                    let size_width = if tag == "input" {
+                        attribute_number("size").map(|size| (size * 8.0).max(20.0))
+                    } else {
+                        None
+                    };
                     (
-                        attribute_width.unwrap_or(default_width),
+                        attribute_width.or(size_width).unwrap_or(default_width),
                         attribute_height.unwrap_or(default_height),
                     )
                 }));
