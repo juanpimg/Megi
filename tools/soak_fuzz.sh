@@ -29,10 +29,10 @@
 set -euo pipefail
 
 HOURS=24
-# 31 targets × 550 s = 17 050 s fits a full rotation inside the 5 h (18 000 s)
-# scheduled workflow budget (#1833). At 600 s a rotation needs 18 600 s and the
+# 34 targets × 529 s = 17 986 s fits a full rotation inside the 5 h (18 000 s)
+# scheduled workflow budget (#1833). At 550 s a rotation needs 18 700 s and the
 # last target would never run before the job deadline.
-SLICE_SECONDS=550
+SLICE_SECONDS=529
 SHARD_INDEX=0
 SHARD_COUNT=1
 OUT="target/soak"
@@ -64,6 +64,9 @@ TARGETS=(
   js_module
   layout_resolve
   net_surface
+  ipc_wire
+  ipc_response
+  net_file_url
   charset
   cookie_parse
   css_animation
