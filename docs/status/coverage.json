@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "overall": {
-    "implemented": 74,
-    "partial": 1,
+    "implemented": 75,
+    "partial": 0,
     "known": 75,
-    "percent": 99,
+    "percent": 100,
     "unverified": [],
     "invalid_states": []
   },
@@ -53,10 +53,10 @@
     },
     {
       "id": "F7",
-      "implemented": 9,
-      "partial": 1,
+      "implemented": 10,
+      "partial": 0,
       "known": 10,
-      "percent": 90
+      "percent": 100
     },
     {
       "id": "X",
@@ -66,16 +66,5 @@
       "percent": 100
     }
   ],
-  "missing": [
-    {
-      "id": "F7-A11Y",
-      "area": "F7",
-      "name": "Accesibilidad y widgets nativos",
-      "source": "issue #989",
-      "state": "partial",
-      "evidence": "none",
-      "issue": 989,
-      "reason": "no requiere evidencia"
-    }
-  ]
+  "missing": []
 }

@@ -188,6 +188,8 @@ pub mod a11y;
 pub mod a11y_at_bus;
 #[cfg(feature = "a11y")]
 pub mod a11y_backend;
+#[cfg(test)]
+mod a11y_backend_orphan_tests;
 pub mod chrome;
 pub mod cli;
 pub mod convert;

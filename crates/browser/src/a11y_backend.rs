@@ -116,11 +116,17 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
         .collect();
     let mut children: Vec<Vec<NodeId>> = vec![Vec::new(); nodes.len()];
     for (index, parent) in parent_of.iter().enumerate() {
-        if let Some(parent) = parent
-            && let Some(parent_index) = nodes.iter().position(|(id, _)| id == parent)
-        {
-            children[parent_index].push(nodes[index].0);
+        if index == 0 {
+            continue;
         }
+        // A snapshot node whose DOM ancestors have no exposed role has `parent: None`.
+        // Leaving it rootless makes `accesskit_consumer` reject the whole update when a
+        // real AT activates (live AT-SPI audit, #989): mount it under the exposed root
+        // instead so the published tree always has exactly one root.
+        let parent_index = parent
+            .and_then(|parent| nodes.iter().position(|(id, _)| *id == parent))
+            .unwrap_or(0);
+        children[parent_index].push(nodes[index].0);
     }
     for (index, (_, node)) in nodes.iter_mut().enumerate() {
         if !children[index].is_empty() {
