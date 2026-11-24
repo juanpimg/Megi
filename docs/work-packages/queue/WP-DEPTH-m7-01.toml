@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m7-01"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "DevTools vía protocolo Firefox"
+spec = "spec v2 §4.1 / progress.toml M7"
+acceptance = "criterio M7#2 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M7 2"
+metric = "depth_closed"
+milestone = "M7"
+impact = 3
+frequency = 3
+profile = "light"

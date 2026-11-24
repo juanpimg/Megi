@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m11-01"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "Selectores de archivo y gestores de credenciales por SO"
+spec = "spec v2 §4.1 / progress.toml M11"
+acceptance = "criterio M11#1 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M11 1"
+metric = "depth_closed"
+milestone = "M11"
+impact = 3
+frequency = 3
+profile = "light"

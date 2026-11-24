@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m1-01"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "10 fixtures E2E de tarea de usuario — no hay suite E2E versionada"
+spec = "spec v2 §4.1 / progress.toml M1"
+acceptance = "criterio M1#3 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M1 3"
+metric = "depth_closed"
+milestone = "M1"
+impact = 3
+frequency = 3
+profile = "light"

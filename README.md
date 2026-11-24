@@ -41,15 +41,16 @@ Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subte
 
 ## 🤝 Contribuciones
 
-Megi es pre-alpha y hay trabajo acotado para empezar hoy mismo:
+Megi es pre-alpha y hay trabajo atómico y verificable en la [cola de work packages](docs/work-packages/BOARD.md):
 
-- [Issues `good first issue`](https://github.com/juanpimg/Megi/labels/good%20first%20issue) — cambios pequeños y verificables con un comando local.
-- [Issues `help wanted`](https://github.com/juanpimg/Megi/labels/help%20wanted) — alcance algo mayor, con evidencia y repro incluidos.
+- [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) — índice operativo: hitos M0–M12, planes y orden de lectura.
+- [`docs/work-packages/BOARD.md`](docs/work-packages/BOARD.md) — 47 WPs generados desde artefactos reales (criterios pendientes y sitios degradados), priorizados por impacto×frecuencia y marcados `light`/`heavy` según el disco que requieren.
+- [Esquema del WP](docs/work-packages/SCHEMA.md) — campos obligatorios, criterio de aceptación y comando de verificación de cada tarea.
 - [Guía de contribución](CONTRIBUTING.md) — convenciones, DCO, TDD y gates obligatorios.
 - [Prompt para agentes de IA](docs/AI-QUICKSTART.md) — arranque rápido para Claude Code, Codex, OpenCode u otro harness.
 - [Web del proyecto](https://juanpimg.github.io/Megi-web/) — arquitectura, estado y hoja de ruta.
 
-Si vas a trabajar en una issue, comenta en ella primero para evitar duplicados. Los cambios de seguridad se reportan en privado según [`SECURITY.md`](SECURITY.md).
+Para elegir trabajo: `python3 tools/wp_plan.py --board --profile light` (o `heavy`). Si la cola está vacía, `python3 tools/wp_generate.py --all` la rellena desde los artefactos; si no hay artefactos, el trabajo se toma directamente del plan del hito. Los agentes preparan PRs, nunca fusionan. Los cambios de seguridad se reportan en privado según [`SECURITY.md`](SECURITY.md).
 
 ---
 

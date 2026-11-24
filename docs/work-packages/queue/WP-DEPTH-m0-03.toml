@@ -1,0 +1,13 @@
+id = "WP-DEPTH-m0-03"
+source = "depth"
+file = "docs/status/progress.toml"
+expected = "criterio verificado"
+actual = "Release con verify + firma — `.github/workflows/release.yml` publica sha256, sin cosign"
+spec = "spec v2 §4.1 / progress.toml M0"
+acceptance = "criterio M0#6 movido a items con evidencia en progress.toml"
+verify_cmd = "python3 tools/check_milestone.py M0 6"
+metric = "depth_closed"
+milestone = "M0"
+impact = 3
+frequency = 3
+profile = "light"
