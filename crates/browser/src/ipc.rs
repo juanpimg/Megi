@@ -20,15 +20,20 @@ pub use process::{
 };
 mod regions;
 mod session;
+mod validated;
 pub use process_pool::{MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site};
 pub use regions::{
     DocumentNodeOrdinals, DocumentOrdinalNodes, IpcFindMatch, IpcFormControl, IpcImageRegion,
     IpcLinkRegion, IpcRect, IpcSelectOption,
 };
 pub use session::{ProcessFrame, ProcessRenderSession};
+pub use validated::{
+    IPC_ENVELOPE_HEADER_LEN, IPC_MAGIC, IPC_VERSION, MAX_IPC_CSS_DIMENSION, Validated,
+    ValidationError, WireHeader, read_framed_envelope, validate_response, write_framed_envelope,
+};
 
-/// Maximum accepted IPC payload (256 MiB: a 4096×4096 RGBA frame plus metadata).
-pub const MAX_IPC_PAYLOAD: usize = 256 * 1024 * 1024;
+/// Maximum accepted IPC payload (32 MiB cap for control and frame messages).
+pub const MAX_IPC_PAYLOAD: usize = 32 * 1024 * 1024;
 
 /// A renderer that has not answered within this deadline is killed (plan Task 3 / T5).
 pub const RENDER_WATCHDOG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
@@ -135,6 +140,7 @@ fn read_exact_or<R: Read>(reader: &mut R, buffer: &mut [u8]) -> Result<(), IpcEr
 /// `RenderRequest`'s non-serializable host events are intentionally excluded; the child
 /// renders the document and its scripts, while DOM patching stays in the parent.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcRenderRequest {
     pub generation: u64,
     pub input: String,
@@ -151,6 +157,7 @@ pub struct IpcRenderRequest {
 /// state (form controls, live DOM) locally; process mode is documented as a reduced-realm
 /// renderer until ADR-004 phase 3 is completed.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct IpcRenderResponse {
     pub generation: u64,
     pub png_bytes: Vec<u8>,
