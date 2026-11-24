@@ -24,10 +24,9 @@ subtitle = "Hitos M0–M12 — criterios de aceptación verificables hacia un na
 
 # Highest-signal gaps, ordered by milestone dependency (not by date).
 next_up = [
-  "M0: publicar una auditoría de 0 fugas T1/T2 con 12 pruebas negativas por SO",
-  "M1: 10 fixtures E2E de tarea de usuario y refrescar el informe de sitios reales",
-  "M3: publicar el sandbox enforced en Linux, macOS y Windows",
-  "M4: ampliar el informe WPT de 30 a 100+ subtests de componentes",
+  "M2: completar Bidi/CJK y Canvas 2D utilizable",
+  "M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas",
+  "M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes",
   "M6: spike de Canvas 2D / WebGL software antes de escribir código del motor",
 ]
 
@@ -72,10 +71,9 @@ items = [
   "Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`",
   "Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`",
   "F0: cookies same-site y no HttpOnly en el IPC; el renderer ya no devuelve cookies al parent — `cargo test -p megi-browser --test ipc_semantic_tests`",
+  "0 fugas T1/T2/T3/T5/T9 auditadas (F0) — `docs/ISOLATION-STRATEGY.md` (Auditoría F0) + `cargo test -p megi-browser --test ipc_semantic_tests --test file_grant_tests --test spawn_hardening_tests --test watchdog_tests` + `python3 -m unittest tools.test_docs_consistency`",
 ]
-pending = [
-  "0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría",
-]
+pending = []
 
 # --- M1 — Interactividad ----------------------------------------------------------------
 [[phase]]
@@ -84,11 +82,10 @@ title = "Interactividad"
 items = [
   "Shell con pestañas, historial, zoom, formularios y descargas — `crates/browser/src/{chrome,forms,download}.rs`",
   "Render en hilo de trabajo con generación cancelable — `crates/browser/src/worker.rs`",
+  "10 fixtures E2E de tarea de usuario — `cargo test -p megi-render --test e2e_task_fixtures` (10/10 PASS, 0 `console_errors`)",
+  "Corpus sin console_errors — `docs/status/real-sites.json` (4/4 sitios con `console_errors = 0`)",
 ]
-pending = [
-  "10 fixtures E2E de tarea de usuario — no hay suite E2E versionada",
-  "Corpus sin console_errors — `docs/status/real-sites.json`: 1/4 PASS, 3 DEGRADED",
-]
+pending = []
 
 # --- M2 — Profundidad declarativa -------------------------------------------------------
 [[phase]]
@@ -109,11 +106,11 @@ pending = [
 id = "M3"
 title = "Frontera de seguridad"
 items = [
-  "28 targets de fuzz compilados — `find fuzz/fuzz_targets -name '*.rs' | wc -l`",
+  "31+ targets de fuzz compilados (34 en `fuzz/fuzz_targets/`, incluyendo `ipc_wire`, `ipc_response`, `net_file_url`) — `find fuzz/fuzz_targets -name '*.rs' | wc -l`",
   "Cookies SameSite con PSL vendored — `crates/net/src/`",
+  "F1: sobre IPC versionado (`MEGI` v1) y validación semántica `Validated<IpcRenderResponse>` — `cargo test -p megi-browser --test ipc_validation_tests --test process_e2e_tests`",
 ]
 pending = [
-  "31+ targets de fuzz — hay 28 en `fuzz/fuzz_targets/`",
   "Sandbox enforced — sin selector Linux/macOS/Windows en el motor",
   "0 fugas cross-site y 12 pruebas negativas por SO — sin campaña publicada",
 ]
