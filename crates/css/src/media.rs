@@ -8,7 +8,9 @@
 //! media types `all`, `screen` and `print` (any other type never matches); and the features
 //! `min-width`, `max-width`, `width`, `min-height`, `max-height`, `height` (px/em/rem/pt/pc/
 //! in/cm/mm; `em`/`rem` are resolved against the 16px initial font size) and `orientation`
-//! (`portrait`/`landscape`). Features that are syntactically valid but not modelled
+//! (`portrait`/`landscape`). Range syntax (`(width >= 600px)`, `(width < 40em)`) and
+//! `calc()`/math functions in feature values are supported (Media Queries 4 §4.2, §8).
+//! Features that are syntactically valid but not modelled
 //! (`resolution`, `prefers-color-scheme`, `hover`, `aspect-ratio`, boolean features, ...)
 //! evaluate to `false`; this is the conservative choice used by the cascade.
 //!
