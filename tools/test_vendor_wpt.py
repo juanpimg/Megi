@@ -101,9 +101,14 @@ class VendorWptTest(unittest.TestCase):
         self.assertEqual(vendor_wpt.check_manifest(ROOT), [])
         revision = vendor_wpt.load_revision(ROOT)
         self.assertEqual(revision["revision"], PIN)
-        self.assertEqual(
-            sum(entry["subtest_count_expected"] for entry in vendor_wpt.load_manifest(ROOT)),
-            30,
+
+    def test_repository_adopts_at_least_100_executable_subtests(self) -> None:
+        """M4 floor: the manifest is the denominator; 100+ cases must be really executed."""
+        adopted = sum(entry["subtest_count_expected"] for entry in vendor_wpt.load_manifest(ROOT))
+        self.assertGreaterEqual(
+            adopted,
+            100,
+            f"manifest adopts only {adopted} subtests; the M4 floor is 100",
         )
 
 

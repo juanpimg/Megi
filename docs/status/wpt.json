@@ -2,24 +2,24 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "76c28f3a8e5c527494dc4ef864cb46ca3b7250d80a509d17baa40034c1a2c615"
+    "manifest_sha256": "bc7a89e96337b0253d22a7448bd5da938ff58dc0308548ea3ff0ae388a87a40d"
   },
   "run_info": {
-    "harness": "megi-test-harness --summary (CSS Syntax seed)",
-    "scope": "3 vendored CSS Syntax fixtures; NOT full WPT conformance",
-    "adopted_subtests": 30,
+    "harness": "megi-test-harness --summary (CSS Syntax suites)",
+    "scope": "4 vendored CSS Syntax fixtures (100 executed subtests); NOT full WPT conformance",
+    "adopted_subtests": 100,
     "dirs": [
       "tests/wpt/css/css-syntax"
     ]
   },
   "counts": {
-    "pass": 30,
+    "pass": 100,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 30,
+  "total": 100,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -172,9 +172,27 @@
       "status": "PASS"
     },
     {
+      "key": "bc80b95be604c25f28c4cedde06345c9bbb7f5cd4b532aef8203b1142537d7ac",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +1",
+      "status": "PASS"
+    },
+    {
+      "key": "b3106c56896c1b6213e8e711eef2f390aa18907ede9a75e824c86c4ff5d13e71",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -1",
+      "status": "PASS"
+    },
+    {
       "key": "e22f735fb7bcbfabb9ecb67d63f736b4c336199639e0a12b6e6523279fcfd470",
       "test": "tests/wpt/css/css-syntax/anb-parsing.html",
       "subtest": "anb-parsing.html: 5n",
+      "status": "PASS"
+    },
+    {
+      "key": "eaec9e85f91ce499188b2a4cdd7033308c464c2f67553b99ac0c5c397d7b3e57",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5N",
       "status": "PASS"
     },
     {
@@ -184,9 +202,27 @@
       "status": "PASS"
     },
     {
+      "key": "21b69b101b104f8c6f31b6529cf965e9e36141fdd2d6945b01d535b0c23275b5",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n",
+      "status": "PASS"
+    },
+    {
+      "key": "c7f00c0aab848718c803b71cfe0ffb08a876f78112252b0e926795aaf8fb2c81",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: N",
+      "status": "PASS"
+    },
+    {
       "key": "14d3b92d5552e45e529c84735ecede752978754dc04be5cb282e1ace99afa6d3",
       "test": "tests/wpt/css/css-syntax/anb-parsing.html",
       "subtest": "anb-parsing.html: -n",
+      "status": "PASS"
+    },
+    {
+      "key": "bdff7fe6d1c3760ef3e570b99a464aefee1b17c7cdb6b8c9898d8e25ac15ab11",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -N",
       "status": "PASS"
     },
     {
@@ -196,9 +232,393 @@
       "status": "PASS"
     },
     {
+      "key": "ab56ea565cf2da4ce7e9005354adce97ea837565b2e31edcb175c6e4201200b0",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n-5",
+      "status": "PASS"
+    },
+    {
       "key": "f4803c3bb7c1e6f80fa887060132d1aaae55bdfaaccada1819917a81e44bbf12",
       "test": "tests/wpt/css/css-syntax/anb-parsing.html",
       "subtest": "anb-parsing.html: n-5",
+      "status": "PASS"
+    },
+    {
+      "key": "6d4cd87388bf92febc36f13500522ef5c9b2e1f1001267a48c43dca7de3932d6",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n-5",
+      "status": "PASS"
+    },
+    {
+      "key": "fa747ad56a26a0e28a751976608f5a1288d367ec2090d8ddf05105c4ed9c26bd",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n +5",
+      "status": "PASS"
+    },
+    {
+      "key": "4c91e89ac021c24837e447c576ac092a88c88c55edaeccd23300a69ee1ec383b",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n -5",
+      "status": "PASS"
+    },
+    {
+      "key": "fd788e19ea698e6655294dda494524e76fdb2f870815008ca8751ee035720747",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n +5",
+      "status": "PASS"
+    },
+    {
+      "key": "e2f531ff173a0c887fd2dc6cce549b4801eb501145de4701121fc67559de54e5",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n +5",
+      "status": "PASS"
+    },
+    {
+      "key": "40fe054a345dc62248a345a60ff1fed08ed744d2933b8bfe1eb9c009e360d440",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n -5",
+      "status": "PASS"
+    },
+    {
+      "key": "099ec1259e66fab864c8ee0d710970bf8d60b9caff2de02f1b23134dabdbb72a",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n +5",
+      "status": "PASS"
+    },
+    {
+      "key": "88b5403d55c43b1b54f143b75c01b23306dd6acbb99a564e8657a47c2f5e1d8d",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n -5",
+      "status": "PASS"
+    },
+    {
+      "key": "185d4d293fedd4d20dc206b3ffcf18501903fc0bbfb44119d45921cee8f794a5",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n- 5",
+      "status": "PASS"
+    },
+    {
+      "key": "fd2cd12565a56a0bde45b9931afef72f5aade7e4de1b4d568da329d3a3d0165a",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n- -5",
+      "status": "PASS"
+    },
+    {
+      "key": "fafab118105bef45a57dd7018e8762cb87264097e8f5ac891f67a1071f207ff4",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n- +5",
+      "status": "PASS"
+    },
+    {
+      "key": "f01ef6b8d74cd771365d66d72ff0411c3791c20fc523e988ddbb7ca84a90535d",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -5n- 5",
+      "status": "PASS"
+    },
+    {
+      "key": "d87739264c31dddd2dbf560338fb072ae49172b1b058ca47f421a59561d10040",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n- 5",
+      "status": "PASS"
+    },
+    {
+      "key": "2ed03969a438623d79e991927d975b7262fd5f58970e25b8650bfd242601ae60",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n- 5",
+      "status": "PASS"
+    },
+    {
+      "key": "dae665b5325894fafccdb0dd3c0901df254a7ecca586b45947f705d78329d3cd",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n- +5",
+      "status": "PASS"
+    },
+    {
+      "key": "432212f8f356203be71715bb6cc732347c6ae1a01934b57de44e788d5f9d2129",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n- -5",
+      "status": "PASS"
+    },
+    {
+      "key": "ad51be7487e34aa309a22dfa7e5b8bfec5512fac0fd928c635ef14b984d202d7",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n- 5",
+      "status": "PASS"
+    },
+    {
+      "key": "0edd50b376bd5d734a90403af174ebea9ea95b8a91cbfba862fd91d5863ff569",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n- +5",
+      "status": "PASS"
+    },
+    {
+      "key": "550cc92933b742201acf2c3da6856c212ac62213de89cfc392f03285090574c3",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n- -5",
+      "status": "PASS"
+    },
+    {
+      "key": "33950767246b66f209c1d3ca9773f0a27302814a62b18b5a6c462d84d17da003",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n + 5",
+      "status": "PASS"
+    },
+    {
+      "key": "ecc29a9a5e864b85eb73ba2c83c767d2ecd7d421bbb540ce95f2e2e83e0a6b47",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n - 5",
+      "status": "PASS"
+    },
+    {
+      "key": "b107f114f5fd5a65fb24a18ce5a5e0f2c30bf709d5013beef955433ddbb0d888",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n + +5",
+      "status": "PASS"
+    },
+    {
+      "key": "e96d3ccff63dbd1f8eca8c975a2d5d5644afafbc3c9d3cc594182f5235e6996d",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n + -5",
+      "status": "PASS"
+    },
+    {
+      "key": "3d160fe09bdff9ff800d61e8672beb6b33d1b7f8b8144cb0e5c933bff5cec6df",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n - +5",
+      "status": "PASS"
+    },
+    {
+      "key": "7f514506453b705091041b7a4d2d4a0f9a7476a8c680491dc0e5a12ab51703f7",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 5n - -5",
+      "status": "PASS"
+    },
+    {
+      "key": "0951ebca04b629195b541b183a31cd42fb767f322a29a9006ab7b8a8b3385f54",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n + 5",
+      "status": "PASS"
+    },
+    {
+      "key": "2b72f2f70dd3d449def13e43b7c65972631fb9fe5e029e8d20756ed8ea9bd8b9",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: n + 5",
+      "status": "PASS"
+    },
+    {
+      "key": "17454fd75b9e42f7851f889032df7ed222ea35e65b9d2faf9f99f1dad127cdb4",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n - 5",
+      "status": "PASS"
+    },
+    {
+      "key": "0bcb1bfa64fceb2c21dee46e90186f644036f4857abecbb5e485b99b98e20988",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n + +5",
+      "status": "PASS"
+    },
+    {
+      "key": "67a9414e87458e060ff3f6c10b710dd46400c6d10cbd9c87c4c202eec8e43fc0",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n + -5",
+      "status": "PASS"
+    },
+    {
+      "key": "78c1d07b4f40ea1295dfc8599e56daee98ae0f54ea5b6ab7c1e587b126c15c0c",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n - +5",
+      "status": "PASS"
+    },
+    {
+      "key": "532a234dc49a3d08b623ad67eb8c6959fe7dd9031faf00ab539d692f64e3c09b",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: +n - -5",
+      "status": "PASS"
+    },
+    {
+      "key": "303e37a41e59f9182760a342cea5d8f147b6f9365198ce3a9b61142bf6d70693",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n + 5",
+      "status": "PASS"
+    },
+    {
+      "key": "8056bbf432794ca2c23d0fcc1c6171a9ad40f7d887e3992734135ca248c3f61c",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n - 5",
+      "status": "PASS"
+    },
+    {
+      "key": "1d87276ff436a6f40aea65a69d20e3688d02c1b0f2636ce437f91727ec8c766d",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n + +5",
+      "status": "PASS"
+    },
+    {
+      "key": "fa972f28c19a7ab7f18d5170d2d47b2d44ed737e61ad0d8e0e3134c389974272",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n + -5",
+      "status": "PASS"
+    },
+    {
+      "key": "267fdbadd359119d2c81664f2db6ef99976a75573aad1e6f35aebe57e7d65b08",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n - +5",
+      "status": "PASS"
+    },
+    {
+      "key": "51356ab49005da8038819bfff8a4cabe0bb8cc8f6972a33f4fc73ead8b64fad3",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -n - -5",
+      "status": "PASS"
+    },
+    {
+      "key": "458b8579cadc05ecbdea00c3f4c20222e3c7b6c4361fe21517890dc8cc889e4b",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 1 - n",
+      "status": "PASS"
+    },
+    {
+      "key": "16d124f5627ff3b251719b488bcd077c65f6c80a6e4ba34377059f6f1819e86d",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: 0 - n",
+      "status": "PASS"
+    },
+    {
+      "key": "1027e960c0a912133d2da6b10d9a4c81be427dc19cc356c357017945aba0b5aa",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: -1 + n",
+      "status": "PASS"
+    },
+    {
+      "key": "ceac2adf48732d434b5c6f4bb421c639de57f82659d8f4579c2a3aa0210d1764",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: - 2n",
+      "status": "PASS"
+    },
+    {
+      "key": "f2bbd07b7aea8b908be8f8bfa4726c0b8e808952fb70bf207f9ef02374c36192",
+      "test": "tests/wpt/css/css-syntax/anb-parsing.html",
+      "subtest": "anb-parsing.html: + 2n",
+      "status": "PASS"
+    },
+    {
+      "key": "b35b765b7d922918266fcee7c54a9cf21383a342a63a70f3ef5f4f7eea8b4274",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 1",
+      "status": "PASS"
+    },
+    {
+      "key": "f992e4c8dcdd18dbbf12225dc4bcd64f78c50ee793d0a928ee51efb4b7f21d58",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: +1",
+      "status": "PASS"
+    },
+    {
+      "key": "3fa45448e7b4fb017a70b76a1cdd2f3d8958f4d835a2c1c0d845e223dbf1fa24",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -1",
+      "status": "PASS"
+    },
+    {
+      "key": "126434963130c5e0808d10f1b9bbf1abf124e4273f1934d2a67154d2043b7fd8",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 0n + 0",
+      "status": "PASS"
+    },
+    {
+      "key": "9831f972eba7f57ff567066edf12f87b66c1b701419fdb3e35a8f972f7cc1cce",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 0n + 1",
+      "status": "PASS"
+    },
+    {
+      "key": "abbba767de30643d2267e4d8ebb8df06f66ea32165dad61dadce4b21ef5567c4",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 0n - 1",
+      "status": "PASS"
+    },
+    {
+      "key": "9d8cb0c76ba31c48f6a1588df77960d8a8cbd61818762963181d04d5c6f8a018",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 1n",
+      "status": "PASS"
+    },
+    {
+      "key": "5f531c355d8527615bce5c08c570c6f8f873d6003a12d5ad25403b3b37a2ca25",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 1n - 0",
+      "status": "PASS"
+    },
+    {
+      "key": "f47ac1b41676ca0fc9b9f111136c4de3e9eed51f0e7e9742d05c3f683d43d663",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 1n + 1",
+      "status": "PASS"
+    },
+    {
+      "key": "94dd1efd500417ed43aced2c264928effbc324aa3395e5d332d4e605287f3d51",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 1n - 1",
+      "status": "PASS"
+    },
+    {
+      "key": "6b84005d6269270234f9286a6d5d4c35346f1470c9ec69f39fd54b08108e431d",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -1n",
+      "status": "PASS"
+    },
+    {
+      "key": "5ff7844e65ddcb78ea1e8a3ab8e67ea6ac36f1239e3d9fb11785cfa95fd71071",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -1n - 0",
+      "status": "PASS"
+    },
+    {
+      "key": "8142fac4496eb527ea01ebcbe577cdba66d05a6a30122684196a38b4dd1f03fc",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -1n + 1",
+      "status": "PASS"
+    },
+    {
+      "key": "6a1e026b58125444939e7aa1505245ff4478adb1fad888ce1ef622bca695d79c",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -1n - 1",
+      "status": "PASS"
+    },
+    {
+      "key": "5a7e60d6bbd126238a2500b1c904bf0e44360afa8f38275a48a89e8bd5d82ee9",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: +n+1",
+      "status": "PASS"
+    },
+    {
+      "key": "c82b809529abe6f65db395883705769174cf1fca7b63920fb3f4c217ae209750",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -n-1",
+      "status": "PASS"
+    },
+    {
+      "key": "2b170ab09a233747f952c2e68ac5ff0b2869c2c0505af1d8142cb2b4ae2dce51",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: n + 0",
+      "status": "PASS"
+    },
+    {
+      "key": "d399fd6d0fe21fea9f77cf6901f345170b1cbaeb6d5718715c4e6bc4cc954abd",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: n - 0",
+      "status": "PASS"
+    },
+    {
+      "key": "aec22f435238065aced0f92e6ec1c90711d7a47ed241dd052f42e899ab2584f5",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: 2n + 2",
+      "status": "PASS"
+    },
+    {
+      "key": "3911c6da0b726b8c6662b69e3e6e2139a9ca3d8c4c7d6247819e578fa9a79fca",
+      "test": "tests/wpt/css/css-syntax/anb-serialization.html",
+      "subtest": "anb-serialization.html: -2n - 2",
       "status": "PASS"
     }
   ]

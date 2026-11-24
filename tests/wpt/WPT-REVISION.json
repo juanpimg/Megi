@@ -2,5 +2,5 @@
   "revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
   "source": "web-platform-tests/wpt",
   "phase": 1,
-  "note": "SHA verified byte-for-byte against the three vendored CSS Syntax fixtures on 2026-11-24; see NOTICE.md"
+  "note": "SHA verified byte-for-byte against vendored fixtures; see NOTICE.md"
 }

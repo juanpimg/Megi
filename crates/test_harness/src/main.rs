@@ -27,7 +27,8 @@ pub(crate) use megi_test_harness::{
     TOKENIZER_EXPECTED_RUNS, TOKENIZER_SUITE_COUNT, TREE_EXPECTED_PASSED, TREE_EXPECTED_RUNS,
     TREE_SUITE_COUNT, XML_VIOLATION_UNANNOTATED_ERRORS, allowed_failures,
     css_harness::{
-        run_wpt_anb_parsing, run_wpt_declarations_trim_whitespace, run_wpt_input_preprocessing,
+        expanded::{run_wpt_anb_parsing_supported, run_wpt_anb_serialization},
+        run_wpt_declarations_trim_whitespace, run_wpt_input_preprocessing,
     },
     format_allowlist, is_known_tokenizer_multiset_gap,
     serializer_harness::run_serializer_suite_file,

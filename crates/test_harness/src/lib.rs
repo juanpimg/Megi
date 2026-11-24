@@ -272,9 +272,10 @@ pub const KNOWN_SERIALIZER_FAILURES: &[(&str, usize)] = &[];
 /// XHTML strings are not exercised; every case still has to match an `expected` HTML string.
 pub const SERIALIZER_XHTML_ALTERNATIVES_IGNORED: usize = 18;
 
-/// Number of CSS Syntax results reported by [`css_harness`] (9 declarations + 13 preprocessing
-/// + 8 An+B).
-pub const CSS_EXPECTED_RESULTS: usize = 30;
+/// Number of CSS Syntax results reported by [`css_harness`]: 9 declarations, 13 preprocessing,
+/// 58 supported `anb-parsing` and 20 `anb-serialization` checks (100 total). The 9 whitespace-
+/// rejection cases and the `@charset` fixture are documented limitations, never PASS.
+pub const CSS_EXPECTED_RESULTS: usize = 100;
 
 /// Expected number of allowed failures for `suite_name` in a known-failure allowlist.
 pub fn allowed_failures(allowlist: &[(&str, usize)], suite_name: &str) -> usize {

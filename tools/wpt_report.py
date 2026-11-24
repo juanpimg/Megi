@@ -3,8 +3,9 @@
 
 The numbers are parsed from `megi-test-harness --summary` (no hand-written P/T), the epoch comes
 from the SHA-pinned WPT revision plus the byte hash of the manifest, and each subtest carries the
-canonical key `sha256(test + NUL + subtest)`. The seed covers the three vendored CSS Syntax
-fixtures; `scope` states that explicitly so 30/30 is never mistaken for full WPT conformance.
+canonical key `sha256(test + NUL + subtest)`. The report covers the four vendored CSS Syntax
+fixtures actually executed by the harness; `scope` states that explicitly so 100/100 is never
+mistaken for full WPT conformance.
 
 Usage:
     python3 tools/wpt_report.py --write
@@ -129,8 +130,8 @@ def build_report(root: Path, output: str | None = None) -> dict:
             "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         },
         "run_info": {
-            "harness": "megi-test-harness --summary (CSS Syntax seed)",
-            "scope": "3 vendored CSS Syntax fixtures; NOT full WPT conformance",
+            "harness": "megi-test-harness --summary (CSS Syntax suites)",
+            "scope": "4 vendored CSS Syntax fixtures (100 executed subtests); NOT full WPT conformance",
             "adopted_subtests": total,
             "dirs": dirs,
         },
