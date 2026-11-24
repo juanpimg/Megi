@@ -37,23 +37,23 @@
 **Interfaces:**
 - Produces: `WorkPackage` dataclass con `id, source, file, expected, actual, spec, acceptance, verify_cmd, metric, milestone`, y `validate_wp(dict) -> Result<WorkPackage, str>`.
 
-- [ ] **Step 1: Test que falla**
+- [x] **Step 1: Test que falla**
 
 `test_wp_missing_verify_cmd_is_rejected`, `test_wp_metric_is_required`, `test_wp_id_format` (`WP-<FUENTE>-<clave>`).
 
-- [ ] **Step 2: Verificar que falla**
+- [x] **Step 2: Verificar que falla**
 
 Run: `python3 -m unittest tools.test_wp_schema -v` → FAIL.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `wp_schema.py` con el dataclass y validación estricta; `SCHEMA.md` documenta campos y ejemplos.
 
-- [ ] **Step 4: Verificar**
+- [x] **Step 4: Verificar**
 
 Run: `python3 -m unittest tools.test_wp_schema -v` → 3 tests OK.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/wp_schema.py tools/test_wp_schema.py docs/work-packages/SCHEMA.md
@@ -70,24 +70,24 @@ git commit -m "feat(wp): work package schema and strict validator"
 - Consumes: `tests/wpt/results/latest.json`, Test262 results, `docs/status/real-sites.json`, `fuzz/artifacts/`, `audit_coverage.py --check`, inventario de subsets, issues con plantillas.
 - Produces: archivos `docs/work-packages/queue/<id>.toml`.
 
-- [ ] **Step 1: Tests que fallan**
+- [x] **Step 1: Tests que fallan**
 
 Un test por fuente: dado un artefacto sintético, el generador produce un WP válido con el `metric` correcto (`wpt_passed`, `js262_passed`, `sites_passed`, `fuzz_crashes`, `audit_pending`, `depth_closed`, `user_issues`).
 
-- [ ] **Step 2: Verificar que falla**
+- [x] **Step 2: Verificar que falla**
 
 Run: `python3 -m unittest tools.test_wp_generate -v` → FAIL.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Cada generador lee su fuente, aplica deduplicación por ID y escribe TOML validado. El generador `depth` consulta un inventario `docs/work-packages/depth-inventory.toml` de subsets con caps pendientes de completar. El generador `user` usa `gh issue list` con las plantillas `crash`/`broken_site`.
 
-- [ ] **Step 4: Verificar**
+- [x] **Step 4: Verificar**
 
 Run: `python3 -m unittest tools.test_wp_generate -v && python3 tools/wp_generate.py --all --dry-run`
 Expected: 7 tests OK; salida lista WPs sin escribir.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/wp_generate.py tools/test_wp_generate.py docs/work-packages/depth-inventory.toml
@@ -105,24 +105,24 @@ git commit -m "feat(wp): seven automatic work package generators"
 - Consumes: cola de WPs, estado `in_progress` desde PRs abiertos con etiqueta `wp`.
 - Produces: selección de hasta 10 WPs,BOARD priorizado, bloqueo de nuevos inicios si hay 10 activos.
 
-- [ ] **Step 1: Tests que fallan**
+- [x] **Step 1: Tests que fallan**
 
 `test_max_ten_in_progress`, `test_priority_is_impact_times_frequency`, `test_refill_when_queue_below_twenty`, `test_agent_cannot_merge` (el planificador no genera comandos de merge).
 
-- [ ] **Step 2: Verificar que falla**
+- [x] **Step 2: Verificar que falla**
 
 Run: `python3 -m unittest tools.test_wp_plan -v` → FAIL.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `wp_plan.py --select` imprime los WPs a iniciar, priorizados por `impact*frequency` (campos del WP), respetando el límite. `--board` regenera `BOARD.md` con columnas `queued/in_progress/review/done`. Sin comandos de merge.
 
-- [ ] **Step 4: Verificar**
+- [x] **Step 4: Verificar**
 
 Run: `python3 -m unittest tools.test_wp_plan -v && python3 tools/wp_plan.py --board`
 Expected: 4 tests OK; BOARD con WPs reales.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tools/wp_plan.py tools/test_wp_plan.py docs/work-packages/BOARD.md
@@ -141,24 +141,24 @@ git commit -m "feat(wp): planner with concurrency cap and reflow"
 - Consumes: generadores + planificador.
 - Produces: ejecución diaria del relleno, dashboard con throughput real.
 
-- [ ] **Step 1: Tests que fallan**
+- [x] **Step 1: Tests que fallan**
 
 `test_workflow_runs_generators`, `test_dashboard_counts_closed_wps_from_commits`, `test_no_estimated_numbers`.
 
-- [ ] **Step 2: Verificar que falla**
+- [x] **Step 2: Verificar que falla**
 
 Run: `python3 -m unittest tools.test_wp_dashboard -v` → FAIL.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Workflow diario que ejecuta los siete generadores y `wp_plan --board`, abre/actualiza un issue de seguimiento. Dashboard que cuenta WPs cerrados desde mensajes de commit `WP-<id>` y calcula throughput semanal. Sin números estimados.
 
-- [ ] **Step 4: Verificar**
+- [x] **Step 4: Verificar**
 
 Run: `python3 -m unittest tools.test_wp_dashboard -v && python3 tools/check_docs_links.py`
 Expected: 3 tests OK; links OK.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/wp-refill.yml .github/workflows/ci.yml docs/status/work-packages.html tools/test_wp_dashboard.py
