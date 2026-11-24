@@ -28,8 +28,8 @@ Cargo.toml	78	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	208	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
-README.md	199	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+PROGRESS.md	251	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
+README.md	197	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 crates/bench/Cargo.toml	29	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2014,7 +2014,7 @@ tools/test_wp_generate.py	19	tool	F3	docs-cleanup	2026-11-24	covered	#2290	creat
 tools/test_wp_plan.py	30	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_progress.py	785	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	783	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_generate.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit

@@ -31,15 +31,13 @@ Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subte
 
 ## 📈 Estado del Proyecto
 
-[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![coverage](docs/status/badge-coverage.svg)](docs/status/coverage.html) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
+> **Progreso v2 — hitos M0–M12.** Las antiguas barras F1–F7 eran estimaciones de fase y han desaparecido. Cada barra cuenta ahora **criterios de aceptación verificables** del [plan aprobado](docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md), con la evidencia citada línea a línea en [`PROGRESS.md`](PROGRESS.md). Un hito se cierra sólo cuando todos sus criterios están verdes. Los números publicados son **conseguidos**, nunca planeados.
 
-[![Capability coverage](docs/status/coverage.svg)](docs/status/coverage.html) · [Progress map (checklist histórico)](docs/status/progress.svg)
+![Mapa de progreso M0–M12 (criterios verificados)](docs/status/progress.svg)
 
-**Pre-Alpha `v0.1.0`** · cobertura de capacidades verificable: ver **[`PROGRESS.md`](PROGRESS.md)** y **[`coverage.html`](docs/status/coverage.html)** · tests y líneas de Rust **actualizados en [`PROGRESS.md`](PROGRESS.md)** (badges superiores) · gate de conformidad **PASS** (4 suites) · **17 crates** · **17/17** crates con `#![forbid(unsafe_code)]`.
+[![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
 
-> **Estado Pre-Alpha (`v0.1.0`)**: Megi ya es compilable y ejecutable como navegador de escritorio (`megi`) y pipeline CLI (`render`), con HTML5, CSS3 (Flexbox/Grid/Container Queries/Layers/bidi), JS (Boa 0.22 + ES modules + `fetch`), SVG/SMIL e imágenes (PNG/JPEG/GIF/WebP). Ya están implementados las animaciones CSS `@keyframes`/`transition` en runtime y el aislamiento multiproceso por pestaña; siguen pendientes el shaping de scripts complejos (árabe/hebreo/tailandés/CJK) y la accesibilidad nativa completa (ver `docs/status/coverage.html`).
-> El porcentaje del antiguo mapa de fases era un promedio de estimaciones y **no** indicaba si el navegador es usable. Ahora el titular es `capacidades implementadas / conocidas`, con evidencia verificable y la lista de pendientes en **[`coverage.html`](docs/status/coverage.html)** (reglas en [`COVERAGE.md`](docs/status/COVERAGE.md)). El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)** (capturas y avisos reales de `render`).
-> Las métricas exactas se actualizan automáticamente en **[`PROGRESS.md`](PROGRESS.md)**. Para consultar el historial de versiones, revisa el **[`CHANGELOG.md`](CHANGELOG.md)**.
+**Pre-Alpha `v0.1.0`** · **17 crates** (17/17 con `#![forbid(unsafe_code)]`) · gate de conformidad **PASS** (4 suites) · tests, hitos cerrados y pendientes detallados en **[`PROGRESS.md`](PROGRESS.md)**. La [cobertura de capacidades](docs/status/coverage.html) es un informe aparte y autorreferencial: ya no se usa como titular del progreso. El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)**. Historial de versiones: **[`CHANGELOG.md`](CHANGELOG.md)**.
 
 ## 🤝 Contribuciones
 
@@ -169,7 +167,7 @@ graph TD
 
 -  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura detallada, modelo de memoria del DOM y política de dependencias.
 -  [`docs/SHOWCASE.md`](docs/SHOWCASE.md): Galería de capturas, fixtures y pruebas visuales de render.
--  [`docs/ROADMAP.md`](docs/ROADMAP.md): Plan de fases (`WP-*`) y estado del desarrollo a largo plazo.
+-  [`docs/ROADMAP.md`](docs/ROADMAP.md): puntero histórico; la ruta vigente está en `docs/AGENT-INDEX.md`.
 -  [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md): Metodología de benchmarks y mediciones de rendimiento.
 -  [`docs/FUZZING.md`](docs/FUZZING.md): Targets de fuzzing continuo y política de triaje de fallos.
 -  [`SECURITY.md`](SECURITY.md): Modelo de seguridad de memoria, límites anti-DoS y políticas de reporte.
