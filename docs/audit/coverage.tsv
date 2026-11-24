@@ -1377,6 +1377,7 @@ docs/audit/findings/wave2/repro-w2-assets/vis-inherit.svg	1	docs	F3	wave-max-mod
 docs/audit/findings/wave2/repro-w2-ci/blank_gate.py	22	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-256-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/findings/wave2/repro-w2-perf/gradient-4-stops.svg	1	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/audit/negative-matrix.toml	378	docs	F3	negative-matrix	2026-11-24	covered	M3-NEGATIVE-MATRIX	
 docs/audit/repros/browser/bad.gif	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.jpg	0	binary	-			exempt		not read line by line: binary
 docs/audit/repros/browser/bad.png	0	binary	-			exempt		not read line by line: binary
@@ -2092,6 +2093,7 @@ tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tools/audit_coverage.py	406	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
+tools/audit_negative_matrix.py	268	tool	F3	negative-matrix	2026-11-24	covered	M3-NEGATIVE-MATRIX	
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2110,6 +2112,7 @@ tools/real_site_check.py	274	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CO
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
+tools/test_audit_negative_matrix.py	138	tool	F3	negative-matrix	2026-11-24	covered	M3-NEGATIVE-MATRIX	
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
 tools/test_check_milestone.py	59	tool	F3	jp	2026-11-24	covered	#2290	
