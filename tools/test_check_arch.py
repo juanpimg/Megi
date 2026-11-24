@@ -153,6 +153,55 @@ class TestCheckArchPredicates(unittest.TestCase):
                 self.assertIn(required, all_section)
 
 
+class TestAliasedCrateImports(unittest.TestCase):
+    """Aliased `use` statements must not bypass the architecture gate."""
+
+    def _scan_with_alias(self, use_line: str) -> tuple[list[str], int]:
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "docs").mkdir()
+            (root / "docs" / "architecture-deps.toml").write_text(
+                '[edges]\nhtml = ["core"]\nrender = []\n'
+            )
+            (root / "docs" / "architecture-baseline.json").write_text(
+                json.dumps({"edges": {}, "oversized_files": {}, "forbidden_patterns": {}})
+            )
+            (root / "Cargo.toml").write_text(
+                '[workspace]\nmembers = ["crates/html", "crates/render"]\n'
+            )
+            for member, package in (("html", "megi-html"), ("render", "megi-render")):
+                crate = root / "crates" / member
+                (crate / "src").mkdir(parents=True)
+                (crate / "Cargo.toml").write_text(f'[package]\nname = "{package}"\n')
+                (crate / "src" / "lib.rs").write_text("// crate\n")
+            (root / "crates" / "html" / "src" / "lib.rs").write_text(use_line + "\n")
+            old_root, old_baseline = check_arch.ROOT, check_arch.BASELINE_PATH
+            try:
+                check_arch.ROOT = root
+                check_arch.BASELINE_PATH = root / "docs" / "architecture-baseline.json"
+                return check_arch.scan()
+            finally:
+                check_arch.ROOT, check_arch.BASELINE_PATH = old_root, old_baseline
+
+    def test_aliased_use_is_counted_as_forbidden_edge(self):
+        violations, _ = self._scan_with_alias("use megi_render as r;")
+        self.assertTrue(
+            any("forbidden edge: html -> render" in v for v in violations),
+            f"aliased import not reported: {violations}",
+        )
+
+    def test_pub_crate_aliased_use_is_counted_as_forbidden_edge(self):
+        violations, _ = self._scan_with_alias("pub(crate) use megi_render as r;")
+        self.assertTrue(
+            any("forbidden edge: html -> render" in v for v in violations),
+            f"pub(crate) aliased import not reported: {violations}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

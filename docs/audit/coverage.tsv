@@ -2104,7 +2104,7 @@ tools/audit_negative_matrix.py	270	tool	F3	jp	2026-11-24	covered	#2290	Re-read a
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/check_arch.py	173	tool	F3	jp	2026-11-19	covered	#1759	
+tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
 tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
@@ -2121,7 +2121,7 @@ tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGE
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_audit_negative_matrix.py	182	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
-tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	
+tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
 tools/test_check_milestone.py	95	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding CI unittest list regression test

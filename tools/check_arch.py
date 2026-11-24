@@ -91,7 +91,7 @@ def scan() -> tuple[list[str], int]:
     violations: list[str] = []
     legacy_count = 0
 
-    use_re = re.compile(r"^\s*(?:pub\s+)?use\s+(?:megi_)?([a-z0-9_]+)(?:::|;)")
+    use_re = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+(?:megi_)?([a-z0-9_]+)\s*(?:::|as\b|;)")
 
     for member, name in packages.items():
         manifest = tomllib.loads((ROOT / member / "Cargo.toml").read_text())
