@@ -29,7 +29,7 @@ Cargo.toml	78	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	262	docs	F3	f3-docs	2026-11-17	covered	#1506-#1515	
+PROGRESS.md	263	docs	F3	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	generated progress refreshed after security commit
 README.md	198	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass

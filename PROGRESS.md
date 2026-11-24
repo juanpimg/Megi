@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `824d10bb` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **21/63** (**33%**) · **3,339** tests · conformance **PASS** · **17** crates · **245,331** lines of Rust
+**Snapshot** — commit `ebdcb980` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **22/64** (**34%**) · **3,347** tests · conformance **PASS** · **17** crates · **245,573** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -16,7 +16,7 @@
 
 | Hito | Objetivo | Criterios verificados | % |
 |---|---|---|---|
-| **M0** | Verdad y cimiento | `████████████████░░░░` 5/6 | 83% |
+| **M0** | Verdad y cimiento | `█████████████████░░░` 6/7 | 85% |
 | **M1** | Interactividad | `██████████░░░░░░░░░░` 2/4 | 50% |
 | **M2** | Profundidad declarativa | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M3** | Frontera de seguridad | `████████░░░░░░░░░░░░` 2/5 | 40% |
@@ -29,11 +29,11 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `██████░░░░░░░░░░░░░░` 21/63 | **33%** |
+| | **Roadmap** | `██████░░░░░░░░░░░░░░` 22/64 | **34%** |
 
 ## Detalle de criterios por hito
 
-### M0 — Verdad y cimiento (83%)
+### M0 — Verdad y cimiento (85%)
 
 **Verificado**
 
@@ -42,6 +42,7 @@
 - Progreso publicado sin estimaciones de fase — `PROGRESS.md` derivado de criterios
 - Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`
 - Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`
+- F0: cookies same-site y no HttpOnly en el IPC; el renderer ya no devuelve cookies al parent — `cargo test -p megi-browser --test ipc_semantic_tests`
 
 **Pendiente**
 
@@ -204,10 +205,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `824d10bb` (2026-11-24) |
+| Commit | `ebdcb980` (2026-11-24) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 245331 |
-| Tests (`cargo test --workspace -- --list`) | 3339 |
+| Lines of Rust (tracked `.rs`) | 245573 |
+| Tests (`cargo test --workspace -- --list`) | 3347 |
 | Crates with `#![forbid(unsafe_code)]` | 17 / 17 |
 | Conformance gate | **PASS** |
 
