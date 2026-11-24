@@ -429,7 +429,7 @@ crates/html/tests/robustness/scripting.rs	107	test	F1	wave-max-mod	2026-11-19	co
 crates/html/tests/robustness/tokenizer.rs	225	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/tests/serializer_tests.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/image/src/avif.rs	51	src	F2	nullobj-merge	2026-11-24	covered	#upstream	re-read
+crates/image/src/avif.rs	51	src	F2	juanpimg	2026-11-24	covered	#1895	AVIF decode via authorized avif-rust crate (ADR-005); read: signature/caps/error mapping/RgbaImage contract
 crates/image/src/crc32.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/error.rs	93	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/src/exif.rs	331	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -527,7 +527,7 @@ crates/image/tests/fixtures/jpeg/reduced_1024x768.rgba	0	binary	-			exempt		not 
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s2.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s4.rgba	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/jpeg/reduced_1024x768_s8.rgba	0	binary	-			exempt		not read line by line: binary
-crates/image/tests/fixtures/lossless-sub8x8-palette.avif	12	test	F1	nullobj-merge	2026-11-24	covered	#upstream	re-read
+crates/image/tests/fixtures/lossless-sub8x8-palette.avif	12	test	F1	juanpimg	2026-11-24	covered	#1895	AVIF lossless fixture verified ISO Media AVIF, 1766 bytes
 crates/image/tests/fixtures/png/basic.png	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/png/filters_rgb16.png	0	binary	-			exempt		not read line by line: binary
 crates/image/tests/fixtures/png/filters_rgb16.rgba	0	binary	-			exempt		not read line by line: binary
@@ -704,7 +704,7 @@ crates/js/tests/custom_elements_tests.rs	54	test	F1	wave-max-mod	2026-11-19	cove
 crates/js/tests/dialog_tests.rs	60	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dom_edges_tests.rs	487	test	F1	merge-2001	2026-11-20	covered	#1935	re-read after upstream merge
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/element_prototype_tests.rs	26	test	F1	nullobj-merge	2026-11-24	covered	#upstream	re-read
+crates/js/tests/element_prototype_tests.rs	26	test	F1	juanpimg	2026-11-24	covered	#2245	Element.prototype querySelector(All) tests, read: import/method coverage
 crates/js/tests/es_modules.rs	499	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/es_modules_stub.rs	19	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/event_advanced_tests/animations.rs	113	test	F1	jp	2026-11-19	covered	#941,#942	
@@ -728,7 +728,7 @@ crates/js/tests/import_maps_r187.rs	314	test	F1	wave-max-mod	2026-11-19	covered	
 crates/js/tests/intl_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/jquery_tests.rs	124	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/js_tests.rs	335	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
+crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	juanpimg	2026-11-24	covered	#2273	Tests minified namespace import parsing (import*as ns)
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/shadow_dom_tests.rs	56	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1134,7 +1134,7 @@ crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	cover
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/document_cookie_tests.rs	113	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/encode_png_tests.rs	62	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/error_page_tests.rs	39	test	F1	docs-cleanup	2026-11-24	covered	#2255	
+crates/render/tests/error_page_tests.rs	39	test	F1	juanpimg	2026-11-24	covered	#2249	Integration tests: warn on CDN error pages served as HTTP 200
 crates/render/tests/event_loop_tests/budgets.rs	219	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/event_loop_tests/cli_workers.rs	130	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/event_loop_tests/common.rs	89	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1222,10 +1222,10 @@ crates/svg/src/document/visit.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/svg/src/gradient.rs	399	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/gradient/tests.rs	131	src	F2	juanpimg	2026-11-20	covered	#1863	gradient tests module, read before marking
 crates/svg/src/lib.rs	351	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/svg/src/path/flatten.rs	190	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/svg/src/path/flatten.rs	194	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/path/mod.rs	24	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/path/parser.rs	340	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/svg/src/path/tests.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/svg/src/path/tests.rs	72	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/pattern.rs	101	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/raster.rs	151	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/src/raster/canvas.rs	403	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1296,7 +1296,7 @@ deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata v
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
+docs/AVIF-STRATEGY.md	32	docs	F3	juanpimg	2026-11-24	covered	#1895	ADR-005 authorizing pure-Rust AVIF decoder (read and reviewed)
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/FUZZING.md	302	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1309,7 +1309,7 @@ docs/MILESTONES.md	152	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	doc
 docs/OUTREACH.md	150	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PHASE4-SUPPORT.md	237	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/REAL_SITE_RELIABILITY.md	95	docs	F3	dag-merge	2026-11-23	covered	#upstream	re-read
+docs/REAL_SITE_RELIABILITY.md	95	docs	F3	juanpimg	2026-11-24	covered	docs	Updated real-site reliability report with final fix results (PR #2270)
 docs/RELEASE.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	548	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned

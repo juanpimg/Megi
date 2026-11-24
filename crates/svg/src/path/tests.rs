@@ -44,6 +44,25 @@ fn test_arc_flags_compact_and_units() {
 }
 
 #[test]
+fn test_near_straight_large_radius_arc_does_not_loop() {
+    // #2248: `a726 726 0 0 0 dx dy` with a tiny endpoint delta is a nearly straight
+    // chord on a huge circle. When large_arc-flag == sweep-flag (both 0 here), SVG
+    // implementation notes F.6.5 require coefficient = -1; using +1 selects the major
+    // arc and produces a full circle (the black block in the Wikipedia wordmark).
+    let subpaths = points("M0 0a726 726 0 0 0 10.82-.2");
+    let pts = &subpaths[0].points;
+    let last = pts.last().copied().expect("arc endpoints");
+    assert!((last.0 - 10.82).abs() < 0.01 && (last.1 + 0.2).abs() < 0.01);
+    // A near-straight chord must stay inside a thin band; a wrongly-flipped major arc
+    // balloons to radius ~363 in y.
+    assert!(
+        pts.iter()
+            .all(|&(x, y)| (-1.0..=12.0).contains(&x) && (-2.0..=1.0).contains(&y)),
+        "near-straight arc must not loop: {pts:?}"
+    );
+}
+
+#[test]
 fn test_malformed_paths_error() {
     let mut used = 0usize;
     assert!(parse_path_data("30 30", &Limits::default(), &mut used).is_err());
