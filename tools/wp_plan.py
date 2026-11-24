@@ -138,7 +138,7 @@ def finish(root: Path, wid: str, metric: str) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     body = ""
     for key, fields in closed.items():
-        body += f"[{key}]\n"
+        body += f"[{json.dumps(key, ensure_ascii=False)}]\n"
         body += "".join(f'{field} = {json.dumps(str(value), ensure_ascii=False)}\n'
                         for field, value in fields.items())
         body += "\n"
