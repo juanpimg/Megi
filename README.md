@@ -11,14 +11,6 @@
 > **Megi** es un motor de navegación web moderno, open source e independiente desarrollado desde cero en **Rust** (Edición 2024), sin bifurcar (*fork*) Blink, WebKit ni Gecko. Su diseño se rige estrictamente por las especificaciones formales vivas de **WHATWG** y **W3C**, con verificación continua en bucle cerrado (*closed-loop testing*) contra **Web Platform Tests (WPT)** y **`html5lib-tests`**.
 
 ---
-
-## Megi Browser Shell
-
-![Megi Desktop Browser Showcase](docs/images/showcase.png)
-*Navegador interactivo Megi (`crates/browser`): chrome nativo con barra de navegación, pestañas, motor tipográfico y renderizado determinista de HTML/CSS de extremo a extremo. Para más ejemplos y capturas de renderizado, consulta la [Galería de Renders](docs/SHOWCASE.md).*
-
----
-
 ## 🧭 Hoja de ruta vigente (aprobada)
 
 Megi avanza hacia un **navegador 100 % utilizable en producción** con conformidad WPT verificable. La estrategia es la hoja de ruta **M0–M12** (dependencias lógicas, sin fechas) del PR #2290:
