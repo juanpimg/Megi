@@ -1,8 +1,18 @@
 [
   {
+    "path": "css/css-syntax/META.yml",
+    "sha256": "070460b7530b80374068ab862c4f5e2b1c90c3f8e9e021ceadac9bfa6c36367f",
+    "bytes": 111,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "upstream metadata (not a test fixture)",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "css/css-syntax/README.md",
-    "sha256": "b1cecb03781bc57ea7fa0c36e59c44c92563bb04e0327cb8cff4c1c1d76339e3",
-    "bytes": 3920,
+    "sha256": "4c973b42488aad84ec305456a2815a3c36dcb0a5720bb1f3bb51db785a190455",
+    "bytes": 4992,
     "license": "BSD-3-Clause",
     "kind": "skip",
     "skip_reason": "documentation (not a WPT fixture)",
@@ -17,7 +27,17 @@
     "kind": "testharness",
     "skip_reason": "",
     "dir": "css/css-syntax",
-    "subtest_count_expected": 8
+    "subtest_count_expected": 58
+  },
+  {
+    "path": "css/css-syntax/anb-serialization.html",
+    "sha256": "9016b296ae079a56c21233513ac8f0fd5223837c934c37e6541715fd47a09500",
+    "bytes": 1397,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "css/css-syntax",
+    "subtest_count_expected": 20
   },
   {
     "path": "css/css-syntax/declarations-trim-whitespace.html",

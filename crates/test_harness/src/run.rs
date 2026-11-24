@@ -398,7 +398,8 @@ pub fn run() {
         let mut results = Vec::new();
         results.extend(run_wpt_declarations_trim_whitespace(&wpt_css_dir)?);
         results.extend(run_wpt_input_preprocessing(&wpt_css_dir)?);
-        results.extend(run_wpt_anb_parsing(&wpt_css_dir)?);
+        results.extend(run_wpt_anb_parsing_supported(&wpt_css_dir)?);
+        results.extend(run_wpt_anb_serialization(&wpt_css_dir)?);
         if let Some(f) = filter {
             results.retain(|r| r.name.contains(f) || "css-syntax".contains(f));
         }

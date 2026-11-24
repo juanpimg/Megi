@@ -139,6 +139,15 @@ class WptGateTest(unittest.TestCase):
         allowed = wpt_gate.load_allowlist(ROOT / "tests/wpt/allowlist.toml")
         self.assertIsNone(wpt_gate.check_gate(current, saved, allowed))
 
+    def test_repository_report_has_at_least_100_real_passes(self) -> None:
+        """M4 floor: every reported PASS comes from the harness; the allowlist stays empty."""
+        current = wpt_gate.load_report(ROOT / "docs/status/wpt.json")
+        allowed = wpt_gate.load_allowlist(ROOT / "tests/wpt/allowlist.toml")
+        self.assertGreaterEqual(current["total"], 100, f"only {current['total']} subtests executed")
+        self.assertEqual(current["counts"]["pass"], current["total"], "a non-PASS would need an allowlist")
+        self.assertEqual(allowed, [], "allowlist must stay empty")
+        self.assertEqual(wpt_gate.canonical_key(TEST, NAME), key())
+
 
 if __name__ == "__main__":
     unittest.main()

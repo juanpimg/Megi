@@ -8,10 +8,12 @@
 //! An+B are extracted from the upstream HTML/JS sources rather than duplicated from memory, so
 //! fixture drift shows up as a loud error.
 //!
-//! The suite intentionally reports exactly 30 results: 9 declaration-trimming checks, 13 input
-//! preprocessing checks (10 extracted from WPT + 3 newline-normalization cases that upstream
-//! cannot express in JS), and 8 curated An+B checks whose expectations are cross-checked against
-//! `anb-parsing.html`. An+B coverage of the remaining upstream assertions is tracked as follow-up.
+//! The suite reports exactly 100 results: 9 declaration-trimming checks, 13 input preprocessing
+//! checks (10 extracted from WPT + 3 newline-normalization cases that upstream cannot express in
+//! JS), 58 supported `anb-parsing.html` assertions and all 20 `anb-serialization.html`
+//! assertions. See [`expanded`] for the documented engine limitations behind the exclusions.
+
+pub mod expanded;
 
 use std::path::Path;
 
@@ -24,7 +26,7 @@ pub struct CssTestResult {
     pub actual: String,
 }
 
-fn read_wpt_fixture(wpt_dir: &Path, file_name: &str) -> Result<String, String> {
+pub(super) fn read_wpt_fixture(wpt_dir: &Path, file_name: &str) -> Result<String, String> {
     let path = wpt_dir.join(file_name);
     std::fs::read_to_string(&path).map_err(|e| {
         format!(
@@ -160,7 +162,10 @@ type JsCallArgs = (Vec<u32>, Vec<u32>);
 ///
 /// Used to derive expectations directly from the vendored upstream files. A malformed call is an
 /// error: the fixture format is known, so silently skipping it would hide test coverage.
-fn extract_two_arg_js_calls(source: &str, func: &str) -> Result<Vec<JsCallArgs>, String> {
+pub(super) fn extract_two_arg_js_calls(
+    source: &str,
+    func: &str,
+) -> Result<Vec<JsCallArgs>, String> {
     let bytes = source.as_bytes();
     let mut calls = Vec::new();
     let mut search_from = 0;
@@ -205,7 +210,7 @@ fn extract_two_arg_js_calls(source: &str, func: &str) -> Result<Vec<JsCallArgs>,
     Ok(calls)
 }
 
-fn code_points_to_string(code_points: &[u32]) -> String {
+pub(super) fn code_points_to_string(code_points: &[u32]) -> String {
     code_points
         .iter()
         .map(|cp| char::from_u32(*cp).unwrap_or('\u{FFFD}'))
@@ -342,7 +347,7 @@ pub fn run_wpt_input_preprocessing(wpt_dir: &Path) -> Result<Vec<CssTestResult>,
 }
 
 /// Canonicalizes an `An+B` struct into the selector text WPT uses for `:nth-child(<An+B>)`.
-fn format_an_plus_b(anb: megi_css::AnPlusB) -> String {
+pub(super) fn format_an_plus_b(anb: megi_css::AnPlusB) -> String {
     if anb.a == 0 {
         return anb.b.to_string();
     }

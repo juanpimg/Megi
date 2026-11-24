@@ -17,8 +17,13 @@ fn test_closed_loop_wpt_css_syntax_suites() {
             .expect("WPT declarations-trim-whitespace.html fixture must run");
     let prep_results = megi_test_harness::css_harness::run_wpt_input_preprocessing(&wpt_css_dir)
         .expect("WPT input-preprocessing.html fixture must run");
-    let anb_results = megi_test_harness::css_harness::run_wpt_anb_parsing(&wpt_css_dir)
-        .expect("WPT anb-parsing.html fixture must run");
+    use megi_test_harness::css_harness::expanded::{
+        run_wpt_anb_parsing_supported, run_wpt_anb_serialization,
+    };
+    let anb_results =
+        run_wpt_anb_parsing_supported(&wpt_css_dir).expect("WPT anb-parsing.html fixture must run");
+    let serialization_results = run_wpt_anb_serialization(&wpt_css_dir)
+        .expect("WPT anb-serialization.html fixture must run");
 
     let mut results = decl_results;
     assert_eq!(
@@ -33,6 +38,12 @@ fn test_closed_loop_wpt_css_syntax_suites() {
         "input-preprocessing must yield 13 checks (10 WPT + 3 newline normalization)"
     );
     results.extend(anb_results);
+    assert_eq!(
+        results.len(),
+        9 + 13 + 58,
+        "anb-parsing must yield the 58 supported upstream checks"
+    );
+    results.extend(serialization_results);
     assert_eq!(
         results.len(),
         CSS_EXPECTED_RESULTS,

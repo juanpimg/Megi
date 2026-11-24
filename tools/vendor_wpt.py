@@ -35,11 +35,26 @@ MANIFEST_KEYS = {
     "path", "sha256", "bytes", "license", "kind", "skip_reason", "dir",
     "subtest_count_expected",
 }
-# Adopted subtests of the CSS Syntax seed, extracted by crates/test_harness/src/css_harness.rs.
+# Adopted subtests, all really executed by crates/test_harness/src/css_harness.rs (and its
+# `expanded` submodule). The count is the denominator of the honest WPT report; it must never
+# exceed the number of cases the harness extracts from the vendored fixture.
 SEED_COUNTS = {
     "css/css-syntax/declarations-trim-whitespace.html": 9,
     "css/css-syntax/input-preprocessing.html": 13,
-    "css/css-syntax/anb-parsing.html": 8,
+    "css/css-syntax/anb-parsing.html": 58,
+    "css/css-syntax/anb-serialization.html": 20,
+}
+# Upstream files deliberately not imported: the first two need getComputedStyle, which the engine
+# does not expose yet; the third requires @charset removal, which the stylesheet parser has not
+# implemented (it currently yields 4 rules instead of 1). Recording them here keeps every omission
+# explicit instead of silently dropping a fixture or inventing a PASS.
+EXCLUDED_PATHS = {
+    "css/css-syntax/ident-three-code-points.html",
+    "css/css-syntax/unicode-range-selector.html",
+    "css/css-syntax/charset-is-not-a-rule.html",
+}
+SKIP_PATHS = {
+    "css/css-syntax/META.yml": "upstream metadata (not a test fixture)",
 }
 
 
@@ -198,11 +213,16 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
         source_dir = source / directory
         if not source_dir.is_dir():
             raise ValueError(f"missing source directory: {source_dir}")
-        for path in sorted(source_dir.rglob("*")):
+        # Only direct children of each --dirs entry are fixtures: recursive imports would put
+        # nested WPT support directories under a manifest `dir` that does not match their path.
+        for path in sorted(source_dir.iterdir()):
             if not path.is_file():
                 continue
             relative = path.relative_to(source).as_posix()
+            if relative in EXCLUDED_PATHS:
+                continue
             skipped = any(marker in relative for marker in SKIP_MARKERS)
+            explicit_skip = SKIP_PATHS.get(relative)
             data = path.read_bytes()
             target = base / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -213,8 +233,9 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
                     "sha256": sha256_bytes(data),
                     "bytes": len(data),
                     "license": license_name,
-                    "kind": "skip" if skipped else "testharness",
-                    "skip_reason": "upstream manual/reference/testdriver file" if skipped else "",
+                    "kind": "skip" if skipped or explicit_skip else "testharness",
+                    "skip_reason": explicit_skip
+                    or ("upstream manual/reference/testdriver file" if skipped else ""),
                     "dir": directory,
                     "subtest_count_expected": SEED_COUNTS.get(relative, 0),
                 }
