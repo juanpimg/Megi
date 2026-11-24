@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `c403e466` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **21/63** (**33%**) · **3,339** tests · conformance **PASS** · **17** crates · **245,331** lines of Rust
+**Snapshot** — commit `824d10bb` (2026-11-24) · hitos cerrados **0/13** · criterios verificados **21/63** (**33%**) · **3,339** tests · conformance **PASS** · **17** crates · **245,331** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -204,7 +204,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `c403e466` (2026-11-24) |
+| Commit | `824d10bb` (2026-11-24) |
 | Crates in the workspace | 17 |
 | Lines of Rust (tracked `.rs`) | 245331 |
 | Tests (`cargo test --workspace -- --list`) | 3339 |
