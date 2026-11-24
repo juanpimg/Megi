@@ -61,4 +61,37 @@ class WorkPackageSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
         self.assertIn("profile", str(ctx.exception))
 
+    def test_milestone_m99_is_rejected(self):
+        data = self._valid(); data["milestone"] = "M99"
+        with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+        self.assertIn("milestone", str(ctx.exception))
+
+    def test_milestone_m12_is_accepted(self):
+        data = self._valid(); data["milestone"] = "M12"
+        self.assertEqual(wp_schema.validate_wp(data).milestone, "M12")
+
+    def test_impact_out_of_range_is_rejected(self):
+        for value in (0, 11):
+            with self.subTest(impact=value):
+                data = self._valid(); data["impact"] = value
+                with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+                self.assertIn("impact", str(ctx.exception))
+
+    def test_frequency_out_of_range_is_rejected(self):
+        for value in (0, 11):
+            with self.subTest(frequency=value):
+                data = self._valid(); data["frequency"] = value
+                with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+                self.assertIn("frequency", str(ctx.exception))
+
+    def test_non_numeric_impact_is_rejected_with_field_name(self):
+        data = self._valid(); data["impact"] = "muchos"
+        with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+        self.assertIn("impact", str(ctx.exception))
+
+    def test_priority_boundaries_are_accepted(self):
+        data = self._valid(); data["impact"] = 1; data["frequency"] = 10
+        wp = wp_schema.validate_wp(data)
+        self.assertEqual((wp.impact, wp.frequency), (1, 10))
+
 if __name__ == "__main__": unittest.main()

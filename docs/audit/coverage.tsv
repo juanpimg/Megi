@@ -2129,7 +2129,7 @@ tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	364	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_plan.py	188	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test del falso aviso de reposición con --profile heavy
-tools/test_wp_schema.py	64	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding profile TDD tests
+tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding milestone and priority validation TDD tests
 tools/test_wpt_gate.py	153	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	gate tests reviewed
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	325	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2139,6 +2139,6 @@ tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	447	tool	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: el aviso de reposición usa la cola total sin filtrar
-tools/wp_schema.py	64	tool	F3	jp	2026-11-24	covered	#2290	re-read after profile validation change
+tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290	re-read after milestone and priority validation change
 tools/wpt_gate.py	214	tool	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	monotonic P/T gate reviewed
 tools/wpt_report.py	206	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	report generator reviewed
