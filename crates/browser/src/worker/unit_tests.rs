@@ -22,6 +22,8 @@ fn fake_frame(generation: u64) -> RenderFrame {
         document: Arc::new(megi_webview::core::Document::new()),
         find_matches: Vec::new(),
         find_rects: Vec::new(),
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
     }
 }
 

@@ -58,8 +58,8 @@ crates/browser/src/a11y/snapshot.rs	199	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/browser/src/a11y/tests.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#1932	re-read
 crates/browser/src/a11y_backend.rs	445	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
-crates/browser/src/a11y_backend_orphan_tests.rs	103	src	F2	juanpimg	2026-11-24	covered	upstream-merge	Read: legitimate upstream file merged from another session, not authored by #1829
-crates/browser/src/a11y_live_tests.rs	78	src	F2	juanpimg	2026-11-24	covered	upstream-merge	a11y live verification tests from upstream
+crates/browser/src/a11y_backend_orphan_tests.rs	103	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
+crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/src/chrome.rs	436	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar_paint.rs	181	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -104,7 +104,7 @@ crates/browser/src/forms/controls.rs	389	src	F2	wave-max-mod	2026-11-19	covered	
 crates/browser/src/forms/edit.rs	409	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/live.rs	332	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/forms/live_dom.rs	163	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
-crates/browser/src/forms/live_tests.rs	343	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
+crates/browser/src/forms/live_tests.rs	345	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/forms/model.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/submit.rs	174	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/tests.rs	480	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -118,7 +118,7 @@ crates/browser/src/ipc/options.rs	386	src	F2	textcap-merge	2026-11-23	covered	#u
 crates/browser/src/ipc/process.rs	178	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/process_pool.rs	405	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/regions.rs	437	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/ipc/session.rs	220	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/src/ipc/session.rs	224	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/tests.rs	431	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/lib.rs	360	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -162,18 +162,19 @@ crates/browser/src/window/presentation.rs	298	src	F2	wave-max-mod	2026-11-19	cov
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/tests.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/ui.rs	422	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/worker.rs	395	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/worker.rs	457	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
-crates/browser/src/worker/render.rs	415	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/render.rs	417	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/store.rs	215	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/tests_extra.rs	196	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/types.rs	120	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/unit_tests.rs	245	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/tests_extra.rs	198	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/types.rs	124	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/unit_tests.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/process_e2e_tests.rs	163	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/tests/shell_tests/basics.rs	275	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
+crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/content.rs	129	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/find.rs	119	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -704,7 +705,7 @@ crates/js/tests/create_element_ns_tests.rs	25	test	F1	merge-1996	2026-11-19	cove
 crates/js/tests/crypto_security_tests.rs	44	test	F1	juanpimg	2026-11-24	covered	#2251	Integration test: getRandomValues/randomUUID use OS CSPRNG via getrandom
 crates/js/tests/custom_elements_tests.rs	54	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/dialog_tests.rs	60	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/document_location_tests.rs	21	test	F1	juanpimg	2026-11-24	covered	upstream-merge	Read: legitimate upstream file merged from another session, not authored by #1829
+crates/js/tests/document_location_tests.rs	21	test	F1	input-size-fix	2026-11-24	covered	#2247	re-read
 crates/js/tests/dom_edges_tests.rs	487	test	F1	merge-2001	2026-11-20	covered	#1935	re-read after upstream merge
 crates/js/tests/dom_normalize_tests.rs	44	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/element_prototype_tests.rs	26	test	F1	nullobj-merge	2026-11-24	covered	#upstream	re-read
@@ -1296,7 +1297,7 @@ crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maxima
 crates/webview/src/lib.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	juanpimg	2026-11-24	covered	upstream-merge	Read: legitimate upstream file merged from another session, not authored by #1829
+docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1313,7 +1314,7 @@ docs/MILESTONES.md	152	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	doc
 docs/OUTREACH.md	150	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PHASE4-SUPPORT.md	237	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/REAL-SITE-PERF.md	46	docs	F3	juanpimg	2026-11-24	covered	upstream-merge	Read: legitimate upstream file merged from another session, not authored by #1829
+docs/REAL-SITE-PERF.md	46	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/REAL_SITE_RELIABILITY.md	95	docs	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 docs/RELEASE.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	548	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned

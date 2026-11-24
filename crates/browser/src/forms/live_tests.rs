@@ -65,6 +65,8 @@ fn live_form_typing_avoids_dom_clones_and_renders_across_60_keystrokes() {
         document: Arc::new(doc),
         find_matches: Vec::new(),
         find_rects: Vec::new(),
+        location_actions: Vec::new(),
+        history_actions: Vec::new(),
     };
 
     let mut store = FrameStore::new();

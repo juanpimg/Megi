@@ -195,6 +195,63 @@ impl WindowApp {
     /// reloaded: the current DOM snapshot is re-rendered with `hashchange` and `popstate`
     /// dispatched on `window` so SPA routers can react (#1503). Any other navigation falls back
     /// to a full render.
+    /// Applies `location.*` / History API requests queued by page scripts in the
+    /// last render (#1828). Same-document state changes only rewrite the URL;
+    /// actual navigations reuse the existing link/back/forward paths.
+    fn apply_script_navigation(
+        &mut self,
+        location_actions: Vec<megi_webview::render::LocationAction>,
+        history_actions: Vec<megi_webview::render::HistoryAction>,
+    ) {
+        use megi_webview::render::{HistoryAction, LocationAction};
+        for action in location_actions {
+            let is_replace = matches!(action, LocationAction::Replace(_));
+            match action {
+                LocationAction::Assign(url) | LocationAction::Replace(url) => {
+                    if let Ok(target) = megi_webview::net::Url::parse(&url) {
+                        if is_replace && self.nav.replace_current(target.clone()) {
+                            self.input = target.as_str();
+                        } else {
+                            self.navigate_to(target);
+                        }
+                    }
+                }
+                LocationAction::Reload => self.reload(),
+            }
+        }
+        for action in history_actions {
+            match action {
+                HistoryAction::Back => self.go_back(),
+                HistoryAction::Forward => self.go_forward(),
+                HistoryAction::Go(0) => self.reload(),
+                HistoryAction::Go(delta) => {
+                    for _ in 0..delta.abs() {
+                        if delta < 0 {
+                            self.go_back();
+                        } else {
+                            self.go_forward();
+                        }
+                    }
+                }
+                // pushState/replaceState only change the URL/state for a
+                // same-document navigation; the shell has no state store yet.
+                HistoryAction::Push { url: Some(url), .. } => {
+                    if let Ok(target) = megi_webview::net::Url::parse(&url) {
+                        self.navigate_to(target);
+                    }
+                }
+                HistoryAction::Replace { url: Some(url), .. } => {
+                    if let Ok(target) = megi_webview::net::Url::parse(&url)
+                        && self.nav.replace_current(target.clone())
+                    {
+                        self.input = target.as_str();
+                    }
+                }
+                HistoryAction::Push { .. } | HistoryAction::Replace { .. } => {}
+            }
+        }
+    }
+
     pub(super) fn apply_history_navigation(
         &mut self,
         url: &megi_webview::net::Url,
@@ -357,8 +414,13 @@ impl WindowApp {
                     }
                     // Take unique ownership of the frame's Document (`strong_count == 1`) so live
                     // form edits mutate in-place via `Arc::make_mut` without cloning the DOM (#2199).
+                    // #1828: consume navigation requests emitted by page scripts
+                    // during this render (location.*, history.*).
+                    let script_location_actions = frame.location_actions.clone();
+                    let script_history_actions = frame.history_actions.clone();
                     self.document = self.store.take_frame_document();
                     self.live_forms.on_frame_applied();
+                    self.apply_script_navigation(script_location_actions, script_history_actions);
                 }
                 None => {
                     self.render_pending = false;

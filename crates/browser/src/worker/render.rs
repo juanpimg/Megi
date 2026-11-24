@@ -222,6 +222,8 @@ pub fn render_document_with_options(
         document: Arc::new(document),
         find_matches,
         find_rects,
+        location_actions: output.location_actions.clone(),
+        history_actions: output.history_actions.clone(),
     })
 }
 
