@@ -1,11 +1,13 @@
 """Tests for the WP planner: concurrency cap, priority, reflow and machine profile."""
 import contextlib
 import io
+import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
-from tools import wp_plan
+from tools import wp_dashboard, wp_plan
 from tools.wp_schema import WorkPackage
 
 def make_wp(wid, impact=1, frequency=1):
@@ -136,6 +138,34 @@ class PlannerTests(unittest.TestCase):
             self.assertFalse((queue / "WP-DEPTH-00.toml").exists())
             closed = wp_plan.load_closed(root)
             self.assertEqual(closed["WP-DEPTH-00"]["metric"], "hito M0 cerrado")
+
+    def test_done_quotes_toml_key_for_id_with_dot(self) -> None:
+        wid = "WP-SITE-example.com"
+        metric = "sites_passed 99->100"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for args in (
+                ["init", "--quiet"],
+                ["config", "user.email", "test@megi.local"],
+                ["config", "user.name", "Megi Test"],
+            ):
+                subprocess.run(["git", "-C", str(root), *args], check=True,
+                               capture_output=True, text=True)
+            (root / "README.md").write_text("x\n", encoding="utf-8")
+            for args in (["add", "README.md"], ["commit", "--quiet", "-m", f"feat(wp): {wid} close"]):
+                subprocess.run(["git", "-C", str(root), *args], check=True,
+                               capture_output=True, text=True)
+            write_queue_wp(root, wid)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(wp_plan.main(["--claim", wid, "--root", str(root)]), 0)
+                self.assertEqual(
+                    wp_plan.main(["--done", wid, "--metric", metric, "--root", str(root)]), 0,
+                )
+            with (root / "docs/work-packages/closed.toml").open("rb") as handle:
+                raw = tomllib.load(handle)
+            self.assertIn(wid, raw)  # flat key, not a nested [WP-SITE] table
+            self.assertEqual(wp_plan.load_closed(root)[wid]["metric"], metric)
+            self.assertEqual(wp_dashboard.collect(root)["closed"], 1)
 
     def test_board_honors_profile_filter(self) -> None:
         light = make_wp("WP-DEPTH-light")
