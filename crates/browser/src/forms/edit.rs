@@ -114,6 +114,13 @@ impl ImeState {
         self.enabled
     }
 
+    /// Whether an IME composition is currently in progress (#1722). While this is true,
+    /// backends must not insert composing bytes from `KeyboardInput` — only `Ime::Commit`
+    /// writes to the editor, so the text is inserted exactly once.
+    pub fn is_composing(&self) -> bool {
+        self.composing
+    }
+
     /// Sets the current preedit text (empty string clears it).
     pub fn set_preedit(&mut self, text: String) {
         self.preedit = text;
@@ -153,8 +160,13 @@ impl ImeState {
     }
 
     /// Commits the composition: returns the final text and clears the preedit.
+    ///
+    /// #1722: this is the path `Ime::Commit` uses (not `commit_events`), so it must also
+    /// end the composing state. Otherwise the `KeyboardInput` guard keeps swallowing
+    /// every subsequent keystroke after an address-bar commit.
     pub fn commit(&mut self, text: String) -> String {
         self.preedit.clear();
+        self.composing = false;
         text
     }
 }

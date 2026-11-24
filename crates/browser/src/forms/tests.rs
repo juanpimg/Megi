@@ -449,6 +449,25 @@ fn form_ids_survive_hostile_page_values() {
 }
 
 #[test]
+fn ime_commit_ends_composition_so_keys_insert_once() {
+    // #1722: committing (the `Ime::Commit` path uses commit(), not commit_events())
+    // must end composition, otherwise the KeyboardInput guard swallows later keys.
+    let mut ime = ImeState::new();
+    ime.enable();
+    ime.preedit_events("に".to_owned());
+    assert!(ime.is_composing());
+    assert_eq!(ime.commit("にほん".to_owned()), "にほん");
+    assert!(!ime.is_composing(), "commit() must end composition (#1722)");
+    ime.preedit_events("x".to_owned());
+    assert!(ime.is_composing());
+    ime.commit_events("x".to_owned());
+    assert!(!ime.is_composing(), "commit_events() must end composition");
+    ime.preedit_events("y".to_owned());
+    ime.disable();
+    assert!(!ime.is_composing(), "disable() must cancel composition");
+}
+
+#[test]
 fn ime_state_emits_composition_event_sequence() {
     // F7-IME: DOM compositionstart/update/end map to the OS IME lifecycle.
     let mut ime = ImeState::new();

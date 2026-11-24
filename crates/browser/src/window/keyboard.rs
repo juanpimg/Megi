@@ -14,6 +14,14 @@ impl WindowApp {
         alt_pressed: bool,
         shift_pressed: bool,
     ) -> bool {
+        // #1722: during IME composition some backends deliver the composing bytes as
+        // `KeyboardInput` *and* as `Ime::Commit`. Inserting both doubles the text
+        // (`にほんにほん`). Ignore key-driven changes while composing; only `Ime::Commit`
+        // writes to the editor. winit 0.30 has no public `event.is_composing`, so use the
+        // state tracked by `handle_ime`.
+        if self.ime.is_composing() {
+            return false;
+        }
         if matches!(key, Key::Named(NamedKey::Tab)) && !self.focus_targets.is_empty() {
             let prev_focus = self.focused_control().map(|control| control.form_id);
             if shift_pressed {
