@@ -1183,6 +1183,7 @@ crates/render/tests/js_corpus_tests.rs	228	test	F1	recon-js	2026-11-24	covered	W
 crates/render/tests/js_geometry_tests.rs	72	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/js_providers_tests.rs	330	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/mixed_content_tests.rs	423	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/module_scripts_minified_tests.rs	92	test	F1	opencode-agent	2026-11-24	covered	#2242	E2E render coverage of minified ES namespace import; asserts no scripts_failed/console_errors/warnings and post-script DOM text ns-minified-ok
 crates/render/tests/module_scripts_tests.rs	181	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/network_advanced_tests/common.rs	203	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/network_advanced_tests/compression.rs	81	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1857,6 +1858,8 @@ tests/fixtures/render/modules/chain.js	3	fixture	F1	waveF1	2026-11-17	covered	#1
 tests/fixtures/render/modules/colors.js	2	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/modules/geometry.js	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/modules/meta.js	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/modules/minified_dep.js	1	fixture	F1	opencode-agent	2026-11-24	covered	#2242	Minified local dependency exporting value for the E2E namespace import; offline file URL, no network
+tests/fixtures/render/modules/minified_namespace.html	8	fixture	F1	opencode-agent	2026-11-24	covered	#2242	Local HTML fixture with minified script type=module using import*as ns from ./minified_dep.js and writing ns.value into div#out
 tests/fixtures/render/modules/observer_timer.js	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/modules/painter.js	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/object_fit.html	27	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
