@@ -18,7 +18,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	206	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/wp-refill.yml	50	ci	F3			pending		
+.github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 .gitignore	50	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 AGENTS.md	114	docs	F3	jp	2026-11-19	covered	#1759	
@@ -1437,54 +1437,54 @@ docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-clean
 docs/work-packages/BOARD.md	65	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/README.md	54	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	50	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/depth-inventory.toml	443	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m0-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m1-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m1-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m10-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m10-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m10-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m10-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m10-05.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m11-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m11-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m11-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m12-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m12-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m2-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m2-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m2-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m3-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m3-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m3-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m4-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m4-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m4-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m4-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m5-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m5-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m5-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m5-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m6-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m6-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m6-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m6-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m7-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m7-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m7-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m7-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m8-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m8-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m8-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m9-01.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m9-02.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m9-03.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-SITE-rust.toml	13	docs	F3			pending		
-docs/work-packages/queue/WP-SITE-wikipedia.toml	13	docs	F3			pending		
+docs/work-packages/depth-inventory.toml	443	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m0-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m1-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m1-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m10-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m10-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m10-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m10-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m10-05.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m11-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m11-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m11-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m12-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m12-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m2-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m2-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m2-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m3-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m3-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m3-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m4-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m4-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m4-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m4-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m5-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m5-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m5-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m5-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m6-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m6-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m6-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m6-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m7-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m7-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m7-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m7-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m8-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m8-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m8-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m9-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m9-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m9-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-SITE-rust.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-SITE-wikipedia.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
@@ -2060,7 +2060,7 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	148	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_soak_fuzz.py	139	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_wp_dashboard.py	65	tool	F3			pending		
+tools/test_wp_dashboard.py	65	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	162	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_plan.py	74	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/test_wp_schema.py	38	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
@@ -2068,7 +2068,7 @@ tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/update_progress.py	783	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/wp_dashboard.py	102	tool	F3			pending		
+tools/wp_dashboard.py	102	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	286	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wp_plan.py	106	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 tools/wp_schema.py	52	tool	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
