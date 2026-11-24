@@ -36,6 +36,10 @@ pub struct Session {
     pub recent: Vec<crate::history::HistoryEntry>,
     /// Per-origin zoom values (newest first, capped, optional extension).
     pub site_zooms: Vec<(String, f64)>,
+    /// Reader-mode page (a `data:` URL) for the active tab, when it was in reader mode
+    /// (#1725). Reader mode is a window-global view, so it is persisted at session level.
+    /// Old sessions without this key parse as `None`.
+    pub reader_html: Option<String>,
 }
 
 impl Session {
@@ -47,6 +51,7 @@ impl Session {
             tabs: Vec::new(),
             recent: Vec::new(),
             site_zooms: Vec::new(),
+            reader_html: None,
         }
     }
 
@@ -99,6 +104,7 @@ impl Session {
             tabs: session_tabs,
             recent: Vec::new(),
             site_zooms: Vec::new(),
+            reader_html: None,
         }
     }
 
@@ -206,13 +212,21 @@ impl Session {
             .iter()
             .map(|(origin, zoom)| format!("[{},{}]", json_string(origin), zoom))
             .collect();
+        // #1725: keep the reader-mode page so an `about:reader` tab restores its content
+        // instead of an empty placeholder. Optional key: old sessions remain parseable.
+        let reader_html = self
+            .reader_html
+            .as_deref()
+            .map(|html| format!(",\"readerHtml\":{}", json_string(html)))
+            .unwrap_or_default();
         format!(
-            "{{\"version\":{},\"active\":{},\"tabs\":[{}],\"recent\":[{}],\"siteZooms\":[{}]}}",
+            "{{\"version\":{},\"active\":{},\"tabs\":[{}],\"recent\":[{}],\"siteZooms\":[{}]{}}}",
             self.version,
             self.active,
             tabs.join(","),
             recent.join(","),
-            zooms.join(",")
+            zooms.join(","),
+            reader_html
         )
     }
 
@@ -315,12 +329,18 @@ impl Session {
                 site_zooms.push((origin.to_owned(), zoom));
             }
         }
+        // #1725: the reader-mode data URL, if this session was saved while in reader mode.
+        let reader_html = get("readerHtml")
+            .and_then(JsonValue::as_str)
+            .filter(|html| html.starts_with("data:text/html,"))
+            .map(str::to_owned);
         let mut session = Self {
             version: SCHEMA_VERSION,
             active,
             tabs,
             recent,
             site_zooms: crate::zoom::normalize_site_zooms(site_zooms),
+            reader_html,
         };
         session.normalize();
         Ok(session)

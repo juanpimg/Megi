@@ -53,6 +53,7 @@ pub(crate) fn sample() -> Session {
         ],
         recent: Vec::new(),
         site_zooms: Vec::new(),
+        reader_html: None,
     }
 }
 
@@ -63,6 +64,43 @@ fn json_roundtrip_is_deterministic() {
     let parsed = Session::from_json(&json).expect("parse");
     assert_eq!(parsed, session);
     assert_eq!(parsed.to_json(), json, "writer is deterministic");
+}
+
+#[test]
+fn json_roundtrip_preserves_reader_html_1725() {
+    let mut session = sample();
+    session.reader_html = Some(
+        "data:text/html,%3Ctitle%3EReader%3C%2Ftitle%3E%3Ch1%3EArticle%3C%2Fh1%3E".to_string(),
+    );
+    let json = session.to_json();
+    let parsed = Session::from_json(&json).expect("parse");
+    assert_eq!(parsed.reader_html, session.reader_html);
+    assert_eq!(parsed.to_json(), json, "writer is deterministic");
+}
+
+#[test]
+fn old_session_without_reader_html_parses_1725() {
+    let mut session = sample();
+    session.reader_html = None;
+    let json = session.to_json();
+    assert!(
+        !json.contains("readerHtml"),
+        "optional key omitted when absent"
+    );
+    let parsed = Session::from_json(&json).expect("parse");
+    assert_eq!(parsed.reader_html, None);
+}
+
+#[test]
+fn non_data_reader_html_is_rejected_1725() {
+    let mut session = sample();
+    session.reader_html = Some("javascript:alert(1)".to_string());
+    let json = session.to_json();
+    let parsed = Session::from_json(&json).expect("parse");
+    assert_eq!(
+        parsed.reader_html, None,
+        "only data:text/html URLs are accepted"
+    );
 }
 
 #[test]
@@ -111,6 +149,7 @@ fn normalization_caps_history_tabs_and_clamps_values() {
         tabs,
         recent: Vec::new(),
         site_zooms: Vec::new(),
+        reader_html: None,
     };
     session.normalize();
     assert_eq!(session.tabs.len(), MAX_SESSION_TABS);
