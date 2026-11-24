@@ -6,8 +6,8 @@
 //! upstream sentinel for a rejected `:nth-child()` selector: no `AnPlusB` pseudo-class means the
 //! engine rejected the formula. A mismatch is reported as FAIL and the gate rejects it.
 //!
-//! Spec: https://drafts.csswg.org/css-syntax/#the-anb-type and
-//! https://drafts.csswg.org/css-syntax/#serializing-anb
+//! Spec: <https://drafts.csswg.org/css-syntax/#the-anb-type> and
+//! <https://drafts.csswg.org/css-syntax/#serializing-anb>
 
 use std::path::Path;
 
