@@ -79,6 +79,13 @@ class SoakRotationTests(unittest.TestCase):
         missing = sorted(bins - targets)
         self.assertEqual(missing, [], f"ASan targets missing from soak rotation: {missing}")
 
+    def test_new_fuzz_seed_targets_are_in_the_soak_rotation(self) -> None:
+        # 65685d3d added three ASan harnesses but only wired the [[bin]] manifest;
+        # without a TARGETS entry the weekly campaign never fuzzes them.
+        targets = set(_soak_targets())
+        for name in ("cookie_parse", "css_animation", "svg_path"):
+            self.assertIn(name, targets, f"{name} must be in TARGETS for the soak campaign")
+
     def test_one_full_rotation_fits_in_the_default_budget(self) -> None:
         # #1833: 21 targets * 900 s = 18 900 s exceeded the 5 h (18 000 s) workflow
         # budget, so the last target never ran before the job timed out.

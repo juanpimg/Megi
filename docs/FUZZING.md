@@ -249,11 +249,9 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 28 harnesses exist in `fuzz/fuzz_targets/` (28 `[[bin]]` targets) and 170 seed corpus files
-  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 27 ASan matrix
-  entries (10 at 600 s, 15 at 300 s) plus 9 UBSan smoke entries (120 s each); `charset`,
-  `compression`, and `http_head` are built by the PR/build job but are not currently in the
-  ASan/UBSan matrices.
+- 31 harnesses exist in `fuzz/fuzz_targets/` (31 `[[bin]]` targets) and 173 seed corpus files
+  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 31 ASan matrix
+  entries (10 at 600 s, 21 at 300 s) plus 9 UBSan smoke entries (120 s each).
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 
@@ -271,8 +269,8 @@ get that:
   (`fuzz-corpus-soak-*`), so each week starts where the previous one stopped, and
   logs plus crash artifacts are uploaded even when the campaign fails.
 * **Locally**: `tools/soak_fuzz.sh --hours 24` runs the same rotation on this
-  machine. Useful flags: `--slice-seconds 600` (time per target per rotation, default
-  600 — the 27-target rotation needs ≤ 666 s to fit the 5 h scheduled budget, #1833),
+  machine. Useful flags: `--slice-seconds 550` (time per target per rotation, default
+  550 — the 31-target rotation needs ≤ 580 s to fit the 5 h scheduled budget, #1833),
   `--targets "html_parse css_parse"`, `--out target/soak`. It keeps
   `fuzz/corpus/<target>` between rotations, mirrors any libFuzzer artifact into
   `target/soak/crashes/<target>/`, and exits non-zero if a target run failed.

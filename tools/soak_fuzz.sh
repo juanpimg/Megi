@@ -29,9 +29,10 @@
 set -euo pipefail
 
 HOURS=24
-# 28 targets × 600 s = 16 800 s fits a full rotation inside the 5 h (18 000 s)
-# scheduled workflow budget (#1833). At 900 s the last target never ran.
-SLICE_SECONDS=600
+# 31 targets × 550 s = 17 050 s fits a full rotation inside the 5 h (18 000 s)
+# scheduled workflow budget (#1833). At 600 s a rotation needs 18 600 s and the
+# last target would never run before the job deadline.
+SLICE_SECONDS=550
 SHARD_INDEX=0
 SHARD_COUNT=1
 OUT="target/soak"
@@ -64,6 +65,9 @@ TARGETS=(
   layout_resolve
   net_surface
   charset
+  cookie_parse
+  css_animation
+  svg_path
 )
 
 while [[ $# -gt 0 ]]; do

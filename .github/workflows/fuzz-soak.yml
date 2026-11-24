@@ -21,9 +21,9 @@ on:
         required: false
         default: "5"
       slice_seconds:
-        description: "Seconds per target per rotation (2400 with 4 shards gives 40 min/target)"
+        description: "Seconds per target per rotation (2100 with 4 shards gives 35 min/target)"
         required: false
-        default: "2400"
+        default: "2100"
       runner:
         description: "Runner label ('hosted' for the 5 h CI matrix, 'self-hosted' for a 24 h deep run)"
         required: false
@@ -54,8 +54,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # X-FUZZ-LONG: four shards run in parallel, each fuzzing ~7 targets for
-        # 2400 s per rotation (40 min/target) instead of 600 s sequentially.
+        # X-FUZZ-LONG: four shards run in parallel, each fuzzing ~8 targets for
+        # 2100 s per rotation (35 min/target) instead of 550 s sequentially.
+        # 8 targets per shard × 2100 s = 16 800 s stays inside the 5 h budget.
         shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -90,7 +91,7 @@ jobs:
       - name: Run the campaign
         env:
           HOURS: ${{ github.event.inputs.hours || '5' }}
-          SLICE_SECONDS: ${{ github.event.inputs.slice_seconds || '2400' }}
+          SLICE_SECONDS: ${{ github.event.inputs.slice_seconds || '2100' }}
           TARGETS: ${{ github.event.inputs.targets }}
         run: |
           set -euo pipefail
