@@ -30,6 +30,7 @@ pub(crate) fn run_resource_stage<'a>(
         document_bytes,
         charset,
         status,
+        initial_warning,
         content_encoding,
         limit_violations,
         cache,
@@ -220,8 +221,12 @@ pub(crate) fn run_resource_stage<'a>(
     );
     let backgrounds_time = backgrounds_start.elapsed();
 
+    if let Some(warning) = initial_warning {
+        warnings.push(warning);
+    }
     Ok((
         ParsedDocumentInput {
+            initial_warning: None,
             document,
             document_url,
             document_headers,

@@ -40,6 +40,7 @@ pub(crate) fn run_script_stage<'a>(
         document_bytes,
         charset,
         status,
+        initial_warning,
         content_encoding,
         limit_violations,
         cache,
@@ -394,6 +395,7 @@ pub(crate) fn run_script_stage<'a>(
 
     Ok((
         ParsedDocumentInput {
+            initial_warning,
             document,
             document_url,
             document_headers,

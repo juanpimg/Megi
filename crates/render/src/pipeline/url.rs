@@ -119,7 +119,7 @@ pub(crate) fn render_url_with_context(
     document_fetch_options.origin = None;
     document_fetch_options.accept_push |= options.accept_server_push;
     let mut document_loader = ResourceLoader::with_options(document_fetch_options.clone());
-    let loaded = load_document(
+    let mut loaded = load_document(
         &url,
         &mut document_loader,
         &document_fetch_options,
@@ -202,6 +202,7 @@ pub(crate) fn render_url_with_context(
         document_bytes: loaded.bytes.len(),
         charset: decoded.charset,
         status: loaded.status,
+        initial_warning: loaded.warning.take(),
         content_encoding: loaded.content_encoding,
         limit_violations: parse.limit_violations,
         cache,
@@ -214,8 +215,33 @@ pub(crate) fn render_url_with_context(
 }
 
 /// Main document loaded by [`render_url`], before decoding.
+/// Detects corporate/CDN error pages served with HTTP 200 (Akamai "Access
+/// Denied", Cloudflare "Just a moment...", generic Forbidden). Such bodies are
+/// tiny HTML documents whose title or first heading is an error marker, and
+/// would otherwise render as a blank page with no warning (#2249).
+fn error_page_warning(bytes: &[u8]) -> Option<String> {
+    if bytes.len() > 16 * 1024 {
+        return None;
+    }
+    let lower = String::from_utf8_lossy(bytes).to_ascii_lowercase();
+    for marker in [
+        "access denied",
+        "403 forbidden",
+        "just a moment...",
+        "attention required! | cloudflare",
+        "request blocked",
+    ] {
+        if lower.contains(marker) {
+            return Some(format!("possible error page ({marker}) served as HTTP 200"));
+        }
+    }
+    None
+}
+
 pub(crate) struct LoadedDocument {
     pub(crate) bytes: Vec<u8>,
+    /// Non-fatal diagnostic for a body that looks like a CDN error page (#2249).
+    pub(crate) warning: Option<String>,
     pub(crate) url: Url,
     pub(crate) content_type: String,
     pub(crate) status: Option<u16>,
@@ -275,8 +301,10 @@ fn load_document(
                 std::mem::take(&mut response.body)
             };
             let content_type = megi_net::resolve_content_type(&response.headers, &bytes);
+            let warning = error_page_warning(&bytes);
             Ok(LoadedDocument {
                 headers: response.headers,
+                warning,
                 bytes,
                 url: response.final_url,
                 content_type,
@@ -287,6 +315,7 @@ fn load_document(
         Scheme::File | Scheme::Data => {
             let resource = loader.load(url)?;
             Ok(LoadedDocument {
+                warning: error_page_warning(&resource.bytes),
                 bytes: resource.bytes.clone(),
                 url: resource.url.clone(),
                 content_type: resource.content_type.clone(),

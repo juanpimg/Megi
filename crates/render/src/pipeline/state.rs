@@ -40,6 +40,8 @@ pub(crate) struct ParsedDocumentInput<'a> {
     pub(crate) document_bytes: usize,
     pub(crate) charset: String,
     pub(crate) status: Option<u16>,
+    /// Non-fatal CDN error-page diagnostic (#2249).
+    pub(crate) initial_warning: Option<String>,
     pub(crate) content_encoding: Option<String>,
     pub(crate) limit_violations: megi_html::LimitViolations,
     pub(crate) cache: Option<&'a mut RenderCache>,
