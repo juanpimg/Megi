@@ -115,13 +115,14 @@ crates/browser/src/headless.rs	459	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/i18n.rs	218	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/ipc.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	IPC transport module from main merge
-crates/browser/src/ipc/options.rs	386	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
+crates/browser/src/ipc.rs	465	src	F2	juanpimg	2026-11-20	covered	N/A	IPC transport module from main merge
+crates/browser/src/ipc/cookie_policy.rs	119	src	F2	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	strict per-site cookie policy, RFC6265 5.1.3/5.2.5, PSL eTLD+1
+crates/browser/src/ipc/options.rs	393	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/ipc/process.rs	178	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/process_pool.rs	405	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/ipc/regions.rs	437	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/ipc/session.rs	224	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/ipc/tests.rs	431	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/src/ipc/session.rs	223	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
+crates/browser/src/ipc/tests.rs	429	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/lib.rs	363	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -164,7 +165,7 @@ crates/browser/src/window/presentation.rs	325	src	F2	juanpimg	2026-11-24	covered
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/tests.rs	249	src	F2	juanpimg	2026-11-24	covered	#1724	TDD tests for document IME preedit status
 crates/browser/src/window/ui.rs	425	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/worker.rs	457	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/worker.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 crates/browser/src/worker/render.rs	417	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -174,6 +175,7 @@ crates/browser/src/worker/types.rs	124	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/browser/src/worker/unit_tests.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/ipc_semantic_tests.rs	134	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
 crates/browser/tests/process_e2e_tests.rs	163	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

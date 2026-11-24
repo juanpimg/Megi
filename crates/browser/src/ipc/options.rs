@@ -70,20 +70,22 @@ impl IpcCookie {
         }
     }
 
-    /// Snapshots all cookies from a shared [`CookieJar`].
-    pub fn from_jar(jar: &Mutex<CookieJar>) -> Vec<Self> {
-        let Ok(guard) = jar.lock() else {
-            return Vec::new();
-        };
-        guard.iter().map(Self::from_cookie).collect()
-    }
-
     /// Replays serialized cookies into `jar` via `CookieJar::store_set_cookie`.
+    ///
+    /// `HttpOnly` is a local jar flag only: it is never granted through IPC, so
+    /// wire entries carrying it are dropped here (RFC 6265 §5.2.5).
     pub fn apply_to_jar(cookies: &[Self], jar: &mut CookieJar) {
         let now_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
         for cookie in cookies {
+            if cookie.http_only
+                || cookie.name.is_empty()
+                || cookie.domain.is_empty()
+                || cookie.domain.starts_with('.')
+            {
+                continue;
+            }
             if let Some(exp) = cookie.expires_epoch_secs
                 && exp <= now_secs
             {
@@ -110,9 +112,6 @@ impl IpcCookie {
             header.push_str(&format!("; Path={path}"));
             if cookie.secure {
                 header.push_str("; Secure");
-            }
-            if cookie.http_only {
-                header.push_str("; HttpOnly");
             }
             header.push_str(&format!("; SameSite={}", cookie.same_site.as_header_str()));
             if let Some(exp) = cookie.expires_epoch_secs {
@@ -164,10 +163,19 @@ impl Default for IpcRenderOptions {
 impl IpcRenderOptions {
     /// Extracts the serializable option fields and cookie snapshot from `options`.
     pub fn from_render_options(options: &RenderOptions) -> Self {
+        // Seed only cookies scoped to the render origin, and never HttpOnly
+        // (plan §Task 2; RFC 6265 §5.2.5). Without an origin there is no site
+        // to scope against, so no cookie crosses the IPC boundary.
         let seed_cookies = options
-            .cookie_jar
+            .origin
             .as_deref()
-            .map(IpcCookie::from_jar)
+            .and_then(|origin| {
+                let guard = options.cookie_jar.as_deref()?.lock().ok()?;
+                Some(super::cookie_policy::seeded_cookies_for(
+                    &crate::site::site_key(origin),
+                    &guard,
+                ))
+            })
             .unwrap_or_default();
         Self {
             time_ms: options.time_ms,
@@ -249,13 +257,14 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn ipc_render_options_round_trip_preserves_time_origin_cookies_and_caps() {
+    fn ipc_render_options_round_trip_filters_httponly_and_preserves_caps() {
         let mut jar = CookieJar::new();
         let https_url = Url::parse("https://app.example/dashboard").expect("https url");
         assert!(jar.store_set_cookie(
             &https_url,
             "__Host-sid=abc; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=3600"
         ));
+        assert!(jar.store_set_cookie(&https_url, "theme=dark; Path=/; Max-Age=3600"));
         let shared = Arc::new(Mutex::new(jar));
 
         let source = RenderOptions {
@@ -284,12 +293,11 @@ mod tests {
         assert_eq!(restored.device_pixel_ratio, 2.0);
         let restored_jar = restored.cookie_jar.expect("cookie jar restored");
         let guard = restored_jar.lock().expect("lock jar");
-        assert_eq!(guard.len(), 1);
+        assert_eq!(guard.len(), 1, "HttpOnly cookie must never cross IPC");
         let c = guard.iter().next().expect("stored cookie");
-        assert_eq!(c.name, "__Host-sid");
-        assert_eq!(c.value, "abc");
-        assert!(c.host_only && c.secure && c.http_only);
-        assert_eq!(c.same_site, SameSite::Strict);
+        assert_eq!(c.name, "theme");
+        assert_eq!(c.value, "dark");
+        assert!(!c.http_only);
         assert!(
             c.expires
                 .is_some_and(|e| e > SystemTime::now() + Duration::from_secs(60))
@@ -297,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn worker_stream_forwards_options_and_returns_updated_cookies() {
+    fn worker_stream_forwards_options_without_returning_cookies() {
         let mut parent_jar = CookieJar::new();
         let origin_url = Url::parse("https://site.test/login").expect("url");
         assert!(parent_jar.store_set_cookie(&origin_url, "prefs=dark; Path=/"));
@@ -340,10 +348,9 @@ mod tests {
         .expect("worker stream");
 
         let response: IpcRenderResponse = read_message(&mut &output[..]).expect("read response");
-        assert_eq!(response.cookies.len(), 2);
-        let mut merged = CookieJar::new();
-        IpcCookie::apply_to_jar(&response.cookies, &mut merged);
-        assert_eq!(merged.len(), 2);
+        // The child's Set-Cookie may not flow back over IPC (plan §Task 2).
+        let wire = serde_json::to_value(&response).expect("serialize response");
+        assert!(wire.get("cookies").is_none());
     }
 
     #[test]

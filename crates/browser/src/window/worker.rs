@@ -319,12 +319,6 @@ impl WindowApp {
             for (pending_gen, response) in pool.drain_tagged() {
                 match response {
                     Ok(response) => {
-                        if !response.cookies.is_empty()
-                            && let Some(jar) = &self.render_options.cookie_jar
-                            && let Ok(mut guard) = jar.lock()
-                        {
-                            crate::ipc::IpcCookie::apply_to_jar(&response.cookies, &mut guard);
-                        }
                         let frame = crate::ipc::ProcessFrame::from_response(response);
                         match frame.to_render_frame(0) {
                             Ok(rendered) => {

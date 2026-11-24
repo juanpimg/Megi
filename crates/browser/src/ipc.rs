@@ -6,9 +6,11 @@
 
 use std::io::{Read, Write};
 
+mod cookie_policy;
 mod options;
 mod process;
 mod process_pool;
+pub use cookie_policy::{CookiePolicyError, seeded_cookies_for, validate_cookie_from_renderer};
 pub use options::{IpcCookie, IpcRenderOptions, IpcSameSite};
 pub use process::{ProcessRenderer, render_png_in_process, render_png_in_process_with_options};
 mod regions;
@@ -156,9 +158,6 @@ pub struct IpcRenderResponse {
     pub find_rects: Vec<IpcRect>,
     /// Post-script serialized DOM, so the parent can build further patches (ADR-004 phase 3).
     pub document_html: String,
-    /// Updated cookie snapshot produced during the child render (#2165).
-    #[serde(default)]
-    pub cookies: Vec<IpcCookie>,
     /// Render failure text (`Some` means the other fields are defaults).
     pub error: Option<String>,
 }
@@ -225,11 +224,6 @@ where
                 Err(format!("render worker panicked: {reason}"))
             }
         };
-        let cookies = options
-            .cookie_jar
-            .as_deref()
-            .map(IpcCookie::from_jar)
-            .unwrap_or_default();
         let response = match render_result {
             Ok(frame) => {
                 let ordinals = DocumentNodeOrdinals::build(&frame.document);
@@ -271,7 +265,6 @@ where
                         .map(IpcRect::from_rect)
                         .collect(),
                     document_html: crate::download::serialize_document(&frame.document),
-                    cookies,
                     error: None,
                 }
             }
@@ -292,7 +285,6 @@ where
                 find_matches: Vec::new(),
                 find_rects: Vec::new(),
                 document_html: String::new(),
-                cookies: Vec::new(),
                 error: Some(error),
             },
         };
@@ -367,7 +359,6 @@ mod tests {
             find_matches: Vec::new(),
             find_rects: Vec::new(),
             document_html: "<!DOCTYPE html><html><head></head><body></body></html>".to_owned(),
-            cookies: Vec::new(),
             error: None,
         };
         write_message(&mut buffer, &response).expect("write response");

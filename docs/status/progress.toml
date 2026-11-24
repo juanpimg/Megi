@@ -71,6 +71,7 @@ items = [
   "Progreso publicado sin estimaciones de fase — `PROGRESS.md` derivado de criterios",
   "Informe WPT con `P/T` y SHA de la época — `docs/status/wpt.md`: ab2ef95, 30/30, allowlist 0; gate `python3 tools/wpt_gate.py --check`",
   "Release con verify + firma — `.github/workflows/release.yml`: job `verify` comprueba sha256 y firma con cosign keyless; `python3 -m unittest tools.test_release_workflow`",
+  "F0: cookies same-site y no HttpOnly en el IPC; el renderer ya no devuelve cookies al parent — `cargo test -p megi-browser --test ipc_semantic_tests`",
 ]
 pending = [
   "0 fugas T1/T2 auditadas — `docs/ISOLATION-STRATEGY.md` describe la estrategia, no una auditoría",

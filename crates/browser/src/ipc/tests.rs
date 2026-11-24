@@ -64,7 +64,6 @@ fn process_frame_restores_dom_from_wire_response() {
         find_rects: Vec::new(),
         document_html: "<!doctype html><html><body><p id=from-child>patched</p></body></html>"
             .to_owned(),
-        cookies: Vec::new(),
         error: None,
     };
     let frame = ProcessFrame::from_response(response);
@@ -95,7 +94,6 @@ fn failed_response_uses_an_empty_document() {
         find_matches: Vec::new(),
         find_rects: Vec::new(),
         document_html: String::new(),
-        cookies: Vec::new(),
         error: Some("boom".to_owned()),
     };
     let frame = ProcessFrame::from_response(response);

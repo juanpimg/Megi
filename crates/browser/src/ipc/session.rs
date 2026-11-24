@@ -215,7 +215,6 @@ mod tests {
             find_matches: Vec::new(),
             find_rects: Vec::new(),
             document_html: String::new(),
-            cookies: Vec::new(),
             error: Some("render failed".to_owned()),
         };
         assert!(session.apply_response(err_resp).is_err());
