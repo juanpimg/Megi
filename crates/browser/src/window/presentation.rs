@@ -2,6 +2,25 @@
 
 use super::*;
 
+/// #1724: picks the status-bar text during IME composition. Preedit text composed inside
+/// a document field is otherwise invisible until `Commit`; showing it in the status bar
+/// makes the intermediate text observable. The address bar paints its own inline preedit,
+/// so its composition is not duplicated here. Download progress keeps top priority.
+pub(super) fn document_ime_status<'a>(
+    preedit: &'a str,
+    address_editing: bool,
+    download: Option<&'a str>,
+    hover: Option<&'a str>,
+) -> Option<&'a str> {
+    if let Some(text) = download {
+        Some(text)
+    } else if !address_editing && !preedit.is_empty() {
+        Some(preedit)
+    } else {
+        hover
+    }
+}
+
 impl WindowApp {
     /// Handles a left click: resolves the link under the cursor and navigates to it.
     /// Converts a physical cursor position into page CSS coordinates (scroll/zoom aware).
@@ -226,8 +245,16 @@ impl WindowApp {
             ime_preedit,
         };
         let download_status = self.download.status_text();
+        // #1724: surface document-field IME preedit in the status bar; the address bar
+        // renders its preedit inline, so only non-address composition is shown here.
+        let status_text = document_ime_status(
+            self.ime.preedit(),
+            chrome_address.is_editing(),
+            download_status.as_deref(),
+            self.hover_url.as_deref(),
+        );
         let view = ChromeView {
-            download_status: download_status.as_deref(),
+            download_status: status_text,
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);

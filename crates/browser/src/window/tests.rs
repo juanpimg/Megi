@@ -3,6 +3,47 @@
 use super::*;
 
 #[cfg(test)]
+mod ime_preedit_status_tests {
+    use super::presentation::document_ime_status;
+
+    #[test]
+    fn document_composition_preedit_shows_in_status_bar() {
+        // #1724: composing inside a document <input> must surface the intermediate
+        // text in the status bar; the address bar paints its own inline preedit.
+        let preedit = document_ime_status("にほん", false, None, Some("https://x.test/"));
+        assert_eq!(
+            preedit,
+            Some("にほん"),
+            "preedit takes priority over hover URL"
+        );
+        let none = document_ime_status("", false, None, Some("https://x.test/"));
+        assert_eq!(
+            none,
+            Some("https://x.test/"),
+            "no preedit falls back to hover URL"
+        );
+    }
+
+    #[test]
+    fn address_bar_composition_does_not_duplicate_preedit_in_status_bar() {
+        // The address bar already renders `ime_preedit` inline (#1724); showing it
+        // in the status bar too would duplicate it.
+        let status = document_ime_status("にほん", true, None, Some("https://x.test/"));
+        assert_eq!(status, Some("https://x.test/"));
+    }
+
+    #[test]
+    fn download_status_still_takes_precedence() {
+        let status = document_ime_status("にほん", false, Some("file.html"), None);
+        assert_eq!(
+            status,
+            Some("file.html"),
+            "download status wins over preedit"
+        );
+    }
+}
+
+#[cfg(test)]
 mod ui_event_forwarding_tests {
     use super::*;
 
