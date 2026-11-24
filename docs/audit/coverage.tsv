@@ -1292,6 +1292,7 @@ deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata v
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/AVIF-STRATEGY.md	32	docs	F3	juanpimg	2026-11-24	covered	#1895	ADR-005 authorizing pure-Rust AVIF decoder (read and reviewed)
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/FUZZING.md	302	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
