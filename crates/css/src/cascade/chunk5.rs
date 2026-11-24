@@ -448,8 +448,8 @@ pub(crate) mod tests {
             decls.iter().map(|d| (d.name.clone(), d)).collect();
 
         assert_ne!(
-            style_cache_key(p1, &cascaded),
-            style_cache_key(p2, &cascaded),
+            style_cache_key(p1, &cascaded, false),
+            style_cache_key(p2, &cascaded, false),
             "distinct parent keys must never produce the same style-cache key"
         );
     }

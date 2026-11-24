@@ -23,6 +23,7 @@ impl ComputedStyle {
             height: Length::Auto,
             min_width: Length::Auto,
             max_width: Length::Auto,
+            max_width_from_ua: false,
             min_height: Length::Auto,
             max_height: Length::Auto,
 

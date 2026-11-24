@@ -17,7 +17,7 @@ pub(crate) fn layout_block_replaced(
 ) {
     resolve_vertical_edges(child, cb.width);
     resolve_horizontal_edges(child, cb.width);
-    let (width, height) = replaced_content_size(child, cb.width, parent_definite_height);
+    let (width, height) = replaced_content_size(child, cb.width, parent_definite_height, false);
     child.dimensions.content.width = width;
     child.dimensions.content.height = height;
     child.dimensions.content.x = cb.x
@@ -87,6 +87,7 @@ pub(crate) fn replaced_content_size(
     layout_box: &LayoutBox,
     cb_width: f32,
     cb_height: Option<f32>,
+    ignore_ua_max_width_cap: bool,
 ) -> (f32, f32) {
     let Some(style) = layout_box.style.as_ref() else {
         let intrinsic = layout_box.intrinsic_size.unwrap_or((300.0, 150.0));
@@ -168,8 +169,23 @@ pub(crate) fn replaced_content_size(
 
     let min_w =
         resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width).map(to_content_h);
-    let max_w =
+    let mut max_w =
         resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width).map(to_content_h);
+    // WHATWG HTML §15.3.2 defines the UA stylesheet that caps form controls with
+    // `max-width:100%`. For a block-level box the percentage resolves against the
+    // containing block and the cap is correct. For an atomic inline it resolves
+    // against the narrow inline formatting context instead (CSS 2.2 §10.3.2), so
+    // the UA cap would clip an author `width:496px` input to ~20px (#2247). Drop
+    // only that UA cap, only in the atomic-inline path and only when a width was
+    // specified; an author `max-width:100%` must keep capping.
+    if ignore_ua_max_width_cap
+        && style.max_width_from_ua
+        && style.calc_lengths.max_width.is_none()
+        && matches!(style.max_width, megi_css::Length::Percent(100.0))
+        && !matches!(style.width, megi_css::Length::Auto)
+    {
+        max_w = None;
+    }
     let min_h = resolve_min_height(style.min_height, style.calc_lengths.min_height, cb_height)
         .map(to_content_v);
     let max_h = resolve_max_height(style.max_height, style.calc_lengths.max_height, cb_height)
@@ -257,7 +273,7 @@ pub(crate) fn layout_atomic_inline(
     if matches!(layout_box.box_type, BoxType::Replaced(_)) {
         resolve_vertical_edges(&mut layout_box, available_width);
         resolve_horizontal_edges(&mut layout_box, available_width);
-        let (width, height) = replaced_content_size(&layout_box, available_width, cb_height);
+        let (width, height) = replaced_content_size(&layout_box, available_width, cb_height, true);
         layout_box.dimensions.content.width = width;
         layout_box.dimensions.content.height = height;
         layout_box.dimensions.content.x = layout_box.dimensions.margin.left

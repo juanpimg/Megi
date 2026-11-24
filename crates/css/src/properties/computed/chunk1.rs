@@ -52,6 +52,11 @@ pub struct ComputedStyle {
     pub height: Length,
     pub min_width: Length,
     pub max_width: Length,
+    /// `true` when the cascaded winner for `max-width` came from the UA stylesheet
+    /// (WHATWG HTML §15.3.2). The cascade sets this after `compute`, because the
+    /// cascaded declaration map itself does not carry origin. Layout uses it to
+    /// distinguish the UA form-control cap from an author `max-width:100%` (#2247).
+    pub max_width_from_ua: bool,
     pub min_height: Length,
     pub max_height: Length,
 

@@ -98,7 +98,11 @@ pub fn resolve_document_styles_with_viewport(
 /// the actual strings is collision-safe and keeps the key independent of allocation layout.
 /// Map iteration order is unspecified, so per-declaration 128-bit hashes are XOR-ed together
 /// (order-independent) and mixed again into the parent seed.
-pub(crate) fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Declaration>) -> u128 {
+pub(crate) fn style_cache_key(
+    parent_key: u128,
+    cascaded: &HashMap<String, &Declaration>,
+    max_width_from_ua: bool,
+) -> u128 {
     fn mix_u64(state: &mut u128, value: u64) {
         *state ^= u128::from(value.wrapping_mul(0x9e37_79b9_7f4a_7c15));
         *state = state
@@ -124,11 +128,32 @@ pub(crate) fn style_cache_key(parent_key: u128, cascaded: &HashMap<String, &Decl
         hash_str(&mut decl_hash, declaration.raw_value.as_str());
         key ^= decl_hash.rotate_left(17).wrapping_mul(0x100_0000_01b3);
     }
+    // The cache hashes declaration *values*, so a UA `max-width:100%` and an
+    // author `max-width:100%` would otherwise share a key while carrying
+    // different provenance (#2247).
+    mix_u64(&mut key, u64::from(max_width_from_ua));
     // Final avalanche so distinct declaration sets cannot cancel by XOR alone.
     let mut out = key ^ (key >> 64);
     out ^= out.rotate_left(29).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     out ^= out.rotate_left(51).wrapping_mul(0x94d0_49bb_1331_11eb);
     out
+}
+
+/// Whether the cascade winner for a property came from the UA stylesheet.
+///
+/// W3C CSS Cascading 4 §6.1 assigns an origin to every declaration; `MatchedDeclaration`
+/// keeps it as `origin_importance`, but `owned_declarations` drops it before
+/// `ComputedStyle::compute`. Capture it here so the computed style can record provenance.
+fn cascaded_from_ua(
+    best: &HashMap<&str, MatchedDeclaration<'_>, FastBuildHasher>,
+    property: &str,
+) -> bool {
+    best.get(property).is_some_and(|matched| {
+        matches!(
+            matched.origin_importance,
+            CascadeOriginImportance::UserAgentNormal | CascadeOriginImportance::UserAgentImportant
+        )
+    })
 }
 
 /// Resolves the computed `background-color` for a `::backdrop` pseudo-element of `node_id`
@@ -273,6 +298,7 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
             merge_container_rules_for(doc, node_id, None, collection, &mut best);
             apply_revert_for(doc, node_id, None, collection, &candidates, &mut best);
             apply_revert_layer_for(doc, node_id, None, collection, &candidates, &mut best);
+            let max_width_from_ua = cascaded_from_ua(&best, "max-width");
             let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
@@ -288,13 +314,14 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
                 .parent
                 .and_then(|parent| style_keys.get(&parent).copied())
                 .unwrap_or(0x9e37_79b9_7f4a_7c15);
-            let cache_key = style_cache_key(parent_key, &cascaded);
+            let cache_key = style_cache_key(parent_key, &cascaded, max_width_from_ua);
             if cacheable && let Some(cached) = style_cache.get(&cache_key) {
                 styles.insert(node_id, cached.clone());
                 style_keys.insert(node_id, cache_key);
             } else {
                 let mut computed =
                     crate::properties::ComputedStyle::compute(&cascaded, parent_style, root_style);
+                computed.max_width_from_ua = max_width_from_ua;
                 if is_modal {
                     computed.set_backdrop_color(resolve_backdrop_color(
                         doc,

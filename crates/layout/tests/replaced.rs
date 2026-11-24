@@ -235,3 +235,109 @@ fn test_input_size_attribute_sets_intrinsic_width() {
         replaced.dimensions.content.width
     );
 }
+
+fn find_replaced_width(box_node: &LayoutBox) -> Option<f32> {
+    if matches!(box_node.box_type, BoxType::Replaced(_)) {
+        return Some(box_node.dimensions.content.width);
+    }
+    box_node.children.iter().find_map(find_replaced_width)
+}
+
+/// An `<input style="width:496px">` inside a shrink-to-fit inline-block gets an
+/// intrinsic width of ~20px, so its IFC is ~20px wide. The UA `max-width:100%`
+/// (#2247, WHATWG HTML §15.3.2) must not clip it there.
+#[test]
+fn ua_max_width_cap_is_ignored_for_atomic_inline_with_author_width() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let wrapper = doc.create_element(Namespace::Html, "div", vec![]);
+    let input = doc.create_element(Namespace::Html, "input", vec![]);
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, wrapper);
+    doc.append_child(wrapper, input);
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto));
+    styles.insert(wrapper, {
+        let mut style = ComputedStyle::initial();
+        style.display = Display::InlineBlock;
+        style
+    });
+    styles.insert(input, {
+        let mut style = ComputedStyle::initial();
+        style.width = Length::Px(496.0);
+        style.max_width = Length::Percent(100.0);
+        style.max_width_from_ua = true;
+        style
+    });
+
+    let tree = layout_tree(&doc, &styles);
+    let width = find_replaced_width(&tree).expect("input replaced box");
+    assert!(
+        (width - 496.0).abs() < 1.0,
+        "UA max-width:100% clipped the author width to {width}"
+    );
+}
+
+/// The same `max-width:100%` authored by the page is a different declaration
+/// origin and must keep capping the atomic inline.
+#[test]
+fn author_max_width_100_percent_still_caps_atomic_inline() {
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    let wrapper = doc.create_element(Namespace::Html, "div", vec![]);
+    let input = doc.create_element(Namespace::Html, "input", vec![]);
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    doc.append_child(body, wrapper);
+    doc.append_child(wrapper, input);
+    let mut styles = HashMap::new();
+    styles.insert(html, make_block_style(Length::Auto));
+    styles.insert(body, make_block_style(Length::Auto));
+    styles.insert(wrapper, {
+        let mut style = ComputedStyle::initial();
+        style.display = Display::InlineBlock;
+        style
+    });
+    styles.insert(input, {
+        let mut style = ComputedStyle::initial();
+        style.width = Length::Px(496.0);
+        style.max_width = Length::Percent(100.0);
+        // max_width_from_ua stays false: this is the author's declaration.
+        style
+    });
+
+    let tree = layout_tree(&doc, &styles);
+    let width = find_replaced_width(&tree).expect("input replaced box");
+    assert!(
+        width < 100.0,
+        "author max-width:100% must still cap the input, got {width}"
+    );
+}
+
+/// The UA cap is legitimate for block-level form controls: percentages resolve
+/// against the real containing block there, so it must not be dropped.
+#[test]
+fn ua_max_width_cap_still_caps_block_level_replaced() {
+    let (mut doc, mut styles, p) = setup();
+    let input = doc.create_element(Namespace::Html, "input", vec![]);
+    doc.append_child(p, input);
+    styles.insert(input, {
+        let mut style = ComputedStyle::initial();
+        style.display = Display::Block;
+        style.width = Length::Px(496.0);
+        style.max_width = Length::Percent(100.0);
+        style.max_width_from_ua = true;
+        style
+    });
+
+    let tree = layout_tree(&doc, &styles);
+    let width = find_replaced_width(&tree).expect("input replaced box");
+    assert!(
+        (width - 400.0).abs() < 1.0,
+        "UA max-width:100% must cap a block input to the 400px containing block, got {width}"
+    );
+}

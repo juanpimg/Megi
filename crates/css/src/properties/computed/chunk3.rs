@@ -396,6 +396,7 @@ impl ComputedStyle {
             height,
             min_width,
             max_width,
+            max_width_from_ua: false, // set by the cascade, which knows the declaration origin
             min_height,
             max_height,
             margin,
