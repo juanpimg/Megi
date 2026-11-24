@@ -9,16 +9,16 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	500	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/coverage.yml	76	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/ci.yml	507	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/fuzz-nightly.yml	363	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-nightly.yml	366	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/fuzz-soak.yml	112	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	206	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.gitignore	46	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+.gitignore	50	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	31	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 AGENTS.md	85	docs	F3	jp	2026-11-19	covered	#1759	
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
@@ -620,7 +620,7 @@ crates/js/src/events/listeners.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/context.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/impl_host.rs	317	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/state.rs	163	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/timer_queue.rs	206	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
@@ -1034,7 +1034,7 @@ crates/paint/tests/robustness.rs	241	test	F1	wave-max-mod	2026-11-19	covered	#ma
 crates/paint/tests/stacking_order.rs	332	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/transform.rs	59	test	F1	juanpimg	2026-11-20	covered	#1933,#1934	paint transform tests from PR 2052
 crates/paint/tests/writing_mode.rs	39	test	F1	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
-crates/raster/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/raster/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate.rs	45	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate/lz77.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/raster/src/deflate/tables.rs	184	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1093,7 +1093,7 @@ crates/render/src/images/tests.rs	71	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/render/src/images/types.rs	82	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	273	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/lib.rs	276	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/main.rs	357	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/main.rs	423	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/render/src/pipeline/final_stage.rs	341	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/imports.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1115,7 +1115,7 @@ crates/render/src/scripts/modules.rs	249	src	F2	wave-max-mod	2026-11-19	covered	
 crates/render/src/scripts/network.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/providers.rs	294	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
 crates/render/src/scripts/tests.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/types.rs	414	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/types.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/webfonts.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1191,7 +1191,7 @@ crates/render/tests/webfont_status_tests.rs	50	test	F1	juanpimg	2026-11-24	cover
 crates/render/tests/webfont_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/websocket_e2e_tests.rs	473	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/worker_tests.rs	50	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/examples/svg_to_png.rs	114	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1292,7 +1292,7 @@ docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream f
 docs/AI-QUICKSTART.md	82	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ARCHITECTURE.md	218	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
-docs/CONTRIBUTOR-ONBOARDING.md	93	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/CONTRIBUTOR-ONBOARDING.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/FUZZING.md	302	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GAPS.md	147	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1303,7 +1303,7 @@ docs/MILESTONES.md	152	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	doc
 docs/OUTREACH.md	150	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/PHASE4-SUPPORT.md	237	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/REAL_SITE_RELIABILITY.md	73	docs	F3	dag-merge	2026-11-23	covered	#upstream	re-read
+docs/REAL_SITE_RELIABILITY.md	75	docs	F3	dag-merge	2026-11-23	covered	#upstream	re-read
 docs/RELEASE.md	43	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	548	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1535,12 +1535,12 @@ docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line:
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
 docs/superpowers/plans/2026-11-17-honest-progress.md	111	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/plans/2026-11-18-auditoria-linea-por-linea-megi.md	47	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-18-js-host-bridge.md	132	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-18-megi-modular-restructuring.md	223	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/plans/2026-11-19-maximal-modularity.md	90	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/plans/2026-11-18-js-host-bridge.md	134	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/plans/2026-11-18-megi-modular-restructuring.md	225	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/plans/2026-11-19-maximal-modularity.md	92	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-17-honest-progress-design.md	73	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/superpowers/specs/2026-11-18-js-host-bridge-design.md	81	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md	449	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/superpowers/specs/2026-11-18-megi-modular-architecture-design.md	451	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 fuzz/Cargo.toml	220	fuzz	F1	f1-fuzz	2026-11-17	covered	#1421-#1429	read in the F3/F4 pass
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
@@ -2101,7 +2101,7 @@ tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/real_site_check.py	259	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/soak_fuzz.sh	158	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/soak_fuzz.sh	159	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	188	tool	F3	jp	2026-11-19	covered	#1759	

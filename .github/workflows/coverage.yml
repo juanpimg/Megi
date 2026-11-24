@@ -3,10 +3,11 @@
 # `cargo llvm-cov` instruments the real test suite (not a synthetic harness), so the
 # number matches what `cargo test` exercises. Runs weekly and on demand: a coverage
 # run is several minutes of CPU and the value is the trend, not per-PR precision.
-# `tools/coverage_report.py --write` regenerates `docs/status/badge-lcov.svg` (line
-# coverage from lcov), which is distinct from `badge-coverage.svg` — the capability
-# manifest badge owned by `update_coverage.py` (#1403). This job uploads the lcov +
-# HTML report and writes the summary, and fails only if coverage drops below the floor.
+# This job uploads the lcov + HTML report and writes the summary, and fails only if
+# coverage drops below the floor. `tools/coverage_report.py --write` can produce a
+# separate `badge-lcov.svg` (line coverage), but this workflow does not run it and the
+# badge is intentionally not versioned; `badge-coverage.svg` is the capability badge
+# owned by `update_coverage.py` (#1403).
 name: coverage
 
 on:

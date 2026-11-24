@@ -1,8 +1,7 @@
-# Onboarding de colaboradores (propuesta para #970)
+# Onboarding de colaboradores
 
-> **Estado**: propuesta para revisión del mantenedor. Las acciones que cambian
-> metadatos de GitHub (etiquetas, Projects, permisos de workflows) requieren
-> permisos de maintainer; este documento deja todo listo para aplicarlas.
+> **Estado**: implementado (#970). Las etiquetas y el tablero viven en GitHub; las
+> acciones que cambian metadatos requieren permisos de maintainer.
 
 Este documento complementa [`CONTRIBUTING.md`](../CONTRIBUTING.md) con una lista
 de trabajo concreta para quien quiera hacer su primer PR en Megi, y la configuración

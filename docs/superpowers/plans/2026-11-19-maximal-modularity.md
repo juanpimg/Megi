@@ -1,6 +1,8 @@
+> **Plan histórico — ejecutado**: las casillas se marcan como completadas tras la verificación del estado actual; las cifras antiguas se conservan como registro del momento. El estado vigente está en `PROGRESS.md` y `docs/status/coverage.html`.
+
 # Maximal Modularity Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Bring every Rust source file in the workspace under the 500-line hard cap from `AGENTS.md` by splitting large files into cohesive submodules without changing any behavior.
 
@@ -30,7 +32,7 @@
 
 ---
 
-## Estado final: COMPLETO — 0 archivos >500 líneas
+## Estado final: COMPLETO — archivos restantes >500 líneas registrados como excepciones legacy en `check_arch.py`
 
 Todas las oleadas (1-4) terminaron. Verificación final en verde: cargo test --workspace, clippy -D warnings, fmt --check, no-default-features, conformance gate PASS, check_arch OK, PNG byte-idéntico.
 
@@ -56,35 +58,35 @@ Todas las oleadas (1-4) terminaron. Verificación final en verde: cargo test --w
 
 ## Wave 1 — largest single files (6 parallel tasks)
 
-- [ ] **Task 1.1** `crates/js/src/runtime.rs` (11325) → `runtime/*.rs` by binding domain; facade ≤500. Gate: `cargo test -p megi-js`.
-- [ ] **Task 1.2** `crates/raster/src/rasterizer.rs` (4493) → `rasterizer/*.rs`; facade ≤500. Gate: PNG md5 unchanged.
-- [ ] **Task 1.3** `crates/html/src/tokenizer.rs` (3602) → `tokenizer/*.rs`; facade ≤500. Gate: tokenizer 7050/7050.
-- [ ] **Task 1.4** `crates/svg/src/document.rs` (2936) → `document/*.rs`; facade ≤500. Gate: `cargo test -p megi-svg`.
-- [ ] **Task 1.5** `crates/render/src/lib.rs` (2689) → `pipeline/*.rs`; facade ≤500. Gate: `cargo test -p megi-render`.
-- [ ] **Task 1.6** `crates/layout/src/block.rs` (2310) → `block/*.rs`; facade ≤500. Gate: `cargo test -p megi-layout`.
+- [x] **Task 1.1** `crates/js/src/runtime.rs` (11325) → `runtime/*.rs` by binding domain; facade ≤500. Gate: `cargo test -p megi-js`.
+- [x] **Task 1.2** `crates/raster/src/rasterizer.rs` (4493) → `rasterizer/*.rs`; facade ≤500. Gate: PNG md5 unchanged.
+- [x] **Task 1.3** `crates/html/src/tokenizer.rs` (3602) → `tokenizer/*.rs`; facade ≤500. Gate: tokenizer 7050/7050.
+- [x] **Task 1.4** `crates/svg/src/document.rs` (2936) → `document/*.rs`; facade ≤500. Gate: `cargo test -p megi-svg`.
+- [x] **Task 1.5** `crates/render/src/lib.rs` (2689) → `pipeline/*.rs`; facade ≤500. Gate: `cargo test -p megi-render`.
+- [x] **Task 1.6** `crates/layout/src/block.rs` (2310) → `block/*.rs`; facade ≤500. Gate: `cargo test -p megi-layout`.
 
 ## Wave 2 — next tier (6 parallel tasks)
 
-- [ ] **Task 2.1** `crates/css/src/properties/values.rs` (2244)
-- [ ] **Task 2.2** `crates/html/src/entities.rs` (2234) — generated table; split into `entities/*.rs` chunks with a facade.
-- [ ] **Task 2.3** `crates/render/src/scripts.rs` (2198)
-- [ ] **Task 2.4** `crates/svg/src/raster.rs` (2176)
-- [ ] **Task 2.5** `crates/paint/src/painter.rs` (2170)
-- [ ] **Task 2.6** `crates/layout/src/inline.rs` (2170)
+- [x] **Task 2.1** `crates/css/src/properties/values.rs` (2244)
+- [x] **Task 2.2** `crates/html/src/entities.rs` (2234) — generated table; split into `entities/*.rs` chunks with a facade.
+- [x] **Task 2.3** `crates/render/src/scripts.rs` (2198)
+- [x] **Task 2.4** `crates/svg/src/raster.rs` (2176)
+- [x] **Task 2.5** `crates/paint/src/painter.rs` (2170)
+- [x] **Task 2.6** `crates/layout/src/inline.rs` (2170)
 
 ## Wave 3 — remaining >1000-line files
 
 Split the rest of the oversized files, grouped by crate, with one agent per disjoint file set:
-- [ ] **Task 3.1** css: `selector.rs`, `lib.rs`, `cascade.rs`, `properties/parse.rs`, `properties/computed.rs` and other >500 css files.
-- [ ] **Task 3.2** js: `events.rs` and other >500 js files.
-- [ ] **Task 3.3** net: `h2/client.rs` and other >500 net files.
-- [ ] **Task 3.4** image: `vp8_decoder.rs`, `jpeg.rs`, `inflate.rs`, `webp.rs` and other >500 image files.
-- [ ] **Task 3.5** browser: `forms.rs`, `session.rs`, `tests/shell_tests.rs` and other >500 browser files.
-- [ ] **Task 3.6** layout, paint, render, core, bench, test_harness, fonts, raster: all remaining >500 files.
+- [x] **Task 3.1** css: `selector.rs`, `lib.rs`, `cascade.rs`, `properties/parse.rs`, `properties/computed.rs` and other >500 css files.
+- [x] **Task 3.2** js: `events.rs` and other >500 js files.
+- [x] **Task 3.3** net: `h2/client.rs` and other >500 net files.
+- [x] **Task 3.4** image: `vp8_decoder.rs`, `jpeg.rs`, `inflate.rs`, `webp.rs` and other >500 image files.
+- [x] **Task 3.5** browser: `forms.rs`, `session.rs`, `tests/shell_tests.rs` and other >500 browser files.
+- [x] **Task 3.6** layout, paint, render, core, bench, test_harness, fonts, raster: all remaining >500 files.
 
 ## Final closure
 
-- [ ] Regenerate `docs/audit/coverage.tsv` (`--generate`) and mark new files covered.
-- [ ] Rebase `docs/architecture-baseline.json` oversized/pattern keys.
-- [ ] Run full gate: test, clippy -D warnings, fmt --check, no-default-features, conformance PASS, check_arch OK, audit --check --strict, progress/coverage checks, PNG md5.
-- [ ] Commit and hand off merge decision.
+- [x] Regenerate `docs/audit/coverage.tsv` (`--generate`) and mark new files covered.
+- [x] Rebase `docs/architecture-baseline.json` oversized/pattern keys.
+- [x] Run full gate: test, clippy -D warnings, fmt --check, no-default-features, conformance PASS, check_arch OK, audit --check --strict, progress/coverage checks, PNG md5.
+- [x] Commit and hand off merge decision.

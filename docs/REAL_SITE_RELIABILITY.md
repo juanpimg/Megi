@@ -30,9 +30,11 @@ All five returned HTTP 200, decoded the charset correctly (utf-8), loaded images
 network failures, and executed scripts without JS errors. So the divergences are **CSS
 selector/style and layout issues, not fetch or scripting failures**.
 
+> **Nota (2026-11-24):** el defecto 1 ya está corregido en `a6c17b5` (`:link`/`:any-link` con regla UA). El resto del informe es un snapshot previo a ese merge.
+
 ## Defects, ranked by impact
 
-### 1. `:link` / `:any-link` never match (P1, cross-site)
+### 1. `:link` / `:any-link` never match (P1, cross-site) — **RESUELTO**
 
 `a:link`, `a:visited`, `a:any-link` are mapped to `PseudoClass::Never` in the selector
 engine (`crates/css/src/selector/chunk5.rs`). Consequences:

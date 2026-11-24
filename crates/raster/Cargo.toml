@@ -9,7 +9,6 @@ repository.workspace = true
 description = "Megi Engine — pure DisplayList to RGBA frame and deterministic PNG rasterizer"
 
 [dependencies]
-megi-core.workspace = true
 megi-display.workspace = true
 megi-fonts.workspace = true
 

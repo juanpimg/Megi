@@ -1,6 +1,8 @@
+> **Plan histórico — ejecutado**: las casillas se marcan como completadas tras la verificación del estado actual; las cifras antiguas se conservan como registro del momento. El estado vigente está en `PROGRESS.md` y `docs/status/coverage.html`.
+
 # Megi Modular Restructuring Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Convert the 14-crate Megi workspace into the strictly layered `megi-*` architecture described in the design doc, with an embeddable `megi-webview`, without changing any observable behavior (goldens, conformance gate, performance budgets).
 
@@ -22,7 +24,7 @@
 | 2.1 `megi-display` | ✅ complete | `DisplayItem`/`DisplayList`/`HitRegion` moved, ownership test |
 | 2.2 `megi-raster` | ✅ complete | rasterizer/PNG moved, PNG md5 `e943565…` before = after |
 | 3.1 PAC inversion | ✅ complete | `PacEvaluator` trait; `cargo tree -e normal` has zero Boa |
-| 4.1 de-Rc JS runtime | ✅ complete | TLS bridge deleted: 0 `CURRENT_HOST`, 0 `with_host`, 0 `HostScope`, 0 `host_slot`, 0 `HostScope` in `crates/js/src`; 4 remaining `Rc<RefCell<Host>>` are the single Context-owned `ContextHost` container required by Boa `HostDefined` (not ambient shared state). 357+ JS tests pass, PNG byte-identical |
+| 4.1 de-Rc JS runtime | ✅ complete | TLS bridge deleted: 0 `CURRENT_HOST`, 0 `with_host`, 0 `HostScope`, 0 `host_slot`, 0 `HostScope` in `crates/js/src`; 2 remaining `Rc<RefCell<Host>>` are the single Context-owned `ContextHost` container required by Boa `HostDefined` (not ambient shared state). 357+ JS tests pass, PNG byte-identical |
 | 5.1 `megi-webview` | ✅ complete | load/frame/hit-test/history/events; light graph has zero Boa/winit/softbuffer |
 | 6.1 thin `megi-browser` | ✅ complete | browser deps = webview + winit + softbuffer; 60 shell tests pass |
 | 7.1 feature matrix + CI | ✅ complete | `megi-test-harness/js` optional; CI checks light WebView |
@@ -34,7 +36,7 @@
 | 8.6 `megi-net` split | ✅ complete | `http.rs` 2888 → 358 lines; net suite green |
 
 The two deferred items are independent of the completed work and are tracked in
-`.superpowers/sdd/2026-11-18-megi-modular-restructuring/progress.md` with their
+el registro de ejecución de este plan (las casillas marcadas a continuación) con sus
 rulings. Everything shipped so far is green: `cargo test --workspace`,
 `cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace
 --no-default-features`, conformance gate PASS, `tools/check_arch.py` OK and
@@ -74,19 +76,19 @@ byte-identical PNG output.
 - Consumes: current HEAD `57b123b`, measured `wc -l`, `cargo test --workspace -- --list`.
 - Produces: a machine-readable baseline used by `tools/check_arch.py` (Task 0.2).
 
-- [ ] **Step 1: Add historical banner to `docs/GAPS.md`**
+- [x] **Step 1: Add historical banner to `docs/GAPS.md`**
 
 Insert after the title: `> **Histórico (2026-11-12):** esta matriz describe el estado de esa fecha. Varias filas marcadas `absent` ya están implementadas (`js/src/xhr.rs`, `js/src/websocket.rs`, `css/src/query.rs`, `css/src/transform.rs`, `net/src/{csp,integrity,hsts,mixed_content}.rs`). Verifica siempre el código antes de actuar.`
 
-- [ ] **Step 2: Measure the baseline**
+- [x] **Step 2: Measure the baseline**
 
 Run: `find crates -name '*.rs' -exec wc -l {} + | sort -rn | head -40`, `grep -rnE 'Rc<|Weak<|unsafe ' crates/*/src --include='*.rs'` and record the numbers in `docs/architecture-baseline.json` with keys `commit`, `oversized_files`, `forbidden_patterns`.
 
-- [ ] **Step 3: Write and run a test for the arch checker's core predicate**
+- [x] **Step 3: Write and run a test for the arch checker's core predicate**
 
 Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_known_edge_is_allowed`, `test_oversized_file_is_legacy_when_in_baseline`. Run `python3 -m unittest tools/test_check_arch.py -v`. Expected: FAIL (module `tools.check_arch` missing).
 
-- [ ] **Step 4: Commit the baseline and test**
+- [x] **Step 4: Commit the baseline and test**
 
 `git add docs/GAPS.md docs/architecture-baseline.json tools/test_check_arch.py && git commit -s -m "docs(arch): freeze baseline and flag historical gap matrix"`
 
@@ -101,13 +103,13 @@ Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_k
 - Consumes: `docs/architecture-baseline.json`, root `Cargo.toml` `[workspace] members`.
 - Produces: `python3 tools/check_arch.py` → exit 0 if no new violations; exit 1 listing file:line.
 
-- [ ] **Step 1: Implement `allowed_edges` as a dict from crate name to set of allowed imports**, using the design doc §2.3 table verbatim.
+- [x] **Step 1: Implement `allowed_edges` as a dict from crate name to set of allowed imports**, using the design doc §2.3 table verbatim.
 
-- [ ] **Step 2: Implement scanning** of `crates/*/Cargo.toml` and `crates/*/src/**/*.rs`; report (a) disallowed `use <crate>::`, (b) `unsafe`/`Rc<`/`Weak<` outside comments and outside baseline, (c) files >500 lines not in baseline.
+- [x] **Step 2: Implement scanning** of `crates/*/Cargo.toml` and `crates/*/src/**/*.rs`; report (a) disallowed `use <crate>::`, (b) `unsafe`/`Rc<`/`Weak<` outside comments and outside baseline, (c) files >500 lines not in baseline.
 
-- [ ] **Step 3: Run `python3 -m unittest tools/test_check_arch.py -v`** → PASS; then `python3 tools/check_arch.py` → exit 0 with the known violations printed as `legacy` (informational).
+- [x] **Step 3: Run `python3 -m unittest tools/test_check_arch.py -v`** → PASS; then `python3 tools/check_arch.py` → exit 0 with the known violations printed as `legacy` (informational).
 
-- [ ] **Step 4: Wire into CI `quality` job** next to `python3 tools/check_docs_links.py`. Commit.
+- [x] **Step 4: Wire into CI `quality` job** next to `python3 tools/check_docs_links.py`. Commit.
 
 ### Task 0.3: Agent rules and workspace lints
 
@@ -120,11 +122,11 @@ Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_k
 - Consumes: design doc §4.
 - Produces: enforced lint `unsafe_code = "forbid"` inherited by all crates; agent rules at repo root.
 
-- [ ] **Step 1: Create `AGENTS.md`** from the design doc §4 fenced block (under 200 lines).
+- [x] **Step 1: Create `AGENTS.md`** from the design doc §4 fenced block (under 200 lines).
 
-- [ ] **Step 2: Add lints** to root `Cargo.toml` and `lints.workspace = true` to every crate manifest that lacks it (verify with `cargo check --workspace --all-targets`).
+- [x] **Step 2: Add lints** to root `Cargo.toml` and `lints.workspace = true` to every crate manifest that lacks it (verify with `cargo check --workspace --all-targets`).
 
-- [ ] **Step 3: Run `cargo check --workspace --all-targets`** → PASS; `python3 tools/check_docs_links.py` → PASS. Commit.
+- [x] **Step 3: Run `cargo check --workspace --all-targets`** → PASS; `python3 tools/check_docs_links.py` → PASS. Commit.
 
 ### Task 1.1: Rename leaf crates (`dom`, `image`, `fonts`)
 
@@ -136,11 +138,11 @@ Create `tools/test_check_arch.py` with `test_unknown_edge_is_violation`, `test_k
 - Consumes: current crate names.
 - Produces: `megi-core`, `megi-image`, `megi-fonts` package names. All downstream `use megi_core::…` etc.
 
-- [ ] **Step 1: Rename the three leaf directories and package names**; update `[workspace.dependencies]` keys and `path`s.
+- [x] **Step 1: Rename the three leaf directories and package names**; update `[workspace.dependencies]` keys and `path`s.
 
-- [ ] **Step 2: Replace `use megi_core::` → `use megi_core::`, `use megi_image::` → `use megi_image::`, `use megi_fonts::` → `use megi_fonts::` repo-wide** (including tests, fuzz, benches, docs code blocks).
+- [x] **Step 2: Replace `use megi_core::` → `use megi_core::`, `use megi_image::` → `use megi_image::`, `use megi_fonts::` → `use megi_fonts::` repo-wide** (including tests, fuzz, benches, docs code blocks).
 
-- [ ] **Step 3: Run `cargo check --workspace --all-targets`** → PASS. Run `cargo test -p megi-core -p megi-image -p megi-fonts` → PASS. Commit `refactor(arch): rename leaf crates to megi-*`.
+- [x] **Step 3: Run `cargo check --workspace --all-targets`** → PASS. Run `cargo test -p megi-core -p megi-image -p megi-fonts` → PASS. Commit `refactor(arch): rename leaf crates to megi-*`.
 
 ### Task 1.2: Rename remaining crates
 
@@ -159,9 +161,9 @@ Steps mirror Task 1.1; gate: `cargo test --workspace` and `cargo run --release -
 - Consumes: `megi_paint::DisplayItem`, `megi_paint::DisplayList`, `megi_paint::HitRegion` current definitions.
 - Produces: `megi_display::{DisplayItem, DisplayList, HitRegion, HitKind}`; `paint` re-exports them for compatibility during this task only.
 
-- [ ] **Step 1: Write a test asserting `DisplayItem` and `DisplayList` are `Clone + Debug` and contain no references** (compile-time `fn assert_owned<T: 'static>()`, no lifetimes). Run → FAIL (crate missing).
-- [ ] **Step 2: Move the types verbatim into `crates/display/src/`**, keeping field names and variant order; `paint` imports from `megi_display` and re-exports.
-- [ ] **Step 3: Run the test → PASS; `cargo test -p megi-paint` → PASS with byte-identical goldens.** Commit.
+- [x] **Step 1: Write a test asserting `DisplayItem` and `DisplayList` are `Clone + Debug` and contain no references** (compile-time `fn assert_owned<T: 'static>()`, no lifetimes). Run → FAIL (crate missing).
+- [x] **Step 2: Move the types verbatim into `crates/display/src/`**, keeping field names and variant order; `paint` imports from `megi_display` and re-exports.
+- [x] **Step 3: Run the test → PASS; `cargo test -p megi-paint` → PASS with byte-identical goldens.** Commit.
 
 ### Task 2.2: Extract `megi-raster`
 
@@ -174,10 +176,10 @@ Steps mirror Task 1.1; gate: `cargo test --workspace` and `cargo run --release -
 - Consumes: `megi_paint::rasterize_display_list*`, `megi_paint::Pixmap`, `megi_paint::RasterStats`.
 - Produces: `megi_raster::{rasterize_display_list, rasterize_display_list_with_font_database, RgbaFrame, RasterStats, encode_png}`. `render` calls `megi_raster` directly; `paint` no longer owns a rasterizer.
 
-- [ ] **Step 1: Copy the goldens before the move** (`cp` the fixture PNGs to `/tmp/opencode/megi-goldens-before/`); record md5.
-- [ ] **Step 2: Move rasterizer/png/deflate to `megi-raster`**, documenting each `thread_local RefCell` in `scratch.rs` with a comment explaining why it exists.
-- [ ] **Step 3: Run `cargo test -p megi-render` and compare md5 of all regenerated PNGs with the recorded ones** → identical.
-- [ ] **Step 4: Run `python3 tools/check_arch.py`** → `paint → raster` edge absent. Commit.
+- [x] **Step 1: Copy the goldens before the move** (`cp` the fixture PNGs to `/tmp/opencode/megi-goldens-before/`); record md5.
+- [x] **Step 2: Move rasterizer/png/deflate to `megi-raster`**, documenting each `thread_local RefCell` in `scratch.rs` with a comment explaining why it exists.
+- [x] **Step 3: Run `cargo test -p megi-render` and compare md5 of all regenerated PNGs with the recorded ones** → identical.
+- [x] **Step 4: Run `python3 tools/check_arch.py`** → `paint → raster` edge absent. Commit.
 
 ### Task 3.1: Invert PAC
 
