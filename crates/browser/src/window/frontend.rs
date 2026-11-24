@@ -15,6 +15,8 @@ impl WindowApp {
         let mut startup_notice = None;
         let mut recent = RecentHistory::new();
         let mut site_zooms: Vec<(String, f64)> = Vec::new();
+        // #1725: reader-mode page persisted with the session (window-global view).
+        let mut reader_html: Option<String> = None;
         let tabs = if let Some(path) = &view.session_path {
             let loaded = crate::session::load(path);
             if let Some(warning) = &loaded.warning {
@@ -26,6 +28,7 @@ impl WindowApp {
                     startup_notice = Some(format!("restored {} tab(s)", session.tabs.len()));
                     recent = crate::history::RecentHistory::from_entries(session.recent.clone());
                     site_zooms = session.site_zooms.clone();
+                    reader_html = session.reader_html.clone();
                     let mut restored = session.restore();
                     if !input.is_empty() && input != crate::tabs::BLANK_TAB_URL {
                         if let Some(pos) = restored.tabs().iter().position(|tab| tab.url == input) {
@@ -124,7 +127,7 @@ impl WindowApp {
             multi_anchor: None,
             hover_form: None,
             site_zooms,
-            reader_html: None,
+            reader_html,
             tabs,
         }
     }

@@ -13,6 +13,9 @@ impl WindowApp {
         let mut session = crate::session::Session::capture(&self.tabs);
         session.recent = self.recent_history.entries().to_vec();
         session.site_zooms = self.site_zooms.clone();
+        // #1725: persist the reader-mode page so an `about:reader` tab restores its content.
+        // Reader mode is a window-global view tied to the active tab.
+        session.reader_html = self.reader_html.clone();
         match crate::session::save(&path, &session) {
             Ok(()) => self.session_autosave.clear_dirty(),
             Err(error) => eprintln!("megi: cannot save session {}: {error}", path.display()),
