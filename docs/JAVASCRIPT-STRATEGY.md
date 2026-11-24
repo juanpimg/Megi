@@ -6,7 +6,7 @@
 - **Rama / HEAD**: `main` (HEAD vigente y métricas en `PROGRESS.md`)
 - **Ámbito**: motor JavaScript de la Fase 6, bindings DOM↔JS, ejecución de `<script>`/`document.write` y event loop mínimo.
 - **No es**: una implementación; este documento no contiene código ni cambia `Cargo.toml`.
-- **Documentos relacionados**: [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.1 (arena DOM e identidad), §3.1 (política de dependencias); [`ROADMAP.md`](ROADMAP.md) §«FASE 6»; [`HANDOFF.md`](HANDOFF.md); [`FUZZING.md`](FUZZING.md); [`SECURITY.md`](../SECURITY.md).
+- **Documentos relacionados**: [`ARCHITECTURE.md`](ARCHITECTURE.md) §2.1 (arena DOM e identidad), §3.1 (política de dependencias); [`ROADMAP.md`](ROADMAP.md) §«FASE 6»; [`docs/AGENT-INDEX.md`](AGENT-INDEX.md); [`FUZZING.md`](FUZZING.md); [`SECURITY.md`](../SECURITY.md).
 
 ---
 

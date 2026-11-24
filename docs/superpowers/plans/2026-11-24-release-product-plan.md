@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hacer que Megi se pueda descargar, verificar y reportar como una alpha creíble: arreglar el release actual, añadir canales continuos, feedback con consentimiento y gobernanza mínima, sin backend propio ni formatos预maturos.
+**Goal:** Hacer que Megi se pueda descargar, verificar y reportar como una alpha creíble: arreglar el release actual, añadir canales continuos, feedback con consentimiento y gobernanza mínima, sin backend propio ni formatos prematuros.
 
 **Architecture:** `release.yml` pasa a exigir verificación antes de publicar y produce artefactos reproducibles firmados con cosign keyless. Canales `continuous`/`beta` publican artefactos inmutables sin auto-update. El feedback (crash y sitio roto) se entrega como borrador de GitHub Issue, con el crash guardado localmente. La gobernanza se documenta y se automatiza la higiene de ramas.
 

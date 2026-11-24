@@ -176,7 +176,7 @@ graph TD
 -  [`CONTRIBUTING.md`](CONTRIBUTING.md): Guía de contribución, convenciones de código y workflows de CI.
 -  [`docs/AI-QUICKSTART.md`](docs/AI-QUICKSTART.md): Prompt pegable para empezar a trabajar en el repo con Claude Code, Codex, OpenCode u otro harness de IA.
 -  [`CHANGELOG.md`](CHANGELOG.md): Registro histórico de versiones, hitos y optimizaciones por ronda.
--  [`docs/MILESTONES.md`](docs/MILESTONES.md): Histórico exhaustivo de micro-hitos, benchmarks y optimizaciones (rondas 1–32).
+-  [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md): Índice operativo para agentes, hitos M0–M12 y plans ejecutables.
 
 ---
 
