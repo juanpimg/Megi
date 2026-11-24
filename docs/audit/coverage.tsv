@@ -2091,7 +2091,7 @@ tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	400	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
 tools/progress_stats.py	277	tool	F3	integration	2026-11-24	covered	#2294,#2295	read during final integration
-tools/real_site_check.py	262	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/real_site_check.py	274	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	163	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
@@ -2108,7 +2108,7 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	213	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tools/test_real_site_check.py	273	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	715	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	

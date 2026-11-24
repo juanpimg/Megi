@@ -62,6 +62,16 @@ def classify(stats: dict, site: dict | None = None) -> str:
         items = 0
     if items <= 0:
         return "PÁGINA EN BLANCO"
+    # #2269: `render --json` now reports the post-script DOM. A SPA can execute JS without
+    # errors and still leave nothing behind; display_items alone misses that blank page.
+    # Only apply the gate when both signals are present (older CLIs do not emit them), and
+    # let manifests opt out for intentionally blank pages via `allow_blank = true`.
+    if "element_count" in stats and "body_text" in stats:
+        elements = _failure_count(stats.get("element_count"))
+        body = stats.get("body_text")
+        body_text = body.strip() if isinstance(body, str) else body
+        if elements <= 0 and not body_text and not (site and site.get("allow_blank")):
+            return "PÁGINA EN BLANCO"
     try:
         status = int(stats.get("status") or 200)
     except (TypeError, ValueError):
@@ -146,6 +156,8 @@ def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, sou
         "mode": "live" if source.startswith(("http://", "https://")) else "snapshot",
         "result": result,
         "display_items": stats.get("display_items", 0),
+        "element_count": _failure_count(stats.get("element_count")),
+        "body_text": stats.get("body_text") or "",
         "status": stats.get("status"),
         "warnings": list(stats.get("warnings") or []),
         "console_errors": _failure_count(stats.get("console_errors")),
