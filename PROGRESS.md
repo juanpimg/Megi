@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `27db1c39` (2026-11-24) · hitos cerrados **2/13** · criterios verificados **26/64** (**40%**) · **3,378** tests · conformance **PASS** · **17** crates · **247,482** lines of Rust
+**Snapshot** — commit `74894772` (2026-11-24) · hitos cerrados **2/13** · criterios verificados **27/64** (**42%**) · **3,384** tests · conformance **PASS** · **17** crates · **248,837** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **M0** | Verdad y cimiento | `████████████████████` 7/7 | 100% |
 | **M1** | Interactividad | `████████████████████` 4/4 | 100% |
-| **M2** | Profundidad declarativa | `████████░░░░░░░░░░░░` 2/5 | 40% |
+| **M2** | Profundidad declarativa | `████████████░░░░░░░░` 3/5 | 60% |
 | **M3** | Frontera de seguridad | `████████████░░░░░░░░` 3/5 | 60% |
 | **M4** | Componentes y persistencia | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M5** | Plataforma nativa | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
@@ -29,7 +29,7 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `████████░░░░░░░░░░░░` 26/64 | **40%** |
+| | **Roadmap** | `████████░░░░░░░░░░░░` 27/64 | **42%** |
 
 ## Detalle de criterios por hito
 
@@ -54,17 +54,17 @@
 - 10 fixtures E2E de tarea de usuario — `cargo test -p megi-render --test e2e_task_fixtures` (10/10 PASS, 0 `console_errors`)
 - Corpus sin console_errors — `docs/status/real-sites.json` (4/4 sitios con `console_errors = 0`)
 
-### M2 — Profundidad declarativa (40%)
+### M2 — Profundidad declarativa (60%)
 
 **Verificado**
 
 - Animaciones CSS `@keyframes`/`transition` en runtime — `crates/css/src/animation_runtime.rs`
 - SVG con texto, gradientes y patterns — `crates/svg/src/`
+- Canvas 2D utilizable (rutas, ángulos `arc`, Bézier, transformaciones, `save`/`restore`, gradientes lineales y `drawImage`) — `crates/js/src/canvas/{path.rs,state.rs}`, `tests/fixtures/render/canvas_paths.html`; `cargo test -p megi-js --test canvas_paths_tests && cargo test -p megi-render --test canvas_tests`
 
 **Pendiente**
 
 - Bidi y CJK completos — `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` §3 lo lista como pendiente
-- Canvas 2D utilizable — no hay implementación en `crates/` (sólo `crates/js/tests/canvas_tests.rs`)
 - Fixtures con md5 estable tras completar los solapes conocidos
 
 ### M3 — Frontera de seguridad (60%)
@@ -199,10 +199,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `27db1c39` (2026-11-24) |
+| Commit | `74894772` (2026-11-24) |
 | Crates in the workspace | 17 |
-| Lines of Rust (tracked `.rs`) | 247482 |
-| Tests (`cargo test --workspace -- --list`) | 3378 |
+| Lines of Rust (tracked `.rs`) | 248837 |
+| Tests (`cargo test --workspace -- --list`) | 3384 |
 | Crates with `#![forbid(unsafe_code)]` | 17 / 17 |
 | Conformance gate | **PASS** |
 
@@ -240,10 +240,10 @@ Capability coverage and WPT conformance are separate metrics; this P/T is genera
 
 ## Next up
 
-- M2: completar Bidi/CJK y Canvas 2D utilizable
+- M2: completar Bidi/CJK y estabilizar md5 de fixtures con solapes conocidos
 - M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas
 - M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes
-- M6: spike de Canvas 2D / WebGL software antes de escribir código del motor
+- M6: spike de Canvas 2D avanzado / WebGL software antes de escribir código del motor
 
 ## Regenerating this page
 
