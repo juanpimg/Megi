@@ -87,6 +87,14 @@ pub enum MediaFeature {
     MinHeight(f32),
     MaxHeight(f32),
     Height(f32),
+    /// Strict range syntax `(width > <length>)` (Media Queries 4 §4.2).
+    WidthGreaterThan(f32),
+    /// Strict range syntax `(width < <length>)` (Media Queries 4 §4.2).
+    WidthLessThan(f32),
+    /// Strict range syntax `(height > <length>)` (Media Queries 4 §4.2).
+    HeightGreaterThan(f32),
+    /// Strict range syntax `(height < <length>)` (Media Queries 4 §4.2).
+    HeightLessThan(f32),
     Orientation(Orientation),
     PrefersColorScheme(ColorScheme),
     PrefersReducedMotion(bool),
@@ -113,9 +121,13 @@ impl MediaFeature {
             Self::MinWidth(value) => width >= *value,
             Self::MaxWidth(value) => width <= *value,
             Self::Width(value) => (width - *value).abs() < 0.5,
+            Self::WidthGreaterThan(value) => width > *value,
+            Self::WidthLessThan(value) => width < *value,
             Self::MinHeight(value) => height >= *value,
             Self::MaxHeight(value) => height <= *value,
             Self::Height(value) => (height - *value).abs() < 0.5,
+            Self::HeightGreaterThan(value) => height > *value,
+            Self::HeightLessThan(value) => height < *value,
             Self::Orientation(Orientation::Portrait) => height >= width,
             Self::Orientation(Orientation::Landscape) => width > height,
             _ => false,
