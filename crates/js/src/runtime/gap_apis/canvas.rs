@@ -85,6 +85,7 @@ pub(crate) fn canvas_get_context(
     ] {
         init.function(native(function), js_string!(name), 4);
     }
+    super::canvas_paths::register_canvas_2d_methods(&mut init);
     let context_object = init.build();
     // fillStyle/strokeStyle accessors (defined after build via the descriptor API).
     let get_fill = accessor_fn(context, canvas_fill_style_get);
@@ -115,10 +116,15 @@ pub(crate) fn canvas_get_context(
         .configurable(true)
         .build();
     let _ = context_object.define_property_or_throw(js_string!("globalAlpha"), descriptor, context);
+    super::canvas_paths::register_canvas_2d_accessors(&context_object, context);
     Ok(context_object.into())
 }
 
-fn canvas_number(args: &[JsValue], index: usize, context: &mut Context) -> JsResult<f64> {
+pub(crate) fn canvas_number(
+    args: &[JsValue],
+    index: usize,
+    context: &mut Context,
+) -> JsResult<f64> {
     args.get(index)
         .map(|value| value.to_number(context))
         .transpose()?
@@ -148,9 +154,10 @@ pub(crate) fn canvas_arc(
     let radius = canvas_number(args, 2, context)?;
     let start = canvas_number(args, 3, context)?;
     let end = canvas_number(args, 4, context)?;
+    let ccw = args.get(5).is_some_and(JsValue::to_boolean);
     with_context_host(context, |host| {
         host.canvas_store
-            .with_surface_mut(node, |s| s.arc(x, y, radius, start, end))
+            .with_surface_mut(node, |s| s.arc(x, y, radius, start, end, ccw))
     });
     Ok(JsValue::undefined())
 }
@@ -281,13 +288,7 @@ pub(crate) fn canvas_fill_style_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let value = arg_string(args, 0, context)?;
-    if let Some(color) = crate::canvas::Rgba::parse(&value) {
-        with_context_host(context, |host| {
-            host.canvas_store
-                .with_surface_mut(node, |s| s.fill_style = color)
-        });
-    }
+    super::canvas_paths::set_paint_style(node, args.first(), true, context)?;
     Ok(JsValue::undefined())
 }
 
@@ -313,13 +314,7 @@ pub(crate) fn canvas_stroke_style_set(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let value = arg_string(args, 0, context)?;
-    if let Some(color) = crate::canvas::Rgba::parse(&value) {
-        with_context_host(context, |host| {
-            host.canvas_store
-                .with_surface_mut(node, |s| s.stroke_style = color)
-        });
-    }
+    super::canvas_paths::set_paint_style(node, args.first(), false, context)?;
     Ok(JsValue::undefined())
 }
 

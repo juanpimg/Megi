@@ -69,3 +69,32 @@ fn canvas_without_script_paints_no_red() {
         "no script => no red canvas"
     );
 }
+
+#[test]
+fn canvas_paths_fixture_renders_deterministically() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root")
+        .join("tests/fixtures/render/canvas_paths.html");
+    let url = format!("file://{}", fixture.display());
+    let options = RenderOptions {
+        viewport: Viewport::new(220, 140).expect("viewport"),
+        ..RenderOptions::default()
+    };
+    let mut first = render_url(&url, &options).expect("first render");
+    let mut second = render_url(&url, &options).expect("second render");
+    assert_eq!(first.stats.scripts_executed, 1);
+    assert_eq!(first.stats.console_errors, 0);
+    assert_eq!(
+        first.png_bytes(),
+        second.png_bytes(),
+        "PNG output must be deterministic"
+    );
+    // Lower half-disc arc color (#ef4444) must be present while upper half stays white.
+    let arc_red = megi_css::Color::new(0xEF, 0x44, 0x44, 0xFF);
+    assert!(
+        count_color(&first.pixmap, arc_red) > 400,
+        "expected lower half-circle arc pixels"
+    );
+}

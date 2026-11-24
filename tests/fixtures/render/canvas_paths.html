@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Canvas 2D Paths &amp; Transforms</title></head>
+<body style="margin:0;background:#ffffff">
+<canvas id="scene" width="200" height="120"></canvas>
+<script>
+  var c = document.getElementById('scene');
+  var ctx = c.getContext('2d');
+
+  // Linear gradient background across top strip
+  var grad = ctx.createLinearGradient(0, 0, 200, 0);
+  grad.addColorStop(0, '#1e3a8a');
+  grad.addColorStop(1, '#10b981');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 200, 30);
+
+  // Half-circle arc (0 to PI = lower semicircle only)
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(45, 60, 25, 0, Math.PI);
+  ctx.fill();
+
+  // Cubic Bezier curve stroke
+  ctx.strokeStyle = '#111827';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(85, 95);
+  ctx.bezierCurveTo(105, 40, 145, 40, 165, 95);
+  ctx.stroke();
+
+  // Transformed save/restore square
+  ctx.save();
+  ctx.translate(10, 40);
+  ctx.scale(2, 2);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(0, 0, 6, 6);
+  ctx.restore();
+
+  // Offscreen canvas scaled via drawImage with globalAlpha
+  var stamp = document.createElement('canvas');
+  stamp.width = 4;
+  stamp.height = 4;
+  var sctx = stamp.getContext('2d');
+  sctx.fillStyle = '#7c3aed';
+  sctx.fillRect(0, 0, 4, 4);
+  ctx.globalAlpha = 0.5;
+  ctx.drawImage(stamp, 170, 50, 20, 20);
+</script>
+</body>
+</html>
