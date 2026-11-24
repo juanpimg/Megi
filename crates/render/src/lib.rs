@@ -209,6 +209,7 @@ pub mod frames;
 pub mod images;
 mod inline_svg;
 pub mod scripts;
+mod shadow_dom;
 pub mod stylesheets;
 mod svg_assets;
 pub mod webfonts;
