@@ -17,6 +17,7 @@ megi-core.workspace = true
 megi-html.workspace = true
 megi-css.workspace = true
 boa_engine = { workspace = true, optional = true }
+getrandom = { workspace = true }
 
 [lints]
 workspace = true

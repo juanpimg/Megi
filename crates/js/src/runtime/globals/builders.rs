@@ -87,18 +87,18 @@ pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
             let obj = array
                 .as_object()
                 .ok_or_else(|| js_error("getRandomValues requires a typed array"))?;
-            // Fill with pseudo-random bytes using a simple xorshift seeded by the clock.
-            let mut seed = with_context_host(context, |host| host.now_ms()).unwrap_or(12345);
+            // #2251: Web Crypto §4.1.1 requires a cryptographically secure RNG.
+            // getrandom uses the OS CSPRNG (getrandom(2)/RtlGenRand/etc.).
             let len = obj
                 .get(js_string!("length"), context)
                 .ok()
                 .and_then(|v| v.to_number(context).ok())
                 .unwrap_or(0.0) as usize;
-            for i in 0..len {
-                seed ^= seed << 13;
-                seed ^= seed >> 7;
-                seed ^= seed << 17;
-                let byte = (seed & 0xff) as u8;
+            let mut bytes = vec![0u8; len];
+            if let Err(error) = getrandom::fill(&mut bytes) {
+                return Err(js_error(format!("getRandomValues failed: {error}")));
+            }
+            for (i, byte) in bytes.into_iter().enumerate() {
                 let _ = obj.set(
                     js_string!(i.to_string()),
                     JsValue::from(byte as i32),
@@ -113,14 +113,10 @@ pub(crate) fn build_crypto(context: &mut Context) -> JsObject {
     );
     init.function(
         native(|_this, _args, _context| {
-            // Generate a v4 UUID from the same xorshift source.
-            let mut seed = with_context_host(_context, |host| host.now_ms()).unwrap_or(12345);
+            // Generate a v4 UUID from the OS CSPRNG (#2251).
             let mut bytes = [0u8; 16];
-            for b in bytes.iter_mut() {
-                seed ^= seed << 13;
-                seed ^= seed >> 7;
-                seed ^= seed << 17;
-                *b = (seed & 0xff) as u8;
+            if let Err(error) = getrandom::fill(&mut bytes) {
+                return Err(js_error(format!("randomUUID failed: {error}")));
             }
             bytes[6] = (bytes[6] & 0x0f) | 0x40;
             bytes[8] = (bytes[8] & 0x3f) | 0x80;
