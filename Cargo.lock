@@ -1808,6 +1808,7 @@ name = "megi-js"
 version = "0.1.0"
 dependencies = [
  "boa_engine",
+ "getrandom 0.3.4",
  "megi-core",
  "megi-css",
  "megi-html",
