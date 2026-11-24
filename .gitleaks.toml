@@ -1,11 +1,9 @@
 # gitleaks configuration for the Megi repository.
 #
-# The default ruleset is used as-is; the only local addition is an allowlist for
-# a documented false positive: `CHANGELOG.md` is prose and one English sentence
-# ("layout fingerprint and CSS parse caching …") trips the `generic-api-key`
-# entropy heuristic. Nothing else in the tree is exempt, and the allowlist is
-# scoped to that single rule and that single file so a real credential added
-# anywhere else — including elsewhere in the changelog — still fails the gate.
+# The default ruleset is used as-is; local additions are narrow allowlists for
+# documented false positives (CHANGELOG prose, vendored HTML, RFC test vectors,
+# and WPT canonical keys). Every entry is scoped to one rule and to exact
+# paths/commits, so a real credential added anywhere else still fails the gate.
 
 [extend]
 useDefault = true
@@ -28,4 +26,9 @@ rules = ["generic-api-key"]
 [[allowlists]]
 description = "RFC 6455 §1.3 Sec-WebSocket-Accept example test vector in historical commit (not a secret)"
 commits = ["5c7cd0d942374d27eb3be1600a12cdf1267f8b8c"]
+rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "docs/status/wpt.json WPT subtest keys are public sha256(test + NUL + subtest) canonical identifiers, not credentials"
+paths = ['''^docs/status/wpt\.json$''']
 rules = ["generic-api-key"]
