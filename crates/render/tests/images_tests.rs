@@ -389,6 +389,39 @@ fn test_max_total_decoded_pixels_cap() {
 }
 
 #[test]
+fn cap_discarded_images_are_reported_as_telemetry() {
+    // #2250: images dropped by the `max_images` cap are only visible in free-form warning
+    // text. Expose the count as structured telemetry so `--json` consumers can detect
+    // silent content loss without parsing warnings.
+    let page = "<!doctype html><html><body style=\"margin:0\">\
+                <img src=\"/img.png\" style=\"width:10px;height:10px\">\
+                <img src=\"/img.png\" style=\"width:10px;height:10px\">\
+                <img src=\"/img.png\" style=\"width:10px;height:10px\">\
+                </body></html>";
+    let mut routes = HashMap::new();
+    routes.insert(
+        "/page.html".to_string(),
+        Response::ok("text/html", page.as_bytes().to_vec()),
+    );
+    routes.insert(
+        "/img.png".to_string(),
+        Response::ok("image/png", fixture_bytes("assets/px.png")),
+    );
+    let server = TestServer::spawn(routes, 2);
+
+    let mut render_options = options();
+    render_options.max_images = 1;
+    let output = render_url(&server.url("/page.html"), &render_options).expect("render");
+    assert_eq!(output.stats.images_loaded, 1);
+    // Three distinct <img> referenced, only one loaded: two discarded by the cap.
+    assert_eq!(
+        output.stats.images_capped, 2,
+        "structured telemetry must report images dropped by the cap (warnings {:?})",
+        output.stats.warnings
+    );
+}
+
+#[test]
 fn image_byte_budget_counts_every_skipped_image() {
     // #1666: when the total byte budget is exhausted, every subsequent image must be counted
     // as failed (telemetry), not silently abandoned by a `break`.
