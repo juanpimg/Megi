@@ -152,9 +152,9 @@ items = [
   "PNG/JPEG/GIF/WebP propios y deterministas — `crates/image/src/`",
   "SVG con shapes, paths, texto y filtros — `crates/svg/src/`",
   "Canvas 2D completo — subset WPT 2dcontext/drawing-rectangles-to-the-canvas 3/3 PASS sin allowlist (WPT total 595/595, manifest sha256 5f4c6b43e7fec3a49fa3635f6bc5c8fd6756eb55aa7c0caab4ffbe9c6d218a20); golden tests/fixtures/render/canvas_full/golden.png md5 d3a429aa406b715bf6b6cf879408cab7 byte-idéntico en dos ejecuciones de tools/render_fixture.sh; crates/js/tests/canvas_tests.rs 13 passed y crates/js/tests/canvas_paths_tests.rs 6 passed",
+  "WebGL 1 por software — ADR docs/adr/2026-11-24-webgl-strategy.md: decisión (a) rasterizador software en Rust puro sin dependencias nuevas ni unsafe; subset WPT webgl/bufferSubData.html 1/1 PASS sin allowlist (WPT total 596/596, manifest sha256 af4cb74f24c232438b3529654e803534e87039c2f518c43ee6e5a37c04c81100, rebaseline con 0 FAIL); golden tests/fixtures/render/webgl_triangle/golden.png md5 3d079f295aa37f644196272a7bdf12f8 byte-idéntico en dos ejecuciones de tools/render_fixture.sh; crates/js/tests/webgl_tests.rs 5 passed; harness `Conformance gate: PASS`; límites: triángulos y buffer objects, sin shaders/texturas/depth, subset WPT de un caso real no conformance completa",
 ]
 pending = [
-  "WebGL 1 por software — sin implementación",
   "AVIF/JPEG XL — sin decodificadores",
   "Audio y vídeo con códecs libres — sin implementación",
 ]
