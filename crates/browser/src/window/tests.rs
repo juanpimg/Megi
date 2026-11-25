@@ -392,3 +392,53 @@ fn build_focus_targets_maps_controls_and_links_in_document_order() {
     assert!(targets.contains(&FocusTarget::Control(42)));
     assert!(targets.contains(&FocusTarget::Link(link)));
 }
+
+#[cfg(test)]
+mod rail_state_tests {
+    use super::*;
+
+    #[test]
+    fn rail_css_width_defaults_to_zero() {
+        // The closed rail changes no pixel: WindowApp initializes rail_open=false
+        // and the pure geometry helper must reserve zero CSS columns for it.
+        assert_eq!(rail_state::css_width(false), 0.0);
+        assert_eq!(
+            rail_state::page_viewport_width(1024, false),
+            1024,
+            "closed rail leaves the page viewport untouched"
+        );
+    }
+
+    #[test]
+    fn rail_view_none_when_closed() {
+        let labels = vec!["one".to_owned(), "two".to_owned()];
+        assert!(
+            rail_state::view(false, &labels, 0, None).is_none(),
+            "a closed rail must never be laid out or painted"
+        );
+        let open = rail_state::view(true, &labels, 1, None).expect("expanded rail");
+        assert_eq!(open.labels, labels.as_slice());
+        assert_eq!(open.active, 1);
+        assert_eq!(open.width_css, rail_state::css_width(true));
+        assert!(open.expanded);
+    }
+
+    #[test]
+    fn chrome_rail_pixels_track_rail_css_width_times_scale() {
+        // `present_region_with_insets` reserves this many physical columns; the
+        // value must follow rail_css_width() so a closed rail is a true no-op.
+        let scale = 1.5;
+        let dest_width = 800u32;
+        let expected = (f64::from(rail_state::css_width(true)) * scale).round() as u32;
+        assert_eq!(present::chrome_rail_pixels(scale, dest_width), expected);
+        assert_eq!(
+            present::chrome_rail_pixels_for(scale, rail_state::css_width(true), dest_width),
+            expected
+        );
+        assert_eq!(
+            present::chrome_rail_pixels_for(scale, rail_state::css_width(false), dest_width),
+            0,
+            "closed rail reserves no physical columns"
+        );
+    }
+}

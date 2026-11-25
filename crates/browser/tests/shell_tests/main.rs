@@ -12,6 +12,7 @@ mod forms;
 mod misc;
 mod options;
 mod pages;
+mod rail_tests;
 mod saves;
 mod tabs;
 mod worker;
