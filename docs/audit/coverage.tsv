@@ -767,7 +767,7 @@ crates/js/tests/wpt_conformance_r233_extra.rs	455	test	F1	wave-max-mod	2026-11-1
 crates/js/tests/wpt_like_r167.rs	321	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/xhr_tests.rs	448	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/Cargo.toml	20	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/bidi.rs	419	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Re-read LTR-inside-RTL fix
+crates/layout/src/bidi.rs	428	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Re-read LTR-inside-RTL fix
 crates/layout/src/bidi/bidi_tests.rs	116	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Tests split from bidi.rs to meet 500-line cap
 crates/layout/src/block.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/absolute.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -792,7 +792,7 @@ crates/layout/src/grid/position.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/layout/src/grid/tracks.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/baseline.rs	71	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline/bidi.rs	173	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/inline/bidi.rs	180	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/format_line.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/ifc.rs	138	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/inline_boxes.rs	368	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -824,7 +824,7 @@ crates/layout/tests/bfc_conformance/blocks.rs	372	test	F1	wave-max-mod	2026-11-1
 crates/layout/tests/bfc_conformance/breaks.rs	130	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/bfc_conformance/main.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/bfc_conformance/sizing.rs	198	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/bidi_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/bidi_tests.rs	145	test	F1	integration	2026-11-25	covered	#2269	re-read after rebase
 crates/layout/tests/calc/containers.rs	233	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/calc/contexts.rs	163	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/calc/length.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
