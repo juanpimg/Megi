@@ -10,7 +10,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	554	ci	F3	jp	2026-11-25	covered	#2290	re-read after adding wpt_report tests to CI unittest list
+.github/workflows/ci.yml	559	ci	F3	jp	2026-11-25	covered	#2290	re-read after registering five tools test modules in the CI unittest list
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -2337,7 +2337,7 @@ tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after a
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
-tools/test_ci_gate.py	81	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding CI list regression test
+tools/test_ci_gate.py	109	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding the full tools-test-list registry regression
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
