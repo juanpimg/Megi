@@ -17,8 +17,10 @@ fn attach_shadow_creates_a_root_and_shadow_root_getter() {
              document.body.appendChild(host); \
              var before = host.shadowRoot; \
              var root = host.attachShadow({ mode: 'open' }); \
+             var second = null; \
+             try { host.attachShadow({ mode: 'open' }); } catch (e) { second = e.name; } \
              String(before === null && root !== null && root === host.shadowRoot \
-                    && root.nodeType === 11 && host.attachShadow({ mode: 'open' }) === root);",
+                    && root.nodeType === 11 && second === 'InvalidStateError');",
             "t",
         )
         .expect("attachShadow");
@@ -52,5 +54,41 @@ fn element_without_shadow_has_null_shadow_root() {
             "t",
         )
         .expect("no shadow");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn closed_shadow_root_is_hidden_but_exposes_its_host() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var host = document.createElement('div'); \
+             var root = host.attachShadow({ mode: 'closed' }); \
+             String(host.shadowRoot === null && root.host === host && \
+                    root instanceof ShadowRoot && \
+                    ShadowRoot.prototype.__proto__ === DocumentFragment.prototype);",
+            "t",
+        )
+        .expect("closed shadow root");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn attach_shadow_validates_mode_and_safelisted_elements() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var host = document.createElement('div'); \
+             var missing = null, bad = null, safelist = null; \
+             try { host.attachShadow({}); } catch (e) { missing = e.name; } \
+             try { host.attachShadow({ mode: 1 }); } catch (e) { bad = e.name; } \
+             globalThis.ATTACHSHADOW_DISALLOWED_ELEMENTS = ['a']; \
+             try { document.createElement('a').attachShadow({ mode: 'open' }); } \
+             catch (e) { safelist = e.name; } \
+             String(missing === 'TypeError' && bad === 'TypeError' && \
+                    safelist === 'NotSupportedError');",
+            "t",
+        )
+        .expect("attachShadow validation");
     assert_eq!(out, "true");
 }

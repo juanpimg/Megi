@@ -184,9 +184,42 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     let wrapper = init.build();
     // #1915: element wrappers inherit from `HTMLElement.prototype`, which itself
     // inherits from `Element.prototype`, so both instanceof checks work.
+    // WHATWG DOM §4.9: `attachShadow`/`shadowRoot` belong to Element only, `host`
+    // belongs to ShadowRoot only. The shared wrapper table installs them on every
+    // node, so remove the ones the node kind must not expose.
+    let node_id = with_context_host(context, |host| host.node_for_handle(handle))
+        .and_then(|result| result.ok());
+    let is_element = node_id
+        .and_then(|id| {
+            with_context_host(context, |host| {
+                host.document
+                    .try_node(id)
+                    .map(|node| matches!(node.kind, megi_core::NodeKind::Element(_)))
+            })
+            .flatten()
+        })
+        .unwrap_or(false);
+    let is_shadow_root = node_id
+        .and_then(|id| with_context_host(context, |host| host.shadow_hosts.contains_key(&id)))
+        .unwrap_or(false);
+    // `Element.prototype.attachShadow` is the validating JS wrapper installed by the
+    // prelude, so the native method must not shadow it as an own property.
+    let _ = wrapper.delete_property_or_throw(js_string!("attachShadow"), context);
+    if !is_element {
+        let _ = wrapper.delete_property_or_throw(js_string!("shadowRoot"), context);
+    }
+    // WHATWG DOM §4.9: element-only accessors must not leak to text/comment/document
+    // wrappers through HTMLElement.prototype. Non-element wrappers inherit Node.prototype.
+    let prototype_name = if is_shadow_root {
+        "ShadowRoot"
+    } else if is_element {
+        "HTMLElement"
+    } else {
+        "Node"
+    };
     if let Some(prototype) = context
         .global_object()
-        .get(js_string!("HTMLElement"), context)
+        .get(js_string!(prototype_name), context)
         .ok()
         .and_then(|value| value.as_object())
         .and_then(|ctor| ctor.get(js_string!("prototype"), context).ok())

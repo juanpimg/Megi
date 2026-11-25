@@ -120,6 +120,18 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
             context,
         )
         .map_err(|error| JsError::Internal(error.to_string()))?;
+    // WHATWG DOM §4.9: the prelude installs the validating `Element.prototype.attachShadow`
+    // on top of this native entry point (it needs to throw real DOMExceptions).
+    let _ = context.register_global_builtin_callable(
+        js_string!("__megi_attach_shadow_native"),
+        1,
+        native(crate::runtime::node_attach_shadow),
+    );
+    let _ = context.register_global_builtin_callable(
+        js_string!("__megi_shadow_root_native"),
+        0,
+        native(crate::runtime::node_shadow_root_get),
+    );
     // #1915: `HTMLElement` is a subclass of Element; element wrappers inherit from
     // its prototype so both `instanceof Element` and `instanceof HTMLElement` hold.
     let element_proto = element_constructor

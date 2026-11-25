@@ -554,7 +554,56 @@ if (typeof IntersectionObserver !== 'function') {
   if (typeof HTMLCollection !== 'function') define('HTMLCollection', StubCtor('HTMLCollection'));
   if (typeof DOMTokenList !== 'function') define('DOMTokenList', StubCtor('DOMTokenList'));
   if (typeof NamedNodeMap !== 'function') define('NamedNodeMap', StubCtor('NamedNodeMap'));
+  if (typeof Node !== 'undefined' && typeof Node.prototype === 'undefined') Node.prototype = {};
+  if (typeof DOMParser !== 'function') {
+    function DOMParser() {}
+    DOMParser.prototype.parseFromString = function () { return {}; };
+    define('DOMParser', DOMParser);
+  }
+  if (typeof CharacterData !== 'function') define('CharacterData', StubCtor('CharacterData', typeof Node !== 'undefined' ? Node : null));
   if (typeof DocumentFragment !== 'function') define('DocumentFragment', StubCtor('DocumentFragment'));
+  // WHATWG DOM §4.9: `ShadowRoot` inherits from DocumentFragment and has no public constructor.
+  if (typeof ShadowRoot !== 'function') {
+    function ShadowRoot() { throw new DOMException('Illegal constructor', 'TypeError'); }
+    ShadowRoot.prototype = Object.create(typeof DocumentFragment === 'function' ? DocumentFragment.prototype : null);
+    Object.defineProperty(ShadowRoot.prototype, 'constructor', { value: ShadowRoot, configurable: true });
+    define('ShadowRoot', ShadowRoot);
+  }
+  // WHATWG DOM §4.9: attachShadow validates `mode`, rejects a second attach and
+  // disallows non-safelisted elements. The native entry point only creates the root.
+  if (typeof Element !== 'undefined' && Element.prototype && typeof globalThis.__megi_attach_shadow_native === 'function') {
+    var nativeAttachShadow = globalThis.__megi_attach_shadow_native;
+    Element.prototype.attachShadow = function (init) {
+      if (!init || typeof init !== 'object' || (init.mode !== 'open' && init.mode !== 'closed')) {
+        throw new TypeError('attachShadow: mode must be "open" or "closed"');
+      }
+      if (Object.prototype.hasOwnProperty.call(this, '__megi_shadow_attached__')) {
+        throw new DOMException('Element already hosts a shadow tree', 'InvalidStateError');
+      }
+      var disallowed = globalThis.ATTACHSHADOW_DISALLOWED_ELEMENTS || [];
+      if (typeof this.localName === 'string' && disallowed.indexOf(this.localName.toLowerCase()) >= 0) {
+        throw new DOMException('attachShadow is not allowed on this element', 'NotSupportedError');
+      }
+      Object.defineProperty(this, '__megi_shadow_attached__', { value: true, configurable: false });
+      var root = nativeAttachShadow.call(this, init);
+      // WHATWG DOM §4.9: `ShadowRoot.host` is the element that owns the tree.
+      Object.defineProperty(root, '__megi_shadow_host__', { value: this, configurable: false });
+      return root;
+    };
+  }
+  if (typeof ShadowRoot === 'function' && ShadowRoot.prototype) {
+    Object.defineProperty(ShadowRoot.prototype, 'host', {
+      get: function () { return this.__megi_shadow_host__ || null; },
+      configurable: true
+    });
+  }
+  if (typeof Element !== 'undefined' && Element.prototype && typeof globalThis.__megi_shadow_root_native === 'function') {
+    var nativeShadowRoot = globalThis.__megi_shadow_root_native;
+    Object.defineProperty(Element.prototype, 'shadowRoot', {
+      get: function () { return nativeShadowRoot.call(this); },
+      configurable: true
+    });
+  }
   if (typeof Text !== 'function') define('Text', StubCtor('Text'));
   if (typeof Comment !== 'function') define('Comment', StubCtor('Comment'));
   if (typeof Attr !== 'function') define('Attr', StubCtor('Attr'));

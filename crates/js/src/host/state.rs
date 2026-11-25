@@ -160,4 +160,6 @@ pub(crate) struct Host {
     pub idl_checked: HashMap<NodeId, bool>,
     /// Worker DOM-proxy event subscriptions: (worker id, NodeId, event type, proxy token).
     pub(crate) worker_dom_listeners: Vec<(u32, megi_core::NodeId, String, u64)>,
+    /// Shadow mode per host `NodeId` (`open` or `closed`) — WHATWG DOM §4.9.
+    pub shadow_modes: std::collections::HashMap<NodeId, String>,
 }

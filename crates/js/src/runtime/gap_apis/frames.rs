@@ -20,12 +20,26 @@ pub(crate) fn node_blur(
 }
 
 /// `Element.attachShadow({mode})` — creates an inert `DocumentFragment` as shadow root (#1541).
+///
+/// WHATWG DOM §4.9: `mode` must be `"open"` or `"closed"`; a closed root is not exposed
+/// through `Element.shadowRoot`, and `ShadowRoot.host` still points at the host element.
 pub(crate) fn node_attach_shadow(
     this: &JsValue,
-    _args: &[JsValue],
+    args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node_id = this_node(this, context)?;
+    let mode = args
+        .first()
+        .and_then(JsValue::as_object)
+        .and_then(|init| init.get(js_string!("mode"), context).ok())
+        .and_then(|value| value.as_string().map(|s| s.to_std_string_lossy()));
+    if !matches!(mode.as_deref(), Some("open" | "closed")) {
+        return Err(JsNativeError::typ()
+            .with_message("attachShadow: mode must be \"open\" or \"closed\"")
+            .into());
+    }
+    let mode = mode.expect("validated above");
     let existing =
         with_context_host(context, |host| host.shadow_roots.get(&node_id).copied()).flatten();
     if let Some(root) = existing {
@@ -35,6 +49,7 @@ pub(crate) fn node_attach_shadow(
         let root = host.document.create_document_fragment();
         host.shadow_roots.insert(node_id, root);
         host.shadow_hosts.insert(root, node_id);
+        host.shadow_modes.insert(node_id, mode);
         Some(root)
     })
     .flatten()
@@ -42,6 +57,7 @@ pub(crate) fn node_attach_shadow(
     wrap_node(context, root)
 }
 
+/// `Element.shadowRoot` getter: null when the element has no root or the root is closed.
 pub(crate) fn node_shadow_root_get(
     this: &JsValue,
     _args: &[JsValue],
@@ -50,9 +66,14 @@ pub(crate) fn node_shadow_root_get(
     let node_id = this_node(this, context)?;
     let root =
         with_context_host(context, |host| host.shadow_roots.get(&node_id).copied()).flatten();
+    let closed = with_context_host(context, |host| {
+        host.shadow_modes.get(&node_id).map(|mode| mode == "closed")
+    })
+    .flatten()
+    .unwrap_or(false);
     match root {
-        Some(root) => wrap_node(context, root),
-        None => Ok(JsValue::null()),
+        Some(root) if !closed => wrap_node(context, root),
+        _ => Ok(JsValue::null()),
     }
 }
 
