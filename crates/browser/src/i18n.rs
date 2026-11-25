@@ -97,13 +97,12 @@ pub struct Strings {
     pub settings: &'static str,
     pub settings_zen_features: &'static str,
     pub settings_diagnostics: &'static str,
-    /// Accessible labels of the three (not yet wired) shell toggles.
+    /// Accessible labels of the three live shell toggles.
     pub settings_vertical_rail: &'static str,
     pub settings_compact_mode: &'static str,
     pub settings_reduced_motion: &'static str,
-    /// Honest status marker: the controls are shown but do not change window state yet.
-    pub settings_coming_phase: &'static str,
-    pub settings_coming_phase_note: &'static str,
+    /// Note explaining that the settings switches change the window state immediately.
+    pub settings_toggle_note: &'static str,
 }
 
 /// Returns the strings table for `locale`.
@@ -151,8 +150,7 @@ pub fn strings(locale: Locale) -> Strings {
             settings_vertical_rail: "Vertical rail",
             settings_compact_mode: "Compact mode",
             settings_reduced_motion: "Reduced motion",
-            settings_coming_phase: "Coming in this phase",
-            settings_coming_phase_note: "These switches are shown for review but are not yet connected to the window state.",
+            settings_toggle_note: "These switches change the window state immediately.",
         },
         Locale::Es => Strings {
             error_loading: "Error al cargar la página",
@@ -196,8 +194,7 @@ pub fn strings(locale: Locale) -> Strings {
             settings_vertical_rail: "Rail vertical",
             settings_compact_mode: "Modo compacto",
             settings_reduced_motion: "Movimiento reducido",
-            settings_coming_phase: "Se implementará en esta fase",
-            settings_coming_phase_note: "Estos interruptores se muestran para revisión pero aún no están conectados al estado de la ventana.",
+            settings_toggle_note: "Estos interruptores cambian el estado de la ventana de inmediato.",
         },
     }
 }

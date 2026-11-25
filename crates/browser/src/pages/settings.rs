@@ -5,11 +5,82 @@
 //! switch also carries `aria-labelledby`/`aria-describedby` so the shell's accessibility snapshot
 //! exposes the same name and status a screen reader would announce.
 //!
-//! Honesty limit: none of the three switches is connected to window state yet. They are rendered
-//! `disabled` and labelled as coming in this phase; the page never claims a working toggle.
+//! The checkboxes are live: their `checked` state is derived from [`ShellSettingsState`], which
+//! the window injects from its own chrome state. Each control carries `data-megi-setting` so the
+//! shell can map its stable `data-megi-form-id` back to the setting it changes. The headless
+//! [`settings_page_html`] keeps the all-off default so generated-page goldens stay stable.
 
 use super::*;
+use crate::forms::{Document, FORM_ID_ATTR, element_ids};
 use crate::i18n::{Locale, strings};
+
+/// One shell setting exposed by the generated settings page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ShellSetting {
+    Rail,
+    Compact,
+    Motion,
+}
+
+impl ShellSetting {
+    /// Parses the `data-megi-setting` attribute written by this page.
+    pub(crate) fn from_attribute(value: &str) -> Option<Self> {
+        match value {
+            "rail" => Some(Self::Rail),
+            "compact" => Some(Self::Compact),
+            "motion" => Some(Self::Motion),
+            _ => None,
+        }
+    }
+}
+
+/// Values of the three shell switches, as rendered by the settings page.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ShellSettingsState {
+    pub rail: bool,
+    pub compact: bool,
+    pub reduced_motion: bool,
+}
+
+impl ShellSettingsState {
+    /// Applies one checkbox change. Returns `false` when the state was already equal.
+    pub fn apply_toggle(&mut self, setting: ShellSetting, checked: bool) -> bool {
+        let current = match setting {
+            ShellSetting::Rail => &mut self.rail,
+            ShellSetting::Compact => &mut self.compact,
+            ShellSetting::Motion => &mut self.reduced_motion,
+        };
+        if *current == checked {
+            return false;
+        }
+        *current = checked;
+        true
+    }
+}
+
+/// Resolves a stable form id assigned by the shell to its settings-page control.
+pub(crate) fn setting_for_form_id(document: &Document, form_id: u32) -> Option<ShellSetting> {
+    element_ids(document).into_iter().find_map(|node| {
+        let element = document.node(node).as_element()?;
+        if element.get_attribute(FORM_ID_ATTR)?.parse::<u32>().ok() != Some(form_id) {
+            return None;
+        }
+        element
+            .get_attribute("data-megi-setting")
+            .and_then(ShellSetting::from_attribute)
+    })
+}
+
+/// Applies a checkbox change identified by its form id to `state` without touching the DOM.
+pub(crate) fn toggle_setting_by_form_id(
+    document: &Document,
+    form_id: u32,
+    checked: bool,
+    state: &mut ShellSettingsState,
+) -> bool {
+    setting_for_form_id(document, form_id)
+        .is_some_and(|setting| state.apply_toggle(setting, checked))
+}
 
 /// Whether `input` is the generated settings URL (case-insensitive, trimmed).
 ///
@@ -21,33 +92,50 @@ pub fn is_settings_url(input: &str) -> bool {
     )
 }
 
-/// Generates the settings page in the host's current locale.
+/// Generates the settings page in the host's current locale, with all switches off.
 pub fn settings_page_html() -> String {
     settings_page_html_with_locale(Locale::current())
 }
 
-/// Locale-aware variant of [`settings_page_html`].
+/// Locale-aware variant of [`settings_page_html`], still using the default state.
 pub fn settings_page_html_with_locale(locale: Locale) -> String {
+    settings_page_html_with_state(locale, ShellSettingsState::default())
+}
+
+/// Generates the settings page from the current shell state.
+pub fn settings_page_html_with_state(locale: Locale, state: ShellSettingsState) -> String {
     let s = strings(locale);
     let lang = locale.html_lang();
     let note = format!(
-        "<p id=\"phase-note\" class=\"note\"><strong>{}</strong> — {}</p>",
-        escape_html(s.settings_coming_phase),
-        escape_html(s.settings_coming_phase_note)
+        "<p id=\"phase-note\" class=\"note\">{}</p>",
+        escape_html(s.settings_toggle_note)
     );
     let toggles = [
-        ("setting-rail", s.settings_vertical_rail),
-        ("setting-compact", s.settings_compact_mode),
-        ("setting-motion", s.settings_reduced_motion),
+        ("setting-rail", "rail", s.settings_vertical_rail, state.rail),
+        (
+            "setting-compact",
+            "compact",
+            s.settings_compact_mode,
+            state.compact,
+        ),
+        (
+            "setting-motion",
+            "motion",
+            s.settings_reduced_motion,
+            state.reduced_motion,
+        ),
     ];
     let mut controls = String::new();
-    for (id, label) in toggles {
+    for (id, key, label, checked) in toggles {
         // WHATWG HTML §13: a form control's label is associated with `for`/`id`; ADR-002 adds
-        // the explicit accessible name and the shared, honest status description.
+        // the explicit accessible name and the shared status description. `checked` is the
+        // only state-dependent part of the markup, so the shell can regenerate it on a toggle.
+        let checked = if checked { " checked" } else { "" };
         let _ = write!(
             controls,
             "<div class=\"toggle\"><input type=\"checkbox\" id=\"{id}\" \
-             aria-labelledby=\"label-{id}\" aria-describedby=\"phase-note\" disabled>\
+             data-megi-setting=\"{key}\" aria-labelledby=\"label-{id}\" \
+             aria-describedby=\"phase-note\"{checked}>\
              <label id=\"label-{id}\" for=\"{id}\">{label}</label></div>"
         );
     }
