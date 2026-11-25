@@ -113,6 +113,20 @@ pub(super) fn paint_background_border(
     let radii = style.border_radius;
     let has_radius = !radii.is_zero();
     let rounded_group = !background_is_propagated && has_radius;
+    // CSS Masking 1 §6.1: the decoded `mask-image` is applied to the box's
+    // background (colour + image layers) as an alpha mask. A URL that was not
+    // fetched/decoded simply paints the unmasked background, as before.
+    let mask_bitmap = if background_is_propagated {
+        None
+    } else {
+        style
+            .background_layers
+            .first()
+            .and_then(|layer| layer.mask_image.as_deref())
+            .and_then(|url| resources.backgrounds.get(url))
+            .filter(|image| !image.is_empty())
+            .map(std::sync::Arc::clone)
+    };
     // `background-clip: text`: the background color/images are composited through
     // the glyph mask of the box's text descendants, scoped strictly to the
     // layers whose `background-clip` is `text` (#446).
@@ -151,6 +165,10 @@ pub(super) fn paint_background_border(
     }
     if rounded_group {
         push_rounded_group(list, resources, border_box, radii);
+    }
+    let mask_group_active = mask_bitmap.is_some();
+    if let Some(mask) = mask_bitmap {
+        push_mask_group(list, resources, border_box, mask);
     }
     let mut text_mask_active = false;
     let color_clips_to_text = style
@@ -317,6 +335,9 @@ pub(super) fn paint_background_border(
 
     if text_mask_active {
         pop_text_mask_group(list, resources);
+    }
+    if mask_group_active {
+        pop_mask_group(list, resources);
     }
     if rounded_group {
         pop_rounded_group(list, resources);

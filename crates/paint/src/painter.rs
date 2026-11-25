@@ -121,8 +121,8 @@ use effects::{
     inline_filtered_solid, overflow_rounded_clip, tree_has_effects,
 };
 use hit_regions::{
-    pop_clip_item, pop_rounded_group, pop_text_mask_group, push_clip_item, push_rounded_group,
-    push_text_mask_group,
+    pop_clip_item, pop_mask_group, pop_rounded_group, pop_text_mask_group, push_clip_item,
+    push_mask_group, push_rounded_group, push_text_mask_group,
 };
 use images::paint_replaced_element;
 use inline::paint_inline_content;

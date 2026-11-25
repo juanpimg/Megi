@@ -42,3 +42,19 @@ pub(super) fn pop_text_mask_group(list: &mut DisplayList, resources: &PaintResou
     list.push(DisplayItem::PopTextMaskGroup);
     resources.pop_clip();
 }
+/// Emits a `PushMaskGroup` display item (CSS Masking 1 §6.1) and mirrors its
+/// bounding rect into the hit-region clip stack.
+pub(super) fn push_mask_group(
+    list: &mut DisplayList,
+    resources: &PaintResources<'_>,
+    rect: Rect,
+    mask: std::sync::Arc<megi_image::RgbaImage>,
+) {
+    list.push(DisplayItem::PushMaskGroup { rect, mask });
+    resources.push_clip(rect);
+}
+/// Emits a `PopMaskGroup` display item and pops its mirrored clip.
+pub(super) fn pop_mask_group(list: &mut DisplayList, resources: &PaintResources<'_>) {
+    list.push(DisplayItem::PopMaskGroup);
+    resources.pop_clip();
+}

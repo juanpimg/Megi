@@ -351,6 +351,12 @@ pub struct BackgroundLayer {
     pub clip: BackgroundClip,
     /// Viewport/element attachment.
     pub attachment: BackgroundAttachment,
+    /// Raw `mask-image` / `-webkit-mask-image` URL shared by the box's background.
+    ///
+    /// Kept on the layer (rather than `ComputedStyle`) so the computed-style
+    /// literal in `computed/chunk3.rs` stays untouched. CSS Masking 1 §6.1
+    /// currently supports one image layer, stored on every layer for lookup.
+    pub mask_image: Option<String>,
 }
 
 impl Default for BackgroundLayer {
@@ -364,6 +370,7 @@ impl Default for BackgroundLayer {
             origin: BackgroundOrigin::PaddingBox,
             clip: BackgroundClip::BorderBox,
             attachment: BackgroundAttachment::Scroll,
+            mask_image: None,
         }
     }
 }

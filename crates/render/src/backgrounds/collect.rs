@@ -64,6 +64,19 @@ pub(super) fn push_style_background_references(
             kind: BackgroundKind::ListStyleImage,
         });
     }
+    // CSS Masking 1 §6.1: the mask image is decoded through the same background
+    // image cache; the painter looks it up by the same raw URL string.
+    if let Some(raw_url) = style
+        .background_layers
+        .first()
+        .and_then(|layer| layer.mask_image.as_deref())
+    {
+        references.push(BackgroundReference {
+            node: node_id,
+            raw_url: raw_url.to_owned(),
+            kind: BackgroundKind::MaskImage,
+        });
+    }
     if include_content_url && let Some(raw_url) = style.content.image_url() {
         references.push(BackgroundReference {
             node: node_id,

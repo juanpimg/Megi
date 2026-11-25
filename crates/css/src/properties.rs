@@ -8,6 +8,7 @@
 
 mod calc;
 mod computed;
+mod mask;
 mod parse;
 mod values;
 

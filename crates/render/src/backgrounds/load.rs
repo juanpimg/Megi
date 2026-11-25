@@ -60,7 +60,7 @@ pub fn load_backgrounds_with_pseudos(
             || style
                 .background_layers
                 .iter()
-                .any(|layer| layer.image.is_some())
+                .any(|layer| layer.image.is_some() || layer.mask_image.is_some())
             || (include_content && style.content.image_url().is_some())
     };
     let has_any_image = styles.values().any(|s| has_style_image(s, false))
