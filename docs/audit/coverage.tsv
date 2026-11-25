@@ -123,7 +123,7 @@ crates/browser/src/forms/widget.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/browser/src/headless.rs	420	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/headless/chrome_compact.rs	104	src	F2	lead	2026-11-25	covered	UI-ZEN-PHASE2	re-read after stash restore onto current main
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/i18n.rs	263	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: En/Es settings strings and parity
+crates/browser/src/i18n.rs	268	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: En/Es settings strings and parity
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/ipc.rs	383	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/cookie_policy.rs	119	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
@@ -139,7 +139,7 @@ crates/browser/src/ipc/session.rs	237	src	F2	issue-2308	2026-11-25	covered	#2308
 crates/browser/src/ipc/tests.rs	483	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/validated.rs	223	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/worker_stream.rs	168	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/lib.rs	379	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings re-exports
+crates/browser/src/lib.rs	382	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings re-exports
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -173,8 +173,9 @@ crates/browser/src/session/storage.rs	232	src	F2	issue-2307	2026-11-25	covered	#
 crates/browser/src/session/tests_a.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/tests_b.rs	283	src	F2	issue-2307	2026-11-25	covered	#2307	added permission regression test; re-read after edit
 crates/browser/src/site.rs	182	src	F2	issue-2308	2026-11-25	covered	#2308	re-read for deterministic slot token derivation
-crates/browser/src/tabs.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/tabs/tests.rs	200	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
+crates/browser/src/tabs.rs	347	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/tabs/tests.rs	292	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
+crates/browser/src/tabs/workspaces.rs	361	src	F2	jp	2026-11-25	covered	#2290	Phase 3 local workspaces: read model, cycle, close and move invariants
 crates/browser/src/title.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window.rs	176	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
@@ -182,17 +183,17 @@ crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phas
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	428	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/form_controls.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/frontend.rs	385	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
-crates/browser/src/window/input.rs	458	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/frontend.rs	389	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
+crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
-crates/browser/src/window/presentation.rs	446	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/presentation.rs	482	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/rail_state.rs	117	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/shortcuts.rs	234	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
+crates/browser/src/window/shortcuts.rs	251	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
 crates/browser/src/window/tests/chrome_mode.rs	61	src	F2	lead	2026-11-25	covered	UI-ZEN-PHASE2	re-read after stash restore onto current main
-crates/browser/src/window/tests/mod.rs	399	src	F2	integration	2026-11-25	covered	#2295	read after rebase
+crates/browser/src/window/tests/mod.rs	481	src	F2	integration	2026-11-25	covered	#2295	read after rebase
 crates/browser/src/window/tests/rail.rs	123	src	F2	integration	2026-11-25	covered	#2290	read after rebase
-crates/browser/src/window/ui.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/ui.rs	456	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/worker.rs	448	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
@@ -222,7 +223,7 @@ crates/browser/tests/shell_tests/options.rs	186	test	F1	wave-max-mod	2026-11-19	
 crates/browser/tests/shell_tests/pages.rs	178	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/rail_tests.rs	87	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/tests/shell_tests/saves.rs	140	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/tabs.rs	364	test	F1	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
+crates/browser/tests/shell_tests/tabs.rs	420	test	F1	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/tests/shell_tests/worker.rs	215	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/spawn_hardening_tests.rs	57	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/watchdog_tests.rs	66	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
