@@ -283,6 +283,19 @@ class ValidatorHardeningTests(unittest.TestCase):
             )
             self.assertFalse(ok, f"{evidence} must not verify a capability: {reason}")
 
+    def test_read_gate_rejects_non_table_gate(self) -> None:
+        # triage-r40: `gate = 5` used to crash with `TypeError: 'int' object is not
+        # iterable` instead of the clean manifest error emitted by load_manifest.
+        progress = self.root / "docs/status/progress.toml"
+        progress.parent.mkdir(parents=True, exist_ok=True)
+        progress.write_text("gate = 5\n", encoding="utf-8")
+        with self.assertRaises(SystemExit) as caught:
+            update_coverage.read_gate(self.root)
+        self.assertEqual(
+            caught.exception.code,
+            f"error: [gate] must be a table in {progress}",
+        )
+
     def test_build_fails_on_unknown_state(self) -> None:
         self._write_status()
         (self.root / "docs/status/coverage.toml").write_text(

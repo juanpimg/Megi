@@ -75,8 +75,12 @@ def load_manifest(path: Path) -> dict:
 
 
 def read_gate(root: Path) -> dict[str, str]:
-    progress = load_manifest(root / PROGRESS_MANIFEST)
-    return dict(progress.get("gate", {}))
+    path = root / PROGRESS_MANIFEST
+    progress = load_manifest(path)
+    gate = progress.get("gate", {})
+    if not isinstance(gate, dict):
+        sys.exit(f"error: [gate] must be a table in {path}")
+    return dict(gate)
 
 
 def _git_repo(root: Path) -> Path:
