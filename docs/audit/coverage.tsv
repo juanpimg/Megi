@@ -89,7 +89,7 @@ crates/browser/src/chrome/tests/tokens.rs	94	src	F2	jp	2026-11-25	covered	#2290	
 crates/browser/src/chrome/tokens.rs	137	src	F2	jp	2026-11-25	covered	#2290	Phase 0 shell design tokens; byte-identical aliases verified by tests
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli/args.rs	196	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read updated --print-to-pdf help text
-crates/browser/src/cli/finish.rs	234	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: PDF mode validation and DevTools port propagation coexist
+crates/browser/src/cli/finish.rs	237	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: normalize_input settings guard
 crates/browser/src/cli/parse.rs	177	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: both new flags parsed and validated
 crates/browser/src/cli/tests.rs	346	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Re-read: headless PDF mode and flag conflict tests
 crates/browser/src/convert.rs	92	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -121,7 +121,7 @@ crates/browser/src/forms/tests.rs	499	src	F2	juanpimg	2026-11-24	covered	#1722	I
 crates/browser/src/forms/widget.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/headless.rs	461	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/i18n.rs	228	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
+crates/browser/src/i18n.rs	263	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: En/Es settings strings and parity
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/ipc.rs	383	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/cookie_policy.rs	119	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
@@ -137,20 +137,22 @@ crates/browser/src/ipc/session.rs	237	src	F2	issue-2308	2026-11-25	covered	#2308
 crates/browser/src/ipc/tests.rs	483	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/validated.rs	223	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/worker_stream.rs	168	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/lib.rs	378	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
+crates/browser/src/lib.rs	379	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings re-exports
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/tests.rs	300	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/main.rs	316	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: attach render output after screenshot render
 crates/browser/src/navigation.rs	438	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/pages.rs	28	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
+crates/browser/src/pages.rs	32	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings module wiring
 crates/browser/src/pages/about.rs	145	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
 crates/browser/src/pages/about_tests.rs	126	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
 crates/browser/src/pages/html.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages/i18n_tests.rs	25	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/pages/input.rs	67	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
+crates/browser/src/pages/input.rs	70	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings data: route
 crates/browser/src/pages/listing.rs	253	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/pages/settings.rs	81	src	F2	subagent-settings	2026-11-25	covered	#2290	Phase 4: read generated settings page after formatting
+crates/browser/src/pages/settings_tests.rs	134	src	F2	subagent-settings	2026-11-25	covered	#2290	Phase 4: read TDD contract after formatting
 crates/browser/src/pages/tests.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pdf.rs	400	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read writer, geometry delegation and new @page test
 crates/browser/src/pdf/objects.rs	60	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read page parser and text writer after @page size/margin change
