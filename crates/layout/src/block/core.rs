@@ -16,6 +16,11 @@ pub(crate) struct PositioningContext {
     pub(crate) abs_cb_height: Option<f32>,
     /// Viewport rectangle: containing block for `position: fixed` (CSS 2.2 §10.1).
     pub(crate) viewport: Rect,
+    /// Whether inline content may break inside an otherwise unbreakable word to fit
+    /// the available width. Set for flex items (CSS Flexbox 1 §4.5: `min-width: auto`
+    /// resolves to zero, so the item can shrink below its min-content width and its
+    /// inline content must wrap inside the shrunken box).
+    pub(crate) wrap_long_words: bool,
 }
 
 impl PositioningContext {
@@ -26,6 +31,7 @@ impl PositioningContext {
             abs_cb: content,
             abs_cb_height: Some(content.height),
             viewport: content,
+            wrap_long_words: false,
         }
     }
 }
@@ -80,6 +86,7 @@ pub(crate) fn layout_block_with_viewport(
         abs_cb: cb,
         abs_cb_height: Some(cb.height),
         viewport,
+        wrap_long_words: false,
     };
     let self_pos = self_positioning_context(layout_box, root_pos);
     layout_box_contents(layout_box, Some(cb.height), true, measurer, self_pos);

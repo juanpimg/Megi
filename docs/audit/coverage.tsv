@@ -397,6 +397,7 @@ crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered
 crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/lib.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/display/src/shadow_bounds_tests.rs	47	src	F2	overflow-wrap-agent	2026-11-25	covered	#2143,#1716	read during overflow-wrap gate; pre-existing tracked test
 crates/display/tests/contract.rs	16	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/Cargo.toml	25	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by line: binary
@@ -827,20 +828,20 @@ crates/layout/Cargo.toml	20	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal
 crates/layout/src/bidi.rs	428	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Re-read LTR-inside-RTL fix
 crates/layout/src/bidi/bidi_tests.rs	126	src	F2	bidi-fix	2026-11-25	covered	CI-BIDI-TRAILING-PUNCT	UAX #9 N2/L2 guard for trailing neutral after paragraph base
 crates/layout/src/block.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/block/absolute.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/block/core.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/block/absolute.rs	284	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after wrap_long_words propagation
+crates/layout/src/block/core.rs	404	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after PositioningContext field
 crates/layout/src/block/floats.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/height.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/intrinsic.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/margin.rs	155	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
-crates/layout/src/block/positioning.rs	290	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/block/positioning.rs	291	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after wrap_long_words propagation
 crates/layout/src/block/sizing.rs	389	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/width.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/flex.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/flex.rs	131	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after WhiteSpace import
 crates/layout/src/flex/helpers.rs	305	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/flex/layout.rs	433	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/flex/layout.rs	438	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after flex item word-break flag
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/names.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -851,9 +852,9 @@ crates/layout/src/inline.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/layout/src/inline/baseline.rs	71	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/bidi.rs	180	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/format_line.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline/ifc.rs	138	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/inline/ifc.rs	147	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after break_into_lines call
 crates/layout/src/inline/inline_boxes.rs	368	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline/line_breaking.rs	304	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/inline/line_breaking.rs	414	src	F2	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	re-read after split_long_words
 crates/layout/src/inline/text.rs	245	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/tokens.rs	500	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/lib.rs	404	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -914,6 +915,7 @@ crates/layout/tests/ifc_conformance2/main.rs	129	test	F1	wave-max-mod	2026-11-19
 crates/layout/tests/ifc_conformance2/wrapping.rs	195	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/ifc_tests.rs	412	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/inline_block.rs	143	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/overflow/main.rs	175	test	F1	overflow-wrap-agent	2026-11-25	covered	#overflow-wrap	authored and re-read after rustfmt
 crates/layout/tests/positioning.rs	360	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/proptest_layout.rs	287	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/pseudo_elements.rs	183	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

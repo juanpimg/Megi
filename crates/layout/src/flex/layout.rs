@@ -397,12 +397,17 @@ fn layout_item_at(
     child.dimensions.margin = edges.margin;
     child.dimensions.padding = edges.padding;
     child.dimensions.border = edges.border;
-    let pos = crate::block::PositioningContext::from_containing_block(Rect::new(
+    let mut pos = crate::block::PositioningContext::from_containing_block(Rect::new(
         origin_x,
         origin_y,
         content_width,
         content_height,
     ));
+    // CSS Flexbox 1 §4.5: `min-width: auto` on a flex item resolves to the
+    // automatic minimum size (zero here), so the item can shrink below its
+    // min-content width. Its inline content must then wrap inside that width,
+    // including inside an otherwise unbreakable word.
+    pos.wrap_long_words = !matches!(item.style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre);
     layout_box_contents(child, definite_height, false, measurer, pos);
     if row {
         item.used_cross = explicit_cross(&item.style, true, definite_height, container_width)
