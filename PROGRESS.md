@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `8e20eb30` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **39/64** (**60%**) · **3,474** tests · conformance **PASS** · **18** crates · **256,904** lines of Rust
+**Snapshot** — commit `ac9f6864` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **40/64** (**62%**) · **3,474** tests · conformance **PASS** · **18** crates · **256,904** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -20,7 +20,7 @@
 | **M1** | Interactividad | `████████████████████` 4/4 | 100% |
 | **M2** | Profundidad declarativa | `████████████████░░░░` 4/5 | 80% |
 | **M3** | Frontera de seguridad | `████████████████████` 5/5 | 100% |
-| **M4** | Componentes y persistencia | `█████████████░░░░░░░` 4/6 | 66% |
+| **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
@@ -29,7 +29,7 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `████████████░░░░░░░░` 39/64 | **60%** |
+| | **Roadmap** | `████████████░░░░░░░░` 40/64 | **62%** |
 
 ## Detalle de criterios por hito
 
@@ -77,7 +77,7 @@
 - Sandbox enforced con selector por SO — `cargo test -p megi-browser --test sandbox_e2e_tests` (13/13: 12 negativas + 1 humo; 14/14 con el probe inerte); `render_security_matrix()` = `linux: enforced; macos: unsupported; windows: unsupported`; `python3 tools/check_milestone.py M3 4` PASS
 - 0 fugas cross-site y 12 pruebas negativas por SO — `docs/audit/negative-matrix.toml`: linux 12/12 pass, macos/windows 12/12 unsupported; `python3 tools/audit_negative_matrix.py --check` PASS
 
-### M4 — Componentes y persistencia (66%)
+### M4 — Componentes y persistencia (83%)
 
 **Verificado**
 
@@ -85,11 +85,11 @@
 - Web Storage expuesto a JS — `crates/js/src/host/types.rs`
 - 100+ subtests WPT de componentes — `docs/status/wpt.md`: 592/592 subtests WPT PASS con allowlist 0; 114 subtests reales de shadow-dom/custom-elements (75 shadow-dom + 39 custom-elements) ejecutados con el runner offline de Boa y shim `testharness`; fixtures adoptados íntegramente `shadow-dom/HTMLSlotElement-interface.html` 18/18, `shadow-dom/Slotable-interface.html` 4/4, `shadow-dom/slots.html` 26/26; implementación WHATWG DOM §4.9.1/§4.9.3 en `crates/js/src/runtime/{node_wrappers.rs,tla/accessors.rs,document/query.rs,globals/features.rs,node_accessors.rs}`; `cargo test -p megi-js` y `cargo test -p megi-test-harness` EXIT=0; `python3 tools/wpt_gate.py --check` PASS y `python3 tools/check_milestone.py M4 3` PASS
 - Service Worker fase 1 en memoria — `crates/js/src/runtime/service_worker/{ops.rs,natives.rs,sw_prelude.js}` y `try_fetch` en `runtime/service_worker.rs`/`network.rs`: register → activate → fetch('/data.txt') servido desde caché sin llamar al provider; cross-origin y `/app` vs `/application` no interceptados (WHATWG SW Appendix A «Match Service Worker Registration»); `Cache.put` agotado lanza `QuotaExceededError` (W3C Cache API §5.4); TDD rojo `cargo test -p megi-js --test service_worker_tests` EXIT=101 (4/6: scope devolvió FROM-SW-CACHE en vez de FROM-NETWORK; quota devolvió ReferenceError), verde EXIT=0 (6/6); relacionados fetch_abort 11/11 + fetch 16/16 + workers 26/26 EXIT=0; `cargo fmt -p megi-js -- --check` y `cargo clippy -p megi-js --all-targets -- -D warnings` EXIT=0; rama rebaseada sobre 5755a816 conservando WebGL; harness `cargo run -p megi-test-harness -- --summary` PASS; gates M4 --match, update_progress --check --no-gate --no-count, update_coverage --check, audit_coverage --check --strict, check_arch, check_docs_links, deslop-please y unittests de tools EXIT=0; límites: fase 1 en memoria, bodies UTF-8, sin versioning completo, cancelación solo pre-abort en fetch (sin AbortSignal en el despacho SW), sin demo offline de documento (M4#6)
+- Demo offline con red cortada — `tests/fixtures/render/sw_offline.html` (846 B, autocontenido) registrado por un SW, proveedor de red cortado, `fetch('/not-cached.html')` verificado como fallido y recarga real servida desde la caché del SW; `crates/js/src/runtime/service_worker.rs`: `SwNavigationResponse` + `try_navigation` sobre `try_fetch`; `crates/render/src/pipeline/options.rs`: `CachedDocument` + `RenderOptions::offline_document`; `crates/render/src/offline_demo.rs` (183 líneas) y flag `--sw-offline` en `crates/render/src/main.rs`; RED `cargo test -p megi-render --test sw_offline_tests sw_offline_renders_after_network_cut` → `error[E0432]: unresolved import megi_render::offline_demo` EXIT=101, verde 1/1 EXIT=0; CLI JSON: mode=sw-offline, png_bytes=32612, cached_bytes=846, provider_calls_after_cut=0, network_cut_verified=true; PNG md5 `0cdbc49a7187cf4a1ff48b635605967f`, idéntico en dos recargas y al render online del fixture; harness PASS; `python3 tools/check_milestone.py M4 5` PASS; límites: SW en memoria, bodies UTF-8, sin versioning completo de caché, demo solo para el documento cacheado (sin subrecursos ni navegación cross-origin)
 
 **Pendiente**
 
 - WASM — sin soporte en el motor
-- Demo offline con red cortada
 
 ### M5 — Plataforma nativa (66%)
 
@@ -193,7 +193,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `8e20eb30` (2026-11-25) |
+| Commit | `ac9f6864` (2026-11-25) |
 | Crates in the workspace | 18 |
 | Lines of Rust (tracked `.rs`) | 256904 |
 | Tests (`cargo test --workspace -- --list`) | 3474 |
