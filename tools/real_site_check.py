@@ -6,6 +6,7 @@ fetch the real URLs through Megi's own `render` pipeline (TLS, CSS, images, JS i
 
     python3 tools/real_site_check.py              # snapshots
     python3 tools/real_site_check.py --live       # real network
+    python3 tools/real_site_check.py --release    # cargo run --release for megi-render
     python3 tools/real_site_check.py --refresh-hashes  # republish md5 of existing PNGs
 """
 
@@ -116,7 +117,30 @@ def _json_from(stdout: str) -> dict:
     return {}
 
 
-def render_one(root: Path, site: dict, live: bool) -> dict:
+def render_command(source: str, png_path: Path, release: bool = False) -> list[str]:
+    """Build the cargo invocation; --release is opt-in and placed before cargo flags."""
+    command = ["cargo", "run"]
+    if release:
+        command.append("--release")
+    command.extend(
+        [
+            "-q",
+            "-p",
+            "megi-render",
+            "--",
+            source,
+            str(png_path),
+            "--width",
+            "1024",
+            "--height",
+            "768",
+            "--json",
+        ]
+    )
+    return command
+
+
+def render_one(root: Path, site: dict, live: bool, release: bool = False) -> dict:
     site_id = str(site["id"])
     if live:
         source = str(site["url"])
@@ -125,21 +149,7 @@ def render_one(root: Path, site: dict, live: bool) -> dict:
     png_rel = png_relative(site_id)
     png_path = root / STATUS_DIR / png_rel
     png_path.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        "cargo",
-        "run",
-        "-q",
-        "-p",
-        "megi-render",
-        "--",
-        source,
-        str(png_path),
-        "--width",
-        "1024",
-        "--height",
-        "768",
-        "--json",
-    ]
+    command = render_command(source, png_path, release)
     try:
         process = subprocess.run(
             command, cwd=root, capture_output=True, text=True, timeout=600, check=False
@@ -305,6 +315,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--live", action="store_true", help="fetch real URLs instead of snapshots")
     parser.add_argument("--offline", action="store_true", help="use versioned snapshots (default)")
     parser.add_argument(
+        "--release",
+        action="store_true",
+        help="build megi-render with cargo --release",
+    )
+    parser.add_argument(
         "--refresh-hashes",
         action="store_true",
         help="recompute png_md5 from existing PNGs without rendering (no cargo)",
@@ -318,7 +333,7 @@ def main(argv: list[str]) -> int:
 
     live = args.live and not args.offline
     sites = load_sites(root)
-    results = [render_one(root, site, live) for site in sites]
+    results = [render_one(root, site, live, args.release) for site in sites]
     generated_at = datetime.now(timezone.utc).date().isoformat()
     payload = {
         "mode": "live" if live else "snapshot",

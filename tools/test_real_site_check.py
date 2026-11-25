@@ -193,6 +193,60 @@ class RenderCommandTests(unittest.TestCase):
         self.assertEqual(result["result"], "PASS")
 
 
+class ReleaseFlagTests(unittest.TestCase):
+    """M2-RELEASE-REMEASURE: --release is an additive, opt-in cargo flag."""
+
+    @staticmethod
+    def _expected_command(release: bool) -> list[str]:
+        prefix = ["cargo", "run"]
+        if release:
+            prefix.append("--release")
+        return prefix + [
+            "-q",
+            "-p",
+            "megi-render",
+            "--",
+            "snap.html",
+            "docs/status/real-sites/x.png",
+            "--width",
+            "1024",
+            "--height",
+            "768",
+            "--json",
+        ]
+
+    def test_render_command_defaults_to_debug(self) -> None:
+        command = real_site_check.render_command(
+            "snap.html", Path("docs/status/real-sites/x.png"), release=False
+        )
+        self.assertEqual(command, self._expected_command(release=False))
+
+    def test_render_command_inserts_release_after_run(self) -> None:
+        command = real_site_check.render_command(
+            "snap.html", Path("docs/status/real-sites/x.png"), release=True
+        )
+        self.assertEqual(command, self._expected_command(release=True))
+
+    def test_main_release_flag_reaches_cargo_command(self) -> None:
+        fake = mock.Mock(
+            returncode=0,
+            stdout='{"display_items": 1, "warnings": [], "status": 200}',
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as root:
+            manifest = Path(root) / "docs/status/real_sites.toml"
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(
+                '[[site]]\nid = "x"\nname = "X"\nsnapshot = "x.html"\n', encoding="utf-8"
+            )
+            with mock.patch.object(real_site_check.subprocess, "run", return_value=fake) as run:
+                rc = real_site_check.main(["--release", "--root", root])
+        self.assertEqual(rc, 0)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:6], ["cargo", "run", "--release", "-q", "-p", "megi-render"])
+        self.assertNotIn("--release", command[command.index("--") + 1 :])
+
+
 class RobustnessTests(unittest.TestCase):
     def test_non_numeric_failure_counts_mark_site_degraded(self) -> None:
         self.assertEqual(
