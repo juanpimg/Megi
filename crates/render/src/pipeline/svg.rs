@@ -151,6 +151,7 @@ pub(crate) fn render_svg_document(
         location_actions: Vec::new(),
         history_actions: Vec::new(),
         stats: RenderStats {
+            network: Vec::new(),
             document_bytes: loaded.bytes.len(),
             charset: "utf-8".to_owned(),
             status: loaded.status,

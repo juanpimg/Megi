@@ -173,6 +173,8 @@ pub(crate) fn render_url_with_context(
     // transfer them to the subresource loader that serves images/stylesheets/scripts.
     loader.absorb_pushes_from(&mut document_loader);
     loader.absorb_pool_from(&mut document_loader);
+    // The navigation request and its subresources share one DevTools waterfall.
+    loader.absorb_network_events_from(&mut document_loader);
     let fetch_time = fetch_start.elapsed();
     if loaded.bytes.len() > options.max_document_bytes {
         return Err(RenderError::DocumentTooLarge {

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use megi_core::{Document, NodeId};
 use megi_css::ComputedStyle;
-use megi_net::Url;
+use megi_net::{NetworkEvent, Url};
 
 use crate::{ConsoleMessage, HistoryAction, LocationAction};
 // Intra-doc links moved out of scope when the pipeline was split into modules.
@@ -52,6 +52,9 @@ pub struct RenderTimings {
 /// Observability data for one render.
 #[derive(Clone, Debug)]
 pub struct RenderStats {
+    /// Real request/response observations made by the loaders of this render session
+    /// (M7 DevTools Network domain).
+    pub network: Vec<NetworkEvent>,
     /// Main-document size in bytes.
     pub document_bytes: usize,
     /// Encoding actually used (`utf-8` or `windows-1252`).

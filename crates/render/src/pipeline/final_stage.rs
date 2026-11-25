@@ -289,6 +289,7 @@ fn finish_render(
         location_actions,
         history_actions,
         stats: RenderStats {
+            network: loader.network_events().to_vec(),
             document_bytes,
             charset,
             status,
