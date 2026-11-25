@@ -42,6 +42,7 @@
 | `2026-11-24-web-platform-extension-plan.md` | M4, M8 | SW completo, HTTP/3, storage/capabilities, offline |
 | `2026-11-24-devtools-platform-plan.md` | M7 | DevTools, WebDriver BiDi, about: pages, perfilado |
 | `2026-11-24-work-package-engine-plan.md` | continuo | cola auto-regenerada, generadores, priorización, dashboard |
+| `2026-11-25-zen-inspired-ui-plan.md` | M5 (shell, sin tocar el motor) | rail vertical opcional, modo compacto, tokens y atajos con paridad a11y |
 
 ## Encadenamiento de hitos
 

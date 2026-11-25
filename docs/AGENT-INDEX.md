@@ -42,6 +42,7 @@ Todos en `docs/superpowers/plans/`:
 - `2026-11-24-web-platform-extension-plan.md`
 - `2026-11-24-devtools-platform-plan.md`
 - `2026-11-24-work-package-engine-plan.md`
+- `2026-11-25-zen-inspired-ui-plan.md` — evolución de la UI del shell inspirada en Zen Browser
 - `2026-11-24-production-readiness-plan.md`
 - `2026-11-24-extended-platform-plan.md`
 - `2026-11-24-native-integration-plan.md`
