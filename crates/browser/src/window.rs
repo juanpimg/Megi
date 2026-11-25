@@ -41,6 +41,8 @@ mod save_as;
 #[cfg(feature = "window")]
 #[cfg(feature = "window")]
 mod shortcuts;
+#[cfg(feature = "window")]
+mod shell_settings;
 #[cfg(all(test, feature = "window"))]
 mod tests;
 #[cfg(feature = "window")]
