@@ -38,12 +38,12 @@ tests = 3444
 tests_commit = "e997fc04"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 254279
+rust_lines = 254594
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "7035dbd3"
+verified_commit = "eeebded9"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -180,9 +180,9 @@ title = "Motor ofensivo"
 items = [
   "HTTP/2 multiplexado y control de flujo — `crates/net/src/http/`",
   "Web Workers cooperativos — `crates/js/src/`",
+  "JIT o migración de motor decidida por datos — decisión (a) «contribuir/actualizar Boa mientras sirva» publicada en `docs/adr/2026-11-24-js-jit-decision.md:1-73` (commit `9dd4eb22`, derivada de spec v2 §4.2 en `docs/superpowers/specs/2026-11-24-megi-ambition-design.md:88` y barra M8 en `docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md:97`); datos reales de `crates/bench/src/benches/js_hot.rs`: `js/hot-engine` 5,229 ms frente a `js/hot-bindings` 9,458 ms (Δ 4,229 ms, 1,809×, 0,211 µs por `getAttribute`), corpus real 0,136 ms, publicados en `docs/status/bench-baseline.json` (`addenda.js-r37`) y `docs/PERFORMANCE.md:420`; comando canónico `cargo +1.99.1 run --release -p megi-bench -- --filter js --iterations 5 --warmup 1 --json` ×7 pasadas a HEAD `76d3be52` con load 1 min 2,33-5,64; `cargo +1.99.1 test --release -p megi-bench js_hot` 6 passed/0 failed; `python3 tools/check_milestone.py M8 3` y `python3 tools/check_milestone.py M8 --match 'JIT o migración'` PASS; límites explícitos en el ADR: sin JIT propio, sin migración a rquickjs, sin Test262 local, sin SLA; M8#2 y M8#3 siguen pending",
 ]
 pending = [
-  "JIT o migración de motor decidida por datos — Boa 0.22 sin decisión publicada",
   "HTTP/3/QUIC — sin implementación",
   "Paralelismo real de estilo/layout/paint — sin benchmarks publicados",
 ]

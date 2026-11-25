@@ -10,7 +10,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	553	ci	F3	jp	2026-11-25	covered	#2290	re-read after adding wpt_report tests to CI unittest list
+.github/workflows/ci.yml	554	ci	F3	jp	2026-11-25	covered	#2290	re-read after adding wpt_report tests to CI unittest list
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -34,7 +34,7 @@ PROGRESS.md	250	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	regenerated wi
 README.md	190	docs	F3	jp	2026-11-24	covered	#2290	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-crates/bench/Cargo.toml	29	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/bench/Cargo.toml	30	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/build.rs	15	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/fixtures/README.md	34	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/fixtures/gif-800x600.gif	0	binary	-			exempt		not read line by line: binary
@@ -44,8 +44,9 @@ crates/bench/src/benches/effects.rs	302	tool	F4	wave-max-mod	2026-11-19	covered	
 crates/bench/src/benches/fonts.rs	97	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/src/benches/html.rs	264	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/src/benches/image.rs	177	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/bench/src/benches/js_hot.rs	233	tool	F4	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 crates/bench/src/benches/layout.rs	294	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/bench/src/benches/mod.rs	192	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/bench/src/benches/mod.rs	195	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/src/benches/png.rs	173	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/src/cli.rs	197	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/bench/src/generators.rs	498	tool	F4	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1353,7 +1354,7 @@ docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#224
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	99	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ARCHITECTURE.md	228	docs	F3	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+docs/ARCHITECTURE.md	229	docs	F3	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
@@ -1364,11 +1365,12 @@ docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentati
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ISOLATION-STRATEGY.md	51	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	ADR-004 phased per-site isolation strategy doc from main
 docs/JAVASCRIPT-STRATEGY.md	259	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/PERFORMANCE.md	416	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
+docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 docs/architecture-baseline.json	110	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/architecture-deps.toml	41	docs	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 docs/audit/FINDINGS.md	254	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -2274,7 +2276,7 @@ tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after a
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	156	tool	F3	lead	2026-11-25	covered	M9-RELEASE-SIGN-EVIDENCE	positional and --match regression tests
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
-tools/test_ci_gate.py	76	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding CI list regression test
+tools/test_ci_gate.py	81	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding CI list regression test
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
@@ -2287,6 +2289,7 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	490	tool	F3	lead	2026-11-25	covered	M2-RELEASE-REMEASURE	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
+tools/test_update_bench_baseline.py	112	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_update_progress.py	229	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-numeric manifest tests regression test
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
@@ -2296,6 +2299,7 @@ tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo te
 tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
 tools/test_wpt_gate.py	181	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding subtest validation regression test
 tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
+tools/update_bench_baseline.py	177	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	

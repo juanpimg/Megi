@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `200a261a` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **37/64** (**57%**) · **3,444** tests · conformance **PASS** · **18** crates · **254,279** lines of Rust
+**Snapshot** — commit `eeebded9` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **38/64** (**59%**) · **3,444** tests · conformance **PASS** · **18** crates · **254,594** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -24,12 +24,12 @@
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
-| **M8** | Motor ofensivo | `████████░░░░░░░░░░░░` 2/5 | 40% |
+| **M8** | Motor ofensivo | `████████████░░░░░░░░` 3/5 | 60% |
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `███████████░░░░░░░░░` 37/64 | **57%** |
+| | **Roadmap** | `███████████░░░░░░░░░` 38/64 | **59%** |
 
 ## Detalle de criterios por hito
 
@@ -132,16 +132,16 @@
 - WebDriver BiDi
 - Perfilador usable
 
-### M8 — Motor ofensivo (40%)
+### M8 — Motor ofensivo (60%)
 
 **Verificado**
 
 - HTTP/2 multiplexado y control de flujo — `crates/net/src/http/`
 - Web Workers cooperativos — `crates/js/src/`
+- JIT o migración de motor decidida por datos — decisión (a) «contribuir/actualizar Boa mientras sirva» publicada en `docs/adr/2026-11-24-js-jit-decision.md:1-73` (commit `9dd4eb22`, derivada de spec v2 §4.2 en `docs/superpowers/specs/2026-11-24-megi-ambition-design.md:88` y barra M8 en `docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md:97`); datos reales de `crates/bench/src/benches/js_hot.rs`: `js/hot-engine` 5,229 ms frente a `js/hot-bindings` 9,458 ms (Δ 4,229 ms, 1,809×, 0,211 µs por `getAttribute`), corpus real 0,136 ms, publicados en `docs/status/bench-baseline.json` (`addenda.js-r37`) y `docs/PERFORMANCE.md:420`; comando canónico `cargo +1.99.1 run --release -p megi-bench -- --filter js --iterations 5 --warmup 1 --json` ×7 pasadas a HEAD `76d3be52` con load 1 min 2,33-5,64; `cargo +1.99.1 test --release -p megi-bench js_hot` 6 passed/0 failed; `python3 tools/check_milestone.py M8 3` y `python3 tools/check_milestone.py M8 --match 'JIT o migración'` PASS; límites explícitos en el ADR: sin JIT propio, sin migración a rquickjs, sin Test262 local, sin SLA; M8#2 y M8#3 siguen pending
 
 **Pendiente**
 
-- JIT o migración de motor decidida por datos — Boa 0.22 sin decisión publicada
 - HTTP/3/QUIC — sin implementación
 - Paralelismo real de estilo/layout/paint — sin benchmarks publicados
 
@@ -193,9 +193,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `200a261a` (2026-11-25) |
+| Commit | `eeebded9` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 254279 |
+| Lines of Rust (tracked `.rs`) | 254594 |
 | Tests (`cargo test --workspace -- --list`) | 3444 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
