@@ -1,5 +1,6 @@
 //! Frontend setup: construction of [`WindowApp`] and winit/softbuffer/window wiring.
 
+use super::shortcuts::ShellAction;
 use super::*;
 
 impl WindowApp {
@@ -188,5 +189,60 @@ impl WindowApp {
         // ADR-004 phase 2: renderers are spawned lazily, one per effective site, by
         // `WindowApp::send_render`. No worker exists until the first request arrives.
         Ok(())
+    }
+
+    /// Applies a migrated shell action and reports whether the key was consumed.
+    pub(super) fn dispatch_shortcut(&mut self, action: Option<ShellAction>) -> bool {
+        match action {
+            Some(ShellAction::ToggleReader) => self.open_reader(),
+            Some(ShellAction::ToggleHistory) => {
+                if self.history_menu.is_some() {
+                    self.history_menu = None;
+                } else {
+                    let rect = chrome::address_bar_rect(self.metrics.css_width as f32);
+                    self.history_menu = Some(HistoryMenu::open(
+                        self.recent_history.menu_entries(),
+                        rect.x,
+                        rect.y + rect.height,
+                    ));
+                }
+                self.request_repaint();
+            }
+            Some(ShellAction::SaveFrame) => self.save_frame_png(),
+            Some(ShellAction::SaveAs) => {
+                // Standard "Save As" shortcut opens the visual dialog (#988).
+                self.open_save_dialog(true);
+            }
+            Some(ShellAction::FocusAddressBar) => self.open_address_bar(),
+            Some(ShellAction::OpenFind) => self.open_find(),
+            Some(ShellAction::PrintDocumentInfo) => self.print_document_info(),
+            Some(ShellAction::NewTab) => self.open_new_tab(),
+            Some(ShellAction::CloseTab) => self.close_active_tab(),
+            Some(ShellAction::CycleTab { next }) => self.cycle_tab(next),
+            Some(ShellAction::ActivateTab(index)) => self.activate_tab(index),
+            Some(ShellAction::ToggleRail) => self.toggle_rail(),
+            // Compact mode and workspaces land in later phases: resolve only.
+            Some(ShellAction::ToggleCompact) | Some(ShellAction::CycleWorkspace) => {}
+            _ => {}
+        }
+        // Only migrated actions return early; all other bindings keep falling through
+        // to the legacy handlers below, preserving their original behaviour.
+        matches!(
+            action,
+            Some(
+                ShellAction::ToggleReader
+                    | ShellAction::ToggleHistory
+                    | ShellAction::SaveFrame
+                    | ShellAction::SaveAs
+                    | ShellAction::FocusAddressBar
+                    | ShellAction::OpenFind
+                    | ShellAction::PrintDocumentInfo
+                    | ShellAction::NewTab
+                    | ShellAction::CloseTab
+                    | ShellAction::CycleTab { .. }
+                    | ShellAction::ActivateTab(_)
+                    | ShellAction::ToggleRail
+            )
+        )
     }
 }

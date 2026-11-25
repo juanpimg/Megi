@@ -183,9 +183,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     shift: shift_pressed,
                 };
                 let action = shortcuts::resolve_shortcut(shortcuts, &event.logical_key);
-                // Migrated actions (now including Ctrl+B's rail toggle) live in
-                // `shortcut_actions` so this event handler stays under 500 lines.
-                if shortcut_actions::dispatch(self, action) {
+                // Migrated actions (including Ctrl+B's rail toggle) live in `shortcuts`
+                // so this event handler stays under 500 lines.
+                if self.dispatch_shortcut(action) {
                     return;
                 }
                 if self.history_menu.is_some() {
