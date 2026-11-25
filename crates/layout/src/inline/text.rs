@@ -185,13 +185,13 @@ pub(crate) fn shaped_width(measurer: &dyn TextMeasurer, text: &str, style: &Comp
 ///
 /// The used `line-height` is resolved here per CSS 2.2 §10.8.1:
 ///
-/// 1. `line-height: <number>` is a *factor* that is inherited as a number and
-///    recomputed against each element's own `font-size`
-///    ([`ComputedStyle::line_height_factor`]); this is why a child with a larger
-///    font gets a proportionally larger line box (audit finding F-12);
-/// 2. otherwise the computed px value (`<length>`, `<percentage>` already resolved
-///    against the declaring element, or the `normal` fallback provided by the CSS
-///    crate) applies;
+/// 1. `line-height: <number>` and `line-height: normal` are *factors* inherited as
+///    specified (`normal` computes to 1.2) and recomputed against each element's own
+///    `font-size` ([`ComputedStyle::line_height_factor`]); this is why a child with a
+///    larger font gets a proportionally larger line box (audit findings F-12 and the
+///    CSS 2.2 §10.8.1 `normal` regression);
+/// 2. otherwise the computed px value (`<length>`/`<percentage>` already resolved
+///    against the declaring element) applies;
 /// 3. when no line-height is available the measurer's natural line height
 ///    (`ascent + descent + line_gap` for real fonts, `1.2 * font_size` for
 ///    [`DefaultTextMeasurer`]) is used.

@@ -23,14 +23,25 @@ pub(crate) mod tests_part4 {
         assert_eq!(child.line_height_factor, Some(1.5));
         assert_eq!(child.line_height, Some(24.0));
 
-        // Absolute lengths and `normal` are not factors.
+        // Absolute lengths are not factors.
         let px = style_with_inline("div", "line-height: 24px;");
         assert_eq!(px.line_height, Some(24.0));
         assert_eq!(px.line_height_factor, None);
 
+        // CSS 2.2 §10.8.1: `normal` is inherited as a factor, not as a fixed px value.
+        // Megi resolves it to 1.2, so a child with a bigger font-size gets a proportionally
+        // bigger used line-height (layout re-resolves `factor * font-size`).
         let normal = style_with_inline("div", "line-height: normal;");
         assert_eq!(normal.line_height, Some(16.0 * 1.2));
-        assert_eq!(normal.line_height_factor, None);
+        assert_eq!(normal.line_height_factor, Some(1.2));
+
+        let (normal_parent, normal_child) =
+            style_pair("font-size: 16px; line-height: normal;", "font-size: 32px;");
+        assert_eq!(normal_parent.line_height_factor, Some(1.2));
+        assert_eq!(normal_child.line_height_factor, Some(1.2));
+        // The legacy computed px stays at the declaring element's 19.2; the inherited
+        // factor is what layout uses to obtain 1.2 * 32 = 38.4 for the child.
+        assert_eq!(normal_child.line_height, Some(16.0 * 1.2));
 
         // Percentages now compute against the element font-size (and are not a factor).
         let pct = style_with_inline("div", "font-size: 20px; line-height: 150%;");

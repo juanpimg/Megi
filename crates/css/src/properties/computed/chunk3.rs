@@ -105,8 +105,8 @@ impl ComputedStyle {
                     ),
                 }
             } else {
-                // Inherited: the px value is kept as before and the numeric factor (if any) is
-                // propagated so layout can re-resolve `factor * font-size` per descendant.
+                // Inherited: the px value stays and the factor (`<number>` or `normal` = 1.2)
+                // is propagated so layout re-resolves it per element (CSS 2.2 §10.8.1).
                 (
                     parent.and_then(|p| p.line_height),
                     parent.and_then(|p| p.line_height_factor),
