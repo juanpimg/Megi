@@ -16,11 +16,7 @@ fn rail_click_activates_tab_and_page_coordinates_are_shifted() {
         "https://b.example/".to_owned(),
     ]);
     assert_eq!(tabs.active_index(), 0, "first tab starts active");
-    let labels: Vec<String> = tabs
-        .tabs()
-        .iter()
-        .map(megi_browser::tabs::Tab::display_title)
-        .collect();
+    let labels: Vec<String> = tabs.rail_labels().0;
     let view = rail_state::view(true, &labels, 0, None).expect("expanded rail");
     let layout = chrome::layout_rail(1024.0, 600.0, 1.0, &view);
     let row = &layout.tabs[1].rect;

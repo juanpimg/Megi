@@ -39,6 +39,7 @@ pub(crate) fn sample() -> Session {
                 index: 0,
                 zoom: 1.0,
                 scroll: 0,
+                workspace: 0,
             },
             SessionTab {
                 url: "file:///tmp/two.html".to_string(),
@@ -49,6 +50,7 @@ pub(crate) fn sample() -> Session {
                 index: 1,
                 zoom: 1.5,
                 scroll: 120,
+                workspace: 1,
             },
         ],
         recent: Vec::new(),
@@ -141,6 +143,7 @@ fn normalization_caps_history_tabs_and_clamps_values() {
             index: 500,
             zoom: 99.0,
             scroll: 7,
+            workspace: 2,
         });
     }
     let mut session = Session {

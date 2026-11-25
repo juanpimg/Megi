@@ -110,7 +110,7 @@ impl Tab {
     }
 
     /// Creates a blank **New Tab** page (used by `Ctrl+T` and the last-tab close policy).
-    pub fn blank() -> Self {
+    pub(crate) fn blank() -> Self {
         let mut tab = Self::new(BLANK_TAB_URL).unwrap_or_else(|| Self {
             navigation: NavigationState::new(),
             title: None,
@@ -130,7 +130,7 @@ impl Tab {
     }
 
     /// Rebuilds a tab from persisted session state (history, URL, zoom, scroll).
-    pub fn restored(
+    pub(crate) fn restored(
         navigation: NavigationState,
         url: String,
         zoom: f64,
@@ -162,6 +162,17 @@ impl Tab {
             },
         }
     }
+}
+
+/// Owned tab data for callers that persist or summarize tabs without borrowing them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TabSnapshot {
+    pub url: String,
+    pub history: Vec<String>,
+    pub index: usize,
+    pub zoom: f64,
+    pub scroll: u32,
+    pub workspace: u8,
 }
 
 /// Bounded, ordered collection of tabs plus the active index.
@@ -206,7 +217,7 @@ impl TabsState {
     /// Number of distinct effective sites across open tabs (ADR-004 phase 1).
     ///
     /// Tabs on the same site may share a renderer; tabs on different sites must not.
-    pub fn distinct_sites(&self) -> usize {
+    fn distinct_sites(&self) -> usize {
         let mut keys: Vec<crate::site::SiteKey> = Vec::new();
         for tab in &self.tabs {
             let key = crate::site::site_key(&tab.url);
@@ -223,7 +234,7 @@ impl TabsState {
     }
 
     /// Builds a tab state from restored tabs (caps the count and clamps the active index).
-    pub fn from_parts(mut tabs: Vec<Tab>, active: usize) -> Self {
+    pub(crate) fn from_parts(mut tabs: Vec<Tab>, active: usize) -> Self {
         if tabs.is_empty() {
             return Self::new(BLANK_TAB_URL);
         }
@@ -252,9 +263,6 @@ impl TabsState {
     }
 
     /// Whether there are no tabs. Never true for a live state (last-tab policy resets).
-    pub fn is_empty(&self) -> bool {
-        self.tabs.is_empty()
-    }
 
     /// Index of the active tab.
     pub const fn active_index(&self) -> usize {
@@ -267,17 +275,46 @@ impl TabsState {
     }
 
     /// Mutable access to the active tab.
-    pub fn active_mut(&mut self) -> &mut Tab {
+    pub(crate) fn active_mut(&mut self) -> &mut Tab {
         &mut self.tabs[self.active]
     }
 
-    /// All tabs, in order.
-    pub fn tabs(&self) -> &[Tab] {
-        &self.tabs
+    /// URLs in tab order, for callers that need to locate a tab without borrowing it.
+    pub(crate) fn url_labels(&self) -> Vec<String> {
+        self.tabs.iter().map(|tab| tab.url.clone()).collect()
+    }
+
+    /// Display titles and workspace indexes, in tab order, for chrome painting.
+    pub fn rail_labels(&self) -> (Vec<String>, Vec<u8>) {
+        (
+            self.tabs.iter().map(Tab::display_title).collect(),
+            self.tabs.iter().map(|tab| tab.workspace).collect(),
+        )
+    }
+
+    /// Owned snapshots of up to `limit` leading tabs, for session persistence.
+    pub(crate) fn snapshots(&self, limit: usize) -> Vec<TabSnapshot> {
+        self.tabs
+            .iter()
+            .take(limit)
+            .map(|tab| TabSnapshot {
+                url: tab.url.clone(),
+                history: tab
+                    .navigation
+                    .history()
+                    .iter()
+                    .map(|url| url.as_str().to_owned())
+                    .collect(),
+                index: tab.navigation.index(),
+                zoom: tab.zoom,
+                scroll: tab.scroll.offset(),
+                workspace: tab.workspace,
+            })
+            .collect()
     }
 
     /// Whether the tab limit has been reached.
-    pub fn is_full(&self) -> bool {
+    pub(crate) fn is_full(&self) -> bool {
         self.tabs.len() >= MAX_TABS
     }
 
@@ -305,27 +342,27 @@ impl TabsState {
     }
 
     /// Activates the next tab of the active workspace, wrapping to its first one.
-    pub fn next_tab(&mut self) -> usize {
+    pub(crate) fn next_tab(&mut self) -> usize {
         self.step_tab(true)
     }
 
     /// Activates the previous tab of the active workspace, wrapping to its last one.
-    pub fn previous_tab(&mut self) -> usize {
+    pub(crate) fn previous_tab(&mut self) -> usize {
         self.step_tab(false)
     }
 
     /// Closes the tab at `index` and applies the documented last-tab/neighbour policy.
-    pub fn close(&mut self, index: usize) -> CloseOutcome {
+    pub(crate) fn close(&mut self, index: usize) -> CloseOutcome {
         self.close_tab(index)
     }
 
     /// Closes the active tab (see [`TabsState::close`]).
-    pub fn close_active(&mut self) -> CloseOutcome {
+    pub(crate) fn close_active(&mut self) -> CloseOutcome {
         self.close(self.active)
     }
 
     /// Window title for a tab index: `"[2/3] title"` when several tabs are open, else `title`.
-    pub fn indexed_title(index: usize, total: usize, title: &str) -> String {
+    pub(crate) fn indexed_title(index: usize, total: usize, title: &str) -> String {
         if total > 1 {
             format!("[{}/{}] {title}", index + 1, total)
         } else {

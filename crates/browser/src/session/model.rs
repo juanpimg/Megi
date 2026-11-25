@@ -21,6 +21,8 @@ pub struct SessionTab {
     pub zoom: f64,
     /// Vertical scroll offset in CSS pixels.
     pub scroll: u32,
+    /// Local workspace index (0–2); missing in older session files.
+    pub workspace: u8,
 }
 
 /// Whole persisted session.
@@ -58,41 +60,29 @@ impl Session {
     /// Captures the live tabs into a session document (caps history and tab counts).
     pub fn capture(tabs: &TabsState) -> Self {
         let mut session_tabs = Vec::with_capacity(tabs.len().min(MAX_SESSION_TABS));
-        for tab in tabs.tabs().iter().take(MAX_SESSION_TABS) {
-            let mut history: Vec<String> = tab
-                .navigation
-                .history()
-                .iter()
-                .map(|url| url.as_str())
-                .collect();
-            // Keep a window that contains the current entry: dropping the oldest entries
-            // without remapping pointed the restored back/forward stack at the wrong URL.
-            let mut index = tab.navigation.index();
-            if history.len() > MAX_HISTORY_PER_TAB {
+        for mut tab in tabs.snapshots(MAX_SESSION_TABS) {
+            let mut index = tab.index;
+            if tab.history.len() > MAX_HISTORY_PER_TAB {
                 let start = index
                     .saturating_sub(MAX_HISTORY_PER_TAB - 1)
-                    .min(history.len() - MAX_HISTORY_PER_TAB);
-                history.drain(..start);
+                    .min(tab.history.len() - MAX_HISTORY_PER_TAB);
+                tab.history.drain(..start);
+                tab.history.truncate(MAX_HISTORY_PER_TAB);
                 index = index.saturating_sub(start);
-                history.truncate(MAX_HISTORY_PER_TAB);
             }
-            let index = index.min(history.len().saturating_sub(1));
-            let mut url = tab.url.clone();
-            if url.is_empty()
-                && let Some(current) = tab.navigation.current()
-            {
-                url = current.as_str();
-            }
-            let mut zoom = tab.zoom;
-            if !zoom.is_finite() || zoom <= 0.0 {
-                zoom = 1.0;
-            }
+            let index = index.min(tab.history.len().saturating_sub(1));
+            let zoom = if tab.zoom.is_finite() && tab.zoom > 0.0 {
+                tab.zoom
+            } else {
+                1.0
+            };
             session_tabs.push(SessionTab {
-                url,
-                history,
+                url: tab.url,
+                history: tab.history,
                 index,
                 zoom,
-                scroll: tab.scroll.offset(),
+                scroll: tab.scroll,
+                workspace: tab.workspace,
             });
         }
         let active = tabs
@@ -169,7 +159,9 @@ impl Session {
             let scroll = ScrollState::new(session_tab.scroll.saturating_add(1), 1);
             let mut scroll = scroll;
             scroll.scroll_to(session_tab.scroll);
-            restored.push(Tab::restored(navigation, url, session_tab.zoom, scroll));
+            let mut restored_tab = Tab::restored(navigation, url, session_tab.zoom, scroll);
+            restored_tab.workspace = session_tab.workspace.min(crate::tabs::MAX_WORKSPACES - 1);
+            restored.push(restored_tab);
         }
         if restored.is_empty() {
             TabsState::new(crate::tabs::BLANK_TAB_URL)
@@ -186,12 +178,13 @@ impl Session {
             .map(|tab| {
                 let history: Vec<String> = tab.history.iter().map(|url| json_string(url)).collect();
                 format!(
-                    "{{\"url\":{},\"history\":[{}],\"index\":{},\"zoom\":{},\"scroll\":{}}}",
+                    "{{\"url\":{},\"history\":[{}],\"index\":{},\"zoom\":{},\"scroll\":{},\"workspace\":{}}}",
                     json_string(&tab.url),
                     history.join(","),
                     tab.index,
                     json_number(tab.zoom),
-                    tab.scroll
+                    tab.scroll,
+                    tab.workspace
                 )
             })
             .collect();
@@ -280,12 +273,17 @@ impl Session {
             let index = tab_get("index").and_then(JsonValue::as_u32).unwrap_or(0) as usize;
             let zoom = tab_get("zoom").and_then(JsonValue::as_f64).unwrap_or(1.0);
             let scroll = tab_get("scroll").and_then(JsonValue::as_u32).unwrap_or(0);
+            let workspace = tab_get("workspace")
+                .and_then(JsonValue::as_u32)
+                .unwrap_or(0)
+                .min(crate::tabs::MAX_WORKSPACES as u32 - 1) as u8;
             tabs.push(SessionTab {
                 url: url.to_owned(),
                 history,
                 index,
                 zoom,
                 scroll,
+                workspace,
             });
         }
         let mut recent = Vec::new();

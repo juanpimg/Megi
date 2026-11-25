@@ -32,7 +32,8 @@ impl WindowApp {
                     reader_html = session.reader_html.clone();
                     let mut restored = session.restore();
                     if !input.is_empty() && input != crate::tabs::BLANK_TAB_URL {
-                        if let Some(pos) = restored.tabs().iter().position(|tab| tab.url == input) {
+                        let urls = restored.url_labels();
+                        if let Some(pos) = urls.iter().position(|url| url == &input) {
                             restored.activate(pos);
                         } else if restored.active().url == crate::tabs::BLANK_TAB_URL {
                             if let Some(replacement) = crate::tabs::Tab::new(input.clone()) {

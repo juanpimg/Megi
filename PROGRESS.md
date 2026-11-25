@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `30c179f4` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **42/64** (**65%**) · **3,565** tests · conformance **PASS** · **18** crates · **263,675** lines of Rust
+**Snapshot** — commit `da3f35c6` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **43/64** (**67%**) · **3,577** tests · conformance **PASS** · **18** crates · **264,002** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -23,13 +23,13 @@
 | **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `█████████████░░░░░░░` 4/6 | 66% |
-| **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
+| **M7** | Herramientas de desarrollador | `████████████░░░░░░░░` 3/5 | 60% |
 | **M8** | Motor ofensivo | `████████████░░░░░░░░` 3/5 | 60% |
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `█████████████░░░░░░░` 42/64 | **65%** |
+| | **Roadmap** | `█████████████░░░░░░░` 43/64 | **67%** |
 
 ## Detalle de criterios por hito
 
@@ -119,16 +119,16 @@
 - AVIF/JPEG XL — sin decodificadores
 - Audio y vídeo con códecs libres — sin implementación
 
-### M7 — Herramientas de desarrollador (40%)
+### M7 — Herramientas de desarrollador (60%)
 
 **Verificado**
 
 - Consola JS y diagnóstico básico — `crates/js/src/host.rs`, `crates/browser/src/find/`
 - Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS
+- DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 3 passed; límites: un único target, sin WebDriver BiDi ni perfilador
 
 **Pendiente**
 
-- DevTools vía protocolo Firefox
 - WebDriver BiDi
 - Perfilador usable
 
@@ -193,10 +193,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `30c179f4` (2026-11-25) |
+| Commit | `da3f35c6` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 263675 |
-| Tests (`cargo test --workspace -- --list`) | 3565 |
+| Lines of Rust (tracked `.rs`) | 264002 |
+| Tests (`cargo test --workspace -- --list`) | 3577 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
 

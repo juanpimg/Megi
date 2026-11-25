@@ -222,6 +222,7 @@ fn normalize_and_restore_preserve_valid_tabs_across_corrupt_entries() {
         index: 99,
         scroll: 0,
         zoom: f64::NAN,
+        workspace: 0,
     });
     session.tabs.push(SessionTab {
         url: "https://example.org/".to_string(),
@@ -229,6 +230,7 @@ fn normalize_and_restore_preserve_valid_tabs_across_corrupt_entries() {
         index: 0,
         scroll: 0,
         zoom: -5.0,
+        workspace: 0,
     });
     session.normalize();
     assert_eq!(session.tabs.len(), 4);
@@ -237,7 +239,7 @@ fn normalize_and_restore_preserve_valid_tabs_across_corrupt_entries() {
 
     let restored = session.restore();
     assert_eq!(restored.len(), 3);
-    assert_eq!(restored.tabs()[2].url, "https://example.org/");
+    assert_eq!(restored.url_labels()[2], "https://example.org/");
 }
 
 #[cfg(unix)]

@@ -298,7 +298,7 @@ fn single_workspace_chrome_render_is_byte_identical_to_legacy_inputs() {
     ]);
     assert_eq!(tabs.workspace(), 0);
     assert_eq!(tabs.workspace_status_text(), None);
-    let legacy_titles: Vec<String> = tabs.tabs().iter().map(|tab| tab.display_title()).collect();
+    let legacy_titles: Vec<String> = tabs.rail_labels().0;
     let visible_titles: Vec<String> = tabs.visible_tabs().map(|tab| tab.display_title()).collect();
     assert_eq!(visible_titles, legacy_titles);
     assert_eq!(tabs.visible_active_index(), tabs.active_index());
