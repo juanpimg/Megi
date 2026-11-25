@@ -1,106 +1,13 @@
 use super::*;
 
-use super::cache::{CounterScope, StyleCache, replaced_default_size};
+use super::cache::replaced_default_size;
 use super::fixups::{
     normalize_block_children, row_fixup_children, row_group_fixup_children, table_fixup_children,
 };
 
-/// Returns `true` if the node is an HTML `<br>` element.
-fn is_html_br(node: &megi_core::Node) -> bool {
-    node.as_element().is_some_and(|el| {
-        el.namespace == Namespace::Html && el.local_name.eq_ignore_ascii_case("br")
-    })
-}
-
-/// Builds a layout box for a `::before` or `::after` pseudo-element when generated.
-#[allow(clippy::too_many_arguments)]
-fn build_pseudo_box(
-    doc: &Document,
-    originating: NodeId,
-    pseudo: PseudoElement,
-    pseudo_styles: &PseudoStyles,
-    style_cache: &mut StyleCache,
-    counters: &mut CounterScope,
-    has_overflow_clip: &mut bool,
-    depth: usize,
-) -> Option<LayoutBox> {
-    let style = pseudo_styles.get(&(originating, pseudo))?;
-    if style.display == Display::None || !style.content.generates_box() {
-        return None;
-    }
-    counters.apply(style, depth);
-
-    let blockified = style.float != Float::None
-        || matches!(style.position, Position::Absolute | Position::Fixed);
-    let is_replaced_pseudo = style.content.image_url().is_some();
-
-    let box_type = if is_replaced_pseudo {
-        BoxType::Replaced(originating)
-    } else {
-        match style.display {
-            Display::Table => BoxType::Table(originating),
-            Display::InlineTable => BoxType::InlineTable(originating),
-            Display::TableRowGroup | Display::TableHeaderGroup | Display::TableFooterGroup => {
-                BoxType::TableRowGroup(originating)
-            }
-            Display::TableRow => BoxType::TableRow(originating),
-            Display::TableCell => BoxType::TableCell(originating),
-            Display::TableCaption => BoxType::TableCaption(originating),
-            Display::TableColumn | Display::TableColumnGroup => BoxType::TableColumn(originating),
-            Display::InlineBlock => BoxType::InlineBlock(originating),
-            _ if blockified => BoxType::BlockNode(originating),
-            Display::Block | Display::Flex | Display::Grid | Display::ListItem => {
-                BoxType::BlockNode(originating)
-            }
-            _ => BoxType::InlineNode(originating),
-        }
-    };
-
-    let own_style = style_cache.intern(style);
-    let mut layout_box = LayoutBox::with_shared_style(box_type, Some(Arc::clone(&own_style)));
-    layout_box.is_pseudo = true;
-    layout_box.position = style.position;
-    layout_box.z_index = if style.position == Position::Static {
-        0
-    } else {
-        style.z_index.unwrap_or(0)
-    };
-    layout_box.opacity = style.opacity;
-    layout_box.is_float = style.float != Float::None;
-    layout_box.float_side = style.float;
-    layout_box.establishes_stacking_context = style.opacity.is_nan()
-        || style.opacity < 1.0
-        || matches!(style.position, Position::Fixed)
-        || (style.position != Position::Static && style.z_index.is_some());
-    if !matches!(style.overflow, Overflow::Visible) {
-        *has_overflow_clip = true;
-    }
-
-    if is_replaced_pseudo {
-        layout_box.intrinsic_size = Some((300.0, 150.0));
-    } else {
-        let needs_counters = matches!(
-            &style.content,
-            megi_css::Content::Items(items) if items.iter().any(|it| matches!(it, ContentItem::Counter(_)))
-        );
-        let counter_map = if needs_counters {
-            counters.snapshot()
-        } else {
-            HashMap::new()
-        };
-        if let Some(text) = style.content.resolve_text(doc, originating, &counter_map)
-            && !text.is_empty()
-        {
-            let text_style = style_cache.anonymous_for(&own_style);
-            layout_box.children.push(LayoutBox::with_shared_style(
-                BoxType::TextNode(text),
-                Some(text_style),
-            ));
-        }
-    }
-
-    Some(layout_box)
-}
+#[path = "element_boxes.rs"]
+mod element_boxes;
+use element_boxes::{build_pseudo_box, is_html_br, select_control_content, select_label_box};
 
 /// Recursively builds a layout box for a DOM node.
 #[allow(clippy::too_many_arguments)]
@@ -154,6 +61,7 @@ pub(super) fn build_box_for_node(
             } else {
                 std::borrow::Cow::Borrowed(tag)
             };
+            let select_content = (tag == "select").then(|| select_control_content(doc, node_id));
 
             // CSS 2.1 §17: table parts. `display` is authoritative; the HTML tag is a
             // fallback for documents whose UA stylesheet is incomplete (or for styles
@@ -399,6 +307,13 @@ pub(super) fn build_box_for_node(
                 _ => raw_children,
             };
 
+            // A replaced `<select>` keeps its atomic sizing, but its native label is
+            // carried as a single generated text child for the paint pass. The
+            // `<option>` boxes are not laid out: the control paints its own content.
+            let select_text_box = select_content
+                .as_ref()
+                .filter(|_| matches!(box_type, BoxType::Replaced(_)))
+                .map(|(label, _)| select_label_box(label, &child_style, &own_style, style_cache));
             let mut layout_box = LayoutBox::with_shared_style(box_type.clone(), Some(own_style));
             // Data contract consumed by `paint` (stacking/clip metadata).
             layout_box.position = style.position;
@@ -410,7 +325,7 @@ pub(super) fn build_box_for_node(
             layout_box.opacity = style.opacity;
             layout_box.is_float = style.float != Float::None;
             layout_box.float_side = style.float;
-            layout_box.children = children;
+            layout_box.children = select_text_box.map_or(children, |text_box| vec![text_box]);
             // Stacking-context flag (CSS 2.2 Appendix E), computed once at build time so
             // the document-wide finalize pass is only needed for `overflow` clipping.
             layout_box.establishes_stacking_context = style.opacity.is_nan()
@@ -474,8 +389,12 @@ pub(super) fn build_box_for_node(
                     } else {
                         None
                     };
+                    let select_width = select_content.as_ref().map(|(_, width)| *width);
                     (
-                        attribute_width.or(size_width).unwrap_or(default_width),
+                        attribute_width
+                            .or(size_width)
+                            .or(select_width)
+                            .unwrap_or(default_width),
                         attribute_height.unwrap_or(default_height),
                     )
                 }));
