@@ -10,10 +10,12 @@
 //! §5.2 requires unmasked server frames. The endpoint stays loopback-only and opt-in.
 //! Commands are dispatched in the `protocol` module: with a real page attached, DOM/CSS commands
 //! read the live arena (WHATWG DOM §4.2.3 / CSSOM §6) and the Network domain replays the
-//! loader's real request/response log; without one, evaluation falls back to the isolated
-//! realm. Multiple targets and WebDriver BiDi are still out of scope.
+//! loader's real request/response log and the Performance domain exports the pipeline's
+//! real `RenderTimings`; without a page, evaluation falls back to the isolated realm.
+//! Multiple targets and WebDriver BiDi are still out of scope.
 
 mod network;
+mod performance;
 mod protocol;
 
 pub use protocol::DevToolsPage;

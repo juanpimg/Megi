@@ -12,7 +12,7 @@ use megi_webview::core::{Document, NodeId};
 use megi_webview::css::ComputedStyle;
 use megi_webview::net::NetworkEvent;
 use megi_webview::render::{
-    RenderOutput, computed_style_pairs, evaluate_expression, evaluate_on_document,
+    RenderOutput, RenderTimings, computed_style_pairs, evaluate_expression, evaluate_on_document,
 };
 use serde_json::{Value, json};
 
@@ -26,32 +26,36 @@ pub struct DevToolsPage {
     pub(super) styles: HashMap<NodeId, ComputedStyle>,
     pub(super) url: String,
     pub(super) network: Vec<NetworkEvent>,
+    pub(super) timings: RenderTimings,
 }
 
 impl DevToolsPage {
     /// Creates a page snapshot from an owned arena, its style snapshot and the real
-    /// loader observations collected while rendering it.
+    /// loader observations and phase timings collected while rendering it.
     pub fn new(
         document: Document,
         styles: HashMap<NodeId, ComputedStyle>,
         url: String,
         network: Vec<NetworkEvent>,
+        timings: RenderTimings,
     ) -> Self {
         Self {
             document,
             styles,
             url,
             network,
+            timings,
         }
     }
 
-    /// Attaches a real render result (DOM + cascade snapshot + URL + request log).
+    /// Attaches a real render result (DOM + cascade snapshot + URL + request log + timings).
     pub fn from_render(output: &RenderOutput) -> Self {
         Self::new(
             output.document.clone(),
             output.styles.clone(),
             output.document_url.as_str().to_owned(),
             output.stats.network.clone(),
+            output.stats.timings,
         )
     }
 }
@@ -140,6 +144,18 @@ pub(super) fn rpc_response(payload: &[u8], page: &SharedPage) -> String {
             let guard = lock_page(page);
             match guard.as_ref() {
                 Some(attached) => dom_response(attached, id, method, request.get("params")),
+                None => rpc_error(id, -32000, "no page attached to the DevTools target"),
+            }
+        }
+        Some(method @ ("Performance.getMetrics" | "Performance.getTrace")) => {
+            let guard = lock_page(page);
+            match guard.as_ref() {
+                Some(attached) => match method {
+                    "Performance.getMetrics" => {
+                        super::performance::get_metrics(&attached.timings, id)
+                    }
+                    _ => super::performance::get_trace(&attached.timings, id),
+                },
                 None => rpc_error(id, -32000, "no page attached to the DevTools target"),
             }
         }
