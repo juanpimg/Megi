@@ -28,6 +28,7 @@ use error::{
     ErrorPositionMode, error_position_mode, xml_coerce_codepoint, xml_coerce_comment,
     xml_coerce_text,
 };
+use megi_core::NodeId;
 use types::{PendingDoctype, PendingTag};
 
 pub use error::{ParseError, ParseErrorCode, is_valid_xml_character};
@@ -84,7 +85,12 @@ pub struct Tokenizer {
     pub max_token_bytes: usize,
     /// Bytes dropped by the per-value cap, so callers can report the truncation (#636).
     pub token_bytes_dropped: u64,
-    pub allow_cdata: bool,
+    /// Whether `[CDATA[` opens a CDATA section (WHATWG HTML §13.2.5.42). Owned by the
+    /// tokenizer: only [`Tokenizer::sync_cdata_context`] may change it (#2301).
+    allow_cdata: bool,
+    /// Tree-builder state `(open_elements.len(), current_node)` that produced
+    /// `allow_cdata`. Re-syncing with the same key is a no-op (#2301).
+    cdata_key: Option<(usize, Option<NodeId>)>,
     pub tokens: Vec<Token>,
     /// Maximum number of parse errors retained by a single tokenization pass
     /// (issue #634): prevents a run of NUL/control bytes from producing millions
@@ -199,6 +205,66 @@ mod tests {
                 self_closing: true,
                 attributes: vec![],
             }
+        );
+    }
+
+    #[test]
+    fn cdata_context_sync_controls_declaration_handling() {
+        // WHATWG HTML §13.2.5.42: `[CDATA[` opens a CDATA section only in foreign
+        // content; in HTML content it raises `cdata-in-html-content` and falls back
+        // to a bogus comment. #2301: the tokenizer owns the decision, so the tree
+        // builder only supplies the adjusted-current-node context.
+        let mut foreign = Tokenizer::from_str_input("<![CDATA[foo]]>", TokenizerConfig::default());
+        foreign.sync_cdata_context((1, None), true);
+        foreign.run();
+        assert_eq!(
+            foreign.tokens,
+            vec![
+                Token::Character(0x66), // 'f'
+                Token::Character(0x6F), // 'o'
+                Token::Character(0x6F), // 'o'
+                Token::Eof,
+            ]
+        );
+        assert!(
+            foreign
+                .errors
+                .iter()
+                .all(|e| e.code != ParseErrorCode::CdataInHtmlContent)
+        );
+
+        let mut html = Tokenizer::from_str_input("<![CDATA[foo]]>", TokenizerConfig::default());
+        html.sync_cdata_context((1, None), false);
+        html.run();
+        assert_eq!(
+            html.tokens,
+            vec![Token::Comment("[CDATA[foo]]".into()), Token::Eof]
+        );
+        assert!(
+            html.errors
+                .iter()
+                .any(|e| e.code == ParseErrorCode::CdataInHtmlContent)
+        );
+
+        // An unchanged key reuses the cached decision; a different key refreshes it.
+        let mut cached = Tokenizer::from_str_input("<![CDATA[foo]]>", TokenizerConfig::default());
+        cached.sync_cdata_context((1, None), true);
+        cached.sync_cdata_context((1, None), false);
+        cached.run();
+        assert!(
+            matches!(cached.tokens.first(), Some(&Token::Character(0x66))),
+            "same key must keep the cached foreign decision: {:?}",
+            cached.tokens
+        );
+
+        let mut refreshed =
+            Tokenizer::from_str_input("<![CDATA[foo]]>", TokenizerConfig::default());
+        refreshed.sync_cdata_context((1, None), true);
+        refreshed.sync_cdata_context((2, None), false);
+        refreshed.run();
+        assert_eq!(
+            refreshed.tokens,
+            vec![Token::Comment("[CDATA[foo]]".into()), Token::Eof]
         );
     }
 

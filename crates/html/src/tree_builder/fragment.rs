@@ -1,7 +1,7 @@
 //! Fragment parser core and tokenizer driving loop.
 
 use crate::tokenizer::{Token, Tokenizer, TokenizerConfig, TokenizerState};
-use megi_core::{Namespace, NodeId};
+use megi_core::Namespace;
 
 use super::*;
 
@@ -116,20 +116,8 @@ pub(crate) fn push_codepoint_utf8(out: &mut Vec<u8>, cp: u32) {
 pub(crate) fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
     // Reused token batch buffer: the old code allocated a `Vec` for every emitted token.
     let mut emitted: Vec<Token> = Vec::with_capacity(4);
-    // The CDATA allowance only depends on the adjusted current node, which is determined by
-    // `(open_elements.len(), current_node)` (plus the fixed fragment context). Caching the
-    // key avoids two arena lookups per input character.
-    let mut cdata_key: Option<(usize, Option<NodeId>)> = None;
     // Consecutive character tokens of the "in body" mode are processed as one run.
     let mut char_run: Vec<u8> = Vec::new();
-    let refresh_cdata =
-        |tok: &mut Tokenizer, tb: &TreeBuilder, key: &mut Option<(usize, Option<NodeId>)>| {
-            let current_key = (tb.open_elements.len(), tb.current_node());
-            if *key != Some(current_key) {
-                tok.allow_cdata = tb.is_adjusted_current_node_foreign();
-                *key = Some(current_key);
-            }
-        };
     loop {
         // Fast path: plain text in the "data" state can be consumed straight into the
         // character run without emitting/handling one `Token::Character` per code point.
@@ -143,7 +131,10 @@ pub(crate) fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                 continue;
             }
         }
-        refresh_cdata(tok, tb, &mut cdata_key);
+        tok.sync_cdata_context(
+            (tb.open_elements.len(), tb.current_node()),
+            tb.is_adjusted_current_node_foreign(),
+        );
         let prev_len = tok.tokens.len();
         tok.step();
         if tok.tokens.len() > prev_len {
@@ -166,7 +157,10 @@ pub(crate) fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                     if let Some(new_state) = tb.process_token(Token::Character(cp)) {
                         tok.state = new_state;
                     }
-                    refresh_cdata(tok, tb, &mut cdata_key);
+                    tok.sync_cdata_context(
+                        (tb.open_elements.len(), tb.current_node()),
+                        tb.is_adjusted_current_node_foreign(),
+                    );
                     continue;
                 }
                 if !char_run.is_empty() {
@@ -188,7 +182,10 @@ pub(crate) fn drive_tokenizer(tok: &mut Tokenizer, tb: &mut TreeBuilder) {
                     // the triggering token was EOF.
                     saw_eof = false;
                 }
-                refresh_cdata(tok, tb, &mut cdata_key);
+                tok.sync_cdata_context(
+                    (tb.open_elements.len(), tb.current_node()),
+                    tb.is_adjusted_current_node_foreign(),
+                );
             }
             if saw_eof {
                 break;

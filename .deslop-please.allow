@@ -135,7 +135,6 @@ field-leak megi_css::properties::computed::chunk1::ComputedStyle::word_spacing
 field-leak megi_css::properties::computed::chunk1::ComputedStyle::z_index
 field-leak megi_display::hit_test::RegionCollector::regions
 field-leak megi_fonts::font::Font::data
-field-leak megi_html::tokenizer::Tokenizer::allow_cdata
 field-leak megi_html::tokenizer::Tokenizer::errors
 field-leak megi_html::tokenizer::Tokenizer::state
 field-leak megi_html::tokenizer::Tokenizer::tokens

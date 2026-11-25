@@ -1,6 +1,6 @@
 path	lines	category	phase	auditor	date	status	findings	notes
 .cargo/config.toml	19	manifest	F3	lead	2026-11-25	covered	CARGO-FORK-DEFAULT	read full config; huacnlee fork defaults with rustup proxy fallback
-.deslop-please.allow	222	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
+.deslop-please.allow	221	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
 .github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -427,11 +427,11 @@ crates/html/src/serializer.rs	17	src	F2	wave-max-mod	2026-11-19	covered	#maximal
 crates/html/src/serializer/fragment.rs	403	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/serializer/tests.rs	93	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/serializer/tree_dump.rs	190	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tokenizer.rs	219	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tokenizer.rs	285	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/attributes.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/char_refs.rs	323	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/comment.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tokenizer/core.rs	320	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tokenizer/core.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/doctype.rs	325	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/doctype_end.rs	297	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/error.rs	242	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -439,7 +439,7 @@ crates/html/src/tokenizer/fast_paths.rs	224	src	F2	wave-max-mod	2026-11-19	cover
 crates/html/src/tokenizer/helpers.rs	334	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/markup.rs	194	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/rawtext.rs	488	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tokenizer/tag.rs	148	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tokenizer/tag.rs	155	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/types.rs	355	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder.rs	454	src	F2	jp	2026-11-25	covered	#2296	re-read after adding the accessor/mirror-sync regression test
 crates/html/src/tree_builder/adoption.rs	267	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -451,7 +451,7 @@ crates/html/src/tree_builder/dispatch_tail.rs	268	src	F2	wave-max-mod	2026-11-19
 crates/html/src/tree_builder/document.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/foreign.rs	213	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/formatting.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tree_builder/fragment.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tree_builder/fragment.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/head.rs	127	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/insertion.rs	380	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/quirks.rs	154	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -466,7 +466,7 @@ crates/html/tests/browser_api.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#ma
 crates/html/tests/perf.rs	146	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/tests/proptest_html.rs	137	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/tests/robustness/deep_tree.rs	162	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/tests/robustness/foreign.rs	104	test	F1	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
+crates/html/tests/robustness/foreign.rs	128	test	F1	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
 crates/html/tests/robustness/main.rs	97	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/tests/robustness/parse_limits.rs	223	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/tests/robustness/scripting.rs	107	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

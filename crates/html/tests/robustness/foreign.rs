@@ -40,6 +40,30 @@ fn foreign_mismatched_end_tag_records_parse_error() {
 }
 
 #[test]
+fn cdata_declaration_follows_foreign_context() {
+    // WHATWG HTML §13.2.5.42 / §13.2.6.4.7 (#2301): `[CDATA[` starts a CDATA section
+    // only while the adjusted current node is foreign. In HTML content it becomes a
+    // bogus comment (`cdata-in-html-content` is raised by the tokenizer).
+    for markup in ["<svg><![CDATA[foo]]>", "<math><![CDATA[foo]]>"] {
+        let outcome = parse_document_with_options(markup, false, &ParseOptions::default());
+        let dump = megi_html::serialize_dom_for_test(&outcome.document);
+        assert!(dump.contains("\"foo\""), "{markup}: {dump}");
+        assert!(!dump.contains("[CDATA["), "{markup}: {dump}");
+    }
+
+    let html = parse_document_with_options("<div><![CDATA[foo]]>", false, &ParseOptions::default());
+    let dump = megi_html::serialize_dom_for_test(&html.document);
+    assert!(
+        dump.contains("<!-- [CDATA[foo]] -->"),
+        "HTML content must turn CDATA into a bogus comment: {dump}"
+    );
+    assert!(
+        !dump.contains("\"foo\""),
+        "no text node in HTML content: {dump}"
+    );
+}
+
+#[test]
 fn foreign_matching_and_camelcase_end_tags_record_no_parse_error() {
     let matching = parse_document_with_options(
         "<svg><circle></circle></svg>",

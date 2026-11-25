@@ -126,15 +126,7 @@ impl Tokenizer {
                     self.pos += 7;
                     self.state = TokenizerState::Doctype;
                 } else if self.peek_slice_ascii_eq("[CDATA[", false) {
-                    self.pos += 7;
-                    if self.allow_cdata {
-                        self.state = TokenizerState::CdataSection;
-                    } else {
-                        // In HTML content without foreign adjusted node, CDATA is a parse error
-                        self.record_error(ParseErrorCode::CdataInHtmlContent);
-                        self.pending_comment = String::from("[CDATA[");
-                        self.state = TokenizerState::BogusComment;
-                    }
+                    self.handle_cdata_declaration();
                 } else {
                     self.record_error(ParseErrorCode::IncorrectlyOpenedComment);
                     self.pending_comment.clear();
@@ -144,5 +136,20 @@ impl Tokenizer {
             _ => return false,
         }
         true
+    }
+
+    /// Consumes the `[CDATA[` marker and applies WHATWG HTML §13.2.5.42: in foreign
+    /// content a CDATA section follows; in HTML content the tokenizer raises
+    /// `cdata-in-html-content` and reprocesses the marker as a bogus comment.
+    /// The foreignness decision is owned by this type (#2301).
+    pub(crate) fn handle_cdata_declaration(&mut self) {
+        self.pos += 7;
+        if self.allow_cdata {
+            self.state = TokenizerState::CdataSection;
+        } else {
+            self.record_error(ParseErrorCode::CdataInHtmlContent);
+            self.pending_comment = String::from("[CDATA[");
+            self.state = TokenizerState::BogusComment;
+        }
     }
 }

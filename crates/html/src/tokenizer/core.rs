@@ -52,6 +52,7 @@ impl Tokenizer {
             max_token_bytes: MAX_TOKEN_BYTES,
             token_bytes_dropped: 0,
             allow_cdata: false,
+            cdata_key: None,
             tokens: Vec::new(),
             errors,
             line_starts,
@@ -79,6 +80,17 @@ impl Tokenizer {
     /// Returns whether §13.2.9 token coercion is enabled.
     pub const fn xml_coercion_enabled(&self) -> bool {
         self.xml_coercion
+    }
+
+    /// Synchronizes the CDATA allowance with the tree builder's adjusted current node
+    /// (WHATWG HTML §13.2.6.4.7, #2301). The caller supplies an opaque tree-builder
+    /// state key and the foreignness it implies; the tokenizer owns the cached decision
+    /// so no caller can desynchronize `allow_cdata` from `cdata_key`.
+    pub(crate) fn sync_cdata_context(&mut self, key: (usize, Option<NodeId>), is_foreign: bool) {
+        if self.cdata_key != Some(key) {
+            self.allow_cdata = is_foreign;
+            self.cdata_key = Some(key);
+        }
     }
 
     /// Runs the tokenizer until `Token::Eof` is emitted.
