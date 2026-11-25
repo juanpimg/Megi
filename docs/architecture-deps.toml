@@ -4,7 +4,7 @@
 # Plain crate names (no `megi_` prefix). Edit here, never in check_arch.py.
 
 # bench may import the crates listed below.
-edges.bench = ['core', 'css', 'fonts', 'html', 'image', 'layout', 'paint', 'render']
+edges.bench = ['core', 'css', 'fonts', 'html', 'image', 'js', 'layout', 'paint', 'render']
 # browser may import the crates listed below.
 edges.browser = ['sandbox', 'webview']
 # core may import the crates listed below.
