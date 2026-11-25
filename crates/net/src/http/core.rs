@@ -235,14 +235,15 @@ pub(super) fn fetch_once(
         if !trailers.is_empty() {
             request = request.with_trailers(trailers);
         }
-        let mut results = if let Some(callback) = on_data.as_deref_mut() {
-            crate::h2::client::request_streaming(&mut stream, vec![request], &limits, callback)?
-        } else {
-            crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?
-        };
+        // Fetch §4.10: buffer the DATA first so the response head can be CORS-checked
+        // before a single byte reaches `on_data`. `request_streaming` delivers DATA from
+        // inside the h2 session, where no response-head validation has happened yet.
+        let mut results =
+            crate::h2::client::request_many_owned(&mut stream, vec![request], &limits)?;
         let response = results
             .pop()
             .ok_or_else(|| FetchError::InvalidResponse("no HTTP/2 response".to_owned()))??;
+        validate_streaming_cors(url, options, &response.headers, on_data.is_some())?;
         let pushed = response
             .pushed
             .into_iter()
@@ -254,14 +255,23 @@ pub(super) fn fetch_once(
                 })
             })
             .collect();
-        return Ok(RawResponse {
+        let mut raw = RawResponse {
             status: response.status,
             reason: response.reason,
             headers: response.headers,
             body: response.body,
             trailers: response.trailers,
             pushed,
-        });
+        };
+        if let Some(callback) = on_data.as_deref_mut() {
+            // Same 16 KiB chunks as the HTTP/1.1 streaming reader; the body has already
+            // been handed to the consumer, so it must not also be returned buffered.
+            for chunk in raw.body.chunks(16 * 1024) {
+                callback(chunk)?;
+            }
+            raw.body.clear();
+        }
+        return Ok(raw);
     }
 
     let expect_continue = request_headers.iter().any(|(name, value)| {

@@ -13,7 +13,7 @@ use std::time::Duration;
 use megi_net::h2::client::{self, Limits};
 use megi_net::h2::frame::{self, Frame, FrameReader, kind};
 use megi_net::h2::hpack::{Decoder, Encoder};
-use megi_net::{FetchError, FetchOptions, Url, fetch};
+use megi_net::{FetchError, FetchOptions, Url, fetch, fetch_streaming};
 use rcgen::generate_simple_self_signed;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -400,5 +400,74 @@ fn frame_validation_rejects_bad_input() {
     assert_eq!(
         frame.parse_settings().expect("settings"),
         vec![(frame::settings::MAX_FRAME_SIZE, 16_384)]
+    );
+}
+
+/// Fetch §4.10: the ACAO check must happen on the response head, before any DATA byte
+/// reaches `on_data`. The h2 streaming path used to call `request_streaming` (which feeds
+/// DATA to the callback while reading) and never checked CORS on that head.
+#[test]
+fn h2_streaming_validates_cors_before_delivering_data() {
+    const SECRET: &[u8] = b"SECRET-CROSS-ORIGIN-BODY";
+    let certificate = test_certificate();
+    let (port, server) = spawn_tls_h2_server(
+        &certificate,
+        vec![b"h2".to_vec()],
+        vec![("content-type".to_owned(), "text/plain".to_owned())],
+        SECRET.to_vec(),
+    );
+    let url = Url::parse(&format!("https://localhost:{port}/secret")).expect("url");
+    let options = FetchOptions {
+        origin: Some("https://app.example".to_owned()),
+        ..options(Some(client_config_trusting(certificate.cert)))
+    };
+    let mut delivered = Vec::new();
+    let error = fetch_streaming(&url, &options, &mut |chunk| {
+        delivered.extend_from_slice(chunk);
+        Ok(())
+    })
+    .expect_err("cross-origin h2 response without ACAO must fail CORS");
+    server.join().expect("server thread");
+    assert!(matches!(error, FetchError::Cors(_)), "{error}");
+    assert!(
+        delivered.is_empty(),
+        "no DATA byte may reach on_data before CORS passes, got {:?}",
+        String::from_utf8_lossy(&delivered)
+    );
+}
+
+#[test]
+fn h2_streaming_delivers_data_after_cors_passes() {
+    const BODY: &[u8] = b"allowed cross-origin body";
+    let certificate = test_certificate();
+    let (port, server) = spawn_tls_h2_server(
+        &certificate,
+        vec![b"h2".to_vec()],
+        vec![
+            ("content-type".to_owned(), "text/plain".to_owned()),
+            (
+                "access-control-allow-origin".to_owned(),
+                "https://app.example".to_owned(),
+            ),
+        ],
+        BODY.to_vec(),
+    );
+    let url = Url::parse(&format!("https://localhost:{port}/allowed")).expect("url");
+    let options = FetchOptions {
+        origin: Some("https://app.example".to_owned()),
+        ..options(Some(client_config_trusting(certificate.cert)))
+    };
+    let mut delivered = Vec::new();
+    let response = fetch_streaming(&url, &options, &mut |chunk| {
+        delivered.extend_from_slice(chunk);
+        Ok(())
+    })
+    .expect("CORS-approved h2 streaming response");
+    server.join().expect("server thread");
+    assert_eq!(response.status, 200);
+    assert_eq!(delivered, BODY);
+    assert!(
+        response.body.is_empty(),
+        "streamed bytes must not also be returned in the buffered body"
     );
 }
