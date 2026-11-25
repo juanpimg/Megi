@@ -15,6 +15,17 @@ use boa_engine::{
 
 pub(crate) use ops::{CachedResponse, SwOps, SwRegistration, SwRequest, SwState, is_same_origin};
 
+/// A cached response returned for a same-origin document navigation (SW §5.2).
+///
+/// Kept as an owned, `Send + Sync` contract so the render crate can hand the
+/// bytes to the document loader without importing this crate's internals.
+#[derive(Clone, Debug)]
+pub struct SwNavigationResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
 mod natives;
 pub(crate) mod ops;
 mod prelude;
@@ -194,4 +205,20 @@ fn dispatch_fetch(
     (ops.fire_fetch)(context, id, request).ok()?;
     (ops.pump_realm)(context, id).ok()?;
     (ops.take_captured)(context, id)
+}
+
+/// Dispatches a GET navigation through the active worker (SW Appendix A).
+/// `None` means the worker did not respond; the caller then uses the network.
+pub(crate) fn try_navigation(context: &mut Context, url: &str) -> Option<SwNavigationResponse> {
+    let request = SwRequest {
+        url: url.to_owned(),
+        method: "GET".to_owned(),
+        headers: Vec::new(),
+    };
+    let cached = try_fetch(context, &request)?;
+    Some(SwNavigationResponse {
+        status: cached.status,
+        headers: cached.headers,
+        body: cached.body,
+    })
 }

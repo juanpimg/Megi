@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Offline reload fixture</title>
+<style>
+  body { margin: 0; background: #f4f6fb; color: #16233d;
+         font: 20px/1.4 sans-serif; }
+  main { width: 360px; margin: 48px auto; padding: 24px;
+         background: #ffffff; border: 2px solid #3f51b5; border-radius: 12px; }
+  h1 { margin: 0 0 12px; font-size: 28px; color: #283593; }
+  p { margin: 8px 0; }
+  #state { font-weight: bold; color: #2e7d32; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Service worker offline demo</h1>
+  <p>This document is cached by a service worker during the first load.</p>
+  <p id="state">Rendered from the cached document after the network was cut.</p>
+</main>
+<script>
+  document.getElementById('state').textContent =
+    'Reloaded offline from the service worker cache.';
+</script>
+</body>
+</html>

@@ -29,6 +29,8 @@ options:
   --height H     viewport height in CSS pixels (default 600, max 8192)
   --base URL     override the base URL used to resolve relative resources
   --no-network   refuse http(s) resources (only file:// and data: are loaded)
+  --sw-offline   <url|file> is an HTML fixture: register a service worker,
+                 cut the network, reload the cached document and write its PNG
   --no-scripting ignore <script> elements (no JS execution, no re-render)
   --cookies      enable a per-render cookie jar (Set-Cookie stored and sent to
                  subresources/redirects; also enables credentialed CORS)
@@ -46,6 +48,7 @@ struct Args {
     height: u32,
     base: Option<String>,
     no_network: bool,
+    sw_offline: bool,
     no_scripting: bool,
     cookies: bool,
     origin: Option<String>,
@@ -86,6 +89,14 @@ fn run() -> Result<(), CliError> {
     let args = parse_args(std::env::args().skip(1))?;
     let viewport = Viewport::new(args.width, args.height)
         .map_err(|error| CliError::Usage(error.to_string()))?;
+    if args.sw_offline {
+        #[cfg(feature = "js")]
+        return render_offline_cli(&args, viewport);
+        #[cfg(not(feature = "js"))]
+        return Err(CliError::Usage(
+            "--sw-offline requires the `js` feature".to_owned(),
+        ));
+    }
     let options = RenderOptions {
         viewport,
         no_network: args.no_network,
@@ -144,6 +155,40 @@ fn run() -> Result<(), CliError> {
     Ok(())
 }
 
+#[cfg(feature = "js")]
+fn render_offline_cli(args: &Args, viewport: Viewport) -> Result<(), CliError> {
+    let html = std::fs::read_to_string(&args.input)
+        .map_err(|error| CliError::Render(format!("cannot read {}: {error}", args.input)))?;
+    let reload = megi_render::offline_demo::render_sw_offline(&html, viewport)
+        .map_err(|error| CliError::Render(error.to_string()))?;
+    std::fs::write(&args.output, &reload.png).map_err(|error| {
+        CliError::Render(format!("cannot write {}: {error}", args.output.display()))
+    })?;
+    if args.json {
+        println!(
+            "{{\"mode\":\"sw-offline\",\"png_bytes\":{},\"cached_bytes\":{},\"provider_calls_after_cut\":{},\"network_cut_verified\":{}}}",
+            reload.png.len(),
+            reload.cached.body.len(),
+            reload.provider_calls_after_cut,
+            if reload.network_cut_verified {
+                "true"
+            } else {
+                "false"
+            },
+        );
+    } else {
+        println!(
+            "offline reload -> {} ({} bytes PNG, {} cached bytes, {} provider calls after cut, network cut verified: {})",
+            args.output.display(),
+            reload.png.len(),
+            reload.cached.body.len(),
+            reload.provider_calls_after_cut,
+            reload.network_cut_verified
+        );
+    }
+    Ok(())
+}
+
 /// Accepts an absolute URL or a filesystem path (converted to a `file://` URL).
 fn normalize_input(input: &str) -> Result<String, CliError> {
     if megi_net::Url::parse(input).is_ok() {
@@ -173,6 +218,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut height = DEFAULT_HEIGHT;
     let mut base = None;
     let mut no_network = false;
+    let mut sw_offline = false;
     let mut no_scripting = false;
     let mut cookies = false;
     let mut origin = None;
@@ -188,6 +234,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
                 std::process::exit(0);
             }
             "--no-network" => no_network = true,
+            "--sw-offline" => sw_offline = true,
             "--no-scripting" => no_scripting = true,
             "--script-budget" => {
                 let value = args.next().ok_or_else(|| {
@@ -258,6 +305,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         height,
         base,
         no_network,
+        sw_offline,
         no_scripting,
         cookies,
         origin,

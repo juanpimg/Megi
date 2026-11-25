@@ -89,7 +89,10 @@ pub(crate) fn render_url_with_context(
     let total_start = Instant::now();
     let url = Url::parse(input)?;
     stylesheets::ensure_supported_scheme(&url)?;
-    if options.no_network && matches!(url.scheme(), Scheme::Http | Scheme::Https) {
+    if options.no_network
+        && options.offline_document.is_none()
+        && matches!(url.scheme(), Scheme::Http | Scheme::Https)
+    {
         return Err(RenderError::NetworkDisabled { url: url.as_str() });
     }
 
@@ -119,13 +122,31 @@ pub(crate) fn render_url_with_context(
     document_fetch_options.origin = None;
     document_fetch_options.accept_push |= options.accept_server_push;
     let mut document_loader = ResourceLoader::with_options(document_fetch_options.clone());
-    let mut loaded = load_document(
-        &url,
-        &mut document_loader,
-        &document_fetch_options,
-        options.stream_responses,
-        options.form_post.as_ref(),
-    )?;
+    // M4#6: a service worker can answer a navigation from its cache. The
+    // document body is handed to the unchanged HTML/CSS/layout/paint pipeline.
+    let mut loaded = match options.offline_document.as_ref() {
+        Some(cached) => LoadedDocument {
+            bytes: cached.body.clone(),
+            warning: None,
+            url: url.clone(),
+            content_type: cached
+                .headers
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                .map(|(_, value)| value.clone())
+                .unwrap_or_else(|| "text/html; charset=utf-8".to_owned()),
+            status: Some(cached.status),
+            headers: cached.headers.clone(),
+            content_encoding: None,
+        },
+        None => load_document(
+            &url,
+            &mut document_loader,
+            &document_fetch_options,
+            options.stream_responses,
+            options.form_post.as_ref(),
+        )?,
+    };
     // Subresource fetches send the document's origin (CORS) and its cookies.
     let subresource_origin = if opaque_origin {
         None

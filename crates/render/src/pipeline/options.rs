@@ -137,6 +137,17 @@ pub enum HistoryAction {
     Go(i64),
 }
 
+/// A document response served by a service worker for an offline navigation.
+///
+/// Only the fields the document loader needs are carried across; the worker
+/// realm itself stays inside the `megi-js` crate (M4#6).
+#[derive(Clone, Debug)]
+pub struct CachedDocument {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+}
+
 /// Configuration for [`render_url`].
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
@@ -144,6 +155,11 @@ pub struct RenderOptions {
     pub viewport: Viewport,
     /// Refuse all `http:`/`https:` document and stylesheet URLs (`--no-network`).
     pub no_network: bool,
+    /// Preloaded main-document response for a cached offline reload.
+    ///
+    /// When present, the document navigation uses these bytes instead of the
+    /// network. Subresources still follow `no_network` (M4#6 scope).
+    pub offline_document: Option<CachedDocument>,
     /// Override the document base URL for relative resources (`--base URL`).
     ///
     /// Accepts an absolute URL or one resolved against the document URL.
@@ -336,6 +352,7 @@ impl Default for RenderOptions {
         Self {
             viewport: Viewport::default(),
             no_network: false,
+            offline_document: None,
             base_override: None,
             max_document_bytes: DEFAULT_MAX_DOCUMENT_BYTES,
             max_stylesheets: DEFAULT_MAX_STYLESHEETS,

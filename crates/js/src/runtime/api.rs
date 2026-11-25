@@ -1,4 +1,15 @@
 use super::*;
+use crate::runtime::service_worker::SwNavigationResponse;
+
+impl JsRuntime {
+    /// Resolves a same-origin GET navigation through the active service worker.
+    ///
+    /// Returns `None` when no worker responds; the caller must then use the
+    /// network provider. Only cached document bytes are exposed, no engine state.
+    pub fn service_worker_navigation(&mut self, url: &str) -> Option<SwNavigationResponse> {
+        crate::runtime::service_worker::try_navigation(&mut self.context, url)
+    }
+}
 
 // Binding methods (split verbatim from the former monolithic api.rs).
 mod core;

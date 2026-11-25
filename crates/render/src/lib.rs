@@ -211,6 +211,9 @@ pub mod error;
 pub mod frames;
 pub mod images;
 mod inline_svg;
+/// M4#6 offline document-reload demo (service worker cache + failing provider).
+#[cfg(feature = "js")]
+pub mod offline_demo;
 pub mod scripts;
 mod shadow_dom;
 pub mod stylesheets;
@@ -271,9 +274,9 @@ pub use error::RenderError;
 pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 pub use options::{
-    DEFAULT_MAX_BACKGROUND_BYTES, DEFAULT_MAX_BACKGROUNDS, DEFAULT_MAX_CSS_BYTES_PER_SHEET,
-    DEFAULT_MAX_DOCUMENT_BYTES, DEFAULT_MAX_IMPORT_DEPTH, DEFAULT_MAX_STYLESHEETS,
-    DEFAULT_MAX_TOTAL_BACKGROUND_BYTES, DEFAULT_MAX_TOTAL_CSS_BYTES,
+    CachedDocument, DEFAULT_MAX_BACKGROUND_BYTES, DEFAULT_MAX_BACKGROUNDS,
+    DEFAULT_MAX_CSS_BYTES_PER_SHEET, DEFAULT_MAX_DOCUMENT_BYTES, DEFAULT_MAX_IMPORT_DEPTH,
+    DEFAULT_MAX_STYLESHEETS, DEFAULT_MAX_TOTAL_BACKGROUND_BYTES, DEFAULT_MAX_TOTAL_CSS_BYTES,
     DEFAULT_MAX_TOTAL_WEB_FONT_BYTES, DEFAULT_MAX_WEB_FONT_BYTES, DEFAULT_MAX_WEB_FONTS,
     HistoryAction, HostDomEvent, HostEventTarget, HostUiEventKind, LocationAction,
     MAX_VIEWPORT_AREA, MAX_VIEWPORT_DIMENSION, RenderOptions, ScriptingMode, Viewport,

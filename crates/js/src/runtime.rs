@@ -223,6 +223,7 @@ mod node_methods;
 mod node_wrappers;
 mod observers;
 pub(crate) mod service_worker;
+pub use service_worker::SwNavigationResponse;
 mod tla;
 mod workers;
 

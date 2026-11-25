@@ -240,7 +240,7 @@ pub use providers::{
     StorageSaveFn, ViewportProvider, WebSocketProvider, WorkerLoader,
 };
 #[cfg(feature = "js")]
-pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome};
+pub use runtime::{Budget, JsRuntime, ModuleAsyncBudget, ModuleAsyncOutcome, SwNavigationResponse};
 
 /// Minimal stand-in types so the stub API keeps the same signatures without Boa.
 #[cfg(not(feature = "js"))]
