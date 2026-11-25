@@ -87,27 +87,25 @@ pub(super) fn paint_replaced_element(
             let start = list.len();
             let drawn =
                 object_fit_rect(rect, image.width as f32, image.height as f32, fit, position);
-            // `object-fit: fill` is the historical stretched image: emit the item
-            // without a clip so existing goldens stay byte-identical. Contain,
-            // none and scale-down draw inside the content box, so only `cover`
-            // needs the clip item (R166).
+            // `object-fit: fill` is the historical stretched image: its drawn
+            // rect is the content box, so emit it without a clip and keep the
+            // existing goldens byte-identical. Every other fit can exceed the
+            // content box: intrinsic size (`none`), scaled size (`cover`,
+            // `contain`, `scale-down`) or an out-of-range `object-position`.
+            // CSS Images 3 §4.2 requires clipping to the content box (R166,
+            // #2296).
             if fit == megi_css::ObjectFit::Fill {
                 list.push(DisplayItem::Image {
                     rect,
                     image: std::sync::Arc::clone(image),
                 });
-            } else if fit == megi_css::ObjectFit::Cover {
+            } else {
                 push_clip_item(list, resources, rect);
                 list.push(DisplayItem::Image {
                     rect: drawn,
                     image: std::sync::Arc::clone(image),
                 });
                 pop_clip_item(list, resources);
-            } else {
-                list.push(DisplayItem::Image {
-                    rect: drawn,
-                    image: std::sync::Arc::clone(image),
-                });
             }
             if alpha_scale < 1.0 && list.len() > start {
                 let items: Vec<DisplayItem> = list.items.drain(start..).collect();

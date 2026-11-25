@@ -472,3 +472,26 @@ fn test_object_fit_cover_with_position_top_left() {
         pixmap.pixel(45, 12)
     );
 }
+
+/// CSS Images 3 §4.2: `object-fit: none` must clip to the content box (#2296).
+#[test]
+fn test_object_fit_none_clips_to_content_box() {
+    // 30x10 blue image at top-left of a 20x20 box: drawn (10,10,30,10) overflows
+    // right while the box's lower half stays uncovered by the image.
+    let wide = Arc::new(RgbaImage::new(30, 10, [0u8, 0, 255, 255].repeat(300)).expect("RGBA"));
+    let (items, pixmap) = render(vec![Child {
+        style: object_style(ObjectFit::None, "top left"),
+        rect: Rect::new(10.0, 10.0, 20.0, 20.0),
+        image: Some(wide),
+    }]);
+    assert_eq!(pixmap.pixel(15, 15), Color::BLUE, "inside both: image");
+    assert_eq!(pixmap.pixel(25, 25), Color::WHITE, "box, no image");
+    assert_eq!(pixmap.pixel(35, 15), Color::WHITE, "outside box");
+    assert!(
+        items.iter().any(|item| matches!(
+            item,
+            DisplayItem::PushClip { rect } if *rect == Rect::new(10.0, 10.0, 20.0, 20.0)
+        )),
+        "none clips the image to the content box"
+    );
+}
