@@ -12,6 +12,6 @@ WPT ab2ef95 — 531/531 subtests pasados (dirs: 4)
 | NOTRUN | 0 |
 | harness_error | 0 |
 
-Epoch: WPT commit `ab2ef95d3a7c512a6e7321688c80e428086af426` · manifest SHA-256 `3e74b4bff2b1907441b4779ea237466b1aae2e49007a3444e28d9ca16f9ad06f`.
+Epoch: WPT commit `ab2ef95d3a7c512a6e7321688c80e428086af426` · manifest SHA-256 `2bd5439fa2862b5afe0d97f25d893e697df3d4c7a2bcc88d831c20ca7f1b7e65`.
 
 Scope: 10 vendored WPT fixtures (531 executed subtests, 4 dirs); NOT full WPT conformance. Capability coverage and WPT conformance are separate metrics; they are never merged into one percentage.

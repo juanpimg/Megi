@@ -2,7 +2,7 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "3e74b4bff2b1907441b4779ea237466b1aae2e49007a3444e28d9ca16f9ad06f"
+    "manifest_sha256": "2bd5439fa2862b5afe0d97f25d893e697df3d4c7a2bcc88d831c20ca7f1b7e65"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
