@@ -127,6 +127,7 @@ jobs:
           tools.test_wp_dashboard
           tools.test_vendor_wpt
           tools.test_wpt_gate
+          tools.test_check_docs_links
           tools.test_update_progress
 
   quality:

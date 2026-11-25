@@ -60,6 +60,11 @@ class ToolsTestListTests(unittest.TestCase):
         # that is not listed never protects merges, however green it is locally.
         self.assertIn("tools.test_audit_negative_matrix", CI.read_text(encoding="utf-8"))
 
+    def test_docs_link_tests_run_in_ci(self):
+        # The docs link regression module must be listed in the explicit unittest
+        # list (#1402): otherwise a passing local test never protects merges.
+        self.assertIn("tools.test_check_docs_links", CI.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
