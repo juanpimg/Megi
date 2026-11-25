@@ -182,7 +182,7 @@ crates/browser/src/window/input.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/window/presentation.rs	325	src	F2	juanpimg	2026-11-24	covered	#1724	document-field IME preedit status helper
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/shortcuts.rs	220	src	F2			pending		
+crates/browser/src/window/shortcuts.rs	220	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
 crates/browser/src/window/tests.rs	394	src	F2	juanpimg	2026-11-24	covered	#1724	TDD tests for document IME preedit status
 crates/browser/src/window/ui.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/worker.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -230,7 +230,7 @@ crates/core/src/query/lookup.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/core/src/query/mod.rs	12	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mutation.rs	398	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/text.rs	234	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/terminal_text.rs	143	src	F2			pending		
+crates/core/src/terminal_text.rs	143	src	F2	jp	2026-11-25	covered	#2290	Re-read after Phase 0 cherry-pick
 crates/core/src/unit_tests/arena_core.rs	477	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_mutations.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_traversal.rs	498	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
