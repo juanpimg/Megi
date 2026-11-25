@@ -204,6 +204,15 @@ En cumplimiento estricto de la directiva operativa del proyecto:
 
 **Decisión ACEPTADA (Fase 6, JS, 2026-11-10)**: motor **Boa `boa_engine` 0.22.x** (pure Rust, MSRV 1.91, Unlicense OR MIT → se elige MIT), en `crates/js`, con **feature `js` encendida por defecto** y **alcance completo** (bindings DOM, eventos, timers, CSSOM, `querySelector`). El build/CI por defecto incluye JS; se mantiene un job `--no-default-features` para el build mínimo std-only. Diseño de bindings y plan WP-6.1–6.7 en [`JAVASCRIPT-STRATEGY.md`](JAVASCRIPT-STRATEGY.md) (ADR-001). `crates/js` existe desde WP-6.1; su integración en `render` (WP-6.2 host) ejecuta los scripts del documento y corre el event loop presupuestado, `html`/`test_harness` ejecutan los scripts parser-inserted (WP-6.4, árbol 3.904/3.904) y WP-A/WP-B aportan eventos/timers y el DOM de WP-B; el núcleo DOM/layout/paint sigue siendo de Megi.
 
+**Decisión ACEPTADA (ADR-006, 2026-11-25)**: los bindings de Canvas 2D leen el
+estado del realm únicamente a través de `crate::canvas::ops` (`CanvasOps`), un
+slot copiable de punteros a función instalado en el `HostDefined` de Boa. `Host`
+sigue siendo el único dueño del estado, pero `canvas.rs`, `canvas_paths.rs` y
+`canvas_support.rs` ya no borrowan `Host` ni llaman a `with_context_host`/
+`this_node`; así se rompe el borde `canvas → host → runtime → canvas` del SCC
+auditado sin cambiar el DAG de crates. Detalle y alternativas en
+[`CANVAS-OPS-BOUNDARY.md`](CANVAS-OPS-BOUNDARY.md).
+
 ### 3.2 Política de Codificación PNG (decisión D3, Fase 4)
 
 La auditoría de Fase 4 detectó que la salida de imagen era únicamente PPM. Se evaluaron tres opciones para producir PNG:

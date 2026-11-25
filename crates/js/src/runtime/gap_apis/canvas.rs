@@ -1,5 +1,6 @@
-use super::canvas_support::{canvas_context_node, canvas_number};
+use super::canvas_support::{canvas_context_node, canvas_element_node, canvas_number};
 use super::*;
+use crate::canvas::ops as canvas_ops;
 
 /// Rejects a JS-supplied `ImageData.data.length` that is not a bounded integer count (#1774).
 /// `1e30` cast to `u32` saturates and would drive billions of native loop iterations.
@@ -22,30 +23,17 @@ pub(crate) fn canvas_get_context(
     if kind != "2d" {
         return Ok(JsValue::null());
     }
-    let node = this_node(this, context)?;
-    let (width, height) = with_context_host(context, |host| {
-        let document = &host.document;
-        let element = document.try_node(node).and_then(|n| n.as_element());
-        let dim = |name: &str, default: u32| -> u32 {
-            element
-                .and_then(|e| e.get_attribute(name))
-                .and_then(|v| v.trim().parse::<u32>().ok())
-                .unwrap_or(default)
-                .min(crate::canvas::MAX_CANVAS_DIM)
-        };
-        (dim("width", 300), dim("height", 150))
-    })
-    .ok_or_else(|| js_error("no active JavaScript host"))?;
-    let surface_ok = with_context_host(context, |host| {
-        host.canvas_store.surface_for(node, width, height).is_some()
-    })
-    .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let Some(node) = canvas_element_node(this, context) else {
+        return Err(js_error("invalid canvas element"));
+    };
+    let (width, height) = canvas_ops::dimensions(context, node)
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let surface_ok = canvas_ops::ensure_surface(context, node, width, height);
     if !surface_ok {
         return Err(js_error("canvas surface exceeds size cap"));
     }
-    let handle = with_context_host(context, |host| host.handle_for(node))
-        .ok_or_else(|| js_error("no active JavaScript host"))?
-        .map_err(js_error)?;
+    let handle = canvas_ops::handle_for(context, node)
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
 
     let mut init = ObjectInitializer::new(context);
     init.property(
@@ -109,9 +97,7 @@ pub(crate) fn canvas_begin_path(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| s.begin_path())
-    });
+    canvas_ops::with_surface(context, node, |s| s.begin_path());
     Ok(JsValue::undefined())
 }
 
@@ -127,10 +113,7 @@ pub(crate) fn canvas_arc(
     let start = canvas_number(args, 3, context)?;
     let end = canvas_number(args, 4, context)?;
     let ccw = args.get(5).is_some_and(JsValue::to_boolean);
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.arc(x, y, radius, start, end, ccw))
-    });
+    canvas_ops::with_surface(context, node, |s| s.arc(x, y, radius, start, end, ccw));
     Ok(JsValue::undefined())
 }
 
@@ -140,9 +123,7 @@ pub(crate) fn canvas_fill(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| s.fill_path())
-    });
+    canvas_ops::with_surface(context, node, |s| s.fill_path());
     Ok(JsValue::undefined())
 }
 
@@ -160,10 +141,7 @@ pub(crate) fn canvas_fill_text(
         .transpose()?
         .map(|s| s.to_std_string_escaped())
         .unwrap_or_default();
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.fill_text(x, y, &text))
-    });
+    canvas_ops::with_surface(context, node, |s| s.fill_text(x, y, &text));
     Ok(JsValue::undefined())
 }
 
@@ -191,9 +169,8 @@ pub(crate) fn canvas_fill_rect(
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.fill_rect(rect.0, rect.1, rect.2, rect.3))
+    canvas_ops::with_surface(context, node, |s| {
+        s.fill_rect(rect.0, rect.1, rect.2, rect.3)
     });
     Ok(JsValue::undefined())
 }
@@ -205,9 +182,8 @@ pub(crate) fn canvas_clear_rect(
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.clear_rect(rect.0, rect.1, rect.2, rect.3))
+    canvas_ops::with_surface(context, node, |s| {
+        s.clear_rect(rect.0, rect.1, rect.2, rect.3)
     });
     Ok(JsValue::undefined())
 }
@@ -219,9 +195,8 @@ pub(crate) fn canvas_stroke_rect(
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let rect = canvas_rect_args(args, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.stroke_rect(rect.0, rect.1, rect.2, rect.3))
+    canvas_ops::with_surface(context, node, |s| {
+        s.stroke_rect(rect.0, rect.1, rect.2, rect.3)
     });
     Ok(JsValue::undefined())
 }
@@ -244,13 +219,8 @@ pub(crate) fn canvas_fill_style_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let css = with_context_host(context, |host| {
-        host.canvas_store
-            .get(node)
-            .map(|s| crate::canvas::rgba_to_css(s.fill_style))
-    })
-    .flatten()
-    .unwrap_or_else(|| "#000000".to_owned());
+    let css = canvas_ops::read_surface(context, node, |s| crate::canvas::rgba_to_css(s.fill_style))
+        .unwrap_or_else(|| "#000000".to_owned());
     Ok(JsValue::from(js_string!(css)))
 }
 
@@ -270,12 +240,9 @@ pub(crate) fn canvas_stroke_style_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let css = with_context_host(context, |host| {
-        host.canvas_store
-            .get(node)
-            .map(|s| crate::canvas::rgba_to_css(s.stroke_style))
+    let css = canvas_ops::read_surface(context, node, |s| {
+        crate::canvas::rgba_to_css(s.stroke_style)
     })
-    .flatten()
     .unwrap_or_else(|| "#000000".to_owned());
     Ok(JsValue::from(js_string!(css)))
 }
@@ -297,11 +264,7 @@ pub(crate) fn canvas_global_alpha_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let alpha = with_context_host(context, |host| {
-        host.canvas_store.get(node).map(|s| s.global_alpha)
-    })
-    .flatten()
-    .unwrap_or(1.0);
+    let alpha = canvas_ops::read_surface(context, node, |s| s.global_alpha).unwrap_or(1.0);
     Ok(JsValue::from(f64::from(alpha)))
 }
 
@@ -317,10 +280,7 @@ pub(crate) fn canvas_global_alpha_set(
         return Ok(JsValue::undefined());
     };
     if raw.is_finite() && (0.0..=1.0).contains(&raw) {
-        with_context_host(context, |host| {
-            host.canvas_store
-                .with_surface_mut(node, |s| s.global_alpha = raw as f32)
-        });
+        canvas_ops::with_surface(context, node, |s| s.global_alpha = raw as f32);
     }
     Ok(JsValue::undefined())
 }
@@ -335,12 +295,7 @@ pub(crate) fn canvas_get_image_data(
     let y = args.get(1).and_then(|v| v.as_number()).unwrap_or(0.0) as i64;
     let w = args.get(2).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
     let h = args.get(3).and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
-    let data = with_context_host(context, |host| {
-        host.canvas_store
-            .get(node)
-            .and_then(|s| s.get_image_data(x, y, w, h))
-    })
-    .flatten();
+    let data = canvas_ops::read_surface(context, node, |s| s.get_image_data(x, y, w, h)).flatten();
     let Some(data) = data else {
         return Ok(JsValue::null());
     };
@@ -394,15 +349,13 @@ pub(crate) fn canvas_put_image_data(
         return Ok(JsValue::undefined());
     };
     let obj = data_obj.as_ref().expect("obj");
-    let fits_surface = with_context_host(context, |host| {
-        host.canvas_store.get(node).is_some_and(|s| {
-            dx >= 0
-                && dy >= 0
-                && (dx as u64) + u64::from(w) <= u64::from(s.width)
-                && (dy as u64) + u64::from(h) <= u64::from(s.height)
-                && w > 0
-                && h > 0
-        })
+    let fits_surface = canvas_ops::read_surface(context, node, |s| {
+        dx >= 0
+            && dy >= 0
+            && (dx as u64) + u64::from(w) <= u64::from(s.width)
+            && (dy as u64) + u64::from(h) <= u64::from(s.height)
+            && w > 0
+            && h > 0
     })
     .unwrap_or(false);
     if !fits_surface {
@@ -420,11 +373,9 @@ pub(crate) fn canvas_put_image_data(
                 .map(|n| n.clamp(0.0, 255.0) as u8)
                 .collect(),
         };
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| {
-            s.operations = s.operations.saturating_add(len as u64);
-            let _ = s.put_image_data(dx, dy, w, h, &bytes);
-        })
+    canvas_ops::with_surface(context, node, |s| {
+        s.operations = s.operations.saturating_add(len as u64);
+        let _ = s.put_image_data(dx, dy, w, h, &bytes);
     });
     Ok(JsValue::undefined())
 }

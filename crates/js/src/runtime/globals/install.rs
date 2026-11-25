@@ -101,6 +101,48 @@ pub(crate) fn install_globals(context: &mut Context) -> Result<(), JsError> {
     }
     crate::events::install(context)?;
     install_browser_features(context)?;
+    // Canvas 2D bindings reach realm state through this narrow capability slot
+    // instead of borrowing `Host` from every native callback. The closures are
+    // non-capturing function pointers; `Host` stays the single owner of state.
+    crate::canvas::ops::CanvasOps::install(
+        context,
+        crate::canvas::ops::CanvasOps {
+            resolve_handle: |context, handle| {
+                host_ref(context)
+                    .ok()
+                    .and_then(|host| host.node_for_handle(handle).ok())
+            },
+            dimensions: |context, node| {
+                let host = host_ref(context).ok()?;
+                let element = host.document.try_node(node)?.as_element()?;
+                let dimension = |name: &str, default: u32| -> u32 {
+                    element
+                        .get_attribute(name)
+                        .and_then(|value| value.trim().parse::<u32>().ok())
+                        .unwrap_or(default)
+                        .min(crate::canvas::MAX_CANVAS_DIM)
+                };
+                Some((dimension("width", 300), dimension("height", 150)))
+            },
+            ensure_surface: |context, node, width, height| {
+                with_context_host(context, |host| {
+                    host.canvas_store.surface_for(node, width, height).is_some()
+                })
+                .unwrap_or(false)
+            },
+            handle_for: |context, node| {
+                with_context_host(context, |host| host.handle_for(node)).and_then(Result::ok)
+            },
+            with_surface: |context, node, f| {
+                let _ =
+                    with_context_host(context, |host| host.canvas_store.with_surface_mut(node, f));
+            },
+            snapshot: |context, node| {
+                with_context_host(context, |host| host.canvas_store.snapshot_surface(node))
+                    .flatten()
+            },
+        },
+    );
     install_gap_apis(context)?;
     crate::xhr::install_xhr(context)?;
     crate::websocket::install(context).map_err(|error| JsError::Internal(error.to_string()))?;

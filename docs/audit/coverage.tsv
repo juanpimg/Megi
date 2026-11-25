@@ -624,8 +624,9 @@ crates/image/tests/webp_tests/lossless.rs	87	test	F1	wave-max-mod	2026-11-19	cov
 crates/image/tests/webp_tests/lossy.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/tests/webp_tests/main.rs	173	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/Cargo.toml	23	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/canvas.rs	454	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
+crates/js/src/canvas.rs	455	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/canvas/color.rs	18	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
+crates/js/src/canvas/ops.rs	201	src	F2	arch-agent	2026-11-25	covered	ADR-006	Read line by line before marking
 crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/state.rs	393	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/canvas/tests.rs	172	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
@@ -667,9 +668,9 @@ crates/js/src/runtime/frames/bridge.rs	350	src	F2	wave-max-mod	2026-11-19	covere
 crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/state.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis.rs	33	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas.rs	446	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas_paths.rs	433	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
-crates/js/src/runtime/gap_apis/canvas_support.rs	37	src	F2	integration	2026-11-25	covered	#2295	read after rebase
+crates/js/src/runtime/gap_apis/canvas.rs	397	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+crates/js/src/runtime/gap_apis/canvas_paths.rs	372	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+crates/js/src/runtime/gap_apis/canvas_support.rs	51	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -680,7 +681,7 @@ crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/features.rs	673	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/src/runtime/globals/install.rs	139	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/globals/install.rs	181	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/location_storage.rs	382	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1333,9 +1334,10 @@ docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#224
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	99	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ARCHITECTURE.md	219	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/ARCHITECTURE.md	228	docs	F3	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
+docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/DESLOP-AUDIT.md	61	docs	F3	opencode-agent	2026-11-25	covered	#audit	read line by line
 docs/FUZZING.md	300	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned

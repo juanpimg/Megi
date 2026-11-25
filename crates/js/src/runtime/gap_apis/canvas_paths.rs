@@ -3,9 +3,10 @@
 //! Plan: docs/superpowers/plans/2026-11-24-engine-depth-plan.md §Task 6.
 //! Spec: WHATWG HTML §4.12.5.1.
 
-use super::canvas_support::{canvas_context_node, canvas_number};
+use super::canvas_support::{canvas_context_node, canvas_element_node, canvas_number};
 use super::*;
 use crate::canvas::PaintStyle;
+use crate::canvas::ops as canvas_ops;
 
 /// Registers extended 2D path, transform, gradient, and `drawImage` methods on the builder.
 pub(crate) fn register_canvas_2d_methods(init: &mut ObjectInitializer<'_>) {
@@ -69,10 +70,8 @@ pub(crate) fn set_paint_style(
         && grad_num >= 0.0
     {
         let grad_id = grad_num as usize;
-        with_context_host(context, |host| {
-            host.canvas_store.with_surface_mut(node, |s| {
-                s.set_paint(is_fill, PaintStyle::Gradient(grad_id))
-            });
+        canvas_ops::with_surface(context, node, |s| {
+            s.set_paint(is_fill, PaintStyle::Gradient(grad_id));
         });
         return Ok(());
     }
@@ -81,9 +80,8 @@ pub(crate) fn set_paint_style(
         .map(|s| s.to_std_string_escaped())
         .map_err(|error| js_error(error.to_string()))?;
     if let Some(color) = crate::canvas::Rgba::parse(&text) {
-        with_context_host(context, |host| {
-            host.canvas_store
-                .with_surface_mut(node, |s| s.set_paint(is_fill, PaintStyle::Color(color)));
+        canvas_ops::with_surface(context, node, |s| {
+            s.set_paint(is_fill, PaintStyle::Color(color));
         });
     }
     Ok(())
@@ -93,10 +91,7 @@ fn canvas_move_to(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let node = canvas_context_node(this, context)?;
     let x = canvas_number(args, 0, context)?;
     let y = canvas_number(args, 1, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.move_to(x, y))
-    });
+    canvas_ops::with_surface(context, node, |s| s.move_to(x, y));
     Ok(JsValue::undefined())
 }
 
@@ -104,10 +99,7 @@ fn canvas_line_to(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     let node = canvas_context_node(this, context)?;
     let x = canvas_number(args, 0, context)?;
     let y = canvas_number(args, 1, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.line_to(x, y))
-    });
+    canvas_ops::with_surface(context, node, |s| s.line_to(x, y));
     Ok(JsValue::undefined())
 }
 
@@ -117,9 +109,7 @@ fn canvas_close_path(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| s.close_path())
-    });
+    canvas_ops::with_surface(context, node, |s| s.close_path());
     Ok(JsValue::undefined())
 }
 
@@ -133,10 +123,7 @@ fn canvas_quadratic_curve_to(
     let cpy = canvas_number(args, 1, context)?;
     let x = canvas_number(args, 2, context)?;
     let y = canvas_number(args, 3, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.quadratic_curve_to(cpx, cpy, x, y))
-    });
+    canvas_ops::with_surface(context, node, |s| s.quadratic_curve_to(cpx, cpy, x, y));
     Ok(JsValue::undefined())
 }
 
@@ -152,9 +139,8 @@ fn canvas_bezier_curve_to(
     let cp2y = canvas_number(args, 3, context)?;
     let x = canvas_number(args, 4, context)?;
     let y = canvas_number(args, 5, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.bezier_curve_to(cp1x, cp1y, cp2x, cp2y, x, y))
+    canvas_ops::with_surface(context, node, |s| {
+        s.bezier_curve_to(cp1x, cp1y, cp2x, cp2y, x, y)
     });
     Ok(JsValue::undefined())
 }
@@ -165,35 +151,25 @@ fn canvas_rect(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
     let y = canvas_number(args, 1, context)?;
     let w = canvas_number(args, 2, context)?;
     let h = canvas_number(args, 3, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.rect_path(x, y, w, h))
-    });
+    canvas_ops::with_surface(context, node, |s| s.rect_path(x, y, w, h));
     Ok(JsValue::undefined())
 }
 
 fn canvas_stroke(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.stroke_path())
-    });
+    canvas_ops::with_surface(context, node, |s| s.stroke_path());
     Ok(JsValue::undefined())
 }
 
 fn canvas_save(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| s.save())
-    });
+    canvas_ops::with_surface(context, node, |s| s.save());
     Ok(JsValue::undefined())
 }
 
 fn canvas_restore(this: &JsValue, _args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| s.restore())
-    });
+    canvas_ops::with_surface(context, node, |s| s.restore());
     Ok(JsValue::undefined())
 }
 
@@ -201,10 +177,7 @@ fn canvas_translate(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
     let node = canvas_context_node(this, context)?;
     let tx = canvas_number(args, 0, context)?;
     let ty = canvas_number(args, 1, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.translate(tx, ty))
-    });
+    canvas_ops::with_surface(context, node, |s| s.translate(tx, ty));
     Ok(JsValue::undefined())
 }
 
@@ -212,20 +185,14 @@ fn canvas_scale(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     let node = canvas_context_node(this, context)?;
     let sx = canvas_number(args, 0, context)?;
     let sy = canvas_number(args, 1, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.scale(sx, sy))
-    });
+    canvas_ops::with_surface(context, node, |s| s.scale(sx, sy));
     Ok(JsValue::undefined())
 }
 
 fn canvas_rotate(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
     let angle = canvas_number(args, 0, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.rotate(angle))
-    });
+    canvas_ops::with_surface(context, node, |s| s.rotate(angle));
     Ok(JsValue::undefined())
 }
 
@@ -237,10 +204,7 @@ fn canvas_transform(this: &JsValue, args: &[JsValue], context: &mut Context) -> 
     let d = canvas_number(args, 3, context)?;
     let e = canvas_number(args, 4, context)?;
     let f = canvas_number(args, 5, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.concat_transform(a, b, c, d, e, f))
-    });
+    canvas_ops::with_surface(context, node, |s| s.concat_transform(a, b, c, d, e, f));
     Ok(JsValue::undefined())
 }
 
@@ -256,10 +220,7 @@ fn canvas_set_transform(
     let d = canvas_number(args, 3, context)?;
     let e = canvas_number(args, 4, context)?;
     let f = canvas_number(args, 5, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.set_transform(a, b, c, d, e, f))
-    });
+    canvas_ops::with_surface(context, node, |s| s.set_transform(a, b, c, d, e, f));
     Ok(JsValue::undefined())
 }
 
@@ -269,10 +230,7 @@ fn canvas_reset_transform(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.reset_transform())
-    });
+    canvas_ops::with_surface(context, node, |s| s.reset_transform());
     Ok(JsValue::undefined())
 }
 
@@ -282,11 +240,7 @@ fn canvas_line_width_get(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let node = canvas_context_node(this, context)?;
-    let lw = with_context_host(context, |host| {
-        host.canvas_store.get(node).map(|s| s.line_width)
-    })
-    .flatten()
-    .unwrap_or(1.0);
+    let lw = canvas_ops::read_surface(context, node, |s| s.line_width).unwrap_or(1.0);
     Ok(JsValue::from(lw))
 }
 
@@ -299,10 +253,7 @@ fn canvas_line_width_set(
     let Some(raw) = args.first().and_then(|v| v.as_number()) else {
         return Ok(JsValue::undefined());
     };
-    with_context_host(context, |host| {
-        host.canvas_store
-            .with_surface_mut(node, |s| s.set_line_width(raw))
-    });
+    canvas_ops::with_surface(context, node, |s| s.set_line_width(raw));
     Ok(JsValue::undefined())
 }
 
@@ -316,18 +267,12 @@ fn canvas_create_linear_gradient(
     let y0 = canvas_number(args, 1, context)?;
     let x1 = canvas_number(args, 2, context)?;
     let y1 = canvas_number(args, 3, context)?;
-    let handle = with_context_host(context, |host| host.handle_for(node))
-        .ok_or_else(|| js_error("no active JavaScript host"))?
-        .map_err(js_error)?;
-    let grad_id = with_context_host(context, |host| {
-        let mut created = None;
-        host.canvas_store.with_surface_mut(node, |s| {
-            created = s.create_linear_gradient(x0, y0, x1, y1);
-        });
-        created
-    })
-    .flatten()
-    .ok_or_else(|| js_error("canvas gradient limit or invalid coordinates"))?;
+    let handle = canvas_ops::handle_for(context, node)
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let grad_id =
+        canvas_ops::surface_value(context, node, |s| s.create_linear_gradient(x0, y0, x1, y1))
+            .flatten()
+            .ok_or_else(|| js_error("canvas gradient limit or invalid coordinates"))?;
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("__megi_canvas_node"),
@@ -367,10 +312,8 @@ fn canvas_gradient_add_color_stop(
     let Some(color) = crate::canvas::Rgba::parse(&color_str) else {
         return Err(js_error("invalid gradient color stop"));
     };
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(node, |s| {
-            let _ = s.add_gradient_stop(grad_id, offset, color);
-        });
+    canvas_ops::with_surface(context, node, |s| {
+        let _ = s.add_gradient_stop(grad_id, offset, color);
     });
     Ok(JsValue::undefined())
 }
@@ -380,12 +323,10 @@ fn canvas_draw_image(this: &JsValue, args: &[JsValue], context: &mut Context) ->
     let Some(image_arg) = args.first() else {
         return Ok(JsValue::undefined());
     };
-    let Ok(src_node) = this_node(image_arg, context) else {
+    let Some(src_node) = canvas_element_node(image_arg, context) else {
         return Ok(JsValue::undefined());
     };
-    let Some(src_snapshot) =
-        with_context_host(context, |host| host.canvas_store.snapshot_surface(src_node)).flatten()
-    else {
+    let Some(src_snapshot) = canvas_ops::snapshot(context, src_node) else {
         return Ok(JsValue::undefined());
     };
     let sw_full = f64::from(src_snapshot.width);
@@ -424,10 +365,8 @@ fn canvas_draw_image(this: &JsValue, args: &[JsValue], context: &mut Context) ->
             sh_full,
         )
     };
-    with_context_host(context, |host| {
-        host.canvas_store.with_surface_mut(dst_node, |dst| {
-            dst.draw_surface(&src_snapshot, sx, sy, sw, sh, dx, dy, dw, dh)
-        });
+    canvas_ops::with_surface(context, dst_node, |dst| {
+        dst.draw_surface(&src_snapshot, sx, sy, sw, sh, dx, dy, dw, dh);
     });
     Ok(JsValue::undefined())
 }
