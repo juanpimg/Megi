@@ -172,6 +172,7 @@ pub(crate) fn render_url_with_context(
     // Push promises received while fetching the document belong to the same load session:
     // transfer them to the subresource loader that serves images/stylesheets/scripts.
     loader.absorb_pushes_from(&mut document_loader);
+    loader.absorb_pool_from(&mut document_loader);
     let fetch_time = fetch_start.elapsed();
     if loaded.bytes.len() > options.max_document_bytes {
         return Err(RenderError::DocumentTooLarge {
@@ -307,7 +308,11 @@ fn load_document(
                     Ok(())
                 })?
             } else {
-                megi_net::fetch(url, fetch_options)?
+                // Warm the navigation loader's keep-alive pool: the pre-script stylesheet
+                // fetch is on the critical path and must not pay a fresh DNS/TCP/TLS
+                // handshake for a connection the document just opened. Redirect hops share
+                // the pool so the connection that matters is the final navigation's.
+                loader.fetch_navigation_pooled(url)?
             };
             // HTTP/2 server pushes received while fetching the document are part of the
             // same load session: cache them for subresource loads (R177).

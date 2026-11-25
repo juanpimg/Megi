@@ -307,6 +307,22 @@ impl ResourceLoader {
         self.push_cache.contains_key(&url.cache_key())
     }
 
+    /// Fetches a navigation GET (following redirects) with pooled connections.
+    ///
+    /// The final hop's keep-alive connection stays in this loader's pool, so a caller can
+    /// transfer the warm pool to the loader that serves the page's subresources. Keeping the
+    /// pool behind this method avoids exposing the connection store as a field.
+    pub fn fetch_navigation_pooled(&mut self, url: &Url) -> Result<Response, FetchError> {
+        crate::http::fetch_pooled_following_redirects(url, &self.options, &mut self.h1_pool)
+    }
+
+    /// Transfers the warmed keep-alive pool of `other` into this loader. Both loaders belong
+    /// to one load session (document + subresources), so a connection established by the
+    /// navigation request is reusable by the CSS/script/image fetches that follow it.
+    pub fn absorb_pool_from(&mut self, other: &mut ResourceLoader) {
+        self.h1_pool = std::mem::take(&mut other.h1_pool);
+    }
+
     /// Number of server-pushed resources dropped because a push cap was exceeded.
     pub const fn pushed_discarded(&self) -> usize {
         self.pushed_discarded

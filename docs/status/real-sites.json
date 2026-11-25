@@ -16,7 +16,7 @@
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1125.6,
+      "time_ms": 227.3,
       "issue": 0,
       "error": "",
       "png": "real-sites/example.png",
@@ -28,18 +28,15 @@
       "note": "CSS/images desde CDN",
       "source": "https://www.rust-lang.org",
       "mode": "live",
-      "result": "DEGRADADO",
+      "result": "PASS",
       "display_items": 427,
       "element_count": 197,
       "body_text": "\n    \n      \n        \n          \n        \n      \n    \n      \n        Install\n        Learn\n        Playground\n        Tools\n        Governance\n        Funding\n        Community\n        Blog\n      \n    \n      \n        \n          Language\n          \n            English (en-US)\n            Español (es)\n            Français (fr)\n            Italiano (it)\n            日本語 (ja)\n            Português (pt-BR)\n            Русский (ru)\n            Türkçe (tr)\n            简体中文 (zh-CN)\n            正體中文 (zh-TW)\n         ",
       "status": 200,
-      "warnings": [
-        "performance budget: total 9581 > 3s",
-        "performance budget: styles_pre_script 372 ms > 200ms"
-      ],
+      "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 9591.7,
+      "time_ms": 1652.6,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
@@ -51,18 +48,15 @@
       "note": "Solapes conocidos en la UI Vector",
       "source": "https://es.wikipedia.org/wiki/Rust",
       "mode": "live",
-      "result": "DEGRADADO",
+      "result": "PASS",
       "display_items": 421,
       "element_count": 521,
       "body_text": "\nIr al contenido\n\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\n\t\n\t\n\nMenú principal\n\t\n\t\n\n\n\t\t\t\t\n\t\t\n\n\t\n\tMenú principal\n\tmover a la barra lateral\n\tocultar\n\n\n\t\n\n\t\n\t\tNavegación\n\t\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\tPortadaPortal de la comunidadActualidadCambios recientesPáginas nuevasPágina aleatoriaAyudaNotificar un errorPáginas especiales\n\t\t\n\t\t\n\t\n\n\n\t\n\n\n\t\t\t\t\n\n\t\n\n\n\t\t\n\t\t\t\n\n\t\n\t\n\t\t\n\t\t\n\t\n\n\n\t\t\n\t\t\n\t\t\t\n\n\t\n\nBuscar\n\t\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\n\t\t\t\tBuscar\n\t\t\t\n\t\t\n\t\n\n\n\t\t\t\n\t\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\t\t\n\n\t\n\t\n\nAparienci",
       "status": 200,
-      "warnings": [
-        "performance budget: styles_pre_script 304 ms > 200ms",
-        "performance budget: images 537 ms > 500ms"
-      ],
+      "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1170.3,
+      "time_ms": 778.6,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
@@ -75,21 +69,20 @@
       "source": "https://news.ycombinator.com",
       "mode": "live",
       "result": "DEGRADADO",
-      "display_items": 2758,
-      "element_count": 798,
-      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)129 points by E-Reverance 1 hour ago  | hide | 32 comments2.Ternary Bonsai 2.5 27B (prismml.com)355 points by b0m 6 hours ago  | hide | 121 comments3.PenGPT: A Generative Transformer for Handwriting and Sketches (greydanus.github.io)62 points by smusamashah 1 hour ago  | hide | 7 comments4.GPT-6 models demonstrate intrinsic protein-design capabilities (openai.com)181 points by acos",
+      "display_items": 2790,
+      "element_count": 795,
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Windows Loudness Equalization, reverse-engineered and ported to PipeWire (github.com/xoxorwr)47 points by ThrowNotAway 56 minutes ago  | hide | 8 comments2.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)727 points by E-Reverance 11 hours ago  | hide | 405 comments3.Button Sounds – collection of professionally-recorded button clicks and presses (joshwcomeau.com)483 points by gaurang_tandon 9 hours ago  | hide | 72 comments4.Mode",
       "status": 200,
       "warnings": [
-        "performance budget: styles_pre_script 742 ms > 200ms",
-        "performance budget: images 728 ms > 500ms"
+        "performance budget: images 757 ms > 500ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 2725.0,
+      "time_ms": 2062.9,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "840fb575b4dd180164901c2a92d02573"
+      "png_md5": "818d994541e948bc374f3035c3a7075a"
     }
   ]
 }

@@ -355,7 +355,7 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use pool::{H1Pool, fetch_pooled};
+pub use pool::{H1Pool, fetch_pooled, fetch_pooled_following_redirects};
 pub use preflight::preflight;
 pub use request::{
     fetch, fetch_with_headers, fetch_with_method, fetch_with_request_body,

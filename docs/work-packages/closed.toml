@@ -8,3 +8,13 @@ id = "WP-DEPTH-m4-01"
 metric = "depth_closed"
 commit = "96f18498"
 
+["WP-SITE-wikipedia"]
+id = "WP-SITE-wikipedia"
+metric = "sites_passed 1->3: es.wikipedia.org PASS (styles_pre_script 298->156ms A/B, budget cleared)"
+commit = "2146c289"
+
+["WP-SITE-rust"]
+id = "WP-SITE-rust"
+metric = "sites_passed 1->3: rust-lang.org PASS (styles_pre_script 110->78ms A/B, budget cleared)"
+commit = "2146c289"
+

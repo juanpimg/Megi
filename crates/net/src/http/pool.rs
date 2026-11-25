@@ -10,7 +10,7 @@ use crate::url::Scheme;
 
 use super::chunked::ConnReader;
 use super::headers::validate_request_header;
-use super::redirect::is_redirect;
+use super::redirect::{is_redirect, resolve_redirect_target};
 use super::request::{lock_jar, url_basic_authorization};
 use super::response::{decode_response_body, parse_head_verbose, read_body};
 use super::transport::{
@@ -111,6 +111,30 @@ fn origin_key(url: &Url) -> String {
     )
 }
 
+/// Fetches a navigation GET (following redirects) while keeping each hop's keep-alive
+/// connection in `pool`.
+///
+/// Every hop uses the pooled GET path, so an idle connection is reused when available and the
+/// connection earned by a redirect hop stays in the pool for the next hop. The final hop's
+/// connection is left in the pool so the caller can transfer it to the loader that serves
+/// CSS/scripts/images (see [`crate::ResourceLoader::absorb_pool_from`]). Redirect semantics
+/// (limit, mixed content, HSTS) mirror the buffered [`fetch`] path.
+pub fn fetch_pooled_following_redirects(
+    url: &Url,
+    options: &FetchOptions,
+    pool: &mut H1Pool,
+) -> Result<Response, FetchError> {
+    let mut current = url.clone();
+    for _ in 0..=options.max_redirects {
+        let response = fetch_pooled_inner(&current, options, pool, true)?;
+        if !is_redirect(response.status) {
+            return Ok(response);
+        }
+        current = resolve_redirect_target(&current, &response.headers, false)?;
+    }
+    Err(FetchError::TooManyRedirects)
+}
+
 /// Fetches a plain-HTTP GET reusing an idle connection from `pool` when possible.
 ///
 /// MVP semantics (documented): only `http:` GET requests without cookies/range/referrer/
@@ -122,6 +146,15 @@ pub fn fetch_pooled(
     url: &Url,
     options: &FetchOptions,
     pool: &mut H1Pool,
+) -> Result<Response, FetchError> {
+    fetch_pooled_inner(url, options, pool, false)
+}
+
+fn fetch_pooled_inner(
+    url: &Url,
+    options: &FetchOptions,
+    pool: &mut H1Pool,
+    return_redirect_hop: bool,
 ) -> Result<Response, FetchError> {
     // Mixed-content first, then HSTS upgrade (both may rewrite the URL before the socket opens).
     let checked_url;
@@ -299,7 +332,7 @@ pub fn fetch_pooled(
                         &header.1,
                     );
                 }
-                if is_redirect(status) {
+                if is_redirect(status) && !return_redirect_hop {
                     match options.redirect_mode {
                         RedirectMode::Follow => {
                             return Err(FetchError::InvalidResponse(
