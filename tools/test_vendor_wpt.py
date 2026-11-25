@@ -143,6 +143,37 @@ class VendorWptTest(unittest.TestCase):
         )
         self.assertEqual(vendor_wpt.check_manifest(self.root), [])
 
+    def test_import_files_records_webgl_fixture_and_support(self) -> None:
+        """M6#4: the WebGL conformance case and its helper are adopted verbatim."""
+        source = self.root / "wpt-source-webgl"
+        source.mkdir()
+        (source / "LICENSE").write_text("BSD 3-Clause\n", encoding="utf-8")
+        fixture = source / "webgl/bufferSubData.html"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"<title>bufferSubData</title>\n")
+        helper = source / "webgl/common.js"
+        helper.write_bytes(b"function getGl() {}\n")
+        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "-c", "user.email=test@example.invalid",
+             "-c", "user.name=Test", "commit", "-qm", "webgl fixture"],
+            check=True,
+        )
+        errors = vendor_wpt.import_files(
+            source,
+            PIN,
+            ["webgl/bufferSubData.html", "webgl/common.js"],
+            self.root,
+            verify_commit=False,
+        )
+        self.assertEqual(errors, [])
+        entries = {entry["path"]: entry for entry in vendor_wpt.load_manifest(self.root)}
+        self.assertEqual(entries["webgl/bufferSubData.html"]["kind"], "testharness")
+        self.assertEqual(entries["webgl/bufferSubData.html"]["subtest_count_expected"], 1)
+        self.assertEqual(entries["webgl/common.js"]["kind"], "support")
+        self.assertEqual(vendor_wpt.check_manifest(self.root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,6 +96,7 @@ SUPPORT_PATHS = {
     "custom-elements/resources/my-custom-element-html-document.html": "support document for custom-elements fixtures",
     "custom-elements/resources/navigation-destination.html": "support document for custom-elements fixtures",
     "common/canvas-tests.js": "pixel assertion helpers for the 2D canvas fixtures",
+    "webgl/common.js": "shared context helper for the WebGL conformance fixtures",
 }
 # Explicit 2D-canvas fixtures adopted for the M6 component subset. Every entry is a
 # real upstream testharness case executed by crates/test_harness/src/wpt/runner.rs;
@@ -104,6 +105,11 @@ CANVAS_SUBSET_COUNTS = {
     "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html": 1,
     "2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html": 1,
     "2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html": 1,
+}
+# Explicit WebGL 1 cases adopted for M6#4. Each count is the number of
+# `test()` callbacks in the upstream file, verified before adoption.
+WEBGL_SUBSET_COUNTS = {
+    "webgl/bufferSubData.html": 1,
 }
 # Directories probed while scoping the runner but not adopted: their engine APIs are
 # incomplete, so reporting their real failures would break the allowlist-free gate.
@@ -388,7 +394,11 @@ def import_files(
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
-        count = SEED_COUNTS.get(relative) or CANVAS_SUBSET_COUNTS.get(relative, 1)
+        count = (
+            SEED_COUNTS.get(relative)
+            or CANVAS_SUBSET_COUNTS.get(relative)
+            or WEBGL_SUBSET_COUNTS.get(relative, 1)
+        )
         support_reason = SUPPORT_PATHS.get(relative)
         skip_reason = SKIP_PATHS.get(relative)
         by_path[relative] = {
