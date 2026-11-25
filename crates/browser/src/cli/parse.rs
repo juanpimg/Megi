@@ -46,6 +46,8 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--chrome" => raw.chrome = true,
             "--chrome-menu" => raw.chrome_menu = true,
             "--chrome-compact" => raw.chrome_compact = true,
+            "--rail" => raw.rail = true,
+            "--compact" => raw.compact = true,
             "--reduced-motion" => raw.reduced_motion = true,
             "--reader" => raw.reader = true,
             "--ipc-render" => raw.ipc_render = true,

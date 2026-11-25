@@ -121,3 +121,18 @@ fn chrome_rail_pixels_track_rail_css_width_times_scale() {
         "closed rail reserves no physical columns"
     );
 }
+
+#[test]
+fn startup_chrome_selectors_flow_into_window_view_options() {
+    let plain = WindowViewOptions::default();
+    assert!(!plain.startup_chrome.rail);
+    assert!(!plain.startup_chrome.compact);
+
+    let selected =
+        WindowViewOptions::new(1.0, RefreshPolicy::disabled()).with_startup_chrome(StartupChrome {
+            rail: true,
+            compact: true,
+        });
+    assert!(selected.startup_chrome.rail);
+    assert!(selected.startup_chrome.compact);
+}

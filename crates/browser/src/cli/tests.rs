@@ -245,6 +245,41 @@ fn chrome_compact_requires_chrome_flag_and_defaults_off() {
 }
 
 #[test]
+fn rail_and_compact_flags_are_opt_in_window_startup_selectors() {
+    let default = parse_cli(args(&["data:,x"])).expect("parse");
+    assert!(!default.rail, "the rail stays closed without the flag");
+    assert!(
+        !default.compact,
+        "the chrome band stays full without the flag"
+    );
+
+    let both = parse_cli(args(&["data:,x", "--rail", "--compact"])).expect("parse");
+    assert!(both.rail);
+    assert!(both.compact);
+    assert_eq!(both.mode, LaunchMode::Window);
+
+    let rail_only = parse_cli(args(&["data:,x", "--rail"])).expect("parse");
+    assert!(rail_only.rail);
+    assert!(!rail_only.compact);
+    let compact_only = parse_cli(args(&["data:,x", "--compact"])).expect("parse");
+    assert!(!compact_only.rail);
+    assert!(compact_only.compact);
+
+    assert!(USAGE.contains("--rail"));
+    assert!(USAGE.contains("--compact"));
+}
+
+#[test]
+fn rail_and_compact_selectors_survive_raw_parse_and_finish() {
+    let raw = parse_args(args(&["data:,x", "--rail", "--compact"])).expect("raw parse");
+    assert!(raw.rail);
+    assert!(raw.compact);
+    let cli = finish_args(raw).expect("finish");
+    assert!(cli.rail);
+    assert!(cli.compact);
+}
+
+#[test]
 fn reduced_motion_flag_is_opt_in() {
     let default = parse_cli(args(&["data:,x"])).expect("parse");
     assert!(!default.reduced_motion);

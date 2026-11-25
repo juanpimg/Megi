@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--print-to-pdf PATH] [--title T]
-//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--chrome] [--tabs URL]...
+//!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--chrome]
+//!      [--rail] [--compact] [--tabs URL]...
 //! ```
 //!
 //! Without `--screenshot` this creates a real winit window (requires an X11/Wayland
@@ -14,8 +15,8 @@ use std::process::ExitCode;
 use std::sync::{Arc, Mutex};
 
 use megi_browser::{
-    CliArgs, LaunchMode, RefreshPolicy, ShellError, WindowViewOptions, finish_args, parse_args,
-    sanitize_terminal_text, zoom,
+    CliArgs, LaunchMode, RefreshPolicy, ShellError, StartupChrome, WindowViewOptions, finish_args,
+    parse_args, sanitize_terminal_text, zoom,
 };
 
 /// Builds the render options for one CLI invocation.
@@ -132,7 +133,11 @@ fn run() -> Result<(), ShellError> {
     )
     .with_tabs(args.tabs.clone())
     .with_process_render(args.ipc_render)
-    .with_reduced_motion(args.reduced_motion);
+    .with_reduced_motion(args.reduced_motion)
+    .with_startup_chrome(StartupChrome {
+        rail: args.rail,
+        compact: args.compact,
+    });
     let mut view = view;
     view.session_path = if args.no_session {
         None

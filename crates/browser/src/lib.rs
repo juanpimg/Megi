@@ -307,7 +307,8 @@ pub use title::{
     short_url, window_title,
 };
 pub use window::{
-    WindowViewOptions, run_window, run_window_with_options, run_window_with_view_options,
+    StartupChrome, WindowViewOptions, run_window, run_window_with_options,
+    run_window_with_view_options,
 };
 pub use worker::{FrameStore, RenderFrame, RenderRequest, WorkerMessage, spawn_worker};
 pub use zoom::{

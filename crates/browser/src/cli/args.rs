@@ -19,6 +19,8 @@ options:
   --width W           window/screenshot width in CSS pixels (default 800, max 8192)
   --height H          window/screenshot height in CSS pixels (default 600, max 8192)
   --window            explicitly request interactive window mode (requires `window` feature)
+  --rail              open the vertical tab rail at startup (interactive window only)
+  --compact           start in the compact chrome band (interactive window only)
   --remote-debugging-port PORT
                       start the DevTools HTTP/WebSocket endpoint on 127.0.0.1:PORT
                       (JSON-RPC Runtime.evaluate; requires the `full` feature)
@@ -63,6 +65,7 @@ window keys:
   Ctrl+F                     find in page: type to search, Enter next, Shift+Enter
                              previous, Esc closes; matches are highlighted in yellow
   Ctrl+T / Ctrl+W            new tab / close tab (last tab resets to New Tab)
+  Ctrl+B                     toggle the tab rail;  Ctrl+Shift+B  toggle the compact band
   Ctrl+Tab / Ctrl+Shift+Tab  next / previous tab;  Alt+1..9   activate tab by index
   Enter                      ignored (no backend: forms never submit); Esc blurs
   Alt+Left / Backspace / b   back;  Alt+Right / n   forward
@@ -118,6 +121,10 @@ pub struct CliArgs {
     pub chrome_menu: bool,
     /// Draw the opt-in compact chrome band in headless screenshots (`--chrome-compact`).
     pub chrome_compact: bool,
+    /// Open the vertical tab rail at startup (`--rail`, window mode only).
+    pub rail: bool,
+    /// Start with the compact chrome band (`--compact`, window mode only).
+    pub compact: bool,
     /// Suppress chrome animation (`--reduced-motion`).
     pub reduced_motion: bool,
     /// Render the extracted reader page instead of the raw page (`--reader`).
@@ -177,6 +184,10 @@ pub struct RawArgs {
     pub chrome_menu: bool,
     /// `--chrome-compact` was passed.
     pub chrome_compact: bool,
+    /// `--rail` was passed.
+    pub rail: bool,
+    /// `--compact` was passed.
+    pub compact: bool,
     /// `--reduced-motion` was passed.
     pub reduced_motion: bool,
     /// `--reader` was passed.

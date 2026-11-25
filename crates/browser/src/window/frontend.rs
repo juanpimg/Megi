@@ -83,7 +83,10 @@ impl WindowApp {
             links: Vec::new(),
             doc_title: None,
             cursor: None,
-            chrome_mode: super::chrome_mode::ChromeMode::new(view.reduced_motion),
+            chrome_mode: super::chrome_mode::ChromeMode::new(
+                view.reduced_motion,
+                view.startup_chrome,
+            ),
             modifiers: ModifiersState::default(),
             zoom,
             refresh: RefreshTimer::new(view.refresh),
@@ -132,8 +135,10 @@ impl WindowApp {
             site_zooms,
             reader_html,
             tabs,
-            rail_open: false,
-            rail_expanded: false,
+            // `--rail` mirrors Ctrl+B: open and expanded, so the new rail is visible
+            // on the first frame. Without it both stay false (legacy pixels).
+            rail_open: view.startup_chrome.rail,
+            rail_expanded: view.startup_chrome.rail,
             rail_hover: false,
             rail_labels: Vec::new(),
         }
