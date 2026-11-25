@@ -275,12 +275,13 @@ crates/css/src/calc.rs	195	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/css/src/calc/mixed_tests.rs	56	src	F2	juanpimg	2026-11-20	covered	#1928	unit tests for mixed calc evaluation, split from calc.rs
 crates/css/src/calc/parser.rs	346	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
 crates/css/src/calc/tests.rs	96	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
-crates/css/src/cascade.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/cascade/chunk1.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/cascade/chunk2.rs	402	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/cascade.rs	157	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade/chunk1.rs	473	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade/chunk2.rs	403	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk2/supports.rs	195	src	F2	lead	2026-11-25	covered	CSS-SUPPORTS-CASCADE	Read 195-line evaluator; TDD 6 tests green
-crates/css/src/cascade/chunk3.rs	477	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/cascade/chunk4.rs	499	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	Preserve all parent-key bits
+crates/css/src/cascade/chunk3.rs	490	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade/chunk4.rs	362	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade/chunk4/document.rs	147	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test
 crates/css/src/color.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk1.rs	418	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -358,12 +359,12 @@ crates/css/src/tokenizer/chunk3.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/user_agent/chunk1.rs	393	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/user_agent/chunk1.rs	402	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/user_agent/chunk2.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	346	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/tests/cascade_core.rs	174	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/tests/cascade_core.rs	259	test	F1	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/tests/cascade_layers.rs	251	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/color4/common.rs	17	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/color4/main.rs	6	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1091,7 +1092,7 @@ crates/paint/tests/decorations.rs	263	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/paint/tests/dialog_top_layer.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/effects.rs	387	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/end_to_end_html/main.rs	21	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/end_to_end_html/pipeline.rs	350	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/end_to_end_html/pipeline.rs	384	test	F1	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/paint/tests/end_to_end_html/support.rs	86	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/end_to_end_html/text_and_fonts.rs	247	test	F1	juanpimg	2026-11-20	covered	#1884	inline-block background image test
 crates/paint/tests/filter_blend.rs	414	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

@@ -16,6 +16,7 @@ pub(crate) fn resolve_pseudo_cascaded_with_candidates<'a>(
         Some(pseudo),
         collection,
         None,
+        None,
         candidates,
     );
     merge_container_rules_for(doc, node_id, Some(pseudo), collection, &mut best);
@@ -56,6 +57,7 @@ pub(crate) fn resolve_base_cascaded_properties<'a>(
         None,
         collection,
         inline_declarations,
+        None,
         candidates,
     )
 }
@@ -66,6 +68,7 @@ pub(crate) fn resolve_base_cascaded_properties_for<'a>(
     pseudo: Option<PseudoElement>,
     collection: &'a StyleCollection,
     inline_declarations: Option<&'a [Declaration]>,
+    presentational_hints: Option<&'a [Declaration]>,
     candidates: &[Candidate],
 ) -> HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher> {
     // One selector-matching budget for this element: every candidate selector shares it.
@@ -105,6 +108,15 @@ pub(crate) fn resolve_base_cascaded_properties_for<'a>(
                 }
             }
         }
+    }
+
+    // 1.5. Presentational hints (WHATWG HTML §15.2): a distinct origin tier below
+    //       author/user rules but above the UA stylesheet. Pseudo-elements never inherit
+    //       the originating element's attributes.
+    if pseudo.is_none()
+        && let Some(hints) = presentational_hints
+    {
+        apply_presentational_hints(hints, &mut best_candidates);
     }
 
     // 2. Process inline styles from style attribute (Author origin with high specificity)
@@ -223,9 +235,10 @@ pub(crate) fn is_revert(declaration: &Declaration) -> bool {
 
 fn origin_of(origin_importance: CascadeOriginImportance) -> Origin {
     match origin_importance {
-        CascadeOriginImportance::UserAgentNormal | CascadeOriginImportance::UserAgentImportant => {
-            Origin::UserAgent
-        }
+        // Presentational hints sit just above the UA sheet for `revert` purposes.
+        CascadeOriginImportance::PresentationalHint
+        | CascadeOriginImportance::UserAgentNormal
+        | CascadeOriginImportance::UserAgentImportant => Origin::UserAgent,
         CascadeOriginImportance::UserNormal | CascadeOriginImportance::UserImportant => {
             Origin::User
         }

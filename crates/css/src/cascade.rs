@@ -75,7 +75,11 @@ pub(crate) use chunk1::ancestor_class_mask;
 #[allow(unused_imports)]
 pub(crate) use chunk1::ancestor_classes_mask;
 #[allow(unused_imports)]
+pub(crate) use chunk1::apply_presentational_hints;
+#[allow(unused_imports)]
 pub(crate) use chunk1::class_hash_bit;
+#[allow(unused_imports)]
+pub(crate) use chunk1::presentational_declarations;
 #[allow(unused_imports)]
 pub(crate) use chunk1::selector_key;
 mod chunk2;

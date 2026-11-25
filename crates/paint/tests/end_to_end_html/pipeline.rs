@@ -348,3 +348,37 @@ fn test_render_basic_html_png_matches_golden() {
         );
     }
 }
+
+/// WHATWG HTML §15.2: a minimal HN-shaped document must paint the `bgcolor` header and
+/// centre the `width` table inside `<center>`; these legacy hints drive real-site pixels.
+#[test]
+fn presentational_hints_render_centered_colored_table() {
+    let source = "<!doctype html><html><body><center>\
+                   <table bgcolor=\"#ff6600\" width=\"50%\"><tr><td>x</td></tr></table>\
+                   </center></body></html>";
+    let (pixmap, _) = render(source, 400, 100);
+    let orange = Color::parse("#ff6600").expect("valid hex color");
+
+    // body margin 8px => center content box 384px; a 50% table is 192px wide and
+    // starts at 8 + (384 - 192) / 2 = 104px.
+    assert_eq!(
+        pixmap.pixel(120, 20),
+        orange,
+        "table background must use bgcolor"
+    );
+    assert_eq!(
+        pixmap.pixel(50, 20),
+        Color::WHITE,
+        "left gutter must stay white"
+    );
+    assert_eq!(
+        pixmap.pixel(280, 20),
+        orange,
+        "width=50% must size the table"
+    );
+    assert_eq!(
+        pixmap.pixel(310, 20),
+        Color::WHITE,
+        "right gutter must stay white"
+    );
+}

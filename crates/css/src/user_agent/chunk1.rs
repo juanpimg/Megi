@@ -18,6 +18,15 @@ center {
 }
 
 
+/* WHATWG HTML §15.2: legacy <center> also centres block-level tables. Megi's block
+   layout centres a box whose width is specified and both margins are `auto`, so the
+   presentational behaviour is expressed as a UA rule rather than a layout special case. */
+center > table {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
 li {
     display: list-item;
 }

@@ -51,22 +51,25 @@ pub enum Origin {
     Author,
 }
 
-/// Cascade precedence rank per W3C Cascading and Inheritance Level 4 §6.2:
+/// Cascade precedence rank per W3C Cascading and Inheritance Level 4 §6.2, with the
+/// presentational-hint tier inserted between UA normal and user normal (WHATWG HTML §15.2):
 ///
 /// 1. User-Agent normal
-/// 2. User normal
-/// 3. Author normal
-/// 4. Author `!important`
-/// 5. User `!important`
-/// 6. User-Agent `!important`
+/// 2. Presentational hint (`bgcolor`, `width`, ...)
+/// 3. User normal
+/// 4. Author normal
+/// 5. Author `!important`
+/// 6. User `!important`
+/// 7. User-Agent `!important`
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CascadeOriginImportance {
     UserAgentNormal = 0,
-    UserNormal = 1,
-    AuthorNormal = 2,
-    AuthorImportant = 3,
-    UserImportant = 4,
-    UserAgentImportant = 5,
+    PresentationalHint = 1,
+    UserNormal = 2,
+    AuthorNormal = 3,
+    AuthorImportant = 4,
+    UserImportant = 5,
+    UserAgentImportant = 6,
 }
 
 impl CascadeOriginImportance {
@@ -381,4 +384,90 @@ pub struct StyleCollection {
     pub(crate) has_animations: bool,
     /// Whether any compiled rule declares a `transition*` property.
     pub(crate) has_transitions: bool,
+}
+
+/// WHATWG HTML §15.2: maps legacy presentational attributes to CSS declarations.
+///
+/// Only the hints needed for real-site parity are implemented: `bgcolor` on the legacy
+/// colourable elements and `width` on `<table>`. Values are validated before being
+/// turned into CSS text, so a hostile attribute cannot inject extra declarations.
+pub(crate) fn presentational_declarations(doc: &Document, node_id: NodeId) -> Vec<Declaration> {
+    let Some(element) = doc.node(node_id).as_element() else {
+        return Vec::new();
+    };
+    if element.namespace != megi_core::Namespace::Html {
+        return Vec::new();
+    }
+    let mut declarations = Vec::with_capacity(2);
+    let colourable = matches!(
+        element.local_name.as_str(),
+        "body" | "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th"
+    );
+    if colourable
+        && let Some(value) = element.get_attribute("bgcolor")
+        && let Some(colour) = crate::properties::Color::parse(value)
+    {
+        // Canonical `#rrggbb` keeps the generated declaration independent of the
+        // attribute spelling (`#abc`, named colours, ...).
+        let css = format!(
+            "background-color: #{:02x}{:02x}{:02x}",
+            colour.r, colour.g, colour.b
+        );
+        declarations.extend(crate::parser::parse_list_of_declarations(&css));
+    }
+    if element.local_name == "table"
+        && let Some(value) = element.get_attribute("width")
+        && let Some(css_value) = presentational_length(value)
+    {
+        let css = format!("width: {css_value}");
+        declarations.extend(crate::parser::parse_list_of_declarations(&css));
+    }
+    declarations
+}
+
+/// Accepts the legacy length forms of `width` (a number of pixels or a percentage).
+fn presentational_length(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 32 {
+        return None;
+    }
+    let (number, suffix) = match value.strip_suffix('%') {
+        Some(number) => (number, "%"),
+        None => (value, "px"),
+    };
+    let parsed: f32 = number.parse().ok()?;
+    if !parsed.is_finite() || parsed < 0.0 {
+        return None;
+    }
+    Some(format!("{number}{suffix}"))
+}
+
+/// Inserts presentational hints into the cascade winner map before inline styles.
+///
+/// The dedicated origin tier (between UA and user/author) makes author declarations and
+/// `!important` win without touching specificity or inline-style ordering.
+pub(crate) fn apply_presentational_hints<'a>(
+    hints: &'a [Declaration],
+    best: &mut HashMap<&'a str, MatchedDeclaration<'a>, FastBuildHasher>,
+) {
+    for (declaration_order, declaration) in hints.iter().enumerate() {
+        let candidate = MatchedDeclaration {
+            declaration,
+            origin_importance: CascadeOriginImportance::PresentationalHint,
+            layer_rank: UNLAYERED_LAYER,
+            specificity: Specificity::new(0, 0, 0),
+            source_order: 0,
+            declaration_order: declaration_order as u32,
+        };
+        match best.entry(declaration.name.as_str()) {
+            std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                if candidate > *occupied.get() {
+                    occupied.insert(candidate);
+                }
+            }
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(candidate);
+            }
+        }
+    }
 }

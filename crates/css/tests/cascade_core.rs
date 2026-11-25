@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use megi_core::{Attribute, Document, Namespace, NodeId};
 use megi_css::selector::{Specificity, parse_selectors};
-use megi_css::{ComputedStyle, Length, Origin, StyleCollection};
+use megi_css::{Color, ComputedStyle, Display, Length, Origin, StyleCollection, TextAlign};
 
 fn append(doc: &mut Document, parent: NodeId, name: &str, attrs: &[(&str, &str)]) -> NodeId {
     let attributes = attrs
@@ -171,4 +171,89 @@ fn standalone_viewport_units_resolve_in_computed_width() {
     let style = styles.get(&target).expect("style");
     assert_eq!(style.width, Length::Px(512.0));
     assert_eq!(style.height, Length::Px(192.0));
+}
+
+/// WHATWG HTML §15.2: `bgcolor` is a presentational hint. It must apply when nothing
+/// else sets the property, lose to author declarations (including `style=""`) and beat
+/// the UA stylesheet.
+#[test]
+fn presentational_bgcolor_is_applied_below_author_and_above_ua() {
+    let orange = Color::parse("#ff6600").expect("valid hex color");
+    let mut doc = Document::new();
+    let root = doc.root();
+    let html = append(&mut doc, root, "html", &[]);
+    let body = append(&mut doc, html, "body", &[]);
+    let hinted = append(&mut doc, body, "table", &[("bgcolor", "#ff6600")]);
+    let authored = append(
+        &mut doc,
+        body,
+        "table",
+        &[("bgcolor", "#ff6600"), ("class", "authored")],
+    );
+    let inline = append(
+        &mut doc,
+        body,
+        "table",
+        &[
+            ("bgcolor", "#ff6600"),
+            ("style", "background-color: rgb(1, 2, 3)"),
+        ],
+    );
+
+    let styles = megi_css::resolve_document_styles(
+        &doc,
+        Some(".authored { background-color: rgb(4, 5, 6); }"),
+    );
+    assert_eq!(styles[&hinted].background_color, orange);
+    assert_eq!(
+        styles[&authored].background_color,
+        Color::parse("rgb(4, 5, 6)").expect("author color")
+    );
+    assert_eq!(
+        styles[&inline].background_color,
+        Color::parse("rgb(1, 2, 3)").expect("inline color")
+    );
+
+    let mut collection = megi_css::create_user_agent_style_collection();
+    collection.add_css(
+        "table { background-color: rgb(9, 9, 9); }",
+        Origin::UserAgent,
+    );
+    let (ua_styles, _) = megi_css::resolve_document_styles_from_collection(&doc, &collection);
+    assert_eq!(ua_styles[&hinted].background_color, orange);
+}
+
+/// WHATWG HTML §15.2: the `width` content attribute on a table is a presentational hint
+/// mapped to the `width` CSS property, overridden by author CSS.
+#[test]
+fn presentational_width_on_table_is_applied_below_author_css() {
+    let mut doc = Document::new();
+    let root = doc.root();
+    let html = append(&mut doc, root, "html", &[]);
+    let body = append(&mut doc, html, "body", &[]);
+    let table = append(&mut doc, body, "table", &[("width", "85%")]);
+
+    let styles = megi_css::resolve_document_styles(&doc, Some(""));
+    assert_eq!(styles[&table].width, Length::Percent(85.0));
+
+    let styles = megi_css::resolve_document_styles(&doc, Some("table { width: 50%; }"));
+    assert_eq!(styles[&table].width, Length::Percent(50.0));
+}
+
+/// WHATWG HTML §15.3.1 / §15.2: `<center>` is a UA `display:block; text-align:center`
+/// box; legacy layout centres a child table through auto horizontal margins.
+#[test]
+fn center_ua_style_centers_child_table() {
+    let mut doc = Document::new();
+    let root = doc.root();
+    let html = append(&mut doc, root, "html", &[]);
+    let body = append(&mut doc, html, "body", &[]);
+    let center = append(&mut doc, body, "center", &[]);
+    let table = append(&mut doc, center, "table", &[("width", "50%")]);
+
+    let styles = megi_css::resolve_document_styles(&doc, Some(""));
+    assert_eq!(styles[&center].display, Display::Block);
+    assert_eq!(styles[&center].text_align, TextAlign::Center);
+    assert_eq!(styles[&table].margin.left, Length::Auto);
+    assert_eq!(styles[&table].margin.right, Length::Auto);
 }

@@ -377,6 +377,7 @@ pub fn resolve_cascaded_properties<'a>(
         None,
         collection,
         inline_declarations,
+        None,
         &candidates,
     );
     merge_container_rules_for(doc, node_id, None, collection, &mut best);
