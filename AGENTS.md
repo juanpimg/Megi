@@ -41,7 +41,7 @@ El índice operativo es `docs/AGENT-INDEX.md`.
    `docs/audit/FINDINGS.md`, `docs/work-packages/BOARD.md` (regenerado por el motor).
 
 ## 2. Vetos absolutos
-- `#![forbid(unsafe_code)]` en los 17 crates. Cero `unsafe`.
+- `#![forbid(unsafe_code)]` en los 17 crates de biblioteca (18 en el workspace; `megi-bench` es binario). Cero `unsafe`.
 - Cero `Rc<`, `Rc<RefCell<`, `Weak<` en código nuevo. Usa `NodeId` + arena,
   `Arc<T>` solo para payload inmutable `Send + Sync`, o `mpsc` para mutación.
   Excepción documentada: el `ContextHost` (`Rc<RefCell<Host>>`) guardado en el

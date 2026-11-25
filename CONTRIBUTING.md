@@ -41,7 +41,7 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
   - `cargo +1.91 check --workspace --all-targets`: verificación contra la MSRV declarada (`rust-version = "1.91"`).
   - `./tools/dev.sh all`: script integral (fmt, clippy, tests, doc y **gate de conformidad**) que debe pasar al 100% verde antes de cualquier commit o Pull Request.
 - **Progress status generado**: si tocas docs, tests, fases o `docs/status/progress.toml`, regenera el snapshot antes de commitear con `python3 tools/update_progress.py --write` (CI ejecuta el check de frescura); **no edites a mano** `PROGRESS.md` ni `docs/status/`.
-  - `cd fuzz && cargo +nightly fuzz build`: compila los 28 targets de fuzz (nightly; también lo hace un job build-only en PRs y pushes a `main` que tocan `fuzz/**`, crates del motor o manifests raíz).
+  - `cd fuzz && cargo +nightly fuzz build`: compila los 34 targets de fuzz (nightly; también lo hace un job build-only en PRs y pushes a `main` que tocan `fuzz/**`, crates del motor o manifests raíz).
 
 ### 1.6 Política de MSRV
 
@@ -75,6 +75,7 @@ crates/
 ├── render/        # Pipeline URL → PNG con scripts, event loop, imágenes y fuentes.
 ├── webview/       # API embebible sin ventana (load/frame/eventos/hit-test). Depende de render.
 ├── browser/       # Shell nativo: winit+softbuffer, chrome, pestañas, sesión. Solo depende de webview.
+├── sandbox/       # Landlock/no_new_privs aplicados en el worker (Unsupported en macOS/Windows).
 ├── bench/         # Benchmarks reproducibles.
 └── test_harness/  # Gate de conformidad html5lib-tests/WPT.
 
@@ -230,7 +231,7 @@ cargo install cargo-fuzz --locked
 cd fuzz && cargo +nightly fuzz run html_parse -- -max_total_time=30
 ```
 
-Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `msrv` (`cargo check` con Rust 1.91 en el build por defecto y en el JS-free) `minimal` (clippy y tests de `js`/`render` con `--no-default-features`), `workflow-lint` (actionlint + shellcheck), `secret-scan` (gitleaks con `.gitleaks.toml`) y `docs-links` (`python3 tools/check_docs_links.py`); aparte, el workflow `bench` compara cada fila contra `docs/status/bench-baseline.json` con `tools/bench_compare.py` (#963). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
+Si `./tools/dev.sh all` reporta `==> All checks passed!`, tu código está listo para ser revisado. La CI remota (`.github/workflows/ci.yml`) ejecuta los mismos pasos y además `docs`, `wpt`, `package`, `security`, `unsafe-audit` y `toolchain-drift`: `quality` (fmt, clippy, tests, doc), `conformance` (gate `--summary`), `wpt` (conformidad WPT), `msrv` (`cargo check` con Rust 1.91 en el build por defecto y en el JS-free), `minimal` (clippy y tests de `js`/`render` con `--no-default-features`), `package`, `security`, `unsafe-audit`, `workflow-lint` (actionlint + shellcheck), `secret-scan` (gitleaks con `.gitleaks.toml`), `docs-links` (`python3 tools/check_docs_links.py`) y `toolchain-drift`; `release`/`check` y el workflow `bench` comparan cada fila contra `docs/status/bench-baseline.json` con `tools/bench_compare.py` (#963). El build sin JS se comprueba **por crate**: `shell` y `test_harness` enlazan Boa aunque se pase `--no-default-features` al workspace, así que ese comando no produce un build sin motor.
 - **CI (ronda 12)**: los jobs instalan en el runner los paquetes de sistema Wayland/X11/xcb (`libwayland-dev`, `libxkbcommon*`, `libx11*`, `libxcb*`) que necesitan `winit`/`softbuffer`; los 3 jobs están en verde y `main`/`feature` sincronizadas.
 
 ---

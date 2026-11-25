@@ -27,6 +27,8 @@ fuzz/
 │   ├── charset.rs            # Character-encoding detection/label handling
 │   ├── compression.rs        # HTTP compression/deflate/gzip/brotli-like stream handling
 │   ├── container_queries.rs  # CSS @container/@layer parsing + query evaluation
+│   ├── cookie_parse.rs       # RFC 6265 cookie parsing, jar storage and retrieval
+│   ├── css_animation.rs      # @keyframes/transition declarations and animation runtime
 │   ├── css_parse.rs          # CSS Syntax L3 tokenizer, stylesheets and declaration lists
 │   ├── dom_mutate.rs         # DOM arena mutation & invariant checks
 │   ├── dom_tree.rs           # DOM construction/mutation paths from parser-like input
@@ -38,16 +40,20 @@ fuzz/
 │   ├── html_parse.rs         # WHATWG HTML tokenizer + tree builder + canonical serializer
 │   ├── http_head.rs          # HTTP header/status-line parsing surfaces
 │   ├── image_decode.rs       # Full PNG/JPEG/GIF/WebP (VP8/VP8L) decode + EXIF orientation (capped)
+│   ├── ipc_response.rs       # Untrusted IPC render response JSON decoding and validation
+│   ├── ipc_wire.rs           # Versioned and legacy IPC wire framing decoders
 │   ├── js_eval.rs            # JavaScript evaluation + DOM/event/timer host bridge (budgeted)
 │   ├── js_module.rs          # ES modules + import maps (resolver/loader, budgeted)
 │   ├── layout_resolve.rs     # Style/layout calc() & constraint resolution paths
 │   ├── layout_tree.rs        # Layout tree construction paths
+│   ├── net_file_url.rs       # file:// URL parsing and FileGrantTable containment
 │   ├── net_surface.rs        # URL, header, cookie, range, and HTTP parser surfaces
 │   ├── net_url.rs            # WHATWG URL subset parser + relative resolution
 │   ├── paint_display_list.rs # Paint/display-list generation paths
 │   ├── render_pipeline.rs    # Full render pipeline: data: HTML -> styles/layout/paint/PNG
 │   ├── selectors.rs          # Selectors L4 parser/matcher + cascade over a synthetic DOM
 │   ├── svg_parse.rs          # SVG XML parse + rasterization under strict anti-DoS limits
+│   ├── svg_path.rs           # SVG path-data grammar through public rasterizer entry points
 │   ├── text_boundary.rs      # byte -> code-point preprocessor (raw surrogates, >U+10FFFF)
 │   ├── webp.rs               # WebP sniffing, RIFF/VP8/VP8L containers + VP8 decoding
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
