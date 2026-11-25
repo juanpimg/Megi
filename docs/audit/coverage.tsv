@@ -1,6 +1,6 @@
 path	lines	category	phase	auditor	date	status	findings	notes
 .cargo/config.toml	5	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-.deslop-please.allow	219	fixture	F1	lead	2026-11-25	covered	DESLOP-ALLOW-REFRESH	Refresh stale tangle entry and drop entries for fixed field-leaks
+.deslop-please.allow	219	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
 .github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -187,6 +187,7 @@ crates/browser/tests/file_grant_tests.rs	119	test	F1	hardening	2026-11-24	covere
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/ipc_semantic_tests.rs	135	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
 crates/browser/tests/ipc_validation_tests.rs	166	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
+crates/browser/tests/print_pdf_e2e.rs	102	test	F1	pdf-evidence	2026-11-25	covered	M5-PDF-E2E	read full 102-line E2E; real binary print-to-pdf and byte determinism
 crates/browser/tests/process_e2e_tests.rs	161	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	re-read
 crates/browser/tests/sandbox_e2e_tests.rs	297	test	F1	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
 crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
