@@ -177,6 +177,98 @@ fn closing_the_active_middle_tab_activates_the_next_one() {
     assert_eq!(state.active().url, "https://example.com/c");
 }
 
+// Phase 3 (local workspaces): these tests are written before the implementation.
+// Expected red reason: `no method named workspace/cycle_workspace/... found for struct TabsState`
+// and `could not find Workspace in tabs`, i.e. the workspace API does not exist yet.
+#[test]
+fn one_workspace_preserves_the_legacy_visible_indices() {
+    let mut state = tab_state();
+    assert_eq!(state.workspace(), 0);
+    assert!(!state.has_multiple_workspaces());
+    assert_eq!(state.visible_len(), state.len());
+    assert_eq!(state.visible_active_index(), state.active_index());
+    assert_eq!(state.visible_tabs().count(), state.len());
+    assert_eq!(state.visible_tab_index(2), Some(2));
+    assert_eq!(state.visible_tab_index(3), None);
+    assert_eq!(state.workspace_status_text(), None);
+    state.activate(1);
+    assert_eq!(state.visible_active_index(), 1);
+    assert_ne!(Workspace::label(0), Workspace::label(1));
+}
+
+#[test]
+fn cycling_workspaces_preserves_each_groups_tabs_scroll_and_active() {
+    let mut state = tab_state();
+    state.activate(0);
+    state.active_mut().scroll = ScrollState::new(2000, 400);
+    state.active_mut().scroll.scroll_to(120);
+    state.active_mut().title = Some("A title".to_string());
+
+    assert!(state.move_active_to_workspace(1));
+    assert_eq!(state.workspace(), 1);
+    assert_eq!(state.visible_len(), 1);
+    assert_eq!(state.active().url, "https://example.com/a");
+    assert_eq!(state.active().scroll.offset(), 120);
+    assert_eq!(state.active().title.as_deref(), Some("A title"));
+    assert_eq!(state.visible_tabs().count(), 1);
+
+    state.open_tab("https://example.com/d").expect("open tab");
+    assert_eq!(state.cycle_workspace(), 2);
+    state.open_tab("https://example.com/e").expect("open tab");
+    assert_eq!(state.workspace(), 2);
+
+    assert_eq!(state.cycle_workspace(), 0);
+    assert_eq!(state.workspace(), 0);
+    assert_eq!(state.visible_len(), 2);
+    assert_eq!(state.active().url, "https://example.com/b", "remembered active tab");
+
+    assert_eq!(state.cycle_workspace(), 1);
+    assert_eq!(state.active().url, "https://example.com/d");
+    assert_eq!(state.active().scroll.offset(), 120, "scroll survives the switch");
+    assert_eq!(state.cycle_workspace(), 2);
+    assert_eq!(state.active().url, "https://example.com/e");
+    assert_eq!(state.cycle_workspace(), 0);
+}
+
+#[test]
+fn workspace_creation_cycling_and_closing_respect_the_limit() {
+    let mut state = tab_state();
+    assert_eq!(state.new_workspace(), 1);
+    assert_eq!(state.workspace(), 1);
+    assert_eq!(state.visible_len(), 1);
+    assert_eq!(state.active().url, BLANK_TAB_URL);
+    assert_eq!(state.new_workspace(), 2);
+    assert!(state.has_multiple_workspaces());
+    assert_eq!(state.cycle_workspace(), 0, "all three groups are in use");
+    assert_eq!(state.len(), 5, "no tab from another workspace was lost");
+
+    assert!(!state.move_active_to_workspace(MAX_WORKSPACES));
+    assert_eq!(state.workspace(), 0);
+    assert!(state.workspace() < MAX_WORKSPACES);
+    state.close_workspace();
+    assert_ne!(state.workspace(), 0, "closing switches to another group");
+    assert!(state.workspace_status_text().is_some());
+}
+
+#[test]
+fn closing_the_last_tab_of_a_workspace_resets_it_to_blank() {
+    let mut state = TabsState::new("https://example.com/only");
+    assert!(!state.close_workspace());
+    assert_eq!(state.workspace(), 0);
+    assert_eq!(state.len(), 1);
+    assert_eq!(state.active().url, BLANK_TAB_URL);
+
+    assert_eq!(state.new_workspace(), 1);
+    state.open_tab("https://example.com/x").expect("open tab");
+    let blank = state.visible_tab_index(0).expect("blank in workspace 1");
+    assert_eq!(state.close(blank), CloseOutcome::Closed);
+    assert_eq!(state.visible_len(), 1, "the workspace is never left empty");
+    let last = state.visible_tab_index(0).expect("remaining tab");
+    assert_eq!(state.close(last), CloseOutcome::ResetLast);
+    assert_eq!(state.visible_len(), 1);
+    assert_eq!(state.active().url, BLANK_TAB_URL);
+}
+
 #[test]
 fn tabs_report_distinct_isolation_sites() {
     // ADR-004 phase 1: same-site tabs share a renderer group, cross-site tabs do not.

@@ -332,11 +332,52 @@ mod shortcut_registry_tests {
     }
 
     #[test]
+    fn workspace_shortcuts_resolve_without_collisions() {
+        // Phase 3 red tests: `NewWorkspace`/`CloseWorkspace` do not exist yet, so the
+        // expected compile error is `no variant NewWorkspace ... in enum ShellAction`.
+        let ctrl_shift = Modifiers {
+            ctrl: true,
+            shift: true,
+            ..Modifiers::NONE
+        };
+        let ctrl_alt = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..Modifiers::NONE
+        };
+        let ctrl_alt_shift = Modifiers {
+            ctrl: true,
+            alt: true,
+            shift: true,
+            ..Modifiers::NONE
+        };
+        assert_eq!(
+            resolve_shortcut(ctrl_shift, &char_key("W")),
+            Some(ShellAction::NewWorkspace)
+        );
+        assert_eq!(
+            resolve_shortcut(ctrl_alt_shift, &char_key("W")),
+            Some(ShellAction::CloseWorkspace)
+        );
+        assert_eq!(
+            resolve_shortcut(ctrl_alt, &char_key("W")),
+            Some(ShellAction::CycleWorkspace)
+        );
+        assert!(
+            check_conflicts().is_ok(),
+            "{}",
+            check_conflicts().unwrap_err()
+        );
+    }
+
+    #[test]
     fn binding_for_round_trips_the_registry_entries() {
         for action in [
             ShellAction::ToggleRail,
             ShellAction::ToggleCompact,
             ShellAction::CycleWorkspace,
+            ShellAction::NewWorkspace,
+            ShellAction::CloseWorkspace,
             ShellAction::ToggleHistory,
             ShellAction::FocusAddressBar,
             ShellAction::OpenFind,
@@ -356,6 +397,47 @@ mod shortcut_registry_tests {
             );
         }
     }
+}
+
+#[test]
+fn workspace_visible_tab_helpers_follow_the_active_group() {
+    // Phase 3 red test for the window-facing pure helpers; the expected failure is
+    // `could not find workspace_chrome_titles in module presentation`.
+    use crate::tabs::{TabsState, Workspace};
+    use super::presentation::{workspace_a11y_titles, workspace_chrome_active, workspace_chrome_titles};
+
+    let mut tabs = TabsState::from_urls(vec![
+        "https://example.com/a".to_string(),
+        "https://example.com/b".to_string(),
+        "https://example.com/c".to_string(),
+    ]);
+    let baseline = vec![
+        "https://example.com/a".to_string(),
+        "https://example.com/b".to_string(),
+        "https://example.com/c".to_string(),
+    ];
+    assert_eq!(workspace_chrome_titles(&tabs), baseline);
+    assert_eq!(workspace_chrome_active(&tabs), 0);
+    assert_eq!(workspace_a11y_titles(&tabs), baseline, "no label decoration with one workspace");
+
+    tabs.activate(0);
+    assert!(tabs.move_active_to_workspace(1));
+    tabs.open_tab("https://example.com/d").expect("open tab");
+    assert_eq!(
+        workspace_chrome_titles(&tabs),
+        vec![
+            "https://example.com/a".to_string(),
+            "https://example.com/d".to_string(),
+        ]
+    );
+    assert_eq!(workspace_chrome_active(&tabs), 1);
+    assert_eq!(
+        workspace_a11y_titles(&tabs),
+        vec![
+            format!("{} — https://example.com/a", Workspace::label(1)),
+            format!("{} — https://example.com/d", Workspace::label(1)),
+        ]
+    );
 }
 
 #[test]
