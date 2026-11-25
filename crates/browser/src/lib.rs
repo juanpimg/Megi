@@ -224,6 +224,9 @@ pub mod session;
 pub mod site;
 pub mod tabs;
 pub mod title;
+/// M7 WebDriver BiDi endpoint (HTTP `/status` + WebSocket JSON-RPC).
+#[cfg(feature = "full")]
+pub mod webdriver;
 pub mod window;
 pub mod worker;
 pub mod zoom;

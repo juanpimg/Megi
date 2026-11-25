@@ -107,6 +107,24 @@ fn run() -> Result<(), ShellError> {
         ));
     }
     let options = render_options(&args);
+    #[cfg(feature = "full")]
+    let _webdriver_bidi = match args.webdriver_bidi_port {
+        Some(port) => Some(
+            megi_browser::webdriver::spawn(port, options.clone()).map_err(|reason| {
+                ShellError::Io {
+                    path: format!("127.0.0.1:{port}"),
+                    reason,
+                }
+            })?,
+        ),
+        None => None,
+    };
+    #[cfg(not(feature = "full"))]
+    if args.webdriver_bidi_port.is_some() {
+        return Err(ShellError::Usage(
+            "--webdriver-bidi-port requires the `full` feature".to_owned(),
+        ));
+    }
     let view = WindowViewOptions::new(
         args.zoom,
         args.refresh_ms

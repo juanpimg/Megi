@@ -63,6 +63,20 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                 }
                 raw.remote_debugging_port = Some(port);
             }
+            "--webdriver-bidi-port" => {
+                let value = next_value(&arguments, &mut index, "--webdriver-bidi-port")?;
+                let port = value.parse::<u16>().map_err(|_| {
+                    ShellError::Usage(format!(
+                        "invalid --webdriver-bidi-port value `{value}` (expected 1..=65535)"
+                    ))
+                })?;
+                if port == 0 {
+                    return Err(ShellError::Usage(
+                        "--webdriver-bidi-port must be 1..=65535".to_string(),
+                    ));
+                }
+                raw.webdriver_bidi_port = Some(port);
+            }
             "--window" => raw.window = true,
             "--no-session" => raw.no_session = true,
             "--session-file" => {

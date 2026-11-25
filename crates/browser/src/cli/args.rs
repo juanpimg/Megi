@@ -140,6 +140,8 @@ pub struct CliArgs {
     pub ipc_render: bool,
     /// DevTools endpoint port on loopback (`--remote-debugging-port`), if requested.
     pub remote_debugging_port: Option<u16>,
+    /// WebDriver BiDi endpoint port on loopback (`--webdriver-bidi-port`), if requested.
+    pub webdriver_bidi_port: Option<u16>,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
@@ -197,6 +199,8 @@ pub struct RawArgs {
     pub ipc_render: bool,
     /// `--remote-debugging-port` value, if provided.
     pub remote_debugging_port: Option<u16>,
+    /// `--webdriver-bidi-port` value, if provided.
+    pub webdriver_bidi_port: Option<u16>,
     /// `--window` was passed.
     pub window: bool,
     /// `-h`/`--help` was passed.
