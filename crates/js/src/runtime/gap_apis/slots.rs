@@ -213,9 +213,21 @@ pub(crate) fn slot_assigned_nodes(
         if !flatten {
             return direct;
         }
+        let seeds = if direct.is_empty() {
+            // A detached slot has no fallback contents (WHATWG DOM §4.9.3).
+            if slot_root(host, slot).is_none() {
+                return Vec::new();
+            }
+            host.document
+                .children(slot)
+                .filter(|id| is_slottable(host, *id))
+                .collect()
+        } else {
+            direct
+        };
         let mut out = Vec::new();
         let mut seen = std::collections::HashSet::new();
-        for id in direct {
+        for id in seeds {
             flatten_node(host, id, &mut seen, &mut out);
         }
         out
