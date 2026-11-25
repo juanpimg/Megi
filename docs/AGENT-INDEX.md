@@ -28,7 +28,7 @@
 | M11 | Integración nativa | native-integration | matriz `enforced` por SO |
 | M12 | Media/legal | media-licensing | DRM decidido con ADR público |
 
-## Planes ejecutables (14)
+## Planes ejecutables (15)
 
 Todos en `docs/superpowers/plans/`:
 

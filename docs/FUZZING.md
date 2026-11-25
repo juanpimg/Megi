@@ -8,10 +8,10 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 
 > **Status**: the harness is wired into CI via
 > [`.github/workflows/fuzz-nightly.yml`](../.github/workflows/fuzz-nightly.yml). The
-> scheduled/dispatch run executes **27 harnesses** in the ASan matrix plus **9** in the
-> UBSan smoke matrix (34 scheduled entries over **28** `[[bin]]` targets in
-> `fuzz/Cargo.toml`; `charset` is compiled but not currently in the ASan matrix (#1647)) under the default libFuzzer **AddressSanitizer** build
-> (10 minutes for 10 critical parsers/decoders and 5 minutes for the remaining 17), and a
+> scheduled/dispatch run executes **34 harnesses** in the ASan matrix plus **9** in the
+> UBSan smoke matrix (43 scheduled entries over **34** `[[bin]]` targets in
+> `fuzz/Cargo.toml`; all 34 targets now appear in the ASan matrix, including `charset` (#1647)) under the default libFuzzer **AddressSanitizer** build
+> (10 minutes for 10 critical parsers/decoders and 5 minutes for the remaining 24), and a
 > short **UndefinedBehaviorSanitizer (UBSan)** smoke pass on representative targets. Pull
 > requests and pushes to `main` run a build-only job that compiles every `[[bin]]` fuzz
 > target in `fuzz/Cargo.toml` on the pinned nightly (no libFuzzer run), so a manifest or
@@ -22,7 +22,7 @@ itself (how to report a vulnerability) lives in [`SECURITY.md`](../SECURITY.md).
 ```text
 fuzz/
 ├── Cargo.toml          # standalone workspace (`[workspace]`), NOT part of the root workspace
-├── fuzz_targets/       # 28 libFuzzer harnesses / `[[bin]]` targets
+├── fuzz_targets/       # 34 libFuzzer harnesses / `[[bin]]` targets
 │   ├── body_stream.rs        # RequestBody/BodyProducer streaming contract
 │   ├── charset.rs            # Character-encoding detection/label handling
 │   ├── compression.rs        # HTTP compression/deflate/gzip/brotli-like stream handling
@@ -53,7 +53,7 @@ fuzz/
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
 ├── src/lib.rs          # shared helpers (`megi_fuzz`): RIFF/WebP envelope, lossy
 │                       #   char-boundary-safe text, length-prefixed part framing
-└── corpus/<target>/    # versioned seed inputs (small, hand-written where present; 170 files total)
+└── corpus/<target>/    # versioned seed inputs (small, hand-written where present; 176 files total)
 ```
 
 `fuzz/` deliberately has its own empty `[workspace]` table: it must not join the root
@@ -249,9 +249,9 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
 
 Notes:
-- 31 harnesses exist in `fuzz/fuzz_targets/` (31 `[[bin]]` targets) and 173 seed corpus files
-  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 31 ASan matrix
-  entries (10 at 600 s, 21 at 300 s) plus 9 UBSan smoke entries (120 s each).
+- 34 harnesses exist in `fuzz/fuzz_targets/` (34 `[[bin]]` targets) and 176 seed corpus files
+  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 34 ASan matrix
+  entries (10 at 600 s, 24 at 300 s) plus 9 UBSan smoke entries (120 s each).
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 
@@ -269,8 +269,8 @@ get that:
   (`fuzz-corpus-soak-*`), so each week starts where the previous one stopped, and
   logs plus crash artifacts are uploaded even when the campaign fails.
 * **Locally**: `tools/soak_fuzz.sh --hours 24` runs the same rotation on this
-  machine. Useful flags: `--slice-seconds 550` (time per target per rotation, default
-  550 — the 31-target rotation needs ≤ 580 s to fit the 5 h scheduled budget, #1833),
+  machine. Useful flags: `--slice-seconds 529` (time per target per rotation, default
+  529 — the 34-target rotation needs ≤ 529 s to fit the 5 h scheduled budget, #1833),
   `--targets "html_parse css_parse"`, `--out target/soak`. It keeps
   `fuzz/corpus/<target>` between rotations, mirrors any libFuzzer artifact into
   `target/soak/crashes/<target>/`, and exits non-zero if a target run failed.
