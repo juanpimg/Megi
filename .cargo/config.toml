@@ -1,3 +1,17 @@
+# Default local build workflow: huacnlee/cargo (drop-in fork).
+# The binary lives at ~/.cargo/bin/cargo; the rustup proxy is kept as
+# ~/.cargo/bin/cargo.rustup. rust-toolchain.toml still selects rustc 1.99.1.
+# The fork stores intermediates in ~/.cargo/targets and GCs them automatically,
+# so CARGO_TARGET_DIR / --target-dir are intentionally not set by repo scripts.
+[build.gc]
+max-size = "auto"
+shared-max-size = "50 GiB"
+projects-max-size = "50 GiB"
+max-unused = "1 day"
+shared-max-unused = "7 days"
+frequency = "1 hour"
+enabled = true
+
 [alias]
 test-all = "test --workspace"
 test-harness = "test -p megi-test-harness"

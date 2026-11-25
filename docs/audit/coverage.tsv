@@ -1,5 +1,5 @@
 path	lines	category	phase	auditor	date	status	findings	notes
-.cargo/config.toml	5	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+.cargo/config.toml	19	manifest	F3	lead	2026-11-25	covered	CARGO-FORK-DEFAULT	read full config; huacnlee fork defaults with rustup proxy fallback
 .deslop-please.allow	219	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
 .github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
