@@ -181,16 +181,31 @@
     }
     return out;
   });
+  // WHATWG HTML §7.1.3.1 "forgiving-base64 decode": ASCII whitespace is ignored,
+  // a trailing `=` pair is optional but otherwise padding and length must agree.
   define("atob", function (input) {
-    var value = String(input).replace(/\s/g, ""); var out = "";
-    for (var i = 0; i < value.length; i++) {
-      if (BASE64.indexOf(value.charAt(i)) < 0 && value.charAt(i) !== "=") { throw new DOMException("InvalidCharacterError", "InvalidCharacterError"); }
+    var value = String(input).replace(/[\u0009\u000A\u000C\u000D\u0020]/g, "");
+    var len = value.length;
+    var bad = new DOMException("InvalidCharacterError", "InvalidCharacterError");
+    if (len % 4 === 1) { throw bad; }
+    var pad = 0;
+    while (pad < len && value.charAt(len - 1 - pad) === "=") { pad += 1; }
+    if (pad > 2) { throw bad; }
+    var data = value.slice(0, len - pad);
+    if (data.length % 4 === 1 || (pad > 0 && data.length % 4 + pad !== 4)) { throw bad; }
+    for (var i = 0; i < data.length; i++) {
+      if (BASE64.indexOf(data.charAt(i)) < 0) { throw bad; }
     }
-    for (var i = 0; i < value.length; i += 4) {
-      var n = (BASE64.indexOf(value.charAt(i)) << 18) | (BASE64.indexOf(value.charAt(i + 1)) << 12) | ((value.charAt(i + 2) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 2))) << 6) | (value.charAt(i + 3) === "=" ? 0 : BASE64.indexOf(value.charAt(i + 3)));
+    var out = "";
+    for (var i = 0; i < data.length; i += 4) {
+      var chunk = data.substr(i, 4);
+      var n = (BASE64.indexOf(chunk.charAt(0)) << 18) |
+        ((chunk.length > 1 ? BASE64.indexOf(chunk.charAt(1)) : 0) << 12) |
+        ((chunk.length > 2 ? BASE64.indexOf(chunk.charAt(2)) : 0) << 6) |
+        (chunk.length > 3 ? BASE64.indexOf(chunk.charAt(3)) : 0);
       out += String.fromCharCode((n >> 16) & 255);
-      if (value.charAt(i + 2) !== "=") { out += String.fromCharCode((n >> 8) & 255); }
-      if (value.charAt(i + 3) !== "=") { out += String.fromCharCode(n & 255); }
+      if (chunk.length > 2) { out += String.fromCharCode((n >> 8) & 255); }
+      if (chunk.length > 3) { out += String.fromCharCode(n & 255); }
     }
     return out;
   });
