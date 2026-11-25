@@ -2,6 +2,8 @@
 
 #[allow(unused_imports)]
 use super::*;
+#[path = "chunk2/supports.rs"]
+mod supports;
 
 /// Compiles one style rule (selectors + expanded declarations) without assigning a source
 /// order; callers set `source_order` before inserting it.
@@ -36,8 +38,9 @@ impl StyleCollection {
     ///
     /// Declarations are shorthand-expanded before they are stored, so every rule contributes
     /// longhand declarations to the cascade (see [`crate::shorthand::expand_declarations`]).
-    /// `@media` rules are evaluated against [`StyleCollection::media`]; other at-rules
-    /// (`@import`, `@supports`, `@font-face`, ...) are still ignored.
+    /// `@media` rules are evaluated against [`StyleCollection::media`] and `@supports`
+    /// conditions against the declarations this engine parses; other at-rules
+    /// (`@import`, `@font-face`, ...) are still ignored.
     pub fn add_stylesheet(&mut self, stylesheet: &Stylesheet, origin: Origin) {
         self.add_rules(&stylesheet.rules, origin, &[], UNLAYERED_LAYER);
         for rule in &stylesheet.keyframes {
@@ -120,6 +123,15 @@ impl StyleCollection {
                     let nested_text = serialize_component_values(&block.values);
                     let nested = crate::parser::parse_stylesheet(&nested_text);
                     self.add_container_rules(&nested.rules, origin, &query, layer_rank);
+                }
+                Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("supports") => {
+                    if supports::condition(&at_rule.prelude)
+                        && let Some(block) = &at_rule.block
+                    {
+                        let nested_text = serialize_component_values(&block.values);
+                        let nested = crate::parser::parse_stylesheet(&nested_text);
+                        self.add_rules(&nested.rules, origin, layer_path, layer_rank);
+                    }
                 }
                 Rule::At(at_rule) if at_rule.name.eq_ignore_ascii_case("layer") => {
                     let prelude = serialize_component_values(&at_rule.prelude);

@@ -271,7 +271,8 @@ crates/css/src/calc/parser.rs	346	src	F2	wave3-css	2026-11-21	covered	#1669,#173
 crates/css/src/calc/tests.rs	96	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
 crates/css/src/cascade.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk1.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/cascade/chunk2.rs	390	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/cascade/chunk2.rs	402	src	F2	wave-max-mod	2026-11-25	covered	#supports	dispatch @supports conditions to evaluator; cascade unchanged for other at-rules
+crates/css/src/cascade/chunk2/supports.rs	195	src	F2	wave-max-mod	2026-11-25	covered	#supports	CSS Conditional Rules 4 condition evaluator; declaration parser reuse
 crates/css/src/cascade/chunk3.rs	477	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/cascade/chunk4.rs	499	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	Preserve all parent-key bits
 crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test
@@ -382,6 +383,7 @@ crates/css/tests/state_vars_calc/main.rs	7	test	F1	wave-max-mod	2026-11-19	cover
 crates/css/tests/state_vars_calc/selectors.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/state_vars_calc/state.rs	321	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/steps_before_flag.rs	78	test	F1	autonomous-round9	2026-11-19	covered	#1757 via PR #1897	
+crates/css/tests/supports_conditions.rs	69	test	F1	wave-max-mod	2026-11-25	covered	#supports	TDD regression tests for @supports in cascade
 crates/css/tests/text_overflow.rs	166	test	F1	juanpimg	2026-11-20	covered	#1929	text-overflow test files from PR 2053 merged into main
 crates/css/tests/transform.rs	281	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
