@@ -181,6 +181,10 @@ pub(super) fn inline_filtered_solid(layout_box: &LayoutBox) -> Option<Color> {
         || style.mix_blend_mode != megi_css::MixBlendMode::Normal
         || !layout_box.children.is_empty()
         || style.background_image.is_some()
+        || style
+            .background_layers
+            .iter()
+            .any(|layer| layer.mask_image.is_some())
         || style.background_geometry_explicit
         || !style.box_shadows.is_empty()
         || !style.border_radius.is_zero()

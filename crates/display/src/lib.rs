@@ -36,6 +36,12 @@ pub type ImageStore = HashMap<NodeId, Arc<megi_image::RgbaImage>>;
 /// paints nothing (backgrounds) or falls back to the default list marker.
 pub type BackgroundImages = HashMap<String, Arc<megi_image::RgbaImage>>;
 
+/// Decoded `mask-image` bitmap carried by a mask group (CSS Masking 1 §6.1).
+///
+/// Named here so consumers that only depend on `megi-display` (notably the
+/// rasterizer) can handle mask groups without taking a new image dependency.
+pub type MaskImage = Arc<megi_image::RgbaImage>;
+
 /// One painted side of a CSS border box.
 ///
 /// Widths are the computed `border-*-width` values in px; a side whose style is
@@ -281,6 +287,12 @@ pub enum DisplayItem {
     },
     /// Closes and composites the topmost text-mask group.
     PopTextMaskGroup,
+    /// Opens a group masked by the alpha channel of a decoded `mask-image` (CSS
+    /// Masking 1 §6.1). The nested items are rendered into a transparent buffer
+    /// and composited through the mask stretched over `rect`.
+    PushMaskGroup { rect: Rect, mask: MaskImage },
+    /// Closes and composites the topmost `mask-image` group.
+    PopMaskGroup,
     /// Pushes a rectangular clipping boundary onto the clip stack.
     PushClip { rect: Rect },
     /// Pops the top clipping boundary from the clip stack.
@@ -301,6 +313,7 @@ impl DisplayItem {
             | Self::RoundedBorder { rect, .. }
             | Self::PushRoundedGroup { rect, .. }
             | Self::PushTextMaskGroup { rect, .. }
+            | Self::PushMaskGroup { rect, .. }
             | Self::Text { rect, .. }
             | Self::TextDecoration { rect, .. }
             | Self::Marker { rect, .. }
@@ -340,7 +353,9 @@ impl DisplayItem {
                 ))
             }
             Self::PushClip { rect } => Some(*rect),
-            Self::PopClip | Self::PopRoundedGroup | Self::PopTextMaskGroup => None,
+            Self::PopClip | Self::PopRoundedGroup | Self::PopTextMaskGroup | Self::PopMaskGroup => {
+                None
+            }
         }
     }
 }

@@ -76,6 +76,7 @@ mod blur;
 mod config;
 mod dispatch;
 mod gradients;
+mod mask;
 mod pixmap;
 mod shapes;
 mod text;
@@ -87,7 +88,7 @@ mod tests;
 // see their parent's private imports, so `use super::*` in a submodule picks
 // up the whole rasterizer surface without duplicating `use` lists.
 #[allow(unused_imports)]
-use self::{blur::*, config::*, dispatch::*, gradients::*, pixmap::*, shapes::*, text::*};
+use self::{blur::*, config::*, dispatch::*, gradients::*, mask::*, pixmap::*, shapes::*, text::*};
 
 // Public API — paths through `rasterizer` stay unchanged for downstream crates.
 pub use blur::filter_solid_color;

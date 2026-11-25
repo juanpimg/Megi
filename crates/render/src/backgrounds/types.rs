@@ -54,6 +54,8 @@ pub enum BackgroundKind {
     Background,
     /// `list-style-image` marker for `display: list-item` boxes.
     ListStyleImage,
+    /// `mask-image` / `-webkit-mask-image` alpha source for the box.
+    MaskImage,
 }
 
 /// Result of the background-loading stage.

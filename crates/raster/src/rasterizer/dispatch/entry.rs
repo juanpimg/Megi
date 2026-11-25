@@ -114,6 +114,46 @@ pub(crate) fn paint_items(
                 index += 1;
                 continue;
             }
+            DisplayItem::PushMaskGroup { rect, mask } => {
+                if budget.flatten {
+                    index += 1;
+                    continue;
+                }
+                // Find the matching PopMaskGroup (supports nesting).
+                let mut depth = 1usize;
+                let mut end = index + 1;
+                while end < items.len() {
+                    match &items[end] {
+                        DisplayItem::PushMaskGroup { .. } => depth += 1,
+                        DisplayItem::PopMaskGroup => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+                paint_mask_group(
+                    pixmap,
+                    shift(*rect, dx, dy),
+                    mask,
+                    &items[index + 1..end],
+                    cache,
+                    font_database,
+                    dx,
+                    dy,
+                    budget,
+                );
+                index = end + 1;
+                continue;
+            }
+            DisplayItem::PopMaskGroup => {
+                // Unbalanced pop: ignore defensively instead of panicking.
+                index += 1;
+                continue;
+            }
             _ => {}
         }
 
@@ -296,7 +336,9 @@ pub(crate) fn paint_items(
             | DisplayItem::PushRoundedGroup { .. }
             | DisplayItem::PopRoundedGroup
             | DisplayItem::PushTextMaskGroup { .. }
-            | DisplayItem::PopTextMaskGroup => unreachable!("handled above"),
+            | DisplayItem::PopTextMaskGroup
+            | DisplayItem::PushMaskGroup { .. }
+            | DisplayItem::PopMaskGroup => unreachable!("handled above"),
         }
         index += 1;
     }

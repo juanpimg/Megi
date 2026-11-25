@@ -106,6 +106,10 @@ impl ComputedStyle {
             BackgroundAttachment::Scroll,
         );
 
+        // CSS Masking 1 §6.1: a single `mask-image` applies to the whole box,
+        // independent of the background layer list. It lives on each layer so
+        // `ComputedStyle`'s literal (chunk3.rs) stays unchanged.
+        let mask_image = super::super::mask::compute_mask_image(entries);
         let mut layers = Vec::with_capacity(layers_count);
         let mut gradient_count = 0usize;
         for index in 0..layers_count {
@@ -135,6 +139,7 @@ impl ComputedStyle {
                 origin: origins[index],
                 clip: clips[index],
                 attachment: attachments[index],
+                mask_image: mask_image.clone(),
             });
         }
         (layers, explicit)
