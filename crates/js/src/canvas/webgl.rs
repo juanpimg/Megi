@@ -1,11 +1,17 @@
 //! Minimal software WebGL 1 foundation (WebGL 1.0 §5.14, §6.2).
 //!
 //! A context writes straight into the canvas `CanvasSurface` RGBA buffer: no
-//! GPU, no shaders, no buffers, no textures. This is a foundation for M6, not
-//! WebGL 1. Framebuffer coordinates use the WebGL bottom-left origin and are
-//! translated to the surface's top-left origin on every access.
+//! GPU, no shaders, no textures. Buffer objects feed `POINTS` through a minimal
+//! vertex attribute pointer (WebGL 1.0 §5.9, §5.13); the legacy `vertices`
+//! property still works. This is a foundation for M6, not WebGL 1.
+//! Framebuffer coordinates use the WebGL bottom-left origin and are translated
+//! to the surface's top-left origin on every access.
 
 use super::Rgba;
+
+mod attrib;
+
+pub use self::attrib::VertexAttribPointer;
 
 /// WebGL 1.0 §5.14: buffer bits accepted by `clear`.
 pub const COLOR_BUFFER_BIT: u32 = 0x0000_4000;
@@ -23,6 +29,8 @@ pub const TRIANGLES: u32 = 0x0004;
 pub const ARRAY_BUFFER: u32 = 0x8892;
 /// WebGL 1.0 §5.14.4: buffer usage accepted by `bufferData`.
 pub const STATIC_DRAW: u32 = 0x88E4;
+/// WebGL 1.0 §5.9: the only attribute component type accepted by the software path.
+pub const FLOAT: u32 = 0x1406;
 /// WebGL 1.0 §5.14.6: error codes reported by `getError`.
 pub const NO_ERROR: u32 = 0;
 pub const INVALID_ENUM: u32 = 0x0500;
@@ -31,12 +39,16 @@ pub const INVALID_OPERATION: u32 = 0x0502;
 /// DoS bounds for JS-supplied buffer data (WebGL 1.0 §6.2).
 pub const MAX_BUFFER_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_WEBGL_BUFFERS: usize = 1024;
+/// WebGL 1.0 §5.9: the GLSL ES minimum is 8; 16 bounds JS-created state.
+pub const MAX_VERTEX_ATTRIBS: usize = 16;
 
-/// One named WebGL buffer object. Handles are 1-based; 0 means "no buffer".
+/// One named WebGL buffer object. Handles are 1-based and never reused; 0 means
+/// "no buffer". Deleted buffers keep their handle but lose their data store.
 #[derive(Clone, Debug)]
 pub struct WebGLBuffer {
     pub handle: u32,
     pub bytes: Vec<u8>,
+    pub deleted: bool,
 }
 
 /// Fixed color for POINTS while no shader program exists (WebGL 1.0 §3.3).
@@ -72,6 +84,8 @@ pub struct WebGLState {
     /// Named buffer objects and the currently bound `ARRAY_BUFFER`.
     pub buffers: Vec<WebGLBuffer>,
     pub bound_array_buffer: Option<usize>,
+    /// Generic attribute arrays installed by `vertexAttribPointer` (WebGL 1.0 §5.9).
+    pub attribs: Vec<VertexAttribPointer>,
     /// WebGL error flag; `getError` returns and clears it.
     pub error: u32,
 }
@@ -91,6 +105,7 @@ impl WebGLState {
             vertices: Vec::new(),
             buffers: Vec::new(),
             bound_array_buffer: None,
+            attribs: Vec::new(),
             error: NO_ERROR,
         }
     }
@@ -174,6 +189,7 @@ impl super::CanvasSurface {
         self.webgl.buffers.push(WebGLBuffer {
             handle,
             bytes: Vec::new(),
+            deleted: false,
         });
         handle
     }
@@ -242,10 +258,70 @@ impl super::CanvasSurface {
         data[offset..end].copy_from_slice(bytes);
     }
 
+    /// WebGL 1.0 §5.9: captures the currently bound `ARRAY_BUFFER` as the data
+    /// source for one generic attribute index. Only `FLOAT` is supported; the
+    /// first two components feed `POINTS` (no shader program exists yet).
+    pub fn webgl_vertex_attrib_pointer(
+        &mut self,
+        index: u32,
+        size: u32,
+        kind: u32,
+        normalized: bool,
+        stride: usize,
+        offset: usize,
+    ) {
+        let Some(buffer) = self.webgl.bound_array_buffer else {
+            self.webgl.error = INVALID_OPERATION;
+            return;
+        };
+        let pointer =
+            match VertexAttribPointer::new(index, size, kind, normalized, stride, offset, buffer) {
+                Ok(pointer) => pointer,
+                Err(error) => {
+                    self.webgl.error = error;
+                    return;
+                }
+            };
+        match self
+            .webgl
+            .attribs
+            .iter()
+            .position(|entry| entry.index == index)
+        {
+            Some(position) => self.webgl.attribs[position] = pointer,
+            None if self.webgl.attribs.len() < MAX_VERTEX_ATTRIBS => {
+                self.webgl.attribs.push(pointer)
+            }
+            None => self.webgl.error = INVALID_OPERATION,
+        }
+    }
+
+    /// WebGL 1.0 §5.13: deletes a named buffer, releasing its data store and
+    /// any attribute pointer or binding that referred to it. Unknown handles are
+    /// silently ignored, as in WebGL.
+    pub fn webgl_delete_buffer(&mut self, buffer: u32) {
+        let Some(index) = self
+            .webgl
+            .buffers
+            .iter()
+            .position(|entry| entry.handle == buffer && !entry.deleted)
+        else {
+            return;
+        };
+        self.webgl.buffers[index].bytes.clear();
+        self.webgl.buffers[index].deleted = true;
+        if self.webgl.bound_array_buffer == Some(index) {
+            self.webgl.bound_array_buffer = None;
+        }
+        self.webgl.attribs.retain(|entry| entry.buffer != index);
+    }
+
     /// WebGL 1.0 §2.11 + §3.3: transforms clip-space vertices through the
-    /// viewport into the framebuffer. `POINTS` writes 1px points; `TRIANGLES`
-    /// rasterises each consecutive triple with a deterministic edge function.
-    /// Blending is not implemented, so the source replaces the destination.
+    /// viewport into the framebuffer. `POINTS` writes 1px points from the
+    /// attribute pointer when one is installed, otherwise from `vertices`;
+    /// `TRIANGLES` rasterises each consecutive triple with a deterministic edge
+    /// function. Blending is not implemented, so the source replaces the
+    /// destination.
     pub fn webgl_draw_arrays(&mut self, mode: u32, first: usize, count: usize) {
         if mode != POINTS && mode != TRIANGLES {
             return;
@@ -254,14 +330,42 @@ impl super::CanvasSurface {
         if vw <= 0 || vh <= 0 {
             return;
         }
+        let point_attrib = if mode == POINTS {
+            self.webgl
+                .attribs
+                .iter()
+                .find(|entry| entry.index == 0)
+                .copied()
+        } else {
+            None
+        };
+        let available = point_attrib
+            .as_ref()
+            .map_or(self.webgl.vertices.len(), |pointer| {
+                self.webgl
+                    .buffers
+                    .get(pointer.buffer)
+                    .map_or(0, |buffer| pointer.vertex_count(buffer))
+            });
         let end = first
             .saturating_add(count)
-            .min(self.webgl.vertices.len())
+            .min(available)
             .min(first.saturating_add(MAX_DRAW_VERTICES));
         let mut framebuffer_vertices = Vec::with_capacity(end.saturating_sub(first));
         for index in first..end {
-            let Some(&(clip_x, clip_y)) = self.webgl.vertices.get(index) else {
-                break;
+            let (clip_x, clip_y) = if let Some(pointer) = &point_attrib {
+                let Some(buffer) = self.webgl.buffers.get(pointer.buffer) else {
+                    break;
+                };
+                let Some(vertex) = pointer.vertex(buffer, index) else {
+                    break;
+                };
+                vertex
+            } else {
+                let Some(&vertex) = self.webgl.vertices.get(index) else {
+                    break;
+                };
+                vertex
             };
             if !clip_x.is_finite() || !clip_y.is_finite() {
                 continue;

@@ -96,6 +96,36 @@ fn webgl_triangle_rasterises_a_real_surface_region() {
 }
 
 #[test]
+fn webgl_vertex_attrib_pointer_draws_points_from_buffer() {
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 4; c.height = 4; \
+             document.body.appendChild(c); \
+             var gl = c.getContext('webgl'); \
+             gl.viewport(0, 0, 4, 4); \
+             gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); \
+             var buffer = gl.createBuffer(); \
+             gl.bindBuffer(gl.ARRAY_BUFFER, buffer); \
+             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-0.5, -0.5, 0.5, 0.5]), gl.STATIC_DRAW); \
+             gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); \
+             gl.drawArrays(gl.POINTS, 0, 2); \
+             var first = new Uint8Array(4); \
+             gl.readPixels(1, 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, first); \
+             var second = new Uint8Array(4); \
+             gl.readPixels(3, 3, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, second); \
+             var middle = new Uint8Array(4); \
+             gl.readPixels(2, 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, middle); \
+             gl.deleteBuffer(buffer); \
+             [first.join(','), second.join(','), middle.join(','), \
+              gl.getError() === WebGLRenderingContext.NO_ERROR].join('|');",
+            "webgl_attrib_buffer",
+        )
+        .expect("webgl vertexAttribPointer drawArrays must not throw");
+    assert_eq!(out, "255,255,255,255|255,255,255,255|255,0,0,255|true");
+}
+
+#[test]
 fn webgl_buffer_sub_data_accepts_nan_offset_without_error() {
     let mut rt = runtime();
     let out = rt

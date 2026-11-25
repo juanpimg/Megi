@@ -37,7 +37,7 @@ Se adopta la **rama (a): rasterizador software en Rust puro**, dentro de `Canvas
 
 ## Límites explícitos
 
-- Esto **no es WebGL 1 completo**: no hay shaders, programas, texturas, depth buffer, VAO, `TRIANGLE_STRIP`/`TRIANGLE_FAN`, blending ni antialiasing. `drawArrays(TRIANGLES)` rasteriza las triples de la propiedad determinista `vertices`, no un `ARRAY_BUFFER` vía `vertexAttribPointer`.
+- Esto **no es WebGL 1 completo**: no hay shaders, programas, texturas, depth buffer, VAO, `TRIANGLE_STRIP`/`TRIANGLE_FAN`, blending ni antialiasing. `drawArrays(POINTS)` puede leer posiciones `FLOAT` desde un `ARRAY_BUFFER` vía `vertexAttribPointer` (WebGL 1.0 §5.9, §5.13); `drawArrays(TRIANGLES)` sigue rasterizando las triples de la propiedad determinista `vertices`.
 - El WPT adoptado es **un caso real** (`bufferSubData`), no la suite WebGL completa; la barra cerrada es «WebGL WPT» con allowlist 0 sobre el subset revisado, no conformance completa de WebGL 1.
 - El color del triángulo es fijo (`POINT_COLOR`); no hay programación de fragmentos.
 - El golden cubre el rasterizador y el helper de buffers se ejecuta en el fixture, pero el contenido de los buffers no es visible en la imagen: su comportamiento se verifica en el test JS y en el subtest WPT.

@@ -7,7 +7,7 @@
 use super::canvas_support::{canvas_context_node, canvas_number};
 use super::webgl_buffers::{
     webgl_bind_buffer, webgl_buffer_data, webgl_buffer_sub_data, webgl_create_buffer,
-    webgl_get_error,
+    webgl_delete_buffer, webgl_get_attrib_location, webgl_get_error, webgl_vertex_attrib_pointer,
 };
 use super::*;
 use crate::canvas::ops as canvas_ops;
@@ -74,6 +74,7 @@ pub(crate) fn build_webgl_context(handle: u32, context: &mut Context) -> JsObjec
         ("UNSIGNED_BYTE", webgl::UNSIGNED_BYTE),
         ("ARRAY_BUFFER", webgl::ARRAY_BUFFER),
         ("STATIC_DRAW", webgl::STATIC_DRAW),
+        ("FLOAT", webgl::FLOAT),
     ] {
         init.property(js_string!(name), JsValue::from(value), Attribute::all());
     }
@@ -89,6 +90,12 @@ pub(crate) fn build_webgl_context(handle: u32, context: &mut Context) -> JsObjec
         ("bindBuffer", webgl_bind_buffer as NativeFn),
         ("bufferData", webgl_buffer_data as NativeFn),
         ("bufferSubData", webgl_buffer_sub_data as NativeFn),
+        ("deleteBuffer", webgl_delete_buffer as NativeFn),
+        (
+            "vertexAttribPointer",
+            webgl_vertex_attrib_pointer as NativeFn,
+        ),
+        ("getAttribLocation", webgl_get_attrib_location as NativeFn),
     ] {
         init.function(native(function), js_string!(name), 8);
     }
@@ -165,7 +172,8 @@ pub(crate) fn webgl_enable(
     Ok(JsValue::undefined())
 }
 
-/// WebGL 1.0 §2.12 + §6.2: only `POINTS` is rasterised, using `vertices`.
+/// WebGL 1.0 §2.12 + §6.2: `POINTS` reads `vertexAttribPointer`'s buffer when
+/// present, otherwise the legacy `vertices` property.
 pub(crate) fn webgl_draw_arrays(
     this: &JsValue,
     args: &[JsValue],
