@@ -1,5 +1,45 @@
 [
   {
+    "path": "2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html",
+    "sha256": "2dce2889890407ab36a87162be15b7e73525c3db58a26bda79cbe2f506d750eb",
+    "bytes": 1082,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "2dcontext/drawing-rectangles-to-the-canvas",
+    "subtest_count_expected": 1
+  },
+  {
+    "path": "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html",
+    "sha256": "452269c8cd0b4dc00f9b8b3f344b57c04dd7b8657aaee4adc8d29174502d6b2a",
+    "bytes": 950,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "2dcontext/drawing-rectangles-to-the-canvas",
+    "subtest_count_expected": 1
+  },
+  {
+    "path": "2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html",
+    "sha256": "7e0cad71eab3e17c58ac4ad08e3b34a0f837488da2898b78a1cce682c1ac1f0f",
+    "bytes": 982,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "2dcontext/drawing-rectangles-to-the-canvas",
+    "subtest_count_expected": 1
+  },
+  {
+    "path": "common/canvas-tests.js",
+    "sha256": "7ce4817a3ce0fef3c728452f17e3ca644e914aea1ae648f2208a52d39d724c5e",
+    "bytes": 3393,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "pixel assertion helpers for the 2D canvas fixtures",
+    "dir": "common",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "css/css-syntax/META.yml",
     "sha256": "070460b7530b80374068ab862c4f5e2b1c90c3f8e9e021ceadac9bfa6c36367f",
     "bytes": 111,

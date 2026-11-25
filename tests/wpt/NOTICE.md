@@ -2,10 +2,13 @@
 - Upstream: web-platform-tests/wpt
 - Pinned commit: `ab2ef95d3a7c512a6e7321688c80e428086af426` (never `master`)
 - License: BSD-3-Clause (allowlisted)
-- Imported dirs: css/css-syntax, dom/nodes, dom/events, url, html/webappapis/atob, fetch/data-urls/resources, shadow-dom, shadow-dom/resources, custom-elements, custom-elements/resources
 
 | Fixture | Bytes | SHA-256 | Kind |
 |---|---:|---|---|
+| `2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html` | 1082 | `2dce2889890407ab36a87162be15b7e73525c3db58a26bda79cbe2f506d750eb` | testharness |
+| `2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html` | 950 | `452269c8cd0b4dc00f9b8b3f344b57c04dd7b8657aaee4adc8d29174502d6b2a` | testharness |
+| `2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html` | 982 | `7e0cad71eab3e17c58ac4ad08e3b34a0f837488da2898b78a1cce682c1ac1f0f` | testharness |
+| `common/canvas-tests.js` | 3393 | `7ce4817a3ce0fef3c728452f17e3ca644e914aea1ae648f2208a52d39d724c5e` | support |
 | `css/css-syntax/META.yml` | 111 | `070460b7530b80374068ab862c4f5e2b1c90c3f8e9e021ceadac9bfa6c36367f` | skip |
 | `css/css-syntax/README.md` | 4992 | `4c973b42488aad84ec305456a2815a3c36dcb0a5720bb1f3bb51db785a190455` | testharness |
 | `css/css-syntax/anb-parsing.html` | 3336 | `e11b74d37e03deda5595ac3a26ecfcf10c4efeb08acfed9371ca56fffe5695db` | testharness |
