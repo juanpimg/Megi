@@ -93,10 +93,12 @@ fn headless_about_pages_render_expected_text() {
 
 #[test]
 fn chrome_compact_band_is_explicit_and_default_stays_byte_identical() {
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
-    let input =
-        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    // A data URL keeps the painted address bar and favicon fallback key independent of the
+    // worktree path, so the golden is reproducible from any checkout location.
+    let input = megi_browser::cli::normalize_input(
+        "data:text/html,<title>Compact</title><h1>Workspace</h1>",
+    )
+    .expect("data URL");
     let options = megi_webview::render::RenderOptions::default();
     let default =
         megi_browser::headless::render_target_with_chrome(&input, 320, 240, &options, None)

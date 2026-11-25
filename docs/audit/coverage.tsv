@@ -218,7 +218,7 @@ crates/browser/tests/sandbox_e2e_tests.rs	297	test	F1	lead	2026-11-25	covered	CI
 crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/content.rs	203	test	F1	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
+crates/browser/tests/shell_tests/content.rs	205	test	F1	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after path-independent compact golden fix
 crates/browser/tests/shell_tests/find.rs	119	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/forms.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/main.rs	18	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
@@ -436,7 +436,7 @@ crates/html/src/tokenizer.rs	285	src	F2	wave-max-mod	2026-11-19	covered	#maximal
 crates/html/src/tokenizer/attributes.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/char_refs.rs	323	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/comment.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tokenizer/core.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tokenizer/core.rs	338	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/html/src/tokenizer/doctype.rs	325	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/doctype_end.rs	297	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tokenizer/error.rs	242	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1361,13 +1361,13 @@ crates/test_harness/Cargo.toml	24	manifest	F3	wave-max-mod	2026-11-19	covered	#m
 crates/test_harness/src/css_harness.rs	452	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/css_harness/expanded.rs	105	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 crates/test_harness/src/js_executor.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/lib.rs	391	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
-crates/test_harness/src/main.rs	43	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
-crates/test_harness/src/run.rs	500	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/lib.rs	347	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+crates/test_harness/src/main.rs	40	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+crates/test_harness/src/run.rs	465	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/src/serializer_harness/mod.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/src/tokenizer_harness.rs	498	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/wpt/manifest.rs	146	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/mod.rs	15	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
@@ -1375,11 +1375,11 @@ crates/test_harness/src/wpt/runner.rs	256	src	F2	wpt-components-scope	2026-11-25
 crates/test_harness/src/wpt/shim.rs	34	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/summary.rs	59	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/testharness_shim.js	244	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
-crates/test_harness/tests/closed_loop/common.rs	43	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/tests/closed_loop/common.rs	42	test	F1	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/tests/closed_loop/css_serializer.rs	136	test	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/tests/closed_loop/fixtures.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/tests/closed_loop/main.rs	25	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/tests/closed_loop/tokenizer.rs	190	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/tests/closed_loop/main.rs	25	test	F1	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+crates/test_harness/tests/closed_loop/tokenizer.rs	172	test	F1	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/tests/closed_loop/tree.rs	89	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/wpt_runner.rs	206	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1389,8 +1389,8 @@ deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata v
 docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	100	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
-docs/AI-QUICKSTART.md	86	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/ARCHITECTURE.md	229	docs	F3	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+docs/ARCHITECTURE.md	229	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
