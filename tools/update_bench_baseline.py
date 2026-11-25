@@ -82,7 +82,10 @@ def measured_rows(documents: list[dict]) -> list[dict]:
                 fail(f"{row['name']}: group/detail changed between passes")
             entry["medians"].append(median)
             for sample in samples:
-                value = float(sample)
+                try:
+                    value = float(sample)
+                except (TypeError, ValueError):
+                    fail(f"{row['name']}: non-numeric sample {sample!r}")
                 if not math.isfinite(value):
                     fail(f"{row['name']}: non-finite sample")
                 entry["samples"].append(value)

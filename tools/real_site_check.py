@@ -292,7 +292,12 @@ def refresh_hashes(root: Path) -> int:
     """
     json_path = root / STATUS_DIR / "real-sites.json"
     html_path = root / STATUS_DIR / "real-sites.html"
-    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        # Same clean exit as load_sites(): a missing or malformed report must
+        # not surface as an uncaught traceback (#2290).
+        sys.exit(f"error: {exc}")
     results = payload.get("results", [])
     for item in results:
         png_rel = str(item.get("png") or "")

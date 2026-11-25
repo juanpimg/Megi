@@ -161,6 +161,14 @@ def read_ledger() -> list[dict[str, str]]:
         if len(fields) != len(HEADER):
             print(f"{LEDGER}: row {index + 1} has {len(fields)} fields", file=sys.stderr)
             raise SystemExit(2)
+        try:
+            int(fields[1])
+        except ValueError:
+            # One validation point protects every int(row["lines"]) counter in
+            # cmd_report/cmd_check (#2290); a bad ledger must not crash with a
+            # bare ValueError traceback.
+            print(f"{LEDGER}: row {index + 1}: invalid lines {fields[1]!r}", file=sys.stderr)
+            raise SystemExit(2)
         rows.append(dict(zip(HEADER, fields, strict=True)))
     return rows
 
