@@ -39,6 +39,20 @@ const GENERIC_FAMILIES: &[&str] = &[
     "fangsong",
 ];
 
+/// CSS Fonts 4 §3.1: `system-ui` is the default UI font of the platform, not the
+/// `sans-serif` generic. Linux fontconfig (and therefore Chrome) maps it to
+/// Noto Sans; keep that first so a system font DB resolves the same face. The
+/// remaining names cover other platforms while `sans-serif` keeps its own,
+/// deterministic fallback list below (goldens depend on it).
+const SYSTEM_UI_FALLBACKS: &[&str] = &[
+    "Noto Sans",
+    "Segoe UI",
+    "Helvetica Neue",
+    "DejaVu Sans",
+    "Liberation Sans",
+    "FreeSans",
+    "Arial",
+];
 /// Preferred system families tried after the OS-specific generic default.
 const SANS_FALLBACKS: &[&str] = &[
     "DejaVu Sans",

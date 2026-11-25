@@ -404,11 +404,11 @@ crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by li
 crates/fonts/assets/DejaVuSans.ttf	0	binary	-			exempt		not read line by line: binary
 crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db.rs	335	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/fonts/src/db.rs	349	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: SYSTEM_UI_FALLBACKS added; sans-serif list untouched
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/query.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/shape.rs	395	src	F2	wave2	2026-11-19	covered	#1976 via PR #1983	Re-read font_for_rendering fallback path
-crates/fonts/src/db/tests.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/fonts/src/db/query.rs	321	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: system-ui expansion + system_db face resolution; literal kept last
+crates/fonts/src/db/shape.rs	403	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: font() consults system DB for system-ui after @font-face aliases
+crates/fonts/src/db/tests.rs	161	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: red/green tests for system-ui vs sans-serif and quoted literal
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

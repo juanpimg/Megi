@@ -57,6 +57,90 @@ mod quoted_family_tests {
 }
 
 #[cfg(test)]
+mod system_ui_tests {
+    use super::*;
+
+    /// CSS Fonts 4 §3.1: `system-ui` is the UA's default UI font, which on Linux
+    /// fontconfig maps to Noto Sans. The `sans-serif` generic keeps the bundled
+    /// DejaVu face so deterministic goldens stay byte-identical (#parity).
+    #[test]
+    fn system_ui_uses_system_default_without_changing_sans_serif() {
+        let db = FontDatabase::from_system();
+        if db.is_empty() {
+            return; // fontless CI container: constructor must simply not panic
+        }
+        let ui_id = db
+            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("system-ui must resolve against the system font DB");
+        let ui = db.build_font(ui_id).expect("system-ui face must build");
+        assert_eq!(
+            ui.family_name(),
+            "Noto Sans",
+            "system-ui must resolve to the system default UI font, got {}",
+            ui.family_name()
+        );
+
+        let sans_id = db
+            .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("sans-serif must resolve against the system font DB");
+        let sans = db.build_font(sans_id).expect("sans-serif face must build");
+        assert_eq!(
+            sans.family_name(),
+            "DejaVu Sans",
+            "sans-serif must keep its existing fallbacks, got {}",
+            sans.family_name()
+        );
+    }
+
+    /// The render pipeline uses a bundled-only DB; the generic must still find
+    /// the system face there, while a quoted name stays a literal family (#1239).
+    #[test]
+    fn bundled_database_resolves_system_ui_but_not_quoted_generic() {
+        let db = FontDatabase::new_with_bundled_fonts();
+        let sans = db
+            .font(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("sans-serif resolves against bundled fonts");
+        assert_eq!(sans.family_name(), "DejaVu Sans");
+
+        let quoted = format!("{QUOTED_FAMILY_PREFIX}system-ui");
+        let literal = db
+            .font(&[&quoted], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("quoted system-ui falls back to the default face");
+        assert_eq!(literal.family_name(), "DejaVu Sans");
+
+        if system_fallback_db().is_empty() {
+            return; // fontless CI container: bundled fallback is the best we can do
+        }
+        let ui = db
+            .font(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("system-ui resolves through the system DB");
+        assert_eq!(ui.family_name(), "Noto Sans");
+    }
+
+    /// CSS Fonts 4 §3.1 family lists are ordered: a face available earlier in
+    /// the list must win over the trailing `system-ui` generic.
+    #[test]
+    fn earlier_available_family_wins_over_system_ui() {
+        let db = FontDatabase::new_with_bundled_fonts();
+        let direct = db
+            .font(&["DejaVu Sans"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("bundled face");
+        let ordered = db
+            .font(
+                &["DejaVu Sans", "system-ui"],
+                400,
+                FontStyle::Normal,
+                Stretch::Normal,
+            )
+            .expect("earlier family must resolve");
+        assert_eq!(
+            ordered, direct,
+            "system-ui must not outrank an earlier available family"
+        );
+    }
+}
+
+#[cfg(test)]
 mod identity_digest_tests {
     use super::*;
 

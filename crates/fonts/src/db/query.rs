@@ -14,9 +14,12 @@ impl FontDatabase {
                 (None, &[] as &[&'static str])
             } else {
                 match keyword.as_str() {
-                    "sans-serif" | "system-ui" | "ui-sans-serif" => {
-                        (Some(Family::SansSerif), SANS_FALLBACKS)
-                    }
+                    "sans-serif" => (Some(Family::SansSerif), SANS_FALLBACKS),
+                    // CSS Fonts 4 §3.1: system-ui is the platform UI font. Do not
+                    // use the `SansSerif` generic here: fontdb maps it to "Arial",
+                    // which would outrank Noto Sans when MS fonts are installed.
+                    // The literal name is still appended below as a last resort.
+                    "system-ui" | "ui-sans-serif" => (None, SYSTEM_UI_FALLBACKS),
                     "serif" | "ui-serif" => (Some(Family::Serif), SERIF_FALLBACKS),
                     "monospace" | "ui-monospace" => (Some(Family::Monospace), MONO_FALLBACKS),
                     "cursive" => (Some(Family::Cursive), CURSIVE_FALLBACKS),
@@ -123,6 +126,41 @@ impl FontDatabase {
             stretch,
             style: DbStyle::from(style),
         })
+    }
+
+    /// Resolves the `system-ui`/`ui-sans-serif` generic when this database only
+    /// holds bundled/web faces (CSS Fonts 4 §3.1). A bundled-only database cannot
+    /// see Noto Sans, so ask the shared system DB and return an owned [`Font`];
+    /// fontdb IDs are never passed between databases. `sans-serif` callers do
+    /// not use this path, so deterministic goldens keep their DejaVu face.
+    pub(crate) fn system_ui_font(
+        &self,
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<Font> {
+        if self.system_loaded {
+            return None;
+        }
+        let ui_index = families.iter().position(|family| {
+            !family.starts_with(QUOTED_FAMILY_PREFIX)
+                && matches!(
+                    unmark_family(family).to_ascii_lowercase().as_str(),
+                    "system-ui" | "ui-sans-serif"
+                )
+        })?;
+        // CSS Fonts 4 §3.1 lists are ordered: a face matched earlier wins.
+        if ui_index > 0
+            && self
+                .query_face(&families[..ui_index], weight, style, stretch)
+                .is_some()
+        {
+            return None;
+        }
+        let system = system_fallback_db();
+        let id = system.query_face(families, weight, style, stretch)?;
+        system.build_font(id).ok()
     }
 
     pub(crate) fn last_resort_face(
