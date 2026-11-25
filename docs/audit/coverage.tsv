@@ -205,7 +205,7 @@ crates/browser/tests/shell_tests/worker.rs	215	test	F1	wave-max-mod	2026-11-19	c
 crates/browser/tests/spawn_hardening_tests.rs	57	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/watchdog_tests.rs	66	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/core/Cargo.toml	14	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/clone.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/clone.rs	369	src	F2	subagent-2299	2026-11-25	covered	#2299	re-read: budget precheck for shallow clone slots and two red/green exhaustion tests
 crates/core/src/document.rs	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/geometry.rs	155	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/iter.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

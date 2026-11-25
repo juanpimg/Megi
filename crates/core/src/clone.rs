@@ -74,6 +74,17 @@ impl Document {
         if matches!(self.node(node_id).kind, NodeKind::Document) {
             return None;
         }
+        // #2299: a clone needs one slot, or two for an HTML <template> (element plus
+        // its own inert contents fragment). Refuse before allocating: `alloc_slot`
+        // panics once the arena reaches MAX_SLOTS with no reusable slots left.
+        let required_slots = if self.clone_needs_contents_slot(node_id) {
+            2
+        } else {
+            1
+        };
+        if budget < required_slots {
+            return None;
+        }
         // Bound clone amplification (issue #678 / #1111): if the subtree (including any
         // `<template>` contents) is too large to safely clone, fall back to a shallow
         // clone instead of risking arena exhaustion / panic.
@@ -121,17 +132,25 @@ impl Document {
         Some(cloned_root)
     }
 
+    /// Returns `true` when cloning `node_id` also allocates a fresh inert contents
+    /// fragment: WHATWG HTML §13.2.6.4 gives every cloned HTML `<template>` its own.
+    /// Shared with the budget precheck so the two cannot diverge (#2299).
+    fn clone_needs_contents_slot(&self, node_id: NodeId) -> bool {
+        self.node(node_id)
+            .as_element()
+            .is_some_and(|el| el.namespace == Namespace::Html && el.local_name == "template")
+    }
+
     /// Allocates a shallow clone of `node_id` (no children) in `O(1)` arena allocations.
     ///
     /// HTML `<template>` elements get a freshly allocated empty `DocumentFragment`
     /// linked from `template_contents` instead of aliasing the original's fragment.
+    /// Callers must have passed the `budget >= required_slots` precheck in
+    /// [`Self::clone_node_with_budget`] (or the `subtree_size` bound for deep clones).
     fn clone_node_shallow(&mut self, node_id: NodeId) -> NodeId {
         let kind = self.node(node_id).kind.clone();
         let cloned_id = self.create_node(kind);
-        let needs_fresh_contents = self
-            .node(cloned_id)
-            .as_element()
-            .is_some_and(|el| el.namespace == Namespace::Html && el.local_name == "template");
+        let needs_fresh_contents = self.clone_needs_contents_slot(node_id);
         if needs_fresh_contents {
             let fragment_id = self.create_node(NodeKind::DocumentFragment);
             if let Some(el) = self.node_mut(cloned_id).as_element_mut() {
@@ -308,5 +327,43 @@ mod tests {
         assert!(doc.node(shallow).first_child.is_none());
         let deep = doc.clone_node_with_budget(div, true, 64).expect("clone");
         assert!(doc.node(deep).first_child.is_some());
+    }
+
+    /// Grows the arena to `MAX_SLOTS` with payload-free tombstones so the next
+    /// `alloc_slot` would panic, leaving `free` slots on the free list.
+    fn exhaust_arena(doc: &mut Document, free: usize) {
+        while doc.nodes.len() < MAX_SLOTS {
+            let slot = doc.nodes.len();
+            doc.nodes.push(crate::tombstone_node(slot, 0));
+            doc.generations.push(0);
+            doc.occupied.push(false);
+        }
+        doc.free_list.clear();
+        for slot in (0..MAX_SLOTS).rev().take(free) {
+            doc.free_list.push(slot as u32);
+        }
+    }
+
+    #[test]
+    fn clone_node_returns_none_when_the_arena_is_full() {
+        // #2299: a zero budget must be reported as None, not panic in alloc_slot.
+        let mut doc = Document::new();
+        let div = doc.create_element(Namespace::Html, "div", Vec::new());
+        exhaust_arena(&mut doc, 0);
+        assert_eq!(doc.free_slots(), 0);
+        assert_eq!(doc.allocated(), MAX_SLOTS);
+        assert_eq!(doc.clone_node(div, false), None);
+    }
+
+    #[test]
+    fn clone_template_returns_none_when_budget_cannot_cover_contents() {
+        // #2299: an HTML <template> needs two slots (element + inert fragment);
+        // with one free slot the clone must fail instead of panicking midway.
+        let mut doc = Document::new();
+        let template = doc.create_element(Namespace::Html, "template", Vec::new());
+        exhaust_arena(&mut doc, 1);
+        assert_eq!(doc.free_slots(), 1);
+        assert_eq!(doc.clone_node(template, false), None);
+        assert_eq!(doc.free_slots(), 1, "failed clone must not leak a slot");
     }
 }
