@@ -524,7 +524,7 @@ area = "F7"
 name = "La barra de chrome no tapa el contenido (scroll_y=0)"
 source = "issue #1012"
 state = "done"
-evidence = "test:crates/browser/src/present.rs::chrome_band_pixels_scales_and_clamps_to_the_window"
+evidence = "test:crates/browser/src/present/unit_tests.rs::chrome_band_pixels_scales_and_clamps_to_the_window"
 issue = 1012
 
 [[capability]]

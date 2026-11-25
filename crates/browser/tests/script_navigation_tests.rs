@@ -9,6 +9,7 @@ fn request(html: &str) -> RenderRequest {
         input: data,
         css_width: 400,
         css_height: 300,
+        raster_scale: 1.0,
         base_override: None,
         scripting: true,
         find_query: None,

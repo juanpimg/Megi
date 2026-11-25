@@ -68,6 +68,7 @@ where
             input: request.input.clone(),
             css_width: request.css_width,
             css_height: request.css_height,
+            raster_scale: request.options.raster_scale(),
             base_override: request.base_override.clone(),
             scripting: request.scripting,
             find_query: request.find_query.clone(),

@@ -145,6 +145,7 @@ impl WindowApp {
                     content_type,
                     body.to_vec(),
                 );
+                let request = request.with_raster_scale(self.raster_scale());
                 self.send_render(request);
                 self.input = submission.action.clone();
                 self.update_title();
@@ -431,13 +432,16 @@ impl WindowApp {
         };
         let snapshot = forms::snapshot_data_url(document);
         let base = self.nav.current_url();
-        let request = self.store.begin_ui_event_request(
-            &snapshot,
-            self.metrics.css_width,
-            self.metrics.css_height,
-            base.as_deref(),
-            ui_events,
-        );
+        let request = self
+            .store
+            .begin_ui_event_request(
+                &snapshot,
+                self.metrics.css_width,
+                self.metrics.css_height,
+                base.as_deref(),
+                ui_events,
+            )
+            .with_raster_scale(self.raster_scale());
         let _ = self.send_render(request);
     }
 }

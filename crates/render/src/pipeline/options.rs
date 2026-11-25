@@ -4,6 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use megi_display::RasterScale;
 use megi_net::FetchOptions;
 
 use crate::images::{
@@ -78,6 +79,25 @@ impl Default for Viewport {
             width: 800,
             height: 600,
         }
+    }
+}
+
+impl Viewport {
+    /// Physical raster dimensions for an owned [`RasterScale`].
+    ///
+    /// The CSS viewport itself is never changed: this is only the size of the
+    /// pixmap/display-list raster pass. The physical area is capped by the same
+    /// [`MAX_VIEWPORT_AREA`] budget so a hostile scale cannot allocate a giant
+    /// framebuffer (existing scale-1 renders keep their exact dimensions).
+    pub fn raster_dimensions(&self, scale: RasterScale) -> Result<(u32, u32), RenderError> {
+        let dimension = |css_px: u32| -> u32 {
+            ((f64::from(css_px) * f64::from(scale.factor())).round() as u32).max(1)
+        };
+        let (width, height) = (dimension(self.width), dimension(self.height));
+        if u64::from(width) * u64::from(height) > MAX_VIEWPORT_AREA {
+            return Err(RenderError::InvalidViewport { width, height });
+        }
+        Ok((width, height))
     }
 }
 
@@ -277,6 +297,14 @@ pub struct RenderOptions {
     pub encode_png: bool,
     /// Device pixel ratio used for responsive image selection (`srcset` / `<picture>`), default `1.0`.
     pub device_pixel_ratio: f32,
+    /// Raster scale: physical device pixels per CSS pixel, default `1.0`.
+    ///
+    /// **Independent of layout**: the CSS viewport (and therefore media queries,
+    /// `srcset`, `devicePixelRatio` and hit regions) stays in CSS pixels. Only the
+    /// final display list geometry and the raster/pixmap dimensions are scaled.
+    /// The browser window sets this from the winit `scale_factor`; headless renders
+    /// and all existing callers keep `1.0`, which is byte-identical to the old path.
+    pub raster_scale: f32,
     /// Optional previous-frame computed style snapshot used as the baseline for CSS
     /// transitions at [`Self::time_ms`]. When `None` (default), script-driven style
     /// changes within a single render still transition from pre-script styles.
@@ -392,6 +420,7 @@ impl Default for RenderOptions {
             storage: None,
             host_events: Vec::new(),
             device_pixel_ratio: 1.0,
+            raster_scale: 1.0,
             transition_from_styles: None,
             host_dom_events: Vec::new(),
         }

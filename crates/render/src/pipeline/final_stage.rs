@@ -222,10 +222,22 @@ fn finish_render(
     let paint_time = paint_start.elapsed();
 
     let raster_start = Instant::now();
+    // DPR boundary: layout, hit regions and `RenderOutput::display_list` stay in CSS
+    // pixels; only the raster copy of the display list is scaled. Identity keeps
+    // the existing borrow (and the byte-identical golden output).
+    let raster_scale = megi_display::RasterScale::new(options.raster_scale);
+    let (raster_width, raster_height) = options.viewport.raster_dimensions(raster_scale)?;
+    let scaled_list;
+    let raster_list: &megi_display::DisplayList = if raster_scale.is_identity() {
+        &display_list
+    } else {
+        scaled_list = raster_scale.apply(&display_list);
+        &scaled_list
+    };
     let pixmap = megi_raster::rasterize_display_list_with_font_database(
-        &display_list,
-        options.viewport.width,
-        options.viewport.height,
+        raster_list,
+        raster_width,
+        raster_height,
         megi_paint::RenderConfig::default(),
         measurer.database(),
     );

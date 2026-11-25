@@ -232,6 +232,7 @@ impl WindowApp {
             });
         }
         widget_overlays.sort_by_key(|item| item.visual.focus_ring);
+        let raster_scale = self.raster_scale() as f64;
         let Some(surface) = self.surface.as_mut() else {
             return;
         };
@@ -274,20 +275,22 @@ impl WindowApp {
             height,
         );
         let rail_px = present::chrome_rail_pixels_for(chrome_scale_f64, rail_css_width, width);
+        // The frame is rasterized at physical resolution; CSS scroll/viewport
+        // coordinates are converted to raster rows inside the present layer.
         let presented = if rail_px == 0 {
-            // Keep the closed-rail path exactly byte-identical to the legacy blit:
-            // `present_region_at` derives its source width from the frame itself.
-            present::present_region_at(
+            // The source width comes from the frame itself: a physical frame in
+            // a same-sized window buffer is a 1:1 blit at any device scale.
+            present::present_region_at_scaled(
                 frame,
                 self.scroll.offset(),
                 page_viewport_height,
-                chrome_px,
                 &mut buffer,
                 width,
                 height,
+                raster_scale,
             )
         } else {
-            present::present_region_with_insets(
+            present::present_region_with_insets_scaled(
                 frame,
                 self.scroll.offset(),
                 page_viewport_height,
@@ -297,6 +300,7 @@ impl WindowApp {
                 &mut buffer,
                 width,
                 height,
+                raster_scale,
             )
         };
         if !presented {

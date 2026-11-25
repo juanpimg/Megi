@@ -37,3 +37,13 @@ rules = ["generic-api-key"]
 description = "RFC 6455 section 1.3 example Sec-WebSocket-Key/Accept pair in DevTools protocol tests is a public test vector, not a credential"
 paths = ["^crates/browser/tests/devtools_protocol\\.rs$"]
 rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "RFC 6455 section 1.3 sample Sec-WebSocket-Key in WebDriver BiDi protocol tests is the same public test vector, not a credential"
+paths = ["^crates/browser/tests/webdriver_bidi\\.rs$"]
+rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "docs/status/test262.json public canonical test identifiers (same class as WPT keys), not credentials"
+paths = ['''^docs/status/test262\.json$''']
+rules = ["generic-api-key"]

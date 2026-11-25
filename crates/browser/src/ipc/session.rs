@@ -46,7 +46,8 @@ impl ProcessFrame {
                     | 0xFF,
             );
         }
-        let height = if self.response.content_height > 0 {
+        // The PNG carries the **physical** frame; `content_height` stays CSS.
+        let content_height = if self.response.content_height > 0 {
             self.response.content_height
         } else {
             image.height
@@ -54,11 +55,11 @@ impl ProcessFrame {
         let nodes = DocumentOrdinalNodes::build(&self.document);
         Ok(crate::worker::RenderFrame {
             generation: self.response.generation,
-            width: self.response.css_width,
-            height,
+            width: image.width,
+            height: image.height,
             pixels,
             png_bytes: self.response.png_bytes.clone(),
-            content_height: height,
+            content_height,
             capped: false,
             links: self
                 .response

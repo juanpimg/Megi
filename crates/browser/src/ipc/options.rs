@@ -150,6 +150,9 @@ pub struct IpcRenderOptions {
     pub max_web_font_bytes: usize,
     pub max_total_web_font_bytes: usize,
     pub device_pixel_ratio: f32,
+    /// Physical device pixels per CSS pixel for the child raster pass.
+    /// Default `1.0` via `#[serde(default)]`, so older parents/children interoperate.
+    pub raster_scale: f32,
     pub stream_responses: bool,
     pub accept_server_push: bool,
     pub enable_workers: bool,
@@ -162,6 +165,17 @@ impl Default for IpcRenderOptions {
 }
 
 impl IpcRenderOptions {
+    /// Overrides the device raster scale forwarded to the child renderer.
+    pub fn with_raster_scale(mut self, raster_scale: f32) -> Self {
+        self.raster_scale = raster_scale;
+        self
+    }
+
+    /// Device raster scale requested for the child raster pass.
+    pub const fn raster_scale(&self) -> f32 {
+        self.raster_scale
+    }
+
     /// Extracts the serializable option fields and cookie snapshot from `options`.
     pub fn from_render_options(options: &RenderOptions) -> Self {
         // Seed only cookies scoped to the render origin, and never HttpOnly
@@ -201,6 +215,7 @@ impl IpcRenderOptions {
             max_web_font_bytes: options.max_web_font_bytes,
             max_total_web_font_bytes: options.max_total_web_font_bytes,
             device_pixel_ratio: options.device_pixel_ratio,
+            raster_scale: options.raster_scale,
             stream_responses: options.stream_responses,
             accept_server_push: options.accept_server_push,
             enable_workers: options.enable_workers,
@@ -240,6 +255,7 @@ impl IpcRenderOptions {
             max_web_font_bytes: self.max_web_font_bytes,
             max_total_web_font_bytes: self.max_total_web_font_bytes,
             device_pixel_ratio: self.device_pixel_ratio,
+            raster_scale: self.raster_scale,
             stream_responses: self.stream_responses,
             accept_server_push: self.accept_server_push,
             enable_workers: self.enable_workers,

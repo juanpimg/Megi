@@ -312,6 +312,7 @@ mod tests {
             input: input.to_owned(),
             css_width: 100,
             css_height: 100,
+            raster_scale: 1.0,
             base_override: None,
             scripting: false,
             find_query: None,

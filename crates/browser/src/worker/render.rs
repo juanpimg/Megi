@@ -146,11 +146,12 @@ pub fn render_document_with_options(
         scrollable_content_height(&probe.layout).max(probe.layout.dimensions.margin_box().height);
     let (content_height, capped) = scroll::content_height(layout_height);
     let target_height = content_height.clamp(1, scroll::MAX_CONTENT_HEIGHT);
-    let output = if target_height > probe.pixmap.height {
+    // Compare **CSS** heights: `probe.pixmap.height` is physical when raster_scale != 1.
+    let output = if target_height > request.css_height {
         render_view(request, target_height, base_options, false)?
     } else if request.scripting {
         // Re-run at probe height with scripting enabled so scripts execute once.
-        render_view(request, probe.pixmap.height, base_options, false)?
+        render_view(request, request.css_height, base_options, false)?
     } else {
         probe
     };
@@ -273,6 +274,9 @@ pub(crate) fn view_options(
 ) -> megi_webview::render::RenderOptions {
     let mut options = base_options.clone();
     options.viewport = viewport;
+    // The CSS viewport above is unchanged; the raster pass alone is scaled by
+    // the device scale carried in the request. Hit regions stay in CSS px.
+    options.raster_scale = request.raster_scale;
     if let Some(base) = &request.base_override {
         options.base_override = Some(base.clone());
     }
