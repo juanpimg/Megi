@@ -125,6 +125,54 @@ mod robustness_regression_tests {
         assert!(tb.open_html_counts.is_empty());
     }
 
+    /// #2296: external consumers may only inspect parser state through read-only
+    /// accessors. The observable contract is that those accessors report the exact state
+    /// after every supported mutation, while the internal mirrors (`open_ids`,
+    /// `open_html_counts`) stay in sync with the exposed stack.
+    #[test]
+    fn read_only_accessors_reflect_state_and_keep_mirrors_in_sync() {
+        let mut tb = TreeBuilder::new(false);
+        assert_eq!(tb.document().root(), tb.doc.root());
+        assert_eq!(tb.mode(), InsertionMode::Initial);
+        assert!(tb.open_elements().is_empty());
+        assert!(tb.active_formatting().is_empty());
+        assert!(tb.template_modes().is_empty());
+        assert_eq!(tb.head_element(), None);
+        assert_eq!(tb.form_element(), None);
+
+        let div = tb.doc.create_element(Namespace::Html, "div", vec![]);
+        let bold = tb.doc.create_element(Namespace::Html, "b", vec![]);
+        tb.push_open_element(div);
+        tb.mode = InsertionMode::InBody;
+        tb.head_element = Some(div);
+        tb.form_element = Some(bold);
+        tb.template_modes.push(InsertionMode::InTemplate);
+        tb.active_formatting.push(FormattingEntry::Element {
+            node_id: bold,
+            tag_name: "b".to_owned(),
+            attributes: Vec::new(),
+        });
+
+        assert_eq!(tb.mode(), InsertionMode::InBody);
+        assert_eq!(tb.open_elements(), &[div]);
+        assert_eq!(tb.head_element(), Some(div));
+        assert_eq!(tb.form_element(), Some(bold));
+        assert_eq!(tb.template_modes(), &[InsertionMode::InTemplate]);
+        assert_eq!(tb.active_formatting().len(), 1);
+        assert_bookkeeping_consistent(&tb);
+
+        // Arbitrary-position mutations (adoption agency) must be reflected too.
+        tb.insert_open_element(0, bold);
+        assert_eq!(tb.open_elements(), &[bold, div]);
+        assert_bookkeeping_consistent(&tb);
+        assert_eq!(tb.pop_open_element(), Some(div));
+        assert_eq!(tb.open_elements(), &[bold]);
+        assert_bookkeeping_consistent(&tb);
+        assert_eq!(tb.remove_open_element(0), bold);
+        assert!(tb.open_elements().is_empty());
+        assert_bookkeeping_consistent(&tb);
+    }
+
     /// Audit finding F2 mentioned a latent `open_elements[fmt_stack_pos - 1]` underflow in
     /// the adoption agency: unreachable for parser-built trees (the formatting element is
     /// never bottom-most), but a manually built/corrupted stack must not panic in release.

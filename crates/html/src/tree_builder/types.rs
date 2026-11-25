@@ -210,15 +210,41 @@ pub struct ParseOutcome {
 }
 
 /// WHATWG HTML §13.2.6 Tree Builder state machine.
+///
+/// The insertion-mode/stack/formatting/head/form state is crate-private: external
+/// consumers inspect it through the read-only accessors below (#2296). In particular
+/// `open_elements` has O(1) mirrors (`open_ids`, `open_html_counts`,
+/// `open_foreign_count`) that must be updated together with the stack; exposing it
+/// mutably would let a caller desynchronize scope checks and corrupt token handling.
+///
+/// External consumers read the state through the accessors:
+///
+/// ```
+/// use megi_html::{InsertionMode, TreeBuilder};
+///
+/// let builder = TreeBuilder::new(false);
+/// assert_eq!(builder.mode(), InsertionMode::Initial);
+/// assert!(builder.open_elements().is_empty());
+/// assert_eq!(builder.head_element(), None);
+/// ```
+///
+/// Direct mutation is a compile error, so the mirrors cannot be desynchronized:
+///
+/// ```compile_fail
+/// use megi_html::TreeBuilder;
+///
+/// let mut builder = TreeBuilder::new(false);
+/// builder.open_elements.clear();
+/// ```
 pub struct TreeBuilder {
-    pub doc: Document,
-    pub mode: InsertionMode,
+    pub(crate) doc: Document,
+    pub(crate) mode: InsertionMode,
     pub original_mode: InsertionMode,
-    pub open_elements: Vec<NodeId>,
-    pub active_formatting: Vec<FormattingEntry>,
-    pub template_modes: Vec<InsertionMode>,
-    pub head_element: Option<NodeId>,
-    pub form_element: Option<NodeId>,
+    pub(crate) open_elements: Vec<NodeId>,
+    pub(crate) active_formatting: Vec<FormattingEntry>,
+    pub(crate) template_modes: Vec<InsertionMode>,
+    pub(crate) head_element: Option<NodeId>,
+    pub(crate) form_element: Option<NodeId>,
     pub scripting_enabled: bool,
     pub frameset_ok: bool,
     pub foster_parenting: bool,
@@ -267,4 +293,43 @@ pub struct TreeBuilder {
     /// (`document.documentElement.remove()`); the end-of-parse synthetic html/head/body fixup
     /// must then be skipped, or it would resurrect a detached skeleton (`scripted_foster01`).
     pub(crate) html_element_seen: bool,
+}
+
+impl TreeBuilder {
+    /// The document being built (§13.2.6). Read-only: use the parsing entry points to
+    /// obtain an owned [`Document`].
+    pub fn document(&self) -> &Document {
+        &self.doc
+    }
+
+    /// The current insertion mode (§13.2.6.4.1 – §13.2.6.4.21).
+    pub fn mode(&self) -> InsertionMode {
+        self.mode
+    }
+
+    /// The stack of open elements (§13.2.4.2), with its mirrors kept in sync by the
+    /// crate-private bookkeeping helpers.
+    pub fn open_elements(&self) -> &[NodeId] {
+        &self.open_elements
+    }
+
+    /// The list of active formatting elements (§13.2.4.3).
+    pub fn active_formatting(&self) -> &[FormattingEntry] {
+        &self.active_formatting
+    }
+
+    /// The saved insertion modes of open `<template>` elements (§13.2.6.4.16).
+    pub fn template_modes(&self) -> &[InsertionMode] {
+        &self.template_modes
+    }
+
+    /// The current `<head>` element, if one has been inserted (§13.2.6.4.3).
+    pub fn head_element(&self) -> Option<NodeId> {
+        self.head_element
+    }
+
+    /// The current `<form>` element, if one has been inserted (§13.2.6.4.7).
+    pub fn form_element(&self) -> Option<NodeId> {
+        self.form_element
+    }
 }
