@@ -286,3 +286,52 @@ fn devtools_endpoint_serves_discovery_and_evaluates_runtime_expression() {
     assert_eq!(rpc["id"], 1);
     assert_eq!(rpc["result"]["result"]["value"], 2, "{rpc}");
 }
+
+#[test]
+fn devtools_performance_exports_real_render_timings() {
+    // M7 profiler: the exported breakdown must be the timings of the attached render,
+    // not a synthetic waterfall. RenderTimings is the single source of truth.
+    let url = data_url("<style>p{color:red}</style><p>profile</p>");
+    let output = render_url(&url, &RenderOptions::default()).expect("render fixture");
+    let endpoint = spawn(
+        0,
+        DebugTarget {
+            title: "Performance fixture".to_owned(),
+            url: url.to_owned(),
+        },
+    )
+    .expect("start endpoint");
+    endpoint.attach(DevToolsPage::from_render(&output));
+    let mut stream = connect_target(endpoint.addr);
+
+    let metrics = rpc_call(&mut stream, 42, "Performance.getMetrics", json!({}));
+    assert_eq!(metrics["id"], 42);
+    let reported = metrics["result"]["metrics"]
+        .as_array()
+        .expect("metrics array from real timings");
+    let total = reported
+        .iter()
+        .find(|metric| metric["name"] == "Total")
+        .and_then(|metric| metric["value"].as_u64())
+        .expect("Total metric");
+    assert_eq!(
+        total,
+        output.stats.timings.total.as_micros() as u64,
+        "profiler must export the measured render, not invented numbers"
+    );
+    assert!(
+        reported
+            .iter()
+            .any(|metric| { metric["name"] == "Layout" && metric["value"].as_u64().is_some() })
+    );
+
+    let trace = rpc_call(&mut stream, 43, "Performance.getTrace", json!({}));
+    assert_eq!(trace["id"], 43);
+    let events = trace["result"]["traceEvents"]
+        .as_array()
+        .expect("trace events from real timings");
+    assert!(events.len() >= 3, "phase flamegraph needs several phases");
+    assert!(events.iter().any(|event| {
+        event["name"] == "Layout" && event["ph"] == "X" && event["args"]["dur"].is_u64()
+    }));
+}
