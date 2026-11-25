@@ -84,7 +84,7 @@ crates/browser/src/chrome/tests/mod.rs	154	src	F2	wave-max-mod	2026-11-19	covere
 crates/browser/src/chrome/tests/paint.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/tabs.rs	103	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/cli/args.rs	196	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: --print-to-pdf and --remote-debugging-port flags both present
+crates/browser/src/cli/args.rs	196	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read updated --print-to-pdf help text
 crates/browser/src/cli/finish.rs	234	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: PDF mode validation and DevTools port propagation coexist
 crates/browser/src/cli/parse.rs	177	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: both new flags parsed and validated
 crates/browser/src/cli/tests.rs	346	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Re-read: headless PDF mode and flag conflict tests
@@ -133,7 +133,7 @@ crates/browser/src/ipc/session.rs	237	src	F2	issue-2308	2026-11-25	covered	#2308
 crates/browser/src/ipc/tests.rs	483	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/validated.rs	223	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/worker_stream.rs	168	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/lib.rs	372	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: pdf and cfg(full) devtools modules and re-exports
+crates/browser/src/lib.rs	375	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read pdf re-exports
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -148,7 +148,9 @@ crates/browser/src/pages/i18n_tests.rs	25	src	F2	wave-max-mod	2026-11-19	covered
 crates/browser/src/pages/input.rs	67	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
 crates/browser/src/pages/listing.rs	253	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages/tests.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/pdf.rs	235	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Read in full: ISO 32000-1 xref/trailer writer, FlateDecode image XObject, headless render path
+crates/browser/src/pdf.rs	295	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read full writer, object layout and tests
+crates/browser/src/pdf/objects.rs	60	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read objects.rs and text.rs in full after clippy refactor
+crates/browser/src/pdf/text.rs	162	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read objects.rs and text.rs in full after clippy refactor
 crates/browser/src/present.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/reader.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/refresh.rs	206	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
