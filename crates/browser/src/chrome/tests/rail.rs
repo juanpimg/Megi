@@ -15,6 +15,7 @@ fn rail_view<'a>(
         hover: None,
         expanded,
         width_css,
+        top_css: CHROME_HEIGHT,
     }
 }
 

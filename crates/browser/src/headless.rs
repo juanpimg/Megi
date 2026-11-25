@@ -112,6 +112,10 @@ pub fn reader_url(
     Ok(crate::pages::data_url(&page))
 }
 
+mod chrome_compact;
+
+pub use chrome_compact::{render_target_with_chrome_compact, screenshot_with_chrome_compact};
+
 /// Renders `input` and paints the shell chrome (tab strip + address bar) over the page.
 ///
 /// Headless equivalent of the window overlay: the chrome occupies the top
@@ -125,53 +129,7 @@ pub fn render_target_with_chrome(
     options: &megi_webview::render::RenderOptions,
     find_query: Option<&str>,
 ) -> Result<megi_webview::render::RenderOutput, ShellError> {
-    // Chrome/find paint the pixmap after the pipeline, so skip the eager page PNG and
-    // encode once at the end (R201); the final bytes are identical to the previous path.
-    let mut base = options.clone();
-    base.encode_png = false;
-    let mut output = render_target_with_options(input, width, height, &base)?;
-    if let Some(query) = find_query {
-        let rects = crate::find::highlight_rects(&output.layout, query);
-        crate::find::overlay_highlights_pixmap(&mut output.pixmap, &rects, 0);
-    }
-    let title = crate::title::document_title(&output.document).unwrap_or_else(|| input.to_string());
-    let tabs = vec![crate::chrome::truncate_title(&title, 24)];
-    let favicons = vec![Some(crate::favicon::for_page(
-        &output.document,
-        &output.document_url,
-        options,
-    ))];
-    let address = crate::chrome::AddressBar::new();
-    let view = crate::chrome::ChromeView {
-        favicons: &favicons,
-        tabs: &tabs,
-        active_tab: 0,
-        address: &address,
-        fallback_url: input,
-        dropdown: None,
-        scroll_y: 0,
-        css_viewport_height: height,
-        css_width: width as f32,
-        completion: None,
-        loading: false,
-        overflow: None,
-        hover_url: None,
-        menu: None,
-        can_go_back: false,
-        can_go_forward: false,
-        history_menu: None,
-        download_status: None,
-        history_button: false,
-        ime_preedit: "",
-        rail: None,
-    };
-    // Only the chrome band is painted: the simple `--chrome` view has no
-    // dropdown/status/menu overlays, so the direct RGBA compositor skips the
-    // full-framebuffer `0RGB` round-trip and the whole-frame draw (R196).
-    let band_rows = (crate::chrome::CHROME_HEIGHT.ceil() as u32).min(height);
-    crate::chrome::draw_chrome_over_pixmap(&mut output.pixmap, band_rows, 1.0, &view);
-    output.ensure_png();
-    Ok(output)
+    chrome_compact::render_target_with_chrome_mode(input, width, height, options, find_query, false)
 }
 
 /// Like [`render_target_with_chrome`] but with a deterministic **context menu open**
@@ -223,6 +181,7 @@ pub fn render_target_with_chrome_menu(
         download_status: None,
         history_button: false,
         ime_preedit: "",
+        compact: false,
         rail: None,
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);

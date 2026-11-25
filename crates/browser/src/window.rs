@@ -17,6 +17,8 @@ use crate::zoom;
 #[cfg(all(feature = "window", feature = "a11y"))]
 mod accessibility;
 #[cfg(feature = "window")]
+use frontend::chrome_mode;
+#[cfg(feature = "window")]
 mod desktop;
 #[cfg(feature = "window")]
 mod downloads;
@@ -64,6 +66,8 @@ pub struct WindowViewOptions {
     pub download_dir: Option<std::path::PathBuf>,
     /// Use OS renderer processes with DOM-patching IPC instead of per-site threads.
     pub process_render: bool,
+    /// Suppress chrome animation (`prefers-reduced-motion: reduce`, opt-in flag).
+    pub reduced_motion: bool,
 }
 
 impl Default for WindowViewOptions {
@@ -75,6 +79,7 @@ impl Default for WindowViewOptions {
             session_path: None,
             download_dir: None,
             process_render: true,
+            reduced_motion: false,
         }
     }
 }
@@ -89,12 +94,19 @@ impl WindowViewOptions {
             session_path: None,
             download_dir: None,
             process_render: true,
+            reduced_motion: false,
         }
     }
 
     /// Enables OS renderer processes with DOM-patching IPC (ADR-004).
     pub fn with_process_render(mut self, enabled: bool) -> Self {
         self.process_render = enabled;
+        self
+    }
+
+    /// Suppresses chrome transitions when the user prefers reduced motion.
+    pub fn with_reduced_motion(mut self, enabled: bool) -> Self {
+        self.reduced_motion = enabled;
         self
     }
 

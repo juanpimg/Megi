@@ -116,6 +116,10 @@ pub struct CliArgs {
     pub chrome: bool,
     /// Draw a deterministic open context menu in headless chrome screenshots.
     pub chrome_menu: bool,
+    /// Draw the opt-in compact chrome band in headless screenshots (`--chrome-compact`).
+    pub chrome_compact: bool,
+    /// Suppress chrome animation (`--reduced-motion`).
+    pub reduced_motion: bool,
     /// Render the extracted reader page instead of the raw page (`--reader`).
     pub reader: bool,
     /// Disable session persistence (`--no-session`).
@@ -169,6 +173,10 @@ pub struct RawArgs {
     pub chrome: bool,
     /// `--chrome-menu` was passed.
     pub chrome_menu: bool,
+    /// `--chrome-compact` was passed.
+    pub chrome_compact: bool,
+    /// `--reduced-motion` was passed.
+    pub reduced_motion: bool,
     /// `--reader` was passed.
     pub reader: bool,
     /// `--no-session` was passed.

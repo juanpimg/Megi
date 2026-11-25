@@ -5,7 +5,8 @@ use super::*;
 
 impl WindowApp {
     pub(super) fn page_coordinates(&self, physical_x: f64, physical_y: f64) -> (f32, f32) {
-        let chrome_px = f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale;
+        let chrome_px =
+            f64::from(self.chrome_mode.state(Instant::now()).band_css) * self.metrics.scale;
         physical_to_page(
             // The rail occupies the leftmost physical columns; page hit-testing
             // must use the same shifted window as `present_region_with_insets`.
@@ -40,6 +41,14 @@ impl WindowApp {
         };
         if rail_hover != self.rail_hover {
             self.rail_hover = rail_hover;
+            self.request_repaint();
+        }
+        let now = Instant::now();
+        let state = self.chrome_mode.state(now);
+        let css_x = (physical_x / self.metrics.scale) as f32;
+        let css_y = (physical_y / self.metrics.scale) as f32;
+        let hovering_edge = chrome::rail_hover_hit(css_x, css_y, state.band_css, state.inset_css);
+        if self.chrome_mode.set_peek(hovering_edge, now) {
             self.request_repaint();
         }
         let (x, y) = self.page_coordinates(physical_x, physical_y);

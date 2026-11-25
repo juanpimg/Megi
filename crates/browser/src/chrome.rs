@@ -61,6 +61,11 @@ use tab_strip::{paint_overflow_menu, paint_tab_strip};
 pub use address_bar::{
     AddressBar, address_bar_rect, history_button_hit, history_button_rect, resolve_address,
 };
+pub use address_bar_paint::compact;
+pub use address_bar_paint::compact::{
+    MIN_HIT_TARGET_CSS, PEEK_ANIMATION_MS, band_css_height, band_pixels, peek_labels_visible,
+    peek_width_css,
+};
 pub use dropdown::{
     DropdownItem, DropdownList, DropdownState, dropdown_items, dropdown_layout,
     dropdown_layout_items,
@@ -76,7 +81,7 @@ pub use navigation::{
 };
 pub use rail::{
     RailHit, RailLayout, RailTabRect, RailView, draw_rail, draw_rail_over_pixmap, layout_rail,
-    paint_rail, rail_hit,
+    paint_rail, rail_hit, rail_hover_hit,
 };
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{
@@ -255,6 +260,9 @@ pub struct ChromeView<'a> {
     /// Optional vertical tab rail painted below the top band (Phase 1 UI).
     /// `None` keeps every existing chrome pixel byte-identical.
     pub rail: Option<RailView<'a>>,
+    /// Compact 40 px band: hide the tab strip, keep the 28 px address strip.
+    /// `false` keeps every existing chrome pixel byte-identical.
+    pub compact: bool,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -280,7 +288,9 @@ pub fn draw_chrome(
     };
     let mut pixmap = Pixmap::new(dest_width, dest_height);
     let css_width = view.css_width.max(1.0);
-    paint_tab_strip(&mut pixmap, scale, view, css_width);
+    if !view.compact {
+        paint_tab_strip(&mut pixmap, scale, view, css_width);
+    }
     paint_address_bar(&mut pixmap, scale, view, css_width);
     // The rail is painted before floating menus so those keep their layering.
     // With `rail: None` this block is a no-op and all legacy pixels are intact.
@@ -293,6 +303,9 @@ pub fn draw_chrome(
     }
     paint_navigation_buttons(&mut pixmap, scale, view);
     paint_history_button(&mut pixmap, scale, view);
+    if view.compact {
+        compact::shift_band_up(&mut pixmap, scale);
+    }
     if let Some(menu) = view.history_menu {
         paint_history_menu(&mut pixmap, scale, view, menu);
     }
@@ -355,10 +368,15 @@ pub fn draw_chrome_over_pixmap(
     // full-buffer mix for exactly these rows.
     let mut band = Pixmap::new(width, rows);
     let css_width = view.css_width.max(1.0);
-    paint_tab_strip(&mut band, scale, view, css_width);
+    if !view.compact {
+        paint_tab_strip(&mut band, scale, view, css_width);
+    }
     paint_address_bar(&mut band, scale, view, css_width);
     paint_navigation_buttons(&mut band, scale, view);
     paint_history_button(&mut band, scale, view);
+    if view.compact {
+        compact::shift_band_up(&mut band, scale);
+    }
     debug_assert!(view.dropdown.is_none());
     debug_assert!(view.overflow.is_none());
     debug_assert!(view.menu.is_none());

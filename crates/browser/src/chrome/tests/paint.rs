@@ -301,6 +301,7 @@ fn draw_chrome_without_rail_keeps_legacy_pixels() {
         hover: None,
         expanded: true,
         width_css: RAIL_EXPANDED_WIDTH,
+        top_css: CHROME_HEIGHT,
     });
     let mut with_rail = buffer(640, 400);
     draw_chrome(&mut with_rail, 640, 400, 1.0, &rail_view);

@@ -56,8 +56,13 @@ pub fn viewport_slice(
 /// (F7-CHROME-OVERLAY / #1012). The band scales with HiDPI and is clamped so the page always
 /// keeps at least one physical row. Pure so the wiring can be tested without a window.
 pub fn chrome_band_pixels(scale: f64, dest_height: u32) -> u32 {
-    let css_height = crate::chrome::CHROME_HEIGHT;
-    ((f64::from(css_height) * scale).round() as u32).min(dest_height.saturating_sub(1))
+    chrome_band_pixels_for(scale, crate::chrome::CHROME_HEIGHT, dest_height)
+}
+
+/// Physical-pixel height of a chrome band with an arbitrary CSS height.
+pub fn chrome_band_pixels_for(scale: f64, band_css_height: f32, dest_height: u32) -> u32 {
+    ((f64::from(band_css_height) * scale).round().max(0.0) as u32)
+        .min(dest_height.saturating_sub(1))
 }
 
 /// Physical-pixel width of the expanded vertical tab rail, clamped so the page keeps one column.

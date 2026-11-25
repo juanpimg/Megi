@@ -246,6 +246,8 @@ pub(super) struct WindowApp {
     pub(super) doc_title: Option<String>,
     /// Latest physical cursor position over the window.
     pub(super) cursor: Option<(f64, f64)>,
+    /// Phase 2 shell chrome state: compact band, rail peek, reduced motion.
+    pub(super) chrome_mode: super::chrome_mode::ChromeMode,
     /// Current keyboard modifiers (for Alt+←/→ and Ctrl+zoom/L).
     pub(super) modifiers: ModifiersState,
     /// Current page zoom factor (50–300 %).

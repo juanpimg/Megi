@@ -4,6 +4,9 @@ use super::shortcuts::{Modifiers, ShellAction, binding_for, check_conflicts, res
 use super::*;
 
 #[cfg(test)]
+mod chrome_mode;
+
+#[cfg(test)]
 mod ime_preedit_status_tests {
     use super::presentation::document_ime_status;
 

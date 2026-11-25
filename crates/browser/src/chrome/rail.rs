@@ -75,6 +75,36 @@ pub struct RailView<'a> {
     pub expanded: bool,
     /// Rail width in CSS pixels (collapsed, expanded or peek token).
     pub width_css: f32,
+    /// Top chrome band height in CSS pixels (58 normally, 40 in compact mode).
+    pub top_css: f32,
+}
+
+impl<'a> RailView<'a> {
+    /// View with the default 58 px top band.
+    pub fn new(
+        labels: &'a [String],
+        active: usize,
+        hover: Option<usize>,
+        expanded: bool,
+        width_css: f32,
+    ) -> Self {
+        Self {
+            labels,
+            active,
+            hover,
+            expanded,
+            width_css,
+            top_css: CHROME_HEIGHT,
+        }
+    }
+}
+
+/// Whether the pointer is on the collapsed rail edge hover zone. The zone is at
+/// least `MIN_HIT_TARGET_CSS` wide so peeking remains reachable at small widths.
+#[must_use]
+pub fn rail_hover_hit(x: f32, y: f32, band_height: f32, rail_css_width: f32) -> bool {
+    let zone = (rail_css_width + 8.0).max(super::MIN_HIT_TARGET_CSS);
+    x >= 0.0 && x <= zone && y >= band_height
 }
 
 fn safe_scale(scale: f32) -> f32 {
@@ -97,17 +127,17 @@ pub fn layout_rail(width: f32, height: f32, scale: f32, view: &RailView<'_>) -> 
         .max(0.0)
         .min(width.max(0.0))
         .min(RAIL_PEEK_WIDTH);
-    let rail_height = (height - CHROME_HEIGHT).max(0.0);
-    let rect = Rect::new(0.0, CHROME_HEIGHT, rail_width, rail_height);
+    let rail_height = (height - view.top_css).max(0.0);
+    let rect = Rect::new(0.0, view.top_css, rail_width, rail_height);
 
     // Reserve the toggle and new-tab rows; only whole rows fit in the rail.
     let rows = (rail_height / row_h).floor() as usize;
     let tab_count = rows.saturating_sub(2).min(view.labels.len());
-    let row_y = |row: usize| CHROME_HEIGHT + row as f32 * row_h;
+    let row_y = |row: usize| view.top_css + row as f32 * row_h;
     let toggle = if rows > 0 {
-        Rect::new(0.0, CHROME_HEIGHT, rail_width, row_h)
+        Rect::new(0.0, view.top_css, rail_width, row_h)
     } else {
-        Rect::new(0.0, CHROME_HEIGHT, rail_width, 0.0)
+        Rect::new(0.0, view.top_css, rail_width, 0.0)
     };
 
     let max_chars = ((rail_width - CLOSE_WIDTH - 26.0) / GLYPH_WIDTH).max(1.0) as usize;
@@ -155,7 +185,7 @@ pub fn layout_rail(width: f32, height: f32, scale: f32, view: &RailView<'_>) -> 
 /// sit inside them; the top band is never a rail hit.
 #[must_use]
 pub fn rail_hit(layout: &RailLayout, x: f32, y: f32) -> Option<RailHit> {
-    if y < CHROME_HEIGHT || !contains(layout.rect, x, y) {
+    if y < layout.rect.y || !contains(layout.rect, x, y) {
         return None;
     }
     if contains(layout.toggle, x, y) {

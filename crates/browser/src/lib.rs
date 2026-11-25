@@ -258,9 +258,9 @@ pub use forms::{
 };
 pub use headless::{
     ScreenshotInfo, accessibility_tree, render_target, render_target_with_chrome,
-    render_target_with_chrome_menu, render_target_with_find, render_target_with_options,
-    save_screenshot, screenshot, screenshot_with_chrome, screenshot_with_find,
-    screenshot_with_options,
+    render_target_with_chrome_compact, render_target_with_chrome_menu, render_target_with_find,
+    render_target_with_options, save_screenshot, screenshot, screenshot_with_chrome,
+    screenshot_with_chrome_compact, screenshot_with_find, screenshot_with_options,
 };
 pub use history::{
     HistoryEntry, HistoryLog, HistoryMenu, MAX_RECENT_HISTORY, MAX_TAB_HISTORY, RecentHistory,

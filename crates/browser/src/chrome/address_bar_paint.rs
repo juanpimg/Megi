@@ -179,3 +179,105 @@ pub(crate) fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &Chrom
         COLOR_ADDRESS_TEXT,
     );
 }
+
+/// Compact-band geometry and transient peek timing (Zen-inspired UI plan, Phase 2).
+///
+/// Kept beside the address-bar painter because compact mode moves that strip up
+/// without shrinking any hit target.
+pub mod compact {
+    use megi_webview::paint::{Color, Pixmap};
+
+    use crate::chrome::{
+        CHROME_HEIGHT, COMPACT_CHROME_HEIGHT, RAIL_COLLAPSED_WIDTH, RAIL_EXPANDED_WIDTH,
+        RAIL_PEEK_WIDTH, TAB_STRIP_HEIGHT,
+    };
+
+    /// Smallest accepted chrome hit target, in CSS pixels.
+    pub const MIN_HIT_TARGET_CSS: f32 = 22.0;
+    /// Duration of the hover-peek width transition, in milliseconds.
+    pub const PEEK_ANIMATION_MS: u32 = 120;
+
+    /// CSS height of the top band for the given mode.
+    #[must_use]
+    pub fn band_css_height(compact: bool) -> f32 {
+        if compact {
+            COMPACT_CHROME_HEIGHT
+        } else {
+            CHROME_HEIGHT
+        }
+    }
+
+    /// Physical rows reserved by the top band, clamped like `present::chrome_band_pixels`.
+    #[must_use]
+    pub fn band_pixels(compact: bool, scale: f64, dest_height: u32) -> u32 {
+        let scale = if scale.is_finite() && scale > 0.0 {
+            scale
+        } else {
+            1.0
+        };
+        ((f64::from(band_css_height(compact)) * scale).round() as u32)
+            .min(dest_height.saturating_sub(1))
+    }
+
+    /// Rail width in CSS pixels. Peek interpolates from collapsed to peek width;
+    /// reduced motion jumps straight to the final width.
+    #[must_use]
+    pub fn peek_width_css(
+        peek: bool,
+        expanded: bool,
+        elapsed_ms: u32,
+        reduced_motion: bool,
+    ) -> f32 {
+        if expanded {
+            return RAIL_EXPANDED_WIDTH;
+        }
+        if !peek {
+            return RAIL_COLLAPSED_WIDTH;
+        }
+        if reduced_motion {
+            return RAIL_PEEK_WIDTH;
+        }
+        let progress = (elapsed_ms.min(PEEK_ANIMATION_MS) as f32) / (PEEK_ANIMATION_MS as f32);
+        RAIL_COLLAPSED_WIDTH + (RAIL_PEEK_WIDTH - RAIL_COLLAPSED_WIDTH) * progress
+    }
+
+    /// Whether tab labels are legible at this point of the peek transition.
+    #[must_use]
+    pub fn peek_labels_visible(
+        peek: bool,
+        expanded: bool,
+        elapsed_ms: u32,
+        reduced_motion: bool,
+    ) -> bool {
+        expanded
+            || peek_width_css(peek, expanded, elapsed_ms, reduced_motion) >= RAIL_EXPANDED_WIDTH
+    }
+
+    /// Moves the painted address strip up into the compact band and clears the rows
+    /// it vacated. The tab strip is already skipped by the painters; "hide before
+    /// shrink" keeps every remaining hit target at its original size.
+    pub(crate) fn shift_band_up(layer: &mut Pixmap, scale: f32) {
+        let width = layer.width as usize;
+        if width == 0 {
+            return;
+        }
+        let address_start =
+            ((TAB_STRIP_HEIGHT * scale).round() as usize).min(layer.height as usize);
+        let band_end = ((CHROME_HEIGHT * scale).ceil() as usize).min(layer.height as usize);
+        let shift = ((CHROME_HEIGHT - COMPACT_CHROME_HEIGHT) * scale).round() as usize;
+        let rows = band_end.saturating_sub(address_start);
+        if rows == 0 || shift == 0 || shift > address_start {
+            return;
+        }
+        let target = address_start - shift;
+        layer
+            .pixels
+            .copy_within(address_start * width..band_end * width, target * width);
+        for pixel in &mut layer.pixels[..target * width] {
+            *pixel = Color::new(0, 0, 0, 0);
+        }
+        for pixel in &mut layer.pixels[band_end.saturating_sub(shift) * width..band_end * width] {
+            *pixel = Color::new(0, 0, 0, 0);
+        }
+    }
+}

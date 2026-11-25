@@ -117,6 +117,11 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             "--chrome-menu requires --chrome".to_string(),
         ));
     }
+    if raw.chrome_compact && !raw.chrome {
+        return Err(ShellError::Usage(
+            "--chrome-compact requires --chrome".to_string(),
+        ));
+    }
     let zoom = match raw.zoom {
         Some(zoom) => {
             if !crate::zoom::is_valid_cli_zoom(zoom) {
@@ -155,6 +160,8 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             active_tab,
             chrome: raw.chrome,
             chrome_menu: raw.chrome_menu,
+            chrome_compact: raw.chrome_compact,
+            reduced_motion: raw.reduced_motion,
             reader: raw.reader,
             ipc_render: raw.ipc_render,
             remote_debugging_port: raw.remote_debugging_port,
@@ -182,6 +189,8 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         active_tab,
         chrome: raw.chrome,
         chrome_menu: raw.chrome_menu,
+        chrome_compact: raw.chrome_compact,
+        reduced_motion: raw.reduced_motion,
         reader: raw.reader,
         ipc_render: raw.ipc_render,
         remote_debugging_port: raw.remote_debugging_port,

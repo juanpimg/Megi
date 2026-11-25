@@ -235,6 +235,24 @@ fn chrome_menu_requires_chrome_flag() {
 }
 
 #[test]
+fn chrome_compact_requires_chrome_flag_and_defaults_off() {
+    let default = parse_cli(args(&["data:,x", "--chrome"])).expect("parse");
+    assert!(!default.chrome_compact);
+    let err = parse_cli(args(&["data:,x", "--chrome-compact"])).expect_err("must reject");
+    assert!(matches!(err, ShellError::Usage(_)));
+    let compact = parse_cli(args(&["data:,x", "--chrome", "--chrome-compact"])).expect("parse");
+    assert!(compact.chrome_compact);
+}
+
+#[test]
+fn reduced_motion_flag_is_opt_in() {
+    let default = parse_cli(args(&["data:,x"])).expect("parse");
+    assert!(!default.reduced_motion);
+    let enabled = parse_cli(args(&["data:,x", "--reduced-motion"])).expect("parse");
+    assert!(enabled.reduced_motion);
+}
+
+#[test]
 fn active_tab_selects_a_tab_and_validates_range() {
     // #1689: --tabs must be usable from headless mode via --active-tab.
     let cli = parse_cli(args(&[

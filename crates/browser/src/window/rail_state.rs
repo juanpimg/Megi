@@ -66,5 +66,6 @@ pub fn view<'a>(
         hover,
         expanded: true,
         width_css: css_width(true),
+        top_css: crate::chrome::CHROME_HEIGHT,
     })
 }

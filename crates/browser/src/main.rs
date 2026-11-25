@@ -113,7 +113,8 @@ fn run() -> Result<(), ShellError> {
             .map_or_else(RefreshPolicy::disabled, RefreshPolicy::every_ms),
     )
     .with_tabs(args.tabs.clone())
-    .with_process_render(args.ipc_render);
+    .with_process_render(args.ipc_render)
+    .with_reduced_motion(args.reduced_motion);
     let mut view = view;
     view.session_path = if args.no_session {
         None
@@ -167,6 +168,14 @@ fn run() -> Result<(), ShellError> {
             }
             let output = if args.chrome && args.chrome_menu {
                 megi_browser::headless::render_target_with_chrome_menu(
+                    &input,
+                    css_width,
+                    css_height,
+                    &options,
+                    args.find.as_deref(),
+                )?
+            } else if args.chrome && args.chrome_compact {
+                megi_browser::headless::render_target_with_chrome_compact(
                     &input,
                     css_width,
                     css_height,

@@ -82,6 +82,12 @@ impl WindowApp {
         Some(chrome::RailView { hover, ..view })
     }
 
+    /// Toggles the compact top band (Ctrl+Shift+B) and repaints the shell.
+    pub(super) fn toggle_compact(&mut self) {
+        self.chrome_mode.toggle_compact();
+        self.request_repaint();
+    }
+
     /// Toggles the rail (Ctrl+B or the rail toggle row) and reflows the page.
     pub(super) fn toggle_rail(&mut self) {
         self.sync_rail_labels();
@@ -258,7 +264,12 @@ impl WindowApp {
                 .frame()
                 .map(|frame| (frame.pixels.as_slice(), frame.width, frame.height))
         };
-        let chrome_px = present::chrome_band_pixels(chrome_scale_f64, height);
+        let chrome_band_css = self.chrome_mode.state(std::time::Instant::now()).band_css;
+        let chrome_px = chrome::band_pixels(
+            chrome_band_css == chrome::HEIGHT_COMPACT,
+            chrome_scale_f64,
+            height,
+        );
         let rail_px = present::chrome_rail_pixels_for(chrome_scale_f64, rail_css_width, width);
         let presented = if rail_px == 0 {
             // Keep the closed-rail path exactly byte-identical to the legacy blit:
@@ -316,6 +327,7 @@ impl WindowApp {
             hover,
             expanded,
             width_css,
+            top_css: chrome_band_css,
         });
         let view = ChromeView {
             favicons: &favicons,
@@ -339,6 +351,7 @@ impl WindowApp {
             history_button: true,
             ime_preedit,
             rail,
+            compact: chrome_band_css == chrome::HEIGHT_COMPACT,
         };
         let download_status = self.download.status_text();
         // #1724: surface document-field IME preedit in the status bar; the address bar

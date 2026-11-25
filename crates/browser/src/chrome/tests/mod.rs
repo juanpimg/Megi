@@ -4,6 +4,7 @@ use crate::chrome::*;
 use megi_webview::paint::Color;
 
 mod address_bar;
+mod compact;
 mod dropdown;
 mod menus;
 mod paint;
@@ -37,6 +38,7 @@ fn view<'a>(
         download_status: None,
         history_button: false,
         ime_preedit: "",
+        compact: false,
         rail: None,
     }
 }

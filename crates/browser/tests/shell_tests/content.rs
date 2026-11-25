@@ -92,6 +92,29 @@ fn headless_about_pages_render_expected_text() {
 }
 
 #[test]
+fn chrome_compact_band_is_explicit_and_default_stays_byte_identical() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let input =
+        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let options = megi_webview::render::RenderOptions::default();
+    let default =
+        megi_browser::headless::render_target_with_chrome(&input, 320, 240, &options, None)
+            .expect("default chrome render");
+    let compact =
+        megi_browser::headless::render_target_with_chrome_compact(&input, 320, 240, &options, None)
+            .expect("compact chrome render");
+    assert_ne!(
+        compact.png, default.png,
+        "compact is a distinct explicit mode"
+    );
+    let golden =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/chrome/compact.png");
+    let expected = std::fs::read(&golden).expect("explicit compact golden");
+    assert_eq!(compact.png, expected, "compact golden is byte-identical");
+}
+
+#[test]
 fn chrome_and_find_outputs_are_encoded_exactly_once() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");

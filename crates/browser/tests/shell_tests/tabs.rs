@@ -267,6 +267,7 @@ fn chrome_geometry_scales_with_the_device_scale() {
         download_status: None,
         history_button: false,
         ime_preedit: "",
+        compact: false,
         rail: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
