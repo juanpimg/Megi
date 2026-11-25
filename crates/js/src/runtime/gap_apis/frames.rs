@@ -117,8 +117,7 @@ pub(crate) fn frame_element_wrapper(
     .flatten()
     .unwrap_or_default();
     let node_handle = with_context_host(context, |host| {
-        let h = host.frame_node_next_handle;
-        host.frame_node_next_handle = host.frame_node_next_handle.wrapping_add(1);
+        let h = host.next_frame_node_handle();
         host.frame_nodes.insert(h, node);
         h
     })

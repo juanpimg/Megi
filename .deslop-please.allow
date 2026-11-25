@@ -156,7 +156,6 @@ field-leak megi_js::canvas::CanvasSurface::global_alpha
 field-leak megi_js::canvas::CanvasSurface::operations
 field-leak megi_js::host::state::Host::document
 field-leak megi_js::host::state::Host::frame_documents
-field-leak megi_js::host::state::Host::frame_node_next_handle
 field-leak megi_js::host::state::Host::frame_nodes
 field-leak megi_js::host::state::Host::iframe_frames
 field-leak megi_js::host::state::Host::inline_handlers

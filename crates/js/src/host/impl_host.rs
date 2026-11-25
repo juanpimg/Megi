@@ -117,6 +117,16 @@ impl Host {
         u32::try_from(index).map_err(|_| "node handle table overflow".to_string())
     }
 
+    /// Allocates the next opaque handle for a framed-document node wrapper (#1544, #2301).
+    ///
+    /// Handle values are host-local implementation details; keep the historical seed-1
+    /// `wrapping_add` sequence so the `__megi_frame_node` values scripts observe are unchanged.
+    pub(crate) fn next_frame_node_handle(&mut self) -> u32 {
+        let handle = self.frame_node_next_handle;
+        self.frame_node_next_handle = self.frame_node_next_handle.wrapping_add(1);
+        handle
+    }
+
     /// Registers or updates an observed target for `slot`, keeping `observer_index` in sync.
     pub fn observe_target(&mut self, slot: u32, target: ObserverTarget) -> Result<(), String> {
         let Some(obs_idx) = self.observers.iter().position(|r| r.object_slot == slot) else {

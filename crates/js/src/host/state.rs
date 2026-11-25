@@ -110,7 +110,7 @@ pub(crate) struct Host {
     pub iframe_frames: std::collections::HashMap<megi_core::NodeId, u32>,
     pub frame_next_handle: u32,
     pub frame_nodes: std::collections::HashMap<u32, megi_core::NodeId>,
-    pub frame_node_next_handle: u32,
+    pub(super) frame_node_next_handle: u32,
     /// Deterministic cooperative workers (no threads); `None` slots are terminated/dropped.
     pub workers: Vec<Option<crate::runtime::WorkerState>>,
     /// Worker id in the parent host (worker realms only).

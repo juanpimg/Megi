@@ -318,5 +318,53 @@ mod mutation_observer_index_tests {
     }
 }
 
+#[cfg(test)]
+mod frame_node_handle_tests {
+    use super::*;
+
+    fn fresh_host() -> Host {
+        Host::new(Document::new(), "about:blank".into())
+    }
+
+    /// `frame_node` wrappers carry an opaque numeric handle; allocation belongs to the host.
+    #[test]
+    fn next_frame_node_handle_is_monotonic_from_one() {
+        let mut host = fresh_host();
+        assert_eq!(host.next_frame_node_handle(), 1);
+        assert_eq!(host.next_frame_node_handle(), 2);
+        assert_eq!(host.next_frame_node_handle(), 3);
+    }
+
+    #[test]
+    fn next_frame_node_handle_wraps_at_u32_max() {
+        let mut host = fresh_host();
+        host.frame_node_next_handle = u32::MAX;
+        assert_eq!(host.next_frame_node_handle(), u32::MAX);
+        assert_eq!(host.next_frame_node_handle(), 0);
+        assert_eq!(host.next_frame_node_handle(), 1);
+    }
+
+    #[test]
+    fn next_frame_node_handle_preserves_js_observed_handles() {
+        // The `__megi_frame_node` values JS reads back must match the legacy
+        // seed-1 / `wrapping_add(1)` sequence, including the wraparound point.
+        let mut host = fresh_host();
+        let node = NodeId::from_index(0);
+        let observed: Vec<u32> = (0..3)
+            .map(|_| {
+                let handle = host.next_frame_node_handle();
+                host.frame_nodes.insert(handle, node);
+                assert_eq!(host.frame_nodes.get(&handle), Some(&node));
+                handle
+            })
+            .collect();
+        assert_eq!(observed, [1, 2, 3]);
+
+        host.frame_node_next_handle = u32::MAX - 1;
+        let wrapped: Vec<u32> = (0..4).map(|_| host.next_frame_node_handle()).collect();
+        assert_eq!(wrapped, [u32::MAX - 1, u32::MAX, 0, 1]);
+    }
+}
+
 mod timer_queue;
 pub(crate) use timer_queue::*;

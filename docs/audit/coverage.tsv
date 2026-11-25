@@ -1,6 +1,6 @@
 path	lines	category	phase	auditor	date	status	findings	notes
 .cargo/config.toml	19	manifest	F3	lead	2026-11-25	covered	CARGO-FORK-DEFAULT	read full config; huacnlee fork defaults with rustup proxy fallback
-.deslop-please.allow	217	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
+.deslop-please.allow	216	fixture	F1	frame-handle-leak	2026-11-25	covered	#2301	Re-read after removing the frame_node_next_handle field-leak suppression
 .github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -675,9 +675,9 @@ crates/js/src/events/install.rs	200	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/src/events/listeners.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host.rs	322	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host.rs	370	src	F2	frame-handle-leak	2026-11-25	covered	#2301	Re-read after adding frame-node handle allocation unit tests
 crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/impl_host.rs	362	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/host/impl_host.rs	372	src	F2	frame-handle-leak	2026-11-25	covered	#2301	Re-read after adding Host::next_frame_node_handle
 crates/js/src/host/state.rs	189	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/host/timer_queue.rs	206	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/js/src/host/types.rs	445	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -706,7 +706,7 @@ crates/js/src/runtime/gap_apis/canvas.rs	406	src	F2	integration-agent	2026-11-25
 crates/js/src/runtime/gap_apis/canvas_paths.rs	409	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/canvas_support.rs	51	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/ce_registry.js	118	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	implemented and read while extending shadow-dom/custom-elements WPT support
-crates/js/src/runtime/gap_apis/frames.rs	232	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
+crates/js/src/runtime/gap_apis/frames.rs	231	src	F2	frame-handle-leak	2026-11-25	covered	#2301	Re-read after switching frame_element_wrapper to the Host allocator method
 crates/js/src/runtime/gap_apis/install.rs	64	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
