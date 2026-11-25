@@ -304,42 +304,49 @@ fn single_workspace_chrome_render_is_byte_identical_to_legacy_inputs() {
     assert_eq!(tabs.visible_active_index(), tabs.active_index());
 
     let address = megi_browser::chrome::AddressBar::new();
-    let view = |titles: &[String], active: usize| megi_browser::chrome::ChromeView {
-        favicons: &[],
-        tabs: titles,
-        active_tab: active,
-        address: &address,
-        fallback_url: "about:blank",
-        dropdown: None,
-        scroll_y: 0,
-        css_viewport_height: 200,
-        css_width: 320.0,
-        completion: None,
-        loading: false,
-        overflow: None,
-        hover_url: None,
-        menu: None,
-        can_go_back: false,
-        can_go_forward: false,
-        history_menu: None,
-        download_status: None,
-        history_button: false,
-        ime_preedit: "",
-        compact: false,
-        rail: None,
-    };
-    let legacy = view(&legacy_titles, tabs.active_index());
-    let visible = view(&visible_titles, tabs.visible_active_index());
+    fn view<'a>(
+        titles: &'a [String],
+        active: usize,
+        address: &'a megi_browser::chrome::AddressBar,
+    ) -> megi_browser::chrome::ChromeView<'a> {
+        megi_browser::chrome::ChromeView {
+            favicons: &[],
+            tabs: titles,
+            active_tab: active,
+            address,
+            fallback_url: "about:blank",
+            dropdown: None,
+            scroll_y: 0,
+            css_viewport_height: 200,
+            css_width: 320.0,
+            completion: None,
+            loading: false,
+            overflow: None,
+            hover_url: None,
+            menu: None,
+            can_go_back: false,
+            can_go_forward: false,
+            history_menu: None,
+            download_status: None,
+            history_button: false,
+            ime_preedit: "",
+            compact: false,
+            rail: None,
+        }
+    }
+    let legacy = view(&legacy_titles, tabs.active_index(), &address);
+    let visible = view(&visible_titles, tabs.visible_active_index(), &address);
     let mut legacy_pixels = vec![0x00FF_FFFFu32; 640 * 400];
     let mut visible_pixels = vec![0x00FF_FFFFu32; 640 * 400];
-    let legacy_painted = megi_browser::chrome::draw_chrome(
-        &mut legacy_pixels, 640, 400, 2.0, &legacy,
-    );
-    let visible_painted = megi_browser::chrome::draw_chrome(
-        &mut visible_pixels, 640, 400, 2.0, &visible,
-    );
+    let legacy_painted =
+        megi_browser::chrome::draw_chrome(&mut legacy_pixels, 640, 400, 2.0, &legacy);
+    let visible_painted =
+        megi_browser::chrome::draw_chrome(&mut visible_pixels, 640, 400, 2.0, &visible);
     assert_eq!(legacy_painted, visible_painted);
-    assert_eq!(legacy_pixels, visible_pixels, "one workspace paints identical bytes");
+    assert_eq!(
+        legacy_pixels, visible_pixels,
+        "one workspace paints identical bytes"
+    );
 }
 
 #[test]

@@ -286,8 +286,9 @@ impl TabsState {
         if self.is_full() {
             return None;
         }
-        let tab = Tab::new(url)?;
         let workspace = self.workspace;
+        let mut tab = Tab::new(url)?;
+        tab.workspace = workspace;
         self.tabs.push(tab);
         self.active = self.tabs.len() - 1;
         self.workspace_active[usize::from(workspace)] = Some(self.active);

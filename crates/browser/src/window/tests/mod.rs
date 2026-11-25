@@ -349,7 +349,6 @@ mod shortcut_registry_tests {
             ctrl: true,
             alt: true,
             shift: true,
-            ..Modifiers::NONE
         };
         assert_eq!(
             resolve_shortcut(ctrl_shift, &char_key("W")),
@@ -403,8 +402,10 @@ mod shortcut_registry_tests {
 fn workspace_visible_tab_helpers_follow_the_active_group() {
     // Phase 3 red test for the window-facing pure helpers; the expected failure is
     // `could not find workspace_chrome_titles in module presentation`.
+    use super::presentation::{
+        workspace_a11y_titles, workspace_chrome_active, workspace_chrome_titles,
+    };
     use crate::tabs::{TabsState, Workspace};
-    use super::presentation::{workspace_a11y_titles, workspace_chrome_active, workspace_chrome_titles};
 
     let mut tabs = TabsState::from_urls(vec![
         "https://example.com/a".to_string(),
@@ -418,7 +419,11 @@ fn workspace_visible_tab_helpers_follow_the_active_group() {
     ];
     assert_eq!(workspace_chrome_titles(&tabs), baseline);
     assert_eq!(workspace_chrome_active(&tabs), 0);
-    assert_eq!(workspace_a11y_titles(&tabs), baseline, "no label decoration with one workspace");
+    assert_eq!(
+        workspace_a11y_titles(&tabs),
+        baseline,
+        "no label decoration with one workspace"
+    );
 
     tabs.activate(0);
     assert!(tabs.move_active_to_workspace(1));

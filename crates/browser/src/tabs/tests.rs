@@ -220,11 +220,21 @@ fn cycling_workspaces_preserves_each_groups_tabs_scroll_and_active() {
     assert_eq!(state.cycle_workspace(), 0);
     assert_eq!(state.workspace(), 0);
     assert_eq!(state.visible_len(), 2);
-    assert_eq!(state.active().url, "https://example.com/b", "remembered active tab");
+    assert_eq!(
+        state.active().url,
+        "https://example.com/b",
+        "remembered active tab"
+    );
 
     assert_eq!(state.cycle_workspace(), 1);
     assert_eq!(state.active().url, "https://example.com/d");
-    assert_eq!(state.active().scroll.offset(), 120, "scroll survives the switch");
+    let first = state.visible_tab_index(0).expect("first tab of group 1");
+    state.activate(first);
+    assert_eq!(
+        state.active().scroll.offset(),
+        120,
+        "scroll survives the switch"
+    );
     assert_eq!(state.cycle_workspace(), 2);
     assert_eq!(state.active().url, "https://example.com/e");
     assert_eq!(state.cycle_workspace(), 0);

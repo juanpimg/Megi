@@ -178,7 +178,6 @@ fn all_bindings() -> Vec<ShortcutBinding> {
         ctrl: true,
         alt: true,
         shift: true,
-        ..Modifiers::NONE
     };
     let alt = Modifiers {
         alt: true,

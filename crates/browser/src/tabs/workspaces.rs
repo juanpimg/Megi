@@ -189,7 +189,7 @@ impl TabsState {
             .copied()
             .find(|&peer| peer > index)
             .map(|peer| peer - 1)
-            .or_else(|| peers.iter().copied().filter(|&peer| peer < index).last())
+            .or_else(|| peers.iter().copied().rfind(|&peer| peer < index))
             .unwrap_or(index);
         self.tabs.remove(index);
         for slot in &mut self.workspace_active {
@@ -293,11 +293,12 @@ impl TabsState {
             }
         }
         let mut slots = [None; SLOTS];
-        for workspace in 0..SLOTS {
-            if workspace == current {
-                continue;
-            }
-            slots[workspace] = self.workspace_active[workspace]
+        for (workspace, slot) in slots
+            .iter_mut()
+            .enumerate()
+            .filter(|&(index, _)| index != current)
+        {
+            *slot = self.workspace_active[workspace]
                 .and_then(|old| kept_indices.iter().position(|&kept| kept == old))
                 .or_else(|| {
                     kept_indices
@@ -343,7 +344,7 @@ impl TabsState {
                 .copied()
                 .find(|&peer| peer > index)
                 .map(|peer| peer - 1)
-                .or_else(|| peers.iter().copied().filter(|&peer| peer < index).last())
+                .or_else(|| peers.iter().copied().rfind(|&peer| peer < index))
                 .unwrap_or(index);
             self.tabs.remove(index);
             for slot in &mut self.workspace_active {
