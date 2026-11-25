@@ -2242,7 +2242,7 @@ tests/wpt/url/urlsearchparams-set.any.js	22	fixture	F1	wpt-components-scope	2026
 tests/wpt/url/urlsearchparams-sort.any.js	62	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/url/urlsearchparams-stringifier.any.js	123	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tools/audit_coverage.py	409	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
-tools/audit_negative_matrix.py	273	tool	F3	jp	2026-11-25	covered	#2290	Re-read after malformed TOML error handling fix
+tools/audit_negative_matrix.py	269	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
@@ -2250,7 +2250,7 @@ tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliase
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	116	tool	F3	lead	2026-11-25	covered	M9-RELEASE-SIGN-EVIDENCE	stable-text match mode for out-of-order closure
-tools/check_sbom.py	51	tool	F3	jp	2026-11-25	covered	#2290	re-read after one-line UnicodeDecodeError fix
+tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2261,12 +2261,12 @@ tools/real_site_check.py	357	tool	F3	lead	2026-11-25	covered	M2-RELEASE-REMEASUR
 tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
-tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-25	covered	#2290	Re-read after malformed TOML error handling fix
-tools/test_bench_compare.py	213	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
+tools/test_audit_negative_matrix.py	182	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
+tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding --json success-output tests
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	156	tool	F3	lead	2026-11-25	covered	M9-RELEASE-SIGN-EVIDENCE	positional and --match regression tests
-tools/test_check_sbom.py	101	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-UTF-8 regression test
+tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	76	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding CI list regression test
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read

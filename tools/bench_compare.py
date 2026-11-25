@@ -216,7 +216,7 @@ def main() -> int:
     if missing and not args.allow_missing:
         print(f"{len(missing)} missing baseline row(s): {', '.join(missing)}", file=stream)
         return 1
-    print(f"no regressions above {args.threshold:g} % / {args.min_ms:g} ms")
+    print(f"no regressions above {args.threshold:g} % / {args.min_ms:g} ms", file=stream)
     return 0
 
 

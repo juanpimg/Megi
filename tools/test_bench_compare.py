@@ -196,6 +196,19 @@ class JsonStdoutTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("1 missing baseline row(s): row", err)
 
+    def test_json_success_stdout_is_pure_json(self) -> None:
+        # The success diagnostic is trailing plain text too: without routing it
+        # to stderr, `json.loads(stdout)` fails with "Extra data" on a clean run.
+        rc, out, _ = self._run({"row": 10.0}, "--json")
+        self.assertEqual(rc, 0)
+        payload = json.loads(out)
+        self.assertEqual(payload["regressions"], [])
+
+    def test_json_success_diagnostic_is_on_stderr(self) -> None:
+        rc, _, err = self._run({"row": 10.0}, "--json")
+        self.assertEqual(rc, 0)
+        self.assertIn("no regressions above", err)
+
     def test_plain_regression_output_unchanged(self) -> None:
         rc, out, err = self._run({"row": 20.0})
         self.assertEqual(rc, 1)
