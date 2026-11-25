@@ -159,6 +159,45 @@ fn serialize_produces_consumable_json() {
 }
 
 #[test]
+fn serialize_escapes_all_c0_controls_in_json() {
+    // RFC 8259 §7: U+0000..U+001F must be escaped; emitted raw they make invalid JSON.
+    let document = doc("<button aria-label='A&#x1;B&#x1b;C'>Go</button>");
+    let body = document.body().expect("body");
+    let json = serialize(&document, body);
+    assert!(json.contains("\"name\":\"A\\u0001B\\u001bC\""), "{json:?}");
+    assert!(
+        !json.contains('\u{0001}'),
+        "raw U+0001 is invalid JSON: {json:?}"
+    );
+    assert!(
+        !json.contains('\u{001b}'),
+        "raw U+001B is invalid JSON: {json:?}"
+    );
+    // This parser rejects unescaped controls, exactly like JavaScript's JSON.parse.
+    crate::session::JsonParser::new(&json)
+        .parse()
+        .expect("accessibility serialization must be valid JSON");
+}
+
+#[test]
+fn escape_json_handles_every_c0_control() {
+    // RFC 8259 §7: the whole U+0000..U+001F range, not just \n, \r and \t.
+    let escaped = escape_json(&(0u8..=0x1f).map(char::from).collect::<String>());
+    for code in 0u8..=0x1f {
+        match code {
+            b'\n' => assert!(escaped.contains("\\n")),
+            b'\r' => assert!(escaped.contains("\\r")),
+            b'\t' => assert!(escaped.contains("\\t")),
+            _ => assert!(
+                escaped.contains(&format!("\\u{code:04x}")),
+                "U+{code:04X} must be escaped"
+            ),
+        }
+    }
+    assert!(escaped.chars().all(|c| u32::from(c) >= 0x20));
+}
+
+#[test]
 fn stacked_modal_dialogs_focus_topmost_modal() {
     let document = doc(
         "<dialog open data-megi-modal=1><button>Lower</button></dialog>\

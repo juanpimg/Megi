@@ -133,18 +133,22 @@ pub fn serialize(document: &Document, root: NodeId) -> String {
     json
 }
 
+/// Escapes a JSON string body: quotes, backslash, the short escapes and every C0 control.
+/// Same rules as the `render` CLI's `json_string`; `RFC 8259 §7` forbids raw U+0000..U+001F.
 pub(crate) fn escape_json(value: &str) -> String {
-    value
-        .chars()
-        .flat_map(|ch| match ch {
-            '"' => "\\\"".chars().collect::<Vec<_>>(),
-            '\\' => "\\\\".chars().collect::<Vec<_>>(),
-            '\n' => "\\n".chars().collect::<Vec<_>>(),
-            '\r' => "\\r".chars().collect::<Vec<_>>(),
-            '\t' => "\\t".chars().collect::<Vec<_>>(),
-            c => vec![c],
-        })
-        .collect()
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if u32::from(c) < 0x20 => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Deterministic Tab order: focusable, enabled, visible elements with a role, in document
