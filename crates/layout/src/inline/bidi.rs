@@ -21,7 +21,7 @@ pub(crate) fn reorder_line_tokens_bidi(
 ) {
     use crate::bidi::{
         BidiClass, paragraph_base_level, reorder_visual_indices, resolve_levels, word_bidi_class,
-        word_to_visual,
+        word_to_visual_with_base,
     };
 
     if tokens.is_empty() {
@@ -161,7 +161,14 @@ pub(crate) fn reorder_line_tokens_bidi(
             } = tok
                 && level % 2 == 1
             {
-                let visual = word_to_visual(&text_pool[*start..*end], level, forced_all);
+                // UAX #9 N2: neutrals at a word boundary resolve against the
+                // paragraph embedding level, not the word's own odd level.
+                let visual = word_to_visual_with_base(
+                    &text_pool[*start..*end],
+                    level,
+                    base_level,
+                    forced_all,
+                );
                 let new_start = text_pool.len();
                 text_pool.push_str(&visual);
                 *start = new_start;

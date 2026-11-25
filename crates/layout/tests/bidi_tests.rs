@@ -95,6 +95,18 @@ fn mixed_ltr_and_rtl_keeps_ltr_outer_order_and_reverses_rtl_word() {
 }
 
 #[test]
+fn rtl_word_trailing_punctuation_stays_at_visual_end_in_ltr_paragraph() {
+    // UAX #9 N2 + L2: a trailing neutral takes the paragraph embedding level (L
+    // here), so it must not be swept into the reversed RTL run.
+    let (doc, _) = doc_with_p("", "שלום!");
+    let css = "#target { width: 400px; direction: ltr; }";
+    let styles = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+    let root = layout_document(&doc, &styles, Rect::new(0.0, 0.0, 800.0, 600.0)).unwrap();
+    let visual = collect_line_text(&root);
+    assert_eq!(visual, "םולש!");
+}
+
+#[test]
 fn bidi_override_rtl_reverses_latin_text() {
     let (doc, _) = doc_with_p("", "abc def");
     let css = "#target { width: 400px; direction: rtl; unicode-bidi: bidi-override; }";

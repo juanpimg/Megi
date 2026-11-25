@@ -344,6 +344,23 @@ fn is_nonspacing_mark(ch: char) -> bool {
 /// receive an even (LTR) implicit level and must keep their order inside the RTL word,
 /// while nonspacing marks must stay attached to their base (W1, #1447).
 pub fn word_to_visual(text: &str, level: u8, forced_class: Option<BidiClass>) -> String {
+    word_to_visual_with_base(text, level, level, forced_class)
+}
+
+/// Reorders one RTL word, resolving its neutrals against the **paragraph**
+/// embedding level rather than the word's own level.
+///
+/// UAX #9 N1/N2 resolve neutral types using the surrounding text and the
+/// paragraph direction; L2 then reverses level runs from the highest odd level
+/// down. Using the word level as the resolution base made a trailing neutral
+/// (e.g. `"!"` in `"שלום!"`) join the RTL run even in an LTR paragraph, where
+/// it must stay at the visual end. Even-level runs keep their character order.
+pub fn word_to_visual_with_base(
+    text: &str,
+    level: u8,
+    paragraph_base: u8,
+    forced_class: Option<BidiClass>,
+) -> String {
     if level.is_multiple_of(2) {
         return text.to_string();
     }
@@ -374,28 +391,20 @@ pub fn word_to_visual(text: &str, level: u8, forced_class: Option<BidiClass>) ->
     {
         return text.to_string();
     }
-    let levels = resolve_levels(&classes, level);
-    // Reverse the *order of level runs*, not the characters of LTR (even-level) runs.
-    // Odd-level runs are reversed character by character with bracket mirroring (L4).
-    let mut segments: Vec<(u8, String)> = Vec::new();
-    for (index, &ch) in chars.iter().enumerate() {
-        let lvl = levels[index];
-        if segments.last().is_some_and(|(last, _)| *last == lvl) {
-            segments.last_mut().expect("segment").1.push(ch);
-        } else {
-            segments.push((lvl, ch.to_string()));
-        }
-    }
-    segments.reverse();
-    let mut out = String::new();
-    for (lvl, segment) in segments {
-        if lvl % 2 == 1 {
-            out.extend(segment.chars().rev().map(mirror_char));
-        } else {
-            out.push_str(&segment);
-        }
-    }
-    out
+    let levels = resolve_levels(&classes, paragraph_base);
+    // UAX #9 L2: reverse contiguous level runs from the highest level down to
+    // the lowest odd level. Mirror paired brackets at odd levels (L4).
+    reorder_visual_indices(&levels)
+        .into_iter()
+        .map(|index| {
+            let ch = chars[index];
+            if levels[index] % 2 == 1 {
+                mirror_char(ch)
+            } else {
+                ch
+            }
+        })
+        .collect()
 }
 
 /// Returns the dominant [`BidiClass`] for a word token (first strong character, or `ON`).
