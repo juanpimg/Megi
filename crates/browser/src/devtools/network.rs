@@ -8,12 +8,14 @@
 use megi_webview::net::NetworkEvent;
 use serde_json::{Value, json};
 
-use super::protocol::DevToolsPage;
-
 /// Frames for `Network.enable`: one event trio per real request, then the command result.
-pub(super) fn enable(page: &DevToolsPage, id: Value) -> Vec<String> {
-    let mut messages = Vec::with_capacity(page.network.len() * 3 + 1);
-    for (index, event) in page.network.iter().enumerate() {
+///
+/// The caller passes the page's already-owned event log; this module depends only on the
+/// neutral `NetworkEvent` contract, never on the protocol page type (which would create a
+/// `protocol ↔ network` module cycle).
+pub(super) fn enable(events: &[NetworkEvent], id: Value) -> Vec<String> {
+    let mut messages = Vec::with_capacity(events.len() * 3 + 1);
+    for (index, event) in events.iter().enumerate() {
         let request_id = format!("req-{index}");
         messages.push(request_will_be_sent(&request_id, event));
         if let Some(error) = &event.error {

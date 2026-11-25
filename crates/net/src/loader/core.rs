@@ -104,9 +104,12 @@ impl ResourceLoader {
         }
     }
 
-    /// Real request/response observations recorded by this loader (M7 Network domain).
-    pub fn network_events(&self) -> &[NetworkEvent] {
-        &self.events
+    /// Appends the real request/response observations to an owned sink (M7 Network domain).
+    ///
+    /// The loader keeps ownership of its log; callers receive copies in their own buffer and
+    /// never hold a borrow into loader state.
+    pub fn append_network_events_to(&self, sink: &mut Vec<NetworkEvent>) {
+        sink.extend_from_slice(&self.events);
     }
 
     /// Records one observation, keeping the log bounded (oldest events are dropped first).

@@ -289,7 +289,11 @@ fn finish_render(
         location_actions,
         history_actions,
         stats: RenderStats {
-            network: loader.network_events().to_vec(),
+            network: {
+                let mut events = Vec::new();
+                loader.append_network_events_to(&mut events);
+                events
+            },
             document_bytes,
             charset,
             status,

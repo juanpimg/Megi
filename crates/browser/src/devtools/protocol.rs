@@ -71,7 +71,7 @@ pub(super) fn rpc_messages(payload: &[u8], page: &SharedPage) -> Vec<String> {
     if request.get("method").and_then(Value::as_str) == Some("Network.enable") {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         return match lock_page(page).as_ref() {
-            Some(attached) => super::network::enable(attached, id),
+            Some(attached) => super::network::enable(&attached.network, id),
             None => vec![rpc_error(
                 id,
                 -32000,
