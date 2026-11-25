@@ -131,6 +131,11 @@ jobs:
           tools.test_wpt_report
           tools.test_check_docs_links
           tools.test_update_progress
+          tools.test_check_milestone
+          tools.test_docs_consistency
+          tools.test_fuzz_targets
+          tools.test_gitleaks_config
+          tools.test_release_workflow
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
