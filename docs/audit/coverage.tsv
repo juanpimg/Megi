@@ -154,7 +154,7 @@ crates/browser/src/pages/i18n_tests.rs	25	src	F2	wave-max-mod	2026-11-19	covered
 crates/browser/src/pages/input.rs	70	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings data: route
 crates/browser/src/pages/listing.rs	253	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages/settings.rs	169	src	F2	subagent-settings	2026-11-25	covered	#2290	Phase 4: read generated settings page after formatting
-crates/browser/src/pages/settings_tests.rs	221	src	F2	subagent-settings	2026-11-25	covered	#2290	Phase 4: read TDD contract after formatting
+crates/browser/src/pages/settings_tests.rs	228	src	F2	subagent-settings	2026-11-25	covered	#2290	Phase 4: read TDD contract after formatting
 crates/browser/src/pages/tests.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pdf.rs	400	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read writer, geometry delegation and new @page test
 crates/browser/src/pdf/objects.rs	60	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read page parser and text writer after @page size/margin change
