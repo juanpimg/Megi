@@ -9,18 +9,18 @@
       "source": "https://example.com",
       "mode": "live",
       "result": "PASS",
-      "display_items": 17,
+      "display_items": 16,
       "element_count": 11,
       "body_text": "This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.Learn moreEste dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.Данный домен предназнач",
       "status": 200,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 233.7,
+      "time_ms": 1111.1,
       "issue": 0,
       "error": "",
       "png": "real-sites/example.png",
-      "png_md5": "56bd351593b4c1525002360cb0dc6abc"
+      "png_md5": "c7eeed185ab8dadf227a3b5892a4a0f5"
     },
     {
       "id": "rust",
@@ -28,19 +28,23 @@
       "note": "CSS/images desde CDN",
       "source": "https://www.rust-lang.org",
       "mode": "live",
-      "result": "PASS",
-      "display_items": 427,
+      "result": "DEGRADADO",
+      "display_items": 265,
       "element_count": 197,
       "body_text": "\n    \n      \n        \n          \n        \n      \n    \n      \n        Install\n        Learn\n        Playground\n        Tools\n        Governance\n        Funding\n        Community\n        Blog\n      \n    \n      \n        \n          Language\n          \n            English (en-US)\n            Español (es)\n            Français (fr)\n            Italiano (it)\n            日本語 (ja)\n            Português (pt-BR)\n            Русский (ru)\n            Türkçe (tr)\n            简体中文 (zh-CN)\n            正體中文 (zh-TW)\n         ",
       "status": 200,
-      "warnings": [],
+      "warnings": [
+        "performance budget: total 9969 > 3s",
+        "performance budget: styles_pre_script 208 ms > 200ms",
+        "performance budget: images 2391 ms > 500ms"
+      ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1630.2,
+      "time_ms": 10065.1,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
-      "png_md5": "fe5bc97548a9a984ab51ba9c931dbeff"
+      "png_md5": "b01fc0cb1fdc0ac44fa595f0f2f144e8"
     },
     {
       "id": "wikipedia",
@@ -48,19 +52,23 @@
       "note": "Solapes conocidos en la UI Vector",
       "source": "https://es.wikipedia.org/wiki/Rust",
       "mode": "live",
-      "result": "PASS",
-      "display_items": 421,
+      "result": "DEGRADADO",
+      "display_items": 433,
       "element_count": 521,
       "body_text": "\nIr al contenido\n\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\n\t\n\t\n\nMenú principal\n\t\n\t\n\n\n\t\t\t\t\n\t\t\n\n\t\n\tMenú principal\n\tmover a la barra lateral\n\tocultar\n\n\n\t\n\n\t\n\t\tNavegación\n\t\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\tPortadaPortal de la comunidadActualidadCambios recientesPáginas nuevasPágina aleatoriaAyudaNotificar un errorPáginas especiales\n\t\t\n\t\t\n\t\n\n\n\t\n\n\n\t\t\t\t\n\n\t\n\n\n\t\t\n\t\t\t\n\n\t\n\t\n\t\t\n\t\t\n\t\n\n\n\t\t\n\t\t\n\t\t\t\n\n\t\n\nBuscar\n\t\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\n\t\t\t\tBuscar\n\t\t\t\n\t\t\n\t\n\n\n\t\t\t\n\t\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\t\t\n\n\t\n\t\n\nAparienci",
       "status": 200,
-      "warnings": [],
+      "warnings": [
+        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
+        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
+        "performance budget: images 524 ms > 500ms"
+      ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 918.7,
+      "time_ms": 2030.9,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
-      "png_md5": "d648a7778f73ad207428bb5870272875"
+      "png_md5": "71d05c9ed503a5dce7a414aee50dc5c0"
     },
     {
       "id": "hn",
@@ -69,18 +77,18 @@
       "source": "https://news.ycombinator.com",
       "mode": "live",
       "result": "PASS",
-      "display_items": 2774,
-      "element_count": 795,
-      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Windows Loudness Equalization, reverse-engineered and ported to PipeWire (github.com/xoxorwr)99 points by ThrowNotAway 1 hour ago  | hide | 45 comments2.Button Sounds – collection of professionally-recorded button clicks and presses (joshwcomeau.com)519 points by gaurang_tandon 10 hours ago  | hide | 80 comments3.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)759 points by E-Reverance 12 hours ago  | hide | 426 comments4.The sh",
+      "display_items": 2778,
+      "element_count": 801,
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.1Password Security Incident (1password.com)969 points by lxhrstn 5 hours ago  | hide | 412 comments2.Much shorter version of GRH Lean verification from Anthropic (github.com/lsernau)130 points by nb-t 1 hour ago  | hide | 46 comments3.The New York Times tells photographers not to use the latest Photoshop (dpreview.com)71 points by rmason 1 hour ago  | hide | 33 comments4.GPT-6.2 Astra is the first model to beat Googlers' code golf records (",
       "status": 200,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1718.1,
+      "time_ms": 2161.8,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "5b79512eb6d277d0ea004b351d3a5ffe"
+      "png_md5": "22aebfb300557e8f4f4929c9fade869a"
     }
   ]
 }
