@@ -217,3 +217,6 @@ wide-directory crates/net/tests/
 wide-directory crates/paint/tests/
 wide-directory crates/render/src/
 wide-directory crates/render/tests/
+# Upstream UI rail debt (commits 5ce9179a/83a1ad64), pre-existing relative to the hn-images integration.
+tangle megi_browser::window::desktop::WindowApp,megi_browser::window::shortcut_actions::dispatch
+wide-directory crates/browser/src/window/
