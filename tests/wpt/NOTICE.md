@@ -2,7 +2,7 @@
 - Upstream: web-platform-tests/wpt
 - Pinned commit: `ab2ef95d3a7c512a6e7321688c80e428086af426` (never `master`)
 - License: BSD-3-Clause (allowlisted)
-- Imported dirs: css/css-syntax, dom/nodes, dom/events, url, html/webappapis/atob, fetch/data-urls/resources
+- Imported dirs: css/css-syntax, dom/nodes, dom/events, url, html/webappapis/atob, fetch/data-urls/resources, shadow-dom, shadow-dom/resources
 
 | Fixture | Bytes | SHA-256 | Kind |
 |---|---:|---|---|
@@ -13,6 +13,7 @@
 | `css/css-syntax/declarations-trim-whitespace.html` | 1975 | `af6e5414e18c8ce42c3d0f8614837493e7495b5a7f8f84f8bddb9d2654d4c62d` | testharness |
 | `css/css-syntax/input-preprocessing.html` | 1311 | `8792806053c83b90517e2c4b64fec98ba8b6146e15f19e1fa1078694aace6aa0` | testharness |
 | `dom/events/AddEventListenerOptions-once.html` | 2916 | `7eb04358565fd82c3efe34efc12f929c0a45a2c3228188ea094e5d1adad6abb8` | skip |
+| `dom/events/AddEventListenerOptions-passive.html` | 5616 | `859b3b4bafc0f6c41f128e92372584db1570055083f6e32935efef3ae1d09ffa` | skip |
 | `dom/events/CustomEvent.html` | 1084 | `ce69ced25e7e067c575b5adadd5faa63a2d67ae3c527e1f5f6806814bf24191f` | skip |
 | `dom/events/Event-cancelBubble.html` | 5341 | `863af4ba15f1dba39423e91ff1d96f9a1b1fbf176c0156a0137829eaea08a372` | skip |
 | `dom/events/Event-constants.html` | 618 | `68e38865775319d0800cc4a55a263104671a0e71a09dd7d0cdafb21701f0e16a` | skip |
@@ -28,22 +29,40 @@
 | `dom/events/Event-dispatch-multiple-cancelBubble.html` | 1388 | `cffd6288cfd153d28dda1eed4e8777dd80f126547e8a57bbb79f6dff84a32769` | skip |
 | `dom/events/Event-dispatch-multiple-stopPropagation.html` | 1393 | `6d01d79dbeae450e1fa86d5feba1605f7024feb434d9825a2fe3a57172adc16f` | skip |
 | `dom/events/Event-dispatch-omitted-capture.html` | 2113 | `b19131d2ddd6ec92e2f6407fb9d37579727b6b88d6f4ed82a6fcef54c1dcaf80` | skip |
+| `dom/events/Event-dispatch-on-disabled-elements.html` | 3971 | `2ae11d23c21de6e95fff1ef48d413214edf055daf5101ab3e84b8b0a19c20046` | skip |
 | `dom/events/Event-dispatch-order.html` | 921 | `eab3c16fe04011aab013c4454f80bd56b7117e4d6e01c3b182dd18a2386b0bbf` | skip |
+| `dom/events/Event-dispatch-other-document.html` | 691 | `81584891e6519d91ab74d4e62ef0eb23ae333e8b49cab9361ada4fc3f769c783` | skip |
 | `dom/events/Event-dispatch-propagation-stopped.html` | 1754 | `c6fb9c7d4bbaf127cf1cd64f8447486af52013c75f7b3f06ab38e015c7aee78f` | skip |
 | `dom/events/Event-dispatch-redispatch.html` | 1009 | `f4fdfd03461d40024a1766522a460ca6bf12e0bea60f39573785abaeaa69f3ce` | skip |
+| `dom/events/Event-dispatch-reenter.html` | 2221 | `f0da38c1b27415c9f374b0923b766ab4e416cf0539f1d734a9aaebd45aa06483` | skip |
 | `dom/events/Event-dispatch-target-moved.html` | 2552 | `4bea9c1e8d599aa06d6f833d35a6dc60fb94c6a0be34301b0a961cc94ec4a8ce` | skip |
 | `dom/events/Event-dispatch-target-removed.html` | 2463 | `b5c3166a0ec16ffc4a482e83f416f3ad01ef4acd7b46f045c5486bfbed08d189` | skip |
+| `dom/events/Event-dispatch-throwing.html` | 1387 | `3dfd628b864a8d187819b8e3bb62a5c65d6d617af7478eecd449b64034a4eb7f` | skip |
+| `dom/events/Event-init-while-dispatching.html` | 3655 | `e7632d0f6684b38aadbfde9591d48618eab05e68cddfd64498ecd4c436899542` | skip |
 | `dom/events/Event-initEvent.html` | 5139 | `34890021d360db2d2fd4cb7ea78c9827b719dcc52874bf44500b21d10603a39e` | skip |
 | `dom/events/Event-propagation.html` | 1772 | `19e0e500eecd965fde092939c948d6d32280f22ace2dcd007fb2d5cd3d726bab` | skip |
 | `dom/events/Event-returnValue.html` | 2472 | `cdab17047c6c3b8b9f673d4927f500f24ea887d2cb86a46921fb8e4324798586` | skip |
 | `dom/events/Event-subclasses-constructors.html` | 4545 | `4bb590ff15857e280cc511024c7c130c7606cac568fb53f6c19789546a874a1e` | skip |
+| `dom/events/Event-timestamp-high-resolution.html` | 849 | `de2f5769e30c41d25c80e1f7ccf2da45e6992dd6463f6bff559c58199ea08c6e` | skip |
+| `dom/events/Event-timestamp-safe-resolution.html` | 1386 | `571c5965d411cdd81aeb43418405698ef03b7083fa796d4e00f8b36f33a4c96f` | skip |
 | `dom/events/Event-type-empty.html` | 981 | `db62300e80bb6452b84312c438bb55920fd493e35312253e66ab690b034c5731` | skip |
 | `dom/events/Event-type.html` | 777 | `bf6d1fd2dbbed77e8b75008dfb5d17a83cd6ac1fbae6c9fc6fba9db56bf60635` | skip |
 | `dom/events/EventListener-handleEvent.html` | 1179 | `d778111da714130eec1ffdc79166b5f2c1fa9eb2e8a76378095ef78be6fb3087` | skip |
+| `dom/events/EventListener-incumbent-global-1.sub.html` | 615 | `a7128fb0e98968dfc14c3ce641cf264b19428390b639b8b7a8f3898f87cf9cbe` | skip |
+| `dom/events/EventListener-incumbent-global-2.sub.html` | 615 | `adfe7f7179351926f3bbc779d4871686a8ce8df1d5cf2595aa2c1849ae3d7b14` | skip |
+| `dom/events/EventListener-incumbent-global-subframe-1.sub.html` | 513 | `3b6fdca1512bf10b374d0eb7914aee1d40872f572a3d77d14529ca3c48bc470c` | skip |
+| `dom/events/EventListener-incumbent-global-subframe-2.sub.html` | 475 | `f052fd6ff7c6d1c5897c26c4e3dfc939d6fb2b749d3f0bd73a7dc5f63bee8f44` | skip |
+| `dom/events/EventListener-incumbent-global-subsubframe.sub.html` | 528 | `0975a43eb7126bad282e39ab9a9b777d1e7cf6fa58bb8bc6b39d2f10a671a197` | skip |
+| `dom/events/EventListener-invoke-legacy.html` | 1972 | `956c32d6d29e2a77cf18dc550e42a6316c348b162afc8841609400364a18d753` | skip |
+| `dom/events/EventListenerOptions-capture.html` | 3910 | `25e3e924ccd5bde16468d5bb7ee013fe34f67eec73d787fe49f0e2a82b01c0fb` | skip |
 | `dom/events/EventTarget-addEventListener.html` | 673 | `a1d897267dd2f8281b0da1eb407553860eda91aabc78091aa50cfbdd001fb0a7` | skip |
 | `dom/events/EventTarget-dispatchEvent-returnvalue.html` | 2546 | `a1892b3d3f67f32c7c623768ac3d080e92fa3138b42fa52e8a4f0f4a2ece29e6` | skip |
 | `dom/events/EventTarget-dispatchEvent.html` | 3523 | `4c2a9cc4edc488e954f97577a292014f4e65eb9bfef454a27f86fd4c24a1f127` | skip |
 | `dom/events/EventTarget-removeEventListener.html` | 690 | `4882f233527b347f02a3201c4f16d75eef2bdc30653b6ab682535163f29b11e3` | skip |
+| `dom/events/document-level-wheel-event-listener-passive-by-default-manual.html` | 773 | `8abe7a177ee53ec860e994cecb6bf4872af0daed26956221b231db54999ae42b` | skip |
+| `dom/events/event-disabled-dynamic.html` | 972 | `2e4a601eadcf8c2439b41e4233546a973ce016715a9461491616c10103feb0e5` | skip |
+| `dom/events/event-global.html` | 3278 | `64c1af1a0eb0e683428f980e3ba49666307f0d4fb78b8ee5a96f2d1d540b4920` | skip |
+| `dom/events/shadow-relatedTarget.html` | 1047 | `d2ecb3cc3e8fd7818c3c0c27b1597d25a3c66aadcc68d21a48db0d5d93c7fdfb` | skip |
 | `dom/nodes/CharacterData-appendData.html` | 1998 | `edd46cc7581d8af311a92e90259f55e14dc00d2d31c4d4400a35c5e26ca19fa1` | skip |
 | `dom/nodes/CharacterData-data.html` | 2136 | `598c6c56e1b33f16d659a7345bfdfece5a2f1a6dc35455a5f3d3a8425aff7d8f` | skip |
 | `dom/nodes/CharacterData-deleteData.html` | 2924 | `090d9e817edac9fff6b7978bc6eea64782a8228c4fb9d47e31aeee997ab619b4` | skip |
@@ -67,7 +86,15 @@
 | `dom/nodes/Node-textContent.html` | 9526 | `7c1c6ed8d44f08026fdbf8d851147fa09ff0bec5ff0f730979fade639bd75cbe` | skip |
 | `fetch/data-urls/resources/base64.json` | 1683 | `d630751663c6fe3c3eb42a1561fd6f0fccbbc46c8cdb744bb7a9c06e7c905c76` | support |
 | `html/webappapis/atob/base64.html` | 5525 | `7d817d8be9136e628c02f29f2568b3b158c9594312f9446ffef997da80efe0e4` | testharness |
+| `shadow-dom/Element-interface-attachShadow.html` | 5352 | `7d0216d62d5ca5b18f502cd12b6b5d086475fad1c5830a5042642e22ace264f3` | testharness |
+| `shadow-dom/Element-interface-shadowRoot-attribute.html` | 2658 | `d4e740808bfd51ae76593b05159943595baa127f7fa205054736c2e8aeef151a` | testharness |
+| `shadow-dom/META.yml` | 125 | `e9a035c797ece68c64df32df16910ba9299f015040e8e24bc5f0d43d7a1698d4` | skip |
+| `shadow-dom/ShadowRoot-interface.html` | 6154 | `f456f93f65a824ad27f6c9276e62c590fbb7f76871923435257be2f6541789be` | skip |
+| `shadow-dom/resources/shadow-dom-utils.js` | 4965 | `44ffe47d4d606a1140441f6ca59cd8c27551c275c091148ef1a2a714e8cceebf` | support |
 | `url/historical.any.js` | 909 | `0cce2e984b3296d3aab14949c710bcd369b12d29f4f8622bbcdf5e5c033c63d0` | skip |
+| `url/idlharness.any.js` | 290 | `fbd89f9a801742d4177a90417d14cff7916eb44fd1389ad9206c07687b981dd1` | skip |
+| `url/toascii.window.js` | 1847 | `0d728a1bb3aa3aa7e5222c39565971e6300252223e8dcb484424f524059fdd76` | skip |
+| `url/url-searchparams.any.js` | 2599 | `0fbfe0aead8fcae3c211210ac3aac2c5ee7b9661339eb12944a059a9858899db` | skip |
 | `url/url-tojson.any.js` | 123 | `dc5707460963a2cc4dd2e77d48b369ac174515b8fd2f76083f0ade9328b5551a` | skip |
 | `url/urlencoded-parser.any.js` | 2709 | `5902ffd4c0accae0c7ac20225be1afd874ddfe35c51745ad8c9cffb3073f5471` | skip |
 | `url/urlsearchparams-append.any.js` | 1479 | `b3fdef26237562dee586c7768af5b484b3ff9d372595d8a8e59b7ebd1099c19b` | skip |

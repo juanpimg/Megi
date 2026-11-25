@@ -44,6 +44,8 @@ SEED_COUNTS = {
     "css/css-syntax/declarations-trim-whitespace.html": 9,
     "css/css-syntax/input-preprocessing.html": 13,
     "html/webappapis/atob/base64.html": 378,
+    "shadow-dom/Element-interface-attachShadow.html": 6,
+    "shadow-dom/Element-interface-shadowRoot-attribute.html": 3,
 }
 # Upstream files deliberately not imported: the first two need getComputedStyle, which the engine
 # does not expose yet; the third requires @charset removal, which the stylesheet parser has not
@@ -56,11 +58,14 @@ EXCLUDED_PATHS = {
 }
 SKIP_PATHS = {
     "css/css-syntax/META.yml": "upstream metadata (not a test fixture)",
+    "shadow-dom/META.yml": "upstream metadata (not a test fixture)",
+    "shadow-dom/ShadowRoot-interface.html": "not adopted: needs ShadowRoot.activeElement and innerHTML fragment parsing",
 }
 # Support data is vendored byte-for-byte but is not an executed test: the offline
 # component runner hands it to the local `fetch` shim instead of opening a socket.
 SUPPORT_PATHS = {
     "fetch/data-urls/resources/base64.json": "support data for the atob/base64 fixture",
+    "shadow-dom/resources/shadow-dom-utils.js": "support script for the shadow-dom fixtures",
 }
 # Directories probed while scoping the runner but not adopted: their engine APIs are
 # incomplete, so reporting their real failures would break the allowlist-free gate.
