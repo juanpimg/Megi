@@ -485,6 +485,26 @@ class RefreshHashesTests(unittest.TestCase):
             self.assertEqual((first, second), (0, 0))
             self.assertEqual([path.read_bytes() for path in paths], snapshots)
 
+    def test_refresh_hashes_missing_json_exits_cleanly(self) -> None:
+        # #2290: a missing report must produce `error: ...` like load_sites(),
+        # not an uncaught FileNotFoundError traceback.
+        with tempfile.TemporaryDirectory() as root:
+            with self._no_cargo():
+                with self.assertRaises(SystemExit) as caught:
+                    real_site_check.main(["--refresh-hashes", "--root", root])
+            self.assertIn("error:", str(caught.exception))
+            self.assertIn("real-sites.json", str(caught.exception))
+
+    def test_refresh_hashes_malformed_json_exits_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            status = Path(root) / "docs/status"
+            status.mkdir(parents=True, exist_ok=True)
+            (status / "real-sites.json").write_text("{not json", encoding="utf-8")
+            with self._no_cargo():
+                with self.assertRaises(SystemExit) as caught:
+                    real_site_check.main(["--refresh-hashes", "--root", root])
+            self.assertIn("error:", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

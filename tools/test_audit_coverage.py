@@ -8,6 +8,8 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).with_name("audit_coverage.py")
@@ -134,6 +136,35 @@ class LedgerRoundTripTests(unittest.TestCase):
 
     def test_reading_an_empty_ledger_returns_nothing(self) -> None:
         self.assertEqual(audit_coverage.read_ledger(), [])
+
+
+class InvalidLedgerTests(unittest.TestCase):
+    """#2290: a malformed `lines` field must be rejected at the single read point,
+    before any of the three int(row["lines"]) counters can raise ValueError."""
+
+    def setUp(self) -> None:
+        self._ledger = audit_coverage.LEDGER
+        self._tmp = tempfile.TemporaryDirectory()
+        audit_coverage.LEDGER = Path(self._tmp.name) / "coverage.tsv"
+
+    def tearDown(self) -> None:
+        audit_coverage.LEDGER = self._ledger
+        self._tmp.cleanup()
+
+    def test_non_integer_lines_field_exits_with_a_clear_error(self) -> None:
+        audit_coverage.LEDGER.write_text(
+            "\t".join(audit_coverage.HEADER)
+            + "\ncrates/a/src/lib.rs\tnot-a-number\tsrc\tF2\tjp\t2026-11-25\tcovered\t#2290\t\n",
+            encoding="utf-8",
+        )
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as caught:
+            audit_coverage.read_ledger()
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(
+            stderr.getvalue(),
+            f"{audit_coverage.LEDGER}: row 2: invalid lines 'not-a-number'\n",
+        )
 
 
 class CheckTests(unittest.TestCase):

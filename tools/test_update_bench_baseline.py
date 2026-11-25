@@ -107,6 +107,19 @@ class UpdateBenchBaselineTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertNotIn("addenda", json.loads(self.baseline.read_text(encoding="utf-8")))
 
+    def test_non_numeric_sample_fails_without_traceback(self) -> None:
+        # #2290: a malformed sample must go through fail() (exit 2), not escape
+        # as an uncaught TypeError/ValueError with a Python traceback.
+        for bad in (None, "abc"):
+            with self.subTest(sample=bad):
+                doc = bench_doc(10.0)
+                doc["results"][0]["samples_ms"] = [10.0, bad, 10.5]
+                self.passes[0].write_text(json.dumps(doc), encoding="utf-8")
+                result = subprocess.run(self.command("--write"), capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn(f"non-numeric sample {bad!r}", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
