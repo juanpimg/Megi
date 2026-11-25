@@ -62,13 +62,12 @@ pub fn chrome_band_pixels(scale: f64, dest_height: u32) -> u32 {
 
 /// Physical-pixel width of the expanded vertical tab rail, clamped so the page keeps one column.
 pub fn chrome_rail_pixels(scale: f64, dest_width: u32) -> u32 {
-    chrome_rail_pixels_for(scale, crate::chrome::tokens::RAIL_EXPANDED_WIDTH, dest_width)
+    chrome_rail_pixels_for(scale, crate::chrome::RAIL_EXPANDED_WIDTH, dest_width)
 }
 
 /// Physical-pixel width of a rail with an arbitrary CSS width, clamped to the window.
 pub fn chrome_rail_pixels_for(scale: f64, rail_css_width: f32, dest_width: u32) -> u32 {
-    ((f64::from(rail_css_width) * scale).round().max(0.0) as u32)
-        .min(dest_width.saturating_sub(1))
+    ((f64::from(rail_css_width) * scale).round().max(0.0) as u32).min(dest_width.saturating_sub(1))
 }
 
 /// Presents `scroll_y..scroll_y + css_viewport_height` from the CSS-pixel frame
@@ -127,6 +126,9 @@ pub fn present_region_at(
 /// instead of the whole frame width. With `dest_x_offset == 0` and
 /// `css_viewport_width == frame_width` the output is byte-identical to
 /// [`present_region_at`].
+// The flat signature is part of the Phase 1 presentation contract: callers pass
+// frame geometry, viewport metrics and destination offsets without allocating.
+#[allow(clippy::too_many_arguments)]
 pub fn present_region_with_insets(
     frame: Option<(&[u32], u32, u32)>,
     scroll_y: u32,
@@ -186,7 +188,7 @@ pub fn present_region_with_insets(
         dest_row_slice[..x_offset].fill(WHITE_0RGB);
         let source_offset = (css_row as usize) * frame_width;
         for (page_column, pixel) in dest_row_slice[x_offset..].iter_mut().enumerate() {
-            let css_column = (page_column as u64 * src_width) / page_dest_width as u64;
+            let css_column = (page_column as u64 * src_width) / page_dest_width;
             *pixel = pixels[source_offset + css_column.min(frame_width as u64 - 1) as usize];
         }
     }
@@ -352,7 +354,7 @@ mod unit_tests {
             8,
             4
         ));
-        for row in dest.chunks_exact(8) {
+        for row in dest.as_chunks::<8>().0 {
             assert_eq!(row, &[WHITE_0RGB, WHITE_0RGB, C0, C0, C1, C2, C2, C3]);
         }
     }
@@ -378,7 +380,7 @@ mod unit_tests {
             8,
             2
         ));
-        for row in dest.chunks_exact(8) {
+        for row in dest.as_chunks::<8>().0 {
             assert_eq!(row, &[WHITE_0RGB, WHITE_0RGB, C0, C0, C0, C1, C1, C1]);
         }
     }
@@ -447,19 +449,20 @@ mod unit_tests {
 
     #[test]
     fn chrome_rail_pixels_scales_and_clamps_to_the_window() {
-        use crate::chrome::tokens::{RAIL_COLLAPSED_WIDTH, RAIL_EXPANDED_WIDTH};
+        use crate::chrome::{RAIL_COLLAPSED_WIDTH, RAIL_EXPANDED_WIDTH};
         assert_eq!(chrome_rail_pixels(1.0, 800), RAIL_EXPANDED_WIDTH as u32);
         assert_eq!(
             chrome_rail_pixels(2.0, 800),
             (RAIL_EXPANDED_WIDTH * 2.0) as u32
         );
-        assert_eq!(chrome_rail_pixels(1.0, 5), 4, "page keeps 1 physical column");
+        assert_eq!(
+            chrome_rail_pixels(1.0, 5),
+            4,
+            "page keeps 1 physical column"
+        );
         assert_eq!(chrome_rail_pixels(1.0, 1), 0);
         assert_eq!(chrome_rail_pixels(1.0, 0), 0);
-        assert_eq!(
-            chrome_rail_pixels_for(1.0, RAIL_COLLAPSED_WIDTH, 800),
-            12
-        );
+        assert_eq!(chrome_rail_pixels_for(1.0, RAIL_COLLAPSED_WIDTH, 800), 12);
         assert_eq!(chrome_rail_pixels_for(1.0, -4.0, 800), 0);
     }
 }

@@ -155,7 +155,7 @@ crates/browser/src/pages/tests.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/browser/src/pdf.rs	295	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read full writer, object layout and tests
 crates/browser/src/pdf/objects.rs	60	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read objects.rs and text.rs in full after clippy refactor
 crates/browser/src/pdf/text.rs	162	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read objects.rs and text.rs in full after clippy refactor
-crates/browser/src/present.rs	465	src	F2	jp	2026-11-25	covered	#2290	Re-read full file; Phase 1 insets API and rail helpers
+crates/browser/src/present.rs	468	src	F2	jp	2026-11-25	covered	#2290	Re-read full file after clippy/fmt fixes for Phase 1 insets API
 crates/browser/src/reader.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/refresh.rs	206	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/scale.rs	173	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
