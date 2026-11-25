@@ -638,9 +638,9 @@ crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modula
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/computed_style.rs	185	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/core.rs	226	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/events/dispatch.rs	498	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/events/dispatch.rs	487	src	F2	subagent-2297	2026-11-25	covered	#2297	re-read: stopImmediatePropagation gate before inline handler call; inline block extracted to inline.rs
 crates/js/src/events/event.rs	389	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/src/events/inline.rs	148	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/events/inline.rs	184	src	F2	subagent-2297	2026-11-25	covered	#2297	re-read: added deliver_inline_handler() extracted from dispatch.rs
 crates/js/src/events/install.rs	200	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/listeners.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -738,7 +738,7 @@ crates/js/tests/es_modules.rs	499	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/js/tests/es_modules_stub.rs	19	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/event_advanced_tests/animations.rs	113	test	F1	jp	2026-11-19	covered	#941,#942	
 crates/js/tests/event_advanced_tests/dispatch.rs	317	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/event_advanced_tests/inline.rs	131	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/event_advanced_tests/inline.rs	189	test	F1	subagent-2297	2026-11-25	covered	#2297	re-read: added red/green inline stopImmediatePropagation and stopPropagation guard tests
 crates/js/tests/event_advanced_tests/main.rs	18	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/event_advanced_tests/ui_events.rs	224	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/event_spec_fixes_tests.rs	426	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

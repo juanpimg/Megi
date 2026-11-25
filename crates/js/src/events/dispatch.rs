@@ -249,27 +249,16 @@ pub(crate) fn deliver(
     }
     // Inline `on<event>` handlers run at the target (bubble phase), after regular listeners.
     if phase == PropPhase::Target {
-        let inline_slot = {
-            let host = host_ref(context)?;
-            host.inline_handlers
-                .iter()
-                .find(|handler| handler.target == target && handler.event_type == event_type)
-                .map(|handler| handler.slot)
-        };
-        if let Some(slot) = inline_slot {
-            let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))?;
-            if let Some(callback) = callback.as_object() {
-                call_listener(
-                    context,
-                    &callback,
-                    &current_target,
-                    event,
-                    false,
-                    false,
-                    slot,
-                )?;
-            }
+        // #2297: DOM §2.9 — stopImmediatePropagation() blocks every later listener on this
+        // target, including the inline one; stopPropagation() alone must not.
+        if host_ref(context)?
+            .dispatch
+            .map(|dispatch| dispatch.stop_immediate)
+            .unwrap_or(false)
+        {
+            return Ok(());
         }
+        deliver_inline_handler(context, target, event_type, &current_target, event)?;
     }
     Ok(())
 }

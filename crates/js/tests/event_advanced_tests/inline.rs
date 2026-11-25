@@ -108,6 +108,64 @@ fn estimated_heap_bytes_grows_with_dom_and_listeners() {
 }
 
 #[test]
+fn inline_onclick_is_skipped_after_stop_immediate_propagation() {
+    // #2297: DOM §2.9 — `stopImmediatePropagation()` must prevent every later
+    // listener on the same target, including the inline `on<event>` handler.
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.order = [];
+             var el = document.createElement('button');
+             document.body.appendChild(el);
+             el.onclick = function () { order.push('inline'); };
+             el.addEventListener('click', function (event) {
+                 order.push('listener');
+                 event.stopImmediatePropagation();
+             });
+             el.dispatchEvent(new Event('click'));",
+            "inline-stop-immediate.js",
+        )
+        .expect("inline handler dispatch");
+    assert_eq!(
+        runtime
+            .eval("order.join(',')", "inline-stop-immediate.js")
+            .expect("order"),
+        "listener",
+        "inline onclick must not run after stopImmediatePropagation()"
+    );
+}
+
+#[test]
+fn inline_onclick_still_runs_after_stop_propagation_only() {
+    // #2297: DOM §2.9 — `stopPropagation()` alone stops propagation to ancestor
+    // nodes but must NOT suppress listeners on the current target, including the
+    // inline `on<event>` handler. Guards the stopImmediatePropagation fix from
+    // overreaching into the plain propagation flag.
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "globalThis.order2 = [];
+             var el = document.createElement('button');
+             document.body.appendChild(el);
+             el.onclick = function () { order2.push('inline'); };
+             el.addEventListener('click', function (event) {
+                 order2.push('listener');
+                 event.stopPropagation();
+             });
+             el.dispatchEvent(new Event('click'));",
+            "inline-stop-propagation.js",
+        )
+        .expect("inline handler dispatch");
+    assert_eq!(
+        runtime
+            .eval("order2.join(',')", "inline-stop-propagation.js")
+            .expect("order2"),
+        "listener,inline",
+        "inline onclick must still run after stopPropagation() alone"
+    );
+}
+
+#[test]
 fn inline_onclick_on_window() {
     let mut runtime = runtime();
     runtime

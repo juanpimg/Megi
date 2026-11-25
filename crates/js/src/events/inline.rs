@@ -146,3 +146,39 @@ inline_handler_accessors!(
 pub(crate) fn inline_node_accessors() -> Vec<(&'static str, NativeFn, NativeFn)> {
     inline_handler_accessors()
 }
+
+/// Runs the inline `on<event>` handler registered on `target`, if any (#2297).
+///
+/// The `stopImmediatePropagation()` gate lives in `dispatch::deliver`, right before this
+/// call: an inline handler is a same-target listener, so only the immediate flag may
+/// suppress it — never the plain propagation flag.
+pub(crate) fn deliver_inline_handler(
+    context: &mut Context,
+    target: TargetKey,
+    event_type: &str,
+    current_target: &JsValue,
+    event: &JsObject,
+) -> JsResult<()> {
+    let slot = {
+        let host = host_ref(context)?;
+        host.inline_handlers
+            .iter()
+            .find(|handler| handler.target == target && handler.event_type == event_type)
+            .map(|handler| handler.slot)
+    };
+    if let Some(slot) = slot {
+        let callback = array_get(context, "__megi_inline_handlers", u64::from(slot))?;
+        if let Some(callback) = callback.as_object() {
+            call_listener(
+                context,
+                &callback,
+                current_target,
+                event,
+                false,
+                false,
+                slot,
+            )?;
+        }
+    }
+    Ok(())
+}
