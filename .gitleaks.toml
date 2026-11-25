@@ -32,3 +32,8 @@ rules = ["generic-api-key"]
 description = "docs/status/wpt.json WPT subtest keys are public sha256(test + NUL + subtest) canonical identifiers, not credentials"
 paths = ['''^docs/status/wpt\.json$''']
 rules = ["generic-api-key"]
+
+[[allowlists]]
+description = "RFC 6455 section 1.3 example Sec-WebSocket-Key/Accept pair in DevTools protocol tests is a public test vector, not a credential"
+paths = ["^crates/browser/tests/devtools_protocol\\.rs$"]
+rules = ["generic-api-key"]

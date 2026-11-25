@@ -48,6 +48,22 @@ class GitleaksConfigTests(unittest.TestCase):
         for word in ("wpt", "canonical", "sha256"):
             self.assertIn(word, description)
 
+    def test_devtools_rfc_key_exemption_is_path_and_rule_scoped(self) -> None:
+        entries = [
+            entry
+            for entry in self.allowlists
+            if any(
+                "devtools_protocol.rs" in str(path).replace("\\", "")
+                for path in entry.get("paths", [])
+            )
+        ]
+        self.assertEqual(len(entries), 1, "expected one DevTools RFC key exemption")
+        entry = entries[0]
+        self.assertEqual(entry.get("rules"), ["generic-api-key"])
+        self.assertNotIn("commits", entry, "commit-wide exemptions are not allowed")
+        for path in entry.get("paths", []):
+            self.assertNotIn(".*", str(path), "path regex must not degrade to .*")
+
     def test_every_allowlist_names_explicit_rules_and_targets(self) -> None:
         for entry in self.allowlists:
             with self.subTest(description=entry.get("description")):
