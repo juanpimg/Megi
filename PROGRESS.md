@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `6a1bf66f` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **36/64** (**56%**) · **3,444** tests · conformance **PASS** · **18** crates · **253,009** lines of Rust
+**Snapshot** — commit `0c73fb2c` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **37/64** (**57%**) · **3,447** tests · conformance **PASS** · **18** crates · **253,111** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -21,7 +21,7 @@
 | **M2** | Profundidad declarativa | `████████████████░░░░` 4/5 | 80% |
 | **M3** | Frontera de seguridad | `████████████████████` 5/5 | 100% |
 | **M4** | Componentes y persistencia | `██████████░░░░░░░░░░` 3/6 | 50% |
-| **M5** | Plataforma nativa | `██████████░░░░░░░░░░` 3/6 | 50% |
+| **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M8** | Motor ofensivo | `████████░░░░░░░░░░░░` 2/5 | 40% |
@@ -29,7 +29,7 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `███████████░░░░░░░░░` 36/64 | **56%** |
+| | **Roadmap** | `███████████░░░░░░░░░` 37/64 | **57%** |
 
 ## Detalle de criterios por hito
 
@@ -91,17 +91,17 @@
 - WASM — sin soporte en el motor
 - Demo offline con red cortada
 
-### M5 — Plataforma nativa (50%)
+### M5 — Plataforma nativa (66%)
 
 **Verificado**
 
 - Accesibilidad progresiva (aria-describedby expuesto a AT) — `crates/browser/src/a11y/`
 - Descargas PNG/HTML — `crates/browser/src/download.rs`
 - Auditoría de accesibilidad completa y publicada — `docs/A11Y-LIVE-VERIFICATION.md:1-54`: verificación en vivo con bus AT-SPI real (`NO_AT_BRIDGE` desactivado, bus des-enmascarado, `org.a11y.Status.IsEnabled=true`), cliente `Atspi` real leyó roles/nombres/`CHECKED` e invocó `do_action(0)` que navegó a la página objetivo; bug real de `build_tree_update` corregido con test RED→GREEN `crates/browser/src/a11y_backend_orphan_tests.rs::snapshot_nodes_without_an_exposed_parent_mount_under_the_root`; `docs/ACCESSIBILITY-STRATEGY.md:3-4` ADR-002 aceptado e implementado (backend `accesskit` 0.25); tests deterministas `crates/browser/src/a11y_live_tests.rs`, `a11y_aria_tests.rs`, `a11y_at_bus.rs`, `a11y_backend_orphan_tests.rs` y `crates/browser/src/a11y/{nodes,snapshot,tests}.rs`; límites explícitos (`docs/A11Y-LIVE-VERIFICATION.md:47-52`): sin captura de voz de Orca, sin verificación determinista en CI del rasterizado de widgets nativos del SO, paseo en vivo manual (CI cubre el test determinista del árbol y el paseo con `accesskit_consumer`); `python3 tools/check_milestone.py M5 3` PASS
+- Impresión/PDF headless E2E con evidencia real — `crates/browser/tests/print_pdf_e2e.rs::headless_print_to_pdf_writes_a_deterministic_pdf_1_4` ejecuta el binario real (`env!("CARGO_BIN_EXE_megi")`) con `data:text/html,<h1>Megi PDF</h1>` y `--width 800 --height 600 --print-to-pdf <tmp>` bajo `/var/tmp`; comprueba stdout `wrote … (800x600, N bytes)`, `%PDF-1.4`, `/MediaBox [0 0 800 600]`, `xref`, `startxref` con offset real y `%%EOF`, y dos ejecuciones byte-idénticas; `nice -n 19 env CARGO_BUILD_JOBS=1 TMPDIR=/var/tmp CARGO_TARGET_DIR=/home/jp/.cache/megi-target-pdf PATH=/home/jp/.cargo/bin:$PATH cargo +1.99.1 test -p megi-browser --test print_pdf_e2e --locked -- --test-threads=1` (1 passed) y la misma env con `cargo +1.99.1 test -p megi-browser --lib pdf --locked -- --test-threads=1` (2 passed); reproducción manual dos veces con `cargo +1.99.1 run --release -p megi-browser --locked -- data:text/html,<h1>Megi PDF</h1> --width 800 --height 600 --print-to-pdf /var/tmp/megi-pdf-evidence-{a,b}.pdf`: stdout `wrote /var/tmp/megi-pdf-evidence-a.pdf (800x600, 11623 bytes)` y `wrote /var/tmp/megi-pdf-evidence-b.pdf (800x600, 11623 bytes)`, 11623 bytes por archivo, sha256 `4b424b3043e6923194057a711d1122354327019019320de2fa9586331c6f1035` en ambos, `cmp` EXIT=0; motor `crates/browser/src/pdf.rs:47-160` y `crates/browser/src/main.rs:252-277`; límite explícito: PDF de una página raster (imagen Flate; sin capa de texto ni `@media print`), `window.print()` y el diálogo nativo pertenecen a M11#3; `python3 tools/check_milestone.py M5 4` y `python3 tools/check_milestone.py M5 --match 'Impresión/PDF'` PASS
 
 **Pendiente**
 
-- Impresión/PDF — sin implementación
 - Diálogos y portapapeles nativos — sin implementación
 - Sandbox enforced en Linux, macOS y Windows
 
@@ -193,10 +193,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `6a1bf66f` (2026-11-25) |
+| Commit | `0c73fb2c` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 253009 |
-| Tests (`cargo test --workspace -- --list`) | 3444 |
+| Lines of Rust (tracked `.rs`) | 253111 |
+| Tests (`cargo test --workspace -- --list`) | 3447 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
 
