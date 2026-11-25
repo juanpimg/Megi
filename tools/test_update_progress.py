@@ -154,6 +154,32 @@ class UpdateProgressWptTest(unittest.TestCase):
         )
         self.assertNotIn("Traceback", stderr.getvalue())
 
+    def test_build_artifacts_rejects_non_numeric_manifest_tests(self) -> None:
+        # A non-numeric [stats].tests must exit with the same clean "error: ..." as
+        # invalid TOML or an incomplete WPT report, not a raw ValueError (#2290).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            status = root / update_progress.STATUS_DIR
+            status.mkdir(parents=True)
+            write_report(
+                status / "wpt.json",
+                report({"pass": 1, "fail": 0, "timeout": 0, "notrun": 0, "error": 0}, 1,
+                       ["tests/wpt/css/css-syntax"]),
+            )
+            manifest_path = status / "progress.toml"
+            manifest_path.write_text(
+                '[stats]\ntests = "n/a"\n\n[gate]\nstatus = "PASS"\n', encoding="utf-8"
+            )
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as caught:
+                    update_progress.build_artifacts(root, no_count=True, no_gate=True)
+        self.assertEqual(
+            caught.exception.code,
+            f"error: invalid [stats].tests in {manifest_path}: 'n/a'",
+        )
+        self.assertNotIn("Traceback", stderr.getvalue())
+
 
 class FakeCache:
     """In-memory stand-in for the on-disk test-count cache."""

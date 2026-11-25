@@ -169,12 +169,19 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         print("warning: git metadata unavailable; using placeholders", file=sys.stderr)
 
     manifest_stats = manifest.get("stats", {})
+    try:
+        manifest_tests = int(manifest_stats.get("tests", 0))
+    except (TypeError, ValueError):
+        sys.exit(
+            f"error: invalid [stats].tests in {manifest_path}: "
+            f"{manifest_stats.get('tests')!r}"
+        )
     manifest_gate = manifest.get("gate", {})
     tests, tests_measured = count_tests(
         root,
         root / "target" / "progress-stats.json",
         head,
-        int(manifest_stats.get("tests", 0)),
+        manifest_tests,
         no_count,
     )
     gate = run_gate(root, manifest_gate) if not no_gate else dict(manifest_gate)

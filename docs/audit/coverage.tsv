@@ -2141,7 +2141,7 @@ tools/test_real_site_check.py	286	tool	F3	site-corpus	2026-11-24	covered	WP-M1-E
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
-tools/test_update_progress.py	203	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding duplicate-wpt regression test
+tools/test_update_progress.py	229	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-numeric manifest tests regression test
 tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
@@ -2150,7 +2150,7 @@ tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after add
 tools/test_wpt_gate.py	181	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding subtest validation regression test
 tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/update_progress.py	325	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/vendor_wpt.py	320	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
