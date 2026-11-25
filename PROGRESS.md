@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `ab1ca1a0` (2026-11-25) · hitos cerrados **3/13** · criterios verificados **31/64** (**48%**) · **3,402** tests · conformance **PASS** · **18** crates · **249,773** lines of Rust
+**Snapshot** — commit `a13eb6d0` (2026-11-25) · hitos cerrados **3/13** · criterios verificados **32/64** (**50%**) · **3,402** tests · conformance **PASS** · **18** crates · **250,096** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -23,13 +23,13 @@
 | **M4** | Componentes y persistencia | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M5** | Plataforma nativa | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
-| **M7** | Herramientas de desarrollador | `████░░░░░░░░░░░░░░░░` 1/5 | 20% |
+| **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M8** | Motor ofensivo | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `█████████░░░░░░░░░░░` 31/64 | **48%** |
+| | **Roadmap** | `██████████░░░░░░░░░░` 32/64 | **50%** |
 
 ## Detalle de criterios por hito
 
@@ -119,17 +119,17 @@
 - AVIF/JPEG XL — sin decodificadores
 - Audio y vídeo con códecs libres — sin implementación
 
-### M7 — Herramientas de desarrollador (20%)
+### M7 — Herramientas de desarrollador (40%)
 
 **Verificado**
 
 - Consola JS y diagnóstico básico — `crates/js/src/host.rs`, `crates/browser/src/find/`
+- Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS
 
 **Pendiente**
 
 - DevTools vía protocolo Firefox
 - WebDriver BiDi
-- Páginas `about:` de diagnóstico
 - Perfilador usable
 
 ### M8 — Motor ofensivo (40%)
@@ -196,9 +196,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `ab1ca1a0` (2026-11-25) |
+| Commit | `a13eb6d0` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 249773 |
+| Lines of Rust (tracked `.rs`) | 250096 |
 | Tests (`cargo test --workspace -- --list`) | 3402 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
