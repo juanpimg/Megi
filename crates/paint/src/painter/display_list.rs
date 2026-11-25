@@ -82,13 +82,13 @@ fn build_display_list_inner(
         regions,
         viewport,
         effects_present,
+        // Fresh budget per pass: no global static to reset or share (#2296).
+        text_mask_collectors: AtomicUsize::new(0),
     };
     let canvas = canvas_background(root, effects_present);
     // Reserve a modest starting capacity: the painter emits roughly one item per
     // text run plus one per painted box, and `DisplayItem` is a large enum, so a
     // few reallocations are expensive on text-heavy pages (R129).
-    // Reset the per-pass counter for `background-clip: text` collectors (#658).
-    TEXT_MASK_COLLECTORS.store(0, std::sync::atomic::Ordering::Relaxed);
     let mut list = DisplayList::with_capacity(20480);
 
     match canvas {

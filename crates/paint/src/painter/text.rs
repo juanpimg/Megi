@@ -390,6 +390,7 @@ mod tests {
             regions: None,
             viewport: Rect::new(0.0, 0.0, 100.0, 100.0),
             effects_present: false,
+            text_mask_collectors: AtomicUsize::new(0),
         };
         let mut list = DisplayList::new();
         paint_text_run(&layout_box, "Hi", &mut list, &resources, None, 0.5, 100.0);

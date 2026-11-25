@@ -114,15 +114,14 @@ pub(super) fn paint_background_border(
     // `background-clip: text`: the background color/images are composited through
     // the glyph mask of the box's text descendants, scoped strictly to the
     // layers whose `background-clip` is `text` (#446).
-    let text_mask_runs = if !background_is_propagated && background_clips_to_text(style) {
-        // Bound the number of collecting boxes per pass (#658): once the cap is reached,
-        // skip collection so a hostile tree cannot turn one render into O(N * subtree).
-        let count = TEXT_MASK_COLLECTORS.fetch_add(1, Ordering::Relaxed);
-        if count < MAX_TEXT_MASK_COLLECTORS {
-            Some(std::sync::Arc::new(collect_text_mask_runs(layout_box)))
-        } else {
-            None
-        }
+    let text_mask_runs = if !background_is_propagated
+        && background_clips_to_text(style)
+        && resources.claim_text_mask_collector()
+    {
+        // Bound the number of collecting boxes per pass (#658): once the cap is
+        // reached, skip collection so a hostile tree cannot turn one render into
+        // O(N * subtree). The budget belongs to this pass alone (#2296).
+        Some(std::sync::Arc::new(collect_text_mask_runs(layout_box)))
     } else {
         None
     };

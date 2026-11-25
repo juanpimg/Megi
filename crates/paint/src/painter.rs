@@ -117,8 +117,8 @@ pub use display_list::{
 use backgrounds::paint_background_border;
 use blocks::{paint_block_backgrounds, paint_floats};
 use effects::{
-    MAX_TEXT_MASK_COLLECTORS, TEXT_MASK_COLLECTORS, collect_text_mask_runs, effect_padding,
-    has_effects, inline_filtered_solid, overflow_rounded_clip, tree_has_effects,
+    MAX_TEXT_MASK_COLLECTORS, collect_text_mask_runs, effect_padding, has_effects,
+    inline_filtered_solid, overflow_rounded_clip, tree_has_effects,
 };
 use hit_regions::{
     pop_clip_item, pop_rounded_group, pop_text_mask_group, push_clip_item, push_rounded_group,
@@ -168,9 +168,23 @@ struct PaintResources<'a> {
     /// Precomputed once per pass so the hot `phase()` classification can skip
     /// per-box style checks when the whole document has no effects (R141).
     effects_present: bool,
+    /// `background-clip: text` collector slots claimed by this pass (#2296).
+    ///
+    /// State lives on the pass-owned resources, never in a process-wide static:
+    /// concurrent passes must not share (or reset) each other's budget.
+    text_mask_collectors: AtomicUsize,
 }
 
 impl PaintResources<'_> {
+    /// Claims one `background-clip: text` collector slot for this pass.
+    ///
+    /// Returns `false` once the budget is exhausted (CSS Backgrounds 3 §5.6;
+    /// per-pass cap #658, made per-pass rather than global in #2296).
+    #[inline]
+    fn claim_text_mask_collector(&self) -> bool {
+        self.text_mask_collectors.fetch_add(1, Ordering::Relaxed) < MAX_TEXT_MASK_COLLECTORS
+    }
+
     /// Records a painted primitive for hit-testing (no-op when regions are off).
     #[inline]
     fn record(&self, rect: Rect, node_id: Option<megi_core::NodeId>, kind: HitKind) {

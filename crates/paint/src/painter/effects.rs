@@ -1,8 +1,5 @@
 use super::*;
 
-/// Per-pass counter of `background-clip: text` mask collectors.
-pub(super) static TEXT_MASK_COLLECTORS: AtomicUsize = AtomicUsize::new(0);
-
 /// True when any box in the layout tree authors `filter`/`mix-blend-mode`.
 ///
 /// One cheap tree walk per paint pass; when false the painter takes the legacy

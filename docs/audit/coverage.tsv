@@ -1041,23 +1041,23 @@ crates/paint/examples/html_to_png.rs	181	example	F3	wave-max-mod	2026-11-19	cove
 crates/paint/src/background.rs	444	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/background/tests.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/lib.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/src/painter.rs	339	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/src/painter/backgrounds.rs	356	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/src/painter.rs	353	src	F2	wave-max-mod	2026-11-25	covered	#2296	per-pass text-mask collector state; re-read after change
+crates/paint/src/painter/backgrounds.rs	355	src	F2	wave-max-mod	2026-11-25	covered	#2296	claim collector from pass resources; re-read after change
 crates/paint/src/painter/blocks.rs	185	src	F2	juanpimg	2026-11-20	covered	#1884	inline-block background paint
-crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/src/painter/effects.rs	210	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-25	covered	#2296	removed global counter reset; budget created with per-pass resources
+crates/paint/src/painter/effects.rs	207	src	F2	wave-max-mod	2026-11-25	covered	#2296	global counter removed; re-read after change
 crates/paint/src/painter/hit_regions.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/images.rs	129	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/inline.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/stacking.rs	263	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
-crates/paint/src/painter/text.rs	406	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/src/painter/text.rs	407	src	F2	wave-max-mod	2026-11-25	covered	#2296	unit-test resources initializer; re-read after change
 crates/paint/src/style.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_geometry/common.rs	149	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_geometry/layers.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_geometry/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_geometry/tiling.rs	174	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_images.rs	388	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/clipping.rs	486	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/clipping.rs	486	test	F1	wave-max-mod	2026-11-25	covered	#2296	re-read after regression test moved to its own file
 crates/paint/tests/color4.rs	115	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/columns.rs	47	test	F1	columns-merge	2026-11-21	covered	#upstream	re-read
 crates/paint/tests/common/mod.rs	192	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1089,6 +1089,7 @@ crates/paint/tests/raster_quality/text.rs	141	test	F1	wave-max-mod	2026-11-19	co
 crates/paint/tests/replaced_backdrop.rs	474	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/robustness.rs	241	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/stacking_order.rs	332	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/text_mask_per_pass.rs	138	test	F1	wave-max-mod	2026-11-25	covered	#2296	concurrent per-pass budget regression test; read at creation
 crates/paint/tests/transform.rs	59	test	F1	juanpimg	2026-11-20	covered	#1933,#1934	paint transform tests from PR 2052
 crates/paint/tests/writing_mode.rs	39	test	F1	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 crates/raster/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
