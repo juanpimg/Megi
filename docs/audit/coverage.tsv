@@ -2326,7 +2326,7 @@ tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	401	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
-tools/progress_stats.py	278	tool	F3	jp	2026-11-25	covered	#2290	re-read after dirty-tree cache guard
+tools/progress_stats.py	280	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/real_site_check.py	362	tool	F3	jp	2026-11-25	covered	#2290	
 tools/render_fixture.sh	130	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
@@ -2351,9 +2351,9 @@ tools/test_real_site_check.py	510	tool	F3	jp	2026-11-25	covered	#2290
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
-tools/test_update_progress.py	229	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-numeric manifest tests regression test
-tools/test_vendor_wpt.py	179	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	vendor tests reviewed
+tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
@@ -2361,10 +2361,10 @@ tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after add
 tools/test_wpt_gate.py	193	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding subtest validation regression test
 tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
 tools/update_bench_baseline.py	180	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/update_coverage.py	653	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	471	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	offline vendor checker reviewed
+tools/vendor_wpt.py	472	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
