@@ -35,7 +35,7 @@ next_up = [
 # ---------------------------------------------------------------------------------------
 [stats]
 tests = 3424
-tests_commit = "6357ba61"
+tests_commit = "fb9feb44"
 tests_date = "2026-11-25"
 crates = 18
 rust_lines = 250733
@@ -229,8 +229,8 @@ pending = [
 [[phase]]
 id = "M12"
 title = "Cobertura media/legal"
-items = []
-pending = [
-  "ADR público con datos de licencias DRM/EME y alternativas",
-  "Streams protegidos funcionando, o límite legal documentado",
+items = [
+  "ADR público con datos de licencias DRM/EME y alternativas — `docs/adr/2026-11-24-drm-eme-decision.md:1-78`: ADR ACEPTADO derivado de la spec v2 aprobada en PR #2290 (`docs/superpowers/specs/2026-11-24-megi-ambition-design.md:102`, sin aprobación individual inventada); 8 fuentes públicas consultadas el 2026-11-25 con datos reales de licencias/tipos de Widevine (Google: master license agreement, Cloud License Service y License Server SDK, robustez SW_SECURE_* y HW_SECURE_*, OEMCrypto para Level 1), PlayReady (Microsoft: licencia obligatoria por tipo de producto, SL150/SL2000/SL3000 con TEE, MinimumSecurityLevel) y FairPlay Streaming (Apple: Apple Developer Program, aprobación de credenciales, KSM sobre HLS); coste/requisitos legales y riesgo con `#![forbid(unsafe_code)]` 18/18 y el modelo de procesos en `:38-42`; decisión rama (c) en `:44-53`; alternativas reales AV1/VP9/Opus y AVIF (`docs/AVIF-STRATEGY.md:1-12`) en `:55-59`; límites en `:61-67` sin promesa de Netflix/DRM; `python3 tools/check_milestone.py M12 1` PASS",
+  "Streams protegidos funcionando, o límite legal documentado — `docs/adr/2026-11-24-drm-eme-decision.md:44-67` documenta el límite legal de la rama (c) permitida por la barra OR del spec v2 (`docs/superpowers/specs/2026-11-24-megi-ambition-design.md:102`; `docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md:101`): sin CDM licenciado, sin credenciales de producción, sin implementación EME (0 coincidencias de `MediaKeys`/`requestMediaKeySystemAccess`/`MediaKeySession`/`encrypted-media` en `crates/**/*.rs`), sin crate `media`, sin `docs/status/media-matrix.toml` medido (Task 1 abierta); sin acuerdo con Google/Microsoft/Apple y sin promesa de contenido protegido (`:49`, `:63-67`); alternativas AV1/VP9/Opus y AVIF en `:55-59`; `python3 tools/check_milestone.py M12 2` PASS",
 ]
+pending = []

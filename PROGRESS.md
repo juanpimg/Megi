@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `6357ba61` (2026-11-25) · hitos cerrados **3/13** · criterios verificados **33/64** (**51%**) · **3,424** tests · conformance **PASS** · **18** crates · **250,733** lines of Rust
+**Snapshot** — commit `fb9feb44` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **35/64** (**54%**) · **3,424** tests · conformance **PASS** · **18** crates · **250,733** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -28,8 +28,8 @@
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
-| **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `██████████░░░░░░░░░░` 33/64 | **51%** |
+| **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
+| | **Roadmap** | `██████████░░░░░░░░░░` 35/64 | **54%** |
 
 ## Detalle de criterios por hito
 
@@ -182,21 +182,18 @@
 - Notificaciones y permisos por SO con matriz `enforced`
 - Deep links e impresión nativa
 
-### M12 — Cobertura media/legal (0%)
+### M12 — Cobertura media/legal (100%)
 
 **Verificado**
 
-
-**Pendiente**
-
-- ADR público con datos de licencias DRM/EME y alternativas
-- Streams protegidos funcionando, o límite legal documentado
+- ADR público con datos de licencias DRM/EME y alternativas — `docs/adr/2026-11-24-drm-eme-decision.md:1-78`: ADR ACEPTADO derivado de la spec v2 aprobada en PR #2290 (`docs/superpowers/specs/2026-11-24-megi-ambition-design.md:102`, sin aprobación individual inventada); 8 fuentes públicas consultadas el 2026-11-25 con datos reales de licencias/tipos de Widevine (Google: master license agreement, Cloud License Service y License Server SDK, robustez SW_SECURE_* y HW_SECURE_*, OEMCrypto para Level 1), PlayReady (Microsoft: licencia obligatoria por tipo de producto, SL150/SL2000/SL3000 con TEE, MinimumSecurityLevel) y FairPlay Streaming (Apple: Apple Developer Program, aprobación de credenciales, KSM sobre HLS); coste/requisitos legales y riesgo con `#![forbid(unsafe_code)]` 18/18 y el modelo de procesos en `:38-42`; decisión rama (c) en `:44-53`; alternativas reales AV1/VP9/Opus y AVIF (`docs/AVIF-STRATEGY.md:1-12`) en `:55-59`; límites en `:61-67` sin promesa de Netflix/DRM; `python3 tools/check_milestone.py M12 1` PASS
+- Streams protegidos funcionando, o límite legal documentado — `docs/adr/2026-11-24-drm-eme-decision.md:44-67` documenta el límite legal de la rama (c) permitida por la barra OR del spec v2 (`docs/superpowers/specs/2026-11-24-megi-ambition-design.md:102`; `docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md:101`): sin CDM licenciado, sin credenciales de producción, sin implementación EME (0 coincidencias de `MediaKeys`/`requestMediaKeySystemAccess`/`MediaKeySession`/`encrypted-media` en `crates/**/*.rs`), sin crate `media`, sin `docs/status/media-matrix.toml` medido (Task 1 abierta); sin acuerdo con Google/Microsoft/Apple y sin promesa de contenido protegido (`:49`, `:63-67`); alternativas AV1/VP9/Opus y AVIF en `:55-59`; `python3 tools/check_milestone.py M12 2` PASS
 
 ## Repository statistics (measured)
 
 | Metric | Value |
 |---|---|
-| Commit | `6357ba61` (2026-11-25) |
+| Commit | `fb9feb44` (2026-11-25) |
 | Crates in the workspace | 18 |
 | Lines of Rust (tracked `.rs`) | 250733 |
 | Tests (`cargo test --workspace -- --list`) | 3424 |
