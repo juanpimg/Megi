@@ -664,7 +664,7 @@ crates/js/src/runtime/buffer_source.rs	78	src	F2	textcap-merge	2026-11-23	covere
 crates/js/src/runtime/cssom.rs	466	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/document.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/document/parse.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/document/query.rs	401	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/document/query.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/dom_utils.rs	475	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames.rs	11	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -685,7 +685,7 @@ crates/js/src/runtime/gap_apis/slots.rs	361	src	F2	wave-max-mod	2026-11-19	cover
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/globals/features.rs	837	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
+crates/js/src/runtime/globals/features.rs	842	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
 crates/js/src/runtime/globals/install.rs	188	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/location_storage.rs	382	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -693,7 +693,7 @@ crates/js/src/runtime/module_eval.rs	358	src	F2	wave-max-mod	2026-11-19	covered	
 crates/js/src/runtime/module_parse.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/modules.rs	437	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/network.rs	237	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/node_accessors.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/node_accessors.rs	483	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods.rs	18	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/attributes.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/dialog.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -702,12 +702,12 @@ crates/js/src/runtime/node_methods/mutations.rs	156	src	F2	wave-max-mod	2026-11-
 crates/js/src/runtime/node_methods/properties.rs	377	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/tables.rs	261	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/src/runtime/node_methods/validation.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/node_wrappers.rs	475	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
+crates/js/src/runtime/node_wrappers.rs	489	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/observers.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/delivery.rs	105	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/registration.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/tla.rs	8	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/tla/accessors.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/tla/accessors.rs	478	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/tla/loader.rs	278	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/workers.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/workers/api.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -760,7 +760,7 @@ crates/js/tests/js_tests.rs	335	test	F1	wave-max-mod	2026-11-19	covered	#maximal
 crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/shadow_dom_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1337,7 +1337,7 @@ crates/test_harness/tests/closed_loop/fixtures.rs	117	test	F1	wave-max-mod	2026-
 crates/test_harness/tests/closed_loop/main.rs	25	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tokenizer.rs	190	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tree.rs	89	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/tests/wpt_runner.rs	125	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/tests/wpt_runner.rs	152	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/src/lib.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1485,7 +1485,7 @@ docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-clean
 docs/work-packages/BOARD.md	64	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	51	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/closed.toml	5	docs	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
+docs/work-packages/closed.toml	10	docs	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 docs/work-packages/depth-inventory.toml	487	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -1507,7 +1507,6 @@ docs/work-packages/queue/WP-DEPTH-m2-02.toml	13	docs	F3	wp-engine	2026-11-24	cov
 docs/work-packages/queue/WP-DEPTH-m2-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m3-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m3-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-docs/work-packages/queue/WP-DEPTH-m4-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m4-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m4-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m4-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -1533,7 +1532,7 @@ docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3	wp-engine	2026-11-24	cov
 docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-rust.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-wikipedia.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-docs/work-packages/state.json	7	docs	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
+docs/work-packages/state.json	8	docs	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 fuzz/Cargo.toml	266	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	three new fuzz bins reviewed
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt

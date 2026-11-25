@@ -38,12 +38,12 @@ tests = 3444
 tests_commit = "e997fc04"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 252907
+rust_lines = 253009
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "e997fc04"
+verified_commit = "6a1bf66f"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -52,13 +52,13 @@ css_syntax = "100 / 100"
 # --- M0 — Verdad y cimiento -------------------------------------------------------------
 [wpt]
 revision = "ab2ef95d3a7c512a6e7321688c80e428086af426"
-manifest_sha256 = "fdceead4268d342f7d297992e4d2fc63582a75604ec365e27d6f9e87e50a2b60"
-passed = 544
-total = 544
+manifest_sha256 = "d627b90dac8cd4ba6937e282251056a1fad845c9e197861954d68ef4ca0039a3"
+passed = 592
+total = 592
 dirs = 4
 allowlist = 0
-distribution = "PASS=544; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
-headline = "WPT ab2ef95 — 544/544 subtests pasados (dirs: 4)"
+distribution = "PASS=592; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
+headline = "WPT ab2ef95 — 592/592 subtests pasados (dirs: 4)"
 status = "PASS"
 
 [[phase]]
@@ -121,9 +121,9 @@ title = "Componentes y persistencia"
 items = [
   "Shadow roots declarativos — `crates/render/src/shadow_dom.rs`",
   "Web Storage expuesto a JS — `crates/js/src/host/types.rs`",
+  "100+ subtests WPT de componentes — `docs/status/wpt.md`: 592/592 subtests WPT PASS con allowlist 0; 114 subtests reales de shadow-dom/custom-elements (75 shadow-dom + 39 custom-elements) ejecutados con el runner offline de Boa y shim `testharness`; fixtures adoptados íntegramente `shadow-dom/HTMLSlotElement-interface.html` 18/18, `shadow-dom/Slotable-interface.html` 4/4, `shadow-dom/slots.html` 26/26; implementación WHATWG DOM §4.9.1/§4.9.3 en `crates/js/src/runtime/{node_wrappers.rs,tla/accessors.rs,document/query.rs,globals/features.rs,node_accessors.rs}`; `cargo test -p megi-js` y `cargo test -p megi-test-harness` EXIT=0; `python3 tools/wpt_gate.py --check` PASS y `python3 tools/check_milestone.py M4 3` PASS",
 ]
 pending = [
-  "100+ subtests WPT de componentes — sin informe WPT publicado",
   "Service Worker fase 1 — no hay módulo SW en `crates/`",
   "WASM — sin soporte en el motor",
   "Demo offline con red cortada",
