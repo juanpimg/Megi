@@ -1482,7 +1482,7 @@ docs/superpowers/plans/2026-11-24-web-platform-extension-plan.md	66	docs	F3	docs
 docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
-docs/work-packages/BOARD.md	65	docs	F3	docs-cleanup	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/BOARD.md	64	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	51	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/closed.toml	5	docs	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
