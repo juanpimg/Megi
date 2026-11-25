@@ -34,8 +34,8 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 3418
-tests_commit = "a8f26814"
+tests = 3424
+tests_commit = "6357ba61"
 tests_date = "2026-11-25"
 crates = 18
 rust_lines = 250733
@@ -136,9 +136,9 @@ title = "Plataforma nativa"
 items = [
   "Accesibilidad progresiva (aria-describedby expuesto a AT) — `crates/browser/src/a11y/`",
   "Descargas PNG/HTML — `crates/browser/src/download.rs`",
+  "Auditoría de accesibilidad completa y publicada — `docs/A11Y-LIVE-VERIFICATION.md:1-54`: verificación en vivo con bus AT-SPI real (`NO_AT_BRIDGE` desactivado, bus des-enmascarado, `org.a11y.Status.IsEnabled=true`), cliente `Atspi` real leyó roles/nombres/`CHECKED` e invocó `do_action(0)` que navegó a la página objetivo; bug real de `build_tree_update` corregido con test RED→GREEN `crates/browser/src/a11y_backend_orphan_tests.rs::snapshot_nodes_without_an_exposed_parent_mount_under_the_root`; `docs/ACCESSIBILITY-STRATEGY.md:3-4` ADR-002 aceptado e implementado (backend `accesskit` 0.25); tests deterministas `crates/browser/src/a11y_live_tests.rs`, `a11y_aria_tests.rs`, `a11y_at_bus.rs`, `a11y_backend_orphan_tests.rs` y `crates/browser/src/a11y/{nodes,snapshot,tests}.rs`; límites explícitos (`docs/A11Y-LIVE-VERIFICATION.md:47-52`): sin captura de voz de Orca, sin verificación determinista en CI del rasterizado de widgets nativos del SO, paseo en vivo manual (CI cubre el test determinista del árbol y el paseo con `accesskit_consumer`); `python3 tools/check_milestone.py M5 3` PASS",
 ]
 pending = [
-  "Auditoría de accesibilidad completa y publicada",
   "Impresión/PDF — sin implementación",
   "Diálogos y portapapeles nativos — sin implementación",
   "Sandbox enforced en Linux, macOS y Windows",
