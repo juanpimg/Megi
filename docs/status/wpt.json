@@ -2,12 +2,12 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "fdceead4268d342f7d297992e4d2fc63582a75604ec365e27d6f9e87e50a2b60"
+    "manifest_sha256": "d627b90dac8cd4ba6937e282251056a1fad845c9e197861954d68ef4ca0039a3"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "11 vendored WPT fixtures (544 executed subtests, 4 dirs); NOT full WPT conformance",
-    "adopted_subtests": 544,
+    "scope": "14 vendored WPT fixtures (592 executed subtests, 4 dirs); NOT full WPT conformance",
+    "adopted_subtests": 592,
     "dirs": [
       "tests/wpt/css/css-syntax",
       "tests/wpt/custom-elements",
@@ -16,13 +16,13 @@
     ]
   },
   "counts": {
-    "pass": 544,
+    "pass": 592,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 544,
+  "total": 592,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -3181,6 +3181,138 @@
       "status": "PASS"
     },
     {
+      "key": "7a8f15f5a66417c95843f5cb25d6aa222e708ad625f926a184b1a78a36a0b960",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::HTMLSlotElement must be defined on window",
+      "status": "PASS"
+    },
+    {
+      "key": "850a16e5b82190d74f6c1f4071f5d31f02f600d9b70fd7aa478be55bc65996b0",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::\"name\" attribute on HTMLSlotElement must reflect \"name\" attribute",
+      "status": "PASS"
+    },
+    {
+      "key": "2eee45020dcc337cc2593679bcd31ae054e7ecbe2630c03121974e73a5a594c4",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes() on a HTMLSlotElement must return an empty array when the slot element is not in a tree or in a document tree",
+      "status": "PASS"
+    },
+    {
+      "key": "b6921d912ac202e9319191b7e9039a0f2e42f9f7cc88cd301ffdd40ec17752f6",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":false}) on a HTMLSlotElement must return an empty array when the slot element is not in a tree or in a document tree",
+      "status": "PASS"
+    },
+    {
+      "key": "bede04100724208d7d507c9b195225e068aee6f94b04e905ba344f87cd9d9195",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":true}) on a HTMLSlotElement must return an empty array when the slot element is not in a tree or in a document tree",
+      "status": "PASS"
+    },
+    {
+      "key": "f5f034c810521ecab68302dd27a044adcb161b97d1fd7474b5156d1efd528276",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes() must return the list of assigned nodes when none of the assigned nodes themselves are slots",
+      "status": "PASS"
+    },
+    {
+      "key": "899f708e5c254daaa6c81421f805f1496ed2338d74e9b1b9795d4601b86f330e",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":false}) must return the list of assigned nodes when none of the assigned nodes themselves are slots",
+      "status": "PASS"
+    },
+    {
+      "key": "0bf253fb6ab8840ae1212b880aeff55afa3534971a32fb13968ca6a0fe0d3910",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":true}) must return the list of assigned nodes when none of the assigned nodes themselves are slots",
+      "status": "PASS"
+    },
+    {
+      "key": "a2f0a0b7f82ceda14d8196e2737dede36521e1066aacd6a0491fb84dca0d6b90",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes() must update when slot and name attributes are modified",
+      "status": "PASS"
+    },
+    {
+      "key": "bfcfecf3b1783ba9bacd08d1b18de96a6010da682c4023e30d8dcd9a7e696406",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":false}) must update when slot and name attributes are modified",
+      "status": "PASS"
+    },
+    {
+      "key": "eae0bf959acf78f76c842bfca47efbf146774f09f4dd1feac64cbc1b06934b9b",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":true}) must update when slot and name attributes are modified",
+      "status": "PASS"
+    },
+    {
+      "key": "a86a85d5e6be0230cc219b4595222789827a60d2f0180f383bc81f6b1abedab3",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes() must update when a default slot is introduced dynamically by a slot rename",
+      "status": "PASS"
+    },
+    {
+      "key": "84f512e5ef397c0d81c1e4da30467a9e5ed55f64454e0d3bc1207d5f3fcb520d",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":false}) must update when a default slot is introduced dynamically by a slot rename",
+      "status": "PASS"
+    },
+    {
+      "key": "687cb15f4cf9a55bb3a565b08e621dee24b8e230a7f6b501fe667be2966ea8f4",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":true}) must update when a default slot is introduced dynamically by a slot rename",
+      "status": "PASS"
+    },
+    {
+      "key": "73e1c8c54a6a411108daf1639671da49a25eb573daa04630718ebe527e940a94",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes() must update when slot elements are inserted or removed",
+      "status": "PASS"
+    },
+    {
+      "key": "1fb68f75560b99f9e4e87579c97ae95a9492d41005b60cc2877c76c4ea04cdcc",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":false}) must update when slot elements are inserted or removed",
+      "status": "PASS"
+    },
+    {
+      "key": "fc85e9a19d30d108495a423a4cb366af8cf1ba5e3510dbd0c827db2456c9bf22",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({\"flattened\":true}) must update when slot elements are inserted or removed",
+      "status": "PASS"
+    },
+    {
+      "key": "f561700d33c1d8f67e1b44f59776cfdbe7e49cd7e223ce36737cb5d32dedb0e2",
+      "test": "tests/wpt/shadow-dom/HTMLSlotElement-interface.html",
+      "subtest": "shadow-dom/HTMLSlotElement-interface.html::assignedNodes({flatten: true}) must return the distributed nodes, and assignedNodes() and assignedNodes({flatten: false}) must returned the assigned nodes",
+      "status": "PASS"
+    },
+    {
+      "key": "f0160a17d6630583b0194a13b9439c12bc44f890bbe9405e9e15f2ac608dfb75",
+      "test": "tests/wpt/shadow-dom/Slotable-interface.html",
+      "subtest": "shadow-dom/Slotable-interface.html::assignedSlot attribute must be defined on Element and Text interfaces",
+      "status": "PASS"
+    },
+    {
+      "key": "4fb43ad8d322969f5567ab73da74f36e04975dd164b65bdc78dfdb64af2b2a66",
+      "test": "tests/wpt/shadow-dom/Slotable-interface.html",
+      "subtest": "shadow-dom/Slotable-interface.html::assignedSlot must return null when the node does not have an assigned node",
+      "status": "PASS"
+    },
+    {
+      "key": "a179d9d06112dc3aeff539de0ee70b4353e4edd8069959b58b938f7ed4d5d005",
+      "test": "tests/wpt/shadow-dom/Slotable-interface.html",
+      "subtest": "shadow-dom/Slotable-interface.html::assignedSlot must return the assigned slot",
+      "status": "PASS"
+    },
+    {
+      "key": "09bbe1e81132aca0276262b1ad8d7af6b67c4513f9845d2d2339c5ea596bd640",
+      "test": "tests/wpt/shadow-dom/Slotable-interface.html",
+      "subtest": "shadow-dom/Slotable-interface.html::assignedSlot must return null when the assigned slot element is inside a closed shadow tree",
+      "status": "PASS"
+    },
+    {
       "key": "36b88dc2ca0c76383f3d28e37d1288397673e1b838930ede035847a49aff5f4a",
       "test": "tests/wpt/shadow-dom/historical.html",
       "subtest": "shadow-dom/historical.html::element.createShadowRoot should not exist",
@@ -3286,6 +3418,162 @@
       "key": "46c267e397d958d5947d2f4ec7a48e6733d0fa558b4b803d2ec4aec78f2dd11d",
       "test": "tests/wpt/shadow-dom/slots-fallback.html",
       "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation.  Remove a slot which is a fallback content of another slot.",
+      "status": "PASS"
+    },
+    {
+      "key": "b634b69d286ad4646dad6d45ae9ca1797cc7913b337c5a038b57c22a67bbd6f9",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Basic.",
+      "status": "PASS"
+    },
+    {
+      "key": "de6b66b3c9a9b193063b72c3e828848056a279df254ba5279545f31b41984f7e",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Basic, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "b78126eb8c265752f2517e45a900fd52b68aef13fd9ec578addbe35bd819cf81",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slots in closed.",
+      "status": "PASS"
+    },
+    {
+      "key": "a55bc06fa1a0d6ab4055e2b828a6e0534d712d7266a02f063cefa0688ad95e09",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slots in closed, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "13a25e86889a73fde8f9a20846c15a27ab3a00be0a1a6335abe2f2a86bb39df6",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slots not in a shadow tree.",
+      "status": "PASS"
+    },
+    {
+      "key": "fe628421c48700dddb109d44e51dbfc0d8c9d623912a554e34e02b388b967b70",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slots not in a shadow tree, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "e8446100db3b286ec23bcc8746ebbe3477fba44d61c3cb88d6a4b4fd46972985",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Distributed nodes for Slots not in a shadow tree.",
+      "status": "PASS"
+    },
+    {
+      "key": "3c42bca1c9c121cd7cb850660a679576aaa813d01e5ca724b5746cc59a94a44f",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Name matching",
+      "status": "PASS"
+    },
+    {
+      "key": "d3f959e01465dcd7e025bce7943829c96a83b10277b3cf3ef5888a3b835582f8",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: No direct host child.",
+      "status": "PASS"
+    },
+    {
+      "key": "13d48d5f609cf42669864739a92f6b72d6e45117525e6b57b7dcfda028a76275",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Default Slot.",
+      "status": "PASS"
+    },
+    {
+      "key": "7dac6767f9c9a9a6cbbbc2433c96b57b15a5fbb733aa92114e9daf7a78a5f23e",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slot in Slot does not matter in assignment.",
+      "status": "PASS"
+    },
+    {
+      "key": "1c11ba7be3f5b89cba42e6be981756510ab7f3763587011ea6d80b4fc9aec656",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Slot is assigned to another slot",
+      "status": "PASS"
+    },
+    {
+      "key": "053e3678537258331f593621506595687dc8cf9fff9a5519f267247ead01fa63",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Open > Closed.",
+      "status": "PASS"
+    },
+    {
+      "key": "6ef2a130edcb319fdcd8cd43ea73c9586f1dd09e92cb5069a2297a7efe1404a6",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Closed > Closed.",
+      "status": "PASS"
+    },
+    {
+      "key": "c437b143571a4fd473edfff86ea05e66961c5fc222c8945bf70ae835ae9ef68f",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Closed > Open.",
+      "status": "PASS"
+    },
+    {
+      "key": "5c96a73688e43ced2e71be6ced8e79539f1cb0d8af16c2f433e205aa99dd764c",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Complex case: Basi line.",
+      "status": "PASS"
+    },
+    {
+      "key": "3d9a1fc477b2159650523bca832245d58bcb04a6a5800d0b5a1f939d9ee145d3",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: appendChild.",
+      "status": "PASS"
+    },
+    {
+      "key": "84c83bf3878052a237c7018fc8fd53db36e2e2cf69ce09fad93fd37307bbbcae",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Change slot= attribute 1.",
+      "status": "PASS"
+    },
+    {
+      "key": "30d180657802d1bd475ad51fde3eea0dd798055daabc8ba2da75315b399a5987",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Change slot= attribute 2.",
+      "status": "PASS"
+    },
+    {
+      "key": "ebbcb3b60c592eda91bdd999a3db3c082ee879db294f113b3aa27c648484fbca",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Change slot= attribute 3.",
+      "status": "PASS"
+    },
+    {
+      "key": "0703e1912c8162a1ec559028e8d02405ef8ca4075c018ed099d7bccae9ecdcbd",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Remove a child.",
+      "status": "PASS"
+    },
+    {
+      "key": "8c40453b538b6fa687aecac2caf80b7e80df2f1bbc72e3888f46dcd1c4602dca",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Add a slot: after.",
+      "status": "PASS"
+    },
+    {
+      "key": "e88594d89bbc5c8c25d3bc8b0df2e2b031295e11a7a13864fbe19ec9cc74b215",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Add a slot: before.",
+      "status": "PASS"
+    },
+    {
+      "key": "7fb1c6fb9600f8eef0e698b2650255a8f3ca854e257b1bb8ce16786a07aaa103",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Remove a slot.",
+      "status": "PASS"
+    },
+    {
+      "key": "058e64ab65fc16e8358c19b4f39ad5b81c234b13fa6982c45fdeceab3d14b852",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Change slot name= attribute.",
+      "status": "PASS"
+    },
+    {
+      "key": "471a809469a881c624797772bc4eef72b30be52cafee565c5182be8429848ee1",
+      "test": "tests/wpt/shadow-dom/slots.html",
+      "subtest": "shadow-dom/slots.html::Slots: Mutation: Change slot slot= attribute.",
       "status": "PASS"
     }
   ]

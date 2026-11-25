@@ -187,6 +187,7 @@ pub(crate) fn node_text_content_get(
 fn character_data(node: &megi_core::Node) -> Option<&str> {
     match &node.kind {
         megi_core::NodeKind::Text(data) | megi_core::NodeKind::Comment(data) => Some(data),
+        megi_core::NodeKind::ProcessingInstruction { data, .. } => Some(data),
         _ => None,
     }
 }

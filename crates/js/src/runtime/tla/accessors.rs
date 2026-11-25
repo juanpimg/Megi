@@ -171,6 +171,15 @@ pub(crate) fn node_canvas_height_set(
     uint_attribute_set(this, "height", a, crate::canvas::MAX_CANVAS_DIM, c)
 }
 
+/// WHATWG DOM §4.9.1: `Element.slot` reflects the `slot` content attribute.
+pub(crate) fn node_slot_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_get(this, "slot", c)
+}
+
+pub(crate) fn node_slot_set(this: &JsValue, a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
+    string_attribute_set(this, "slot", a, c)
+}
+
 pub(crate) fn node_title_get(this: &JsValue, _a: &[JsValue], c: &mut Context) -> JsResult<JsValue> {
     string_attribute_get(this, "title", c)
 }

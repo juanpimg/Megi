@@ -102,11 +102,11 @@
 | `shadow-dom/Element-interface-attachShadow.html` | 5352 | `7d0216d62d5ca5b18f502cd12b6b5d086475fad1c5830a5042642e22ace264f3` | testharness |
 | `shadow-dom/Element-interface-shadowRoot-attribute.html` | 2658 | `d4e740808bfd51ae76593b05159943595baa127f7fa205054736c2e8aeef151a` | testharness |
 | `shadow-dom/Extensions-to-Event-Interface.html` | 11195 | `87323a8d4af655775f3d53cbd0f17f0d2327fc970d617948be3e9a98841f8b5c` | skip |
-| `shadow-dom/HTMLSlotElement-interface.html` | 16472 | `fd4723960124743f4cab0027f70b6bc683a472ad585494fdd50949f4144ceb7c` | skip |
+| `shadow-dom/HTMLSlotElement-interface.html` | 16472 | `fd4723960124743f4cab0027f70b6bc683a472ad585494fdd50949f4144ceb7c` | testharness |
 | `shadow-dom/META.yml` | 125 | `e9a035c797ece68c64df32df16910ba9299f015040e8e24bc5f0d43d7a1698d4` | skip |
 | `shadow-dom/Node-prototype-cloneNode.html` | 2513 | `f46a431eac6975e6019661ea7297e51f771b7bd09b9b1f66094b0861ff02deb9` | skip |
 | `shadow-dom/ShadowRoot-interface.html` | 6154 | `f456f93f65a824ad27f6c9276e62c590fbb7f76871923435257be2f6541789be` | skip |
-| `shadow-dom/Slotable-interface.html` | 4619 | `7b55ec820fe47f3209c2f3974716105ba117d2836f12f9bf7206119d17bed75f` | skip |
+| `shadow-dom/Slotable-interface.html` | 4619 | `7b55ec820fe47f3209c2f3974716105ba117d2836f12f9bf7206119d17bed75f` | testharness |
 | `shadow-dom/event-composed-path.html` | 10180 | `cd52e834004f0902093eb33849bc7ce753cb05ceaecaeefeb646b60f013f6e8e` | skip |
 | `shadow-dom/event-inside-shadow-tree.html` | 7601 | `aa646f3616fc2cf1860cb67626a7936f01c585b7c2fd83a6fe63ba9253b71afc` | skip |
 | `shadow-dom/event-inside-slotted-node.html` | 14765 | `ba95d997bb2da4be3d3d8379de6a5b5bd5ff41855c73a33789097a78d6d81549` | skip |
@@ -118,7 +118,7 @@
 | `shadow-dom/resources/shadow-dom.js` | 5240 | `5b4dee64fba8f18407a8cb4e0461a2612066c2d4abf5125100d946bffff2ba59` | support |
 | `shadow-dom/slotchange.html` | 6458 | `cce62017454e5b14164680e19a39acca41fb299dd5a8cc84953fe627ddfcd55a` | testharness |
 | `shadow-dom/slots-fallback.html` | 8228 | `a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e` | testharness |
-| `shadow-dom/slots.html` | 15806 | `62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d` | skip |
+| `shadow-dom/slots.html` | 15806 | `62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d` | testharness |
 | `url/historical.any.js` | 909 | `0cce2e984b3296d3aab14949c710bcd369b12d29f4f8622bbcdf5e5c033c63d0` | skip |
 | `url/idlharness.any.js` | 290 | `fbd89f9a801742d4177a90417d14cff7916eb44fd1389ad9206c07687b981dd1` | skip |
 | `url/toascii.window.js` | 1847 | `0d728a1bb3aa3aa7e5222c39565971e6300252223e8dcb484424f524059fdd76` | skip |

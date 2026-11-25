@@ -164,6 +164,32 @@ fn parsed_template_content_survives_import_node() {
 }
 
 #[test]
+fn slot_reflection_and_processing_instruction_nodes() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var light = document.createElement('span'); \
+             light.slot = 'named'; \
+             var host = document.createElement('div'); \
+             var pi = document.createProcessingInstruction('target', 'data'); \
+             host.appendChild(pi); \
+             host.appendChild(light); \
+             document.body.appendChild(host); \
+             var root = host.attachShadow({mode: 'open'}); \
+             var slot = document.createElement('slot'); \
+             slot.setAttribute('name', 'named'); \
+             root.appendChild(slot); \
+             String(light.getAttribute('slot') === 'named' && light.slot === 'named' \
+                    && pi.nodeType === 7 && pi.data === 'data' \
+                    && light.assignedSlot === slot && slot.assignedNodes()[0] === light \
+                    && slot.assignedNodes().indexOf(pi) === -1);",
+            "t",
+        )
+        .expect("slot reflection");
+    assert_eq!(out, "true");
+}
+
+#[test]
 fn attach_shadow_validates_mode_and_safelisted_elements() {
     let mut runtime = runtime();
     let out = runtime

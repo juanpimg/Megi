@@ -729,6 +729,11 @@ pub(crate) fn build_document_object(context: &mut Context) -> JsObject {
         ("createTextNode", 1, document_create_text_node),
         ("createComment", 1, document_create_comment),
         (
+            "createProcessingInstruction",
+            2,
+            document_create_processing_instruction,
+        ),
+        (
             "createDocumentFragment",
             0,
             document_create_document_fragment,

@@ -32,7 +32,6 @@ _(empty)_
 - WP-DEPTH-m2-03
 - WP-DEPTH-m3-01
 - WP-DEPTH-m3-03
-- WP-DEPTH-m4-01
 - WP-DEPTH-m4-02
 - WP-DEPTH-m4-03
 - WP-DEPTH-m4-04
@@ -62,3 +61,4 @@ _(empty)_
 ## done
 
 - WP-DEPTH-m3-02
+- WP-DEPTH-m4-01

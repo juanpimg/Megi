@@ -24,7 +24,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 60] = [
+    let accessors: [(&str, AccessorKind); 61] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
@@ -87,6 +87,7 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
         // #1961: HTMLCanvasElement.width/height reflect the dimension attributes.
         ("width", AccessorKind::CanvasWidth),
         ("height", AccessorKind::CanvasHeight),
+        ("slot", AccessorKind::Slot),
     ];
     type Prepared<'a> = (
         &'a str,
@@ -222,12 +223,23 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
             })
         })
         .unwrap_or(false);
+    let is_text = node_id
+        .and_then(|id| {
+            with_context_host(context, |host| {
+                host.document
+                    .try_node(id)
+                    .is_some_and(|node| matches!(node.kind, megi_core::NodeKind::Text(_)))
+            })
+        })
+        .unwrap_or(false);
     let prototype_name = if is_shadow_root {
         "ShadowRoot"
     } else if is_slot {
         "HTMLSlotElement"
     } else if is_element {
         "HTMLElement"
+    } else if is_text {
+        "Text"
     } else {
         "Node"
     };
@@ -313,6 +325,7 @@ pub(crate) enum AccessorKind {
     Prefix,
     CanvasWidth,
     CanvasHeight,
+    Slot,
 }
 
 pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
@@ -376,6 +389,7 @@ pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Prefix => (node_prefix, None),
         AccessorKind::CanvasWidth => (node_canvas_width_get, Some(node_canvas_width_set)),
         AccessorKind::CanvasHeight => (node_canvas_height_get, Some(node_canvas_height_set)),
+        AccessorKind::Slot => (node_slot_get, Some(node_slot_set)),
     }
 }
 

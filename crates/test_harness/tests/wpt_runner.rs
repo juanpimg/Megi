@@ -118,6 +118,33 @@ fn wpt_custom_element_registry_executes_real_js_subtests() {
 }
 
 #[test]
+fn wpt_component_suites_exceed_the_m4_floor() {
+    let mut passed = 0;
+    let mut failures = Vec::new();
+    for dir in ["shadow-dom", "custom-elements"] {
+        let results = run_wpt_dir(workspace_root(), dir)
+            .unwrap_or_else(|error| panic!("{dir} must be adopted in the manifest: {error}"));
+        passed += results.iter().filter(|r| r.status == "PASS").count();
+        failures.extend(results.into_iter().filter(|r| r.status != "PASS"));
+    }
+    assert!(
+        passed >= 100,
+        "M4 needs 100 real component PASS subtests, got {passed}"
+    );
+    assert!(
+        failures.is_empty(),
+        "allowlist is empty: {} non-PASS component subtests: {}",
+        failures.len(),
+        failures
+            .iter()
+            .take(8)
+            .map(|r| format!("{} ({})", r.display_name(), r.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+}
+
+#[test]
 fn wpt_component_runner_rejects_undeclared_directory() {
     let error = run_wpt_dir(workspace_root(), "dom/not-vendored")
         .expect_err("a directory absent from the manifest must not silently pass");

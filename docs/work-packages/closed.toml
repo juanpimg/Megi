@@ -3,3 +3,8 @@ id = "WP-DEPTH-m3-02"
 metric = "depth_closed"
 commit = "b9bfb5fa"
 
+["WP-DEPTH-m4-01"]
+id = "WP-DEPTH-m4-01"
+metric = "depth_closed"
+commit = "96f18498"
+

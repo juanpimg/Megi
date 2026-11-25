@@ -206,6 +206,26 @@ pub(crate) fn document_create_comment(
     }
 }
 
+pub(crate) fn document_create_processing_instruction(
+    _this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let target = arg_string(args, 0, context)?;
+    let data = arg_string(args, 1, context)?;
+    let node = with_context_host(context, |host| {
+        host.document
+            .create_node(megi_core::NodeKind::ProcessingInstruction {
+                target: target.clone(),
+                data: data.clone(),
+            })
+    });
+    match node {
+        Some(node_id) => wrap_node(context, node_id),
+        None => Err(js_error("no active JavaScript host")),
+    }
+}
+
 pub(crate) fn document_current_script(
     _this: &JsValue,
     _args: &[JsValue],

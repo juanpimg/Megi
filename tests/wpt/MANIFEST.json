@@ -85,7 +85,7 @@
     "bytes": 3592,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: two subtests still fail (HTMLUnknownElement not callable; string third argument ignored mismatch)",
+    "skip_reason": "not adopted: document.implementation.createHTMLDocument is not callable and HTMLUnknownElement is not upgraded",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -95,7 +95,7 @@
     "bytes": 11254,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: eight subtests still fail (instanceof Element not callable; inferred localName undefined; proxy counting)",
+    "skip_reason": "not adopted: CONCRETE-* and SUCCESS-COUNTING-ELEMENT-* elements are undefined and the last case reports success-counting-element-3 instead of undefined",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -964,10 +964,10 @@
     "sha256": "fd4723960124743f4cab0027f70b6bc683a472ad585494fdd50949f4144ceb7c",
     "bytes": 16472,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "not adopted: assignedNodes is empty after slot/name attribute mutations and slot insertion",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "shadow-dom",
-    "subtest_count_expected": 0
+    "subtest_count_expected": 18
   },
   {
     "path": "shadow-dom/META.yml",
@@ -1004,10 +1004,10 @@
     "sha256": "7b55ec820fe47f3209c2f3974716105ba117d2836f12f9bf7206119d17bed75f",
     "bytes": 4619,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "not adopted: assignedSlot on text nodes is not exposed through Text.prototype",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "shadow-dom",
-    "subtest_count_expected": 0
+    "subtest_count_expected": 4
   },
   {
     "path": "shadow-dom/event-composed-path.html",
@@ -1124,10 +1124,10 @@
     "sha256": "62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d",
     "bytes": 15806,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "not adopted: assignedNodes returns 7 nodes instead of 1 in the complex case and 13 instead of 3 after adding a slot",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "shadow-dom",
-    "subtest_count_expected": 0
+    "subtest_count_expected": 26
   },
   {
     "path": "url/historical.any.js",
