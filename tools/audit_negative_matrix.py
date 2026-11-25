@@ -202,7 +202,11 @@ def cmd_check(path: Path) -> int:
     if not path.is_file():
         print(f"FAIL: missing matrix: {path}")
         return 1
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        print(f"FAIL: cannot read matrix {path}: {error}")
+        return 1
     current = current_os()
     if data.get("current_os") != current:
         problems.append(f"current_os mismatch: {data.get('current_os')} != {current}")
