@@ -464,4 +464,5 @@ pub use downloads_panel::draw_downloads_panel;
 mod native_widget_overlay;
 pub use native_widget_overlay::{
     NativeWidgetContent, draw_native_widget, draw_native_widget_with_content,
+    draw_native_widget_with_content_with_offset, draw_native_widget_with_offset,
 };

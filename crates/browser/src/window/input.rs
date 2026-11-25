@@ -7,7 +7,9 @@ impl WindowApp {
     pub(super) fn page_coordinates(&self, physical_x: f64, physical_y: f64) -> (f32, f32) {
         let chrome_px = f64::from(chrome::CHROME_HEIGHT) * self.metrics.scale;
         physical_to_page(
-            physical_x,
+            // The rail occupies the leftmost physical columns; page hit-testing
+            // must use the same shifted window as `present_region_with_insets`.
+            physical_x - rail_state::physical_offset(self.metrics.scale, self.rail_open),
             (physical_y - chrome_px).max(0.0),
             // The effective scale includes page zoom: `present_region` maps CSS pixels
             // with device_scale * zoom, so hit-testing must use the same factor.
@@ -18,6 +20,26 @@ impl WindowApp {
 
     /// Updates the bottom status-bar hover URL and the context-menu hover selection.
     pub(super) fn update_hover(&mut self, physical_x: f64, physical_y: f64) {
+        self.sync_rail_labels();
+        let rail_hover = {
+            let Some(view) = self.rail_view() else { false };
+            let layout = chrome::layout_rail(
+                self.metrics.css_width as f32,
+                self.metrics.css_height as f32,
+                self.metrics.scale as f32,
+                &view,
+            );
+            chrome::rail_hit(
+                &layout,
+                (physical_x / self.metrics.scale) as f32,
+                (physical_y / self.metrics.scale) as f32,
+            )
+            .is_some()
+        };
+        if rail_hover != self.rail_hover {
+            self.rail_hover = rail_hover;
+            self.request_repaint();
+        }
         let (x, y) = self.page_coordinates(physical_x, physical_y);
         let current = self.nav.current().cloned();
         let link = match crate::links::link_url_at(current.as_ref(), &self.links, x, y) {
@@ -242,6 +264,33 @@ impl WindowApp {
         let scale = self.metrics.scale;
         let chrome_x = (physical_x / scale) as f32;
         let chrome_y = (physical_y / scale) as f32;
+        // The rail starts below the chrome band, so it must be hit before the
+        // legacy chrome/page split. Keep the borrow short: actions need &mut self.
+        self.sync_rail_labels();
+        let rail_hit = {
+            let Some(view) = self.rail_view() else { None };
+            let layout = chrome::layout_rail(
+                self.metrics.css_width as f32,
+                self.metrics.css_height as f32,
+                scale as f32,
+                &view,
+            );
+            chrome::rail_hit(&layout, chrome_x, chrome_y)
+        };
+        if let Some(hit) = rail_hit {
+            match hit {
+                chrome::RailHit::Activate(index) => self.activate_tab(index),
+                chrome::RailHit::Close(index) => {
+                    self.save_active_tab();
+                    let _ = self.tabs.close(index);
+                    self.load_active_tab();
+                }
+                chrome::RailHit::NewTab => self.open_new_tab(),
+                chrome::RailHit::Toggle => self.toggle_rail(),
+            }
+            self.request_repaint();
+            return;
+        }
         if chrome::in_chrome(chrome_x, chrome_y, self.metrics.css_width as f32) {
             self.chrome_click(chrome_x, chrome_y);
             return;
@@ -289,8 +338,10 @@ impl WindowApp {
             }
         }
         if let Some(dropdown) = &self.dropdown {
+            let mut control_rect = dropdown.control_rect;
+            control_rect.x += self.rail_css_width();
             let list = chrome::dropdown_layout(
-                &dropdown.control_rect,
+                &control_rect,
                 dropdown.options.len(),
                 self.metrics.css_height,
                 self.scroll.offset(),

@@ -247,7 +247,8 @@ pub use download::{
 pub use error::ShellError;
 pub use find::{
     FindMatch, FindState, HIGHLIGHT_ALPHA, HIGHLIGHT_CURRENT_ALPHA, HIGHLIGHT_RGB, highlight_rects,
-    overlay_highlights_dest, overlay_highlights_pixmap, scroll_offset_for, search,
+    overlay_highlights_dest, overlay_highlights_dest_with_offset, overlay_highlights_pixmap,
+    scroll_offset_for, search,
 };
 pub use forms::{
     ACTIVE_ATTR, FOCUS_ATTR, FORM_ID_ATTR, FocusState, FormControl, FormControlKind,

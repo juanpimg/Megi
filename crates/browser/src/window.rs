@@ -32,8 +32,12 @@ mod input;
 mod keyboard;
 #[cfg(feature = "window")]
 mod presentation;
+/// Pure rail geometry and state helpers, usable without a windowing backend.
+pub mod rail_state;
 #[cfg(feature = "window")]
 mod save_as;
+#[cfg(feature = "window")]
+mod shortcut_actions;
 #[cfg(feature = "window")]
 mod shortcuts;
 #[cfg(all(test, feature = "window"))]

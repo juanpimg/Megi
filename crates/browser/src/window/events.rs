@@ -1,7 +1,7 @@
 //! Event-loop dispatch: the winit [`ApplicationHandler`] implementation that
 //! routes resumed/user/window/wait/exit callbacks into the shell.
 
-use super::shortcuts::{Modifiers, ShellAction};
+use super::shortcuts::Modifiers;
 use super::*;
 
 impl ApplicationHandler<UserEvent> for WindowApp {
@@ -183,60 +183,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                     shift: shift_pressed,
                 };
                 let action = shortcuts::resolve_shortcut(shortcuts, &event.logical_key);
-                match action {
-                    Some(ShellAction::ToggleReader) => self.open_reader(),
-                    Some(ShellAction::ToggleHistory) => {
-                        if self.history_menu.is_some() {
-                            self.history_menu = None;
-                        } else {
-                            let rect = chrome::address_bar_rect(self.metrics.css_width as f32);
-                            self.history_menu = Some(HistoryMenu::open(
-                                self.recent_history.menu_entries(),
-                                rect.x,
-                                rect.y + rect.height,
-                            ));
-                        }
-                        self.request_repaint();
-                    }
-                    Some(ShellAction::SaveFrame) => self.save_frame_png(),
-                    Some(ShellAction::SaveAs) => {
-                        // Standard "Save As" shortcut opens the visual dialog (#988).
-                        self.open_save_dialog(true);
-                    }
-                    Some(ShellAction::FocusAddressBar) => self.open_address_bar(),
-                    Some(ShellAction::OpenFind) => self.open_find(),
-                    Some(ShellAction::PrintDocumentInfo) => self.print_document_info(),
-                    Some(ShellAction::NewTab) => self.open_new_tab(),
-                    Some(ShellAction::CloseTab) => self.close_active_tab(),
-                    Some(ShellAction::CycleTab { next }) => self.cycle_tab(next),
-                    Some(ShellAction::ActivateTab(index)) => self.activate_tab(index),
-                    // Rail, compact and workspaces land in later phases: resolve only.
-                    Some(ShellAction::ToggleRail)
-                    | Some(ShellAction::ToggleCompact)
-                    | Some(ShellAction::CycleWorkspace) => {}
-                    _ => {}
-                }
-                // Only the actions migrated out of the old dispatch block return here.
-                // All other bindings (plain navigation keys, zoom, and the new-only
-                // rail/compact/workspace actions) keep falling through to the
-                // existing handlers below, preserving their original behaviour.
-                let consumed = matches!(
-                    action,
-                    Some(
-                        ShellAction::ToggleReader
-                            | ShellAction::ToggleHistory
-                            | ShellAction::SaveFrame
-                            | ShellAction::SaveAs
-                            | ShellAction::FocusAddressBar
-                            | ShellAction::OpenFind
-                            | ShellAction::PrintDocumentInfo
-                            | ShellAction::NewTab
-                            | ShellAction::CloseTab
-                            | ShellAction::CycleTab { .. }
-                            | ShellAction::ActivateTab(_)
-                    )
-                );
-                if consumed {
+                // Migrated actions (now including Ctrl+B's rail toggle) live in
+                // `shortcut_actions` so this event handler stays under 500 lines.
+                if shortcut_actions::dispatch(self, action) {
                     return;
                 }
                 if self.history_menu.is_some() {

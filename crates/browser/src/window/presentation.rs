@@ -31,6 +31,66 @@ impl WindowApp {
             .max(1)
     }
 
+    /// Page width available after the open rail column is reserved.
+    pub fn page_viewport_width(&self) -> u32 {
+        rail_state::page_viewport_width(self.metrics.css_width, self.rail_open)
+    }
+
+    /// CSS width of the rail column; zero while closed to preserve legacy pixels.
+    pub fn rail_css_width(&self) -> f32 {
+        rail_state::css_width(self.rail_open)
+    }
+
+    pub(super) fn sync_rail_labels(&mut self) {
+        self.rail_labels = self
+            .tabs
+            .tabs()
+            .iter()
+            .map(crate::tabs::Tab::display_title)
+            .collect();
+    }
+
+    /// Rail view used by both hit-testing and painting; `None` while closed.
+    pub fn rail_view(&self) -> Option<chrome::RailView<'_>> {
+        let view = rail_state::view(
+            self.rail_open,
+            &self.rail_labels,
+            self.tabs.active_index(),
+            None,
+        )?;
+        if !self.rail_hover {
+            return Some(view);
+        }
+        let layout = chrome::layout_rail(
+            self.metrics.css_width as f32,
+            self.metrics.css_height as f32,
+            self.metrics.scale as f32,
+            &view,
+        );
+        let hover = self.cursor.and_then(|(physical_x, physical_y)| {
+            let scale = self.metrics.scale;
+            chrome::rail_hit(
+                &layout,
+                (physical_x / scale) as f32,
+                (physical_y / scale) as f32,
+            )
+        });
+        let hover = hover.and_then(|hit| match hit {
+            chrome::RailHit::Activate(index) | chrome::RailHit::Close(index) => Some(index),
+            _ => None,
+        });
+        Some(chrome::RailView { hover, ..view })
+    }
+
+    /// Toggles the rail (Ctrl+B or the rail toggle row) and reflows the page.
+    pub(super) fn toggle_rail(&mut self) {
+        self.sync_rail_labels();
+        self.rail_open = rail_state::toggle(self.rail_open);
+        self.rail_hover = false;
+        self.request_render();
+        self.request_repaint();
+    }
+
     /// Scrolls by `delta` CSS pixels and repaints when the offset changed.
     pub(super) fn scroll_by(&mut self, delta: i64) {
         if self.scroll.scroll_by(delta) {
@@ -88,15 +148,25 @@ impl WindowApp {
             return;
         };
         // Chrome paint inputs are captured before borrowing the surface mutably.
+        self.sync_rail_labels();
+        let rail_css_width = self.rail_css_width();
         let chrome_titles: Vec<String> = self
             .tabs
             .tabs()
             .iter()
             .map(crate::tabs::Tab::display_title)
             .collect();
+        let rail_scalars = self
+            .rail_view()
+            .map(|view| (view.active, view.hover, view.expanded, view.width_css));
+        let page_viewport_width = self.page_viewport_width();
+        let chrome_scale_f64 = self.metrics.scale;
         let chrome_fallback = self.current_url_text();
         let chrome_address = self.address.clone();
-        let chrome_dropdown = self.dropdown.clone();
+        let mut chrome_dropdown = self.dropdown.clone();
+        if let Some(dropdown) = chrome_dropdown.as_mut() {
+            dropdown.control_rect.x += rail_css_width;
+        }
         let chrome_active_tab = self.tabs.active_index();
         let chrome_scroll = self.scroll.offset();
         let chrome_css_height = self.metrics.css_height;
@@ -188,28 +258,46 @@ impl WindowApp {
                 .frame()
                 .map(|frame| (frame.pixels.as_slice(), frame.width, frame.height))
         };
-        let chrome_px = present::chrome_band_pixels(self.metrics.scale, height);
-        let presented = present::present_region_at(
-            frame,
-            self.scroll.offset(),
-            page_viewport_height,
-            chrome_px,
-            &mut buffer,
-            width,
-            height,
-        );
-        if !presented {
-            buffer.fill(WHITE_0RGB);
-        } else if self.find_editing && !self.find_rects.is_empty() {
-            let _ = find::overlay_highlights_dest(
+        let chrome_px = present::chrome_band_pixels(chrome_scale_f64, height);
+        let rail_px = present::chrome_rail_pixels_for(chrome_scale_f64, rail_css_width, width);
+        let presented = if rail_px == 0 {
+            // Keep the closed-rail path exactly byte-identical to the legacy blit:
+            // `present_region_at` derives its source width from the frame itself.
+            present::present_region_at(
+                frame,
+                self.scroll.offset(),
+                page_viewport_height,
+                chrome_px,
                 &mut buffer,
                 width,
                 height,
-                self.metrics.css_width,
+            )
+        } else {
+            present::present_region_with_insets(
+                frame,
+                self.scroll.offset(),
+                page_viewport_height,
+                page_viewport_width,
+                rail_px,
+                chrome_px,
+                &mut buffer,
+                width,
+                height,
+            )
+        };
+        if !presented {
+            buffer.fill(WHITE_0RGB);
+        } else if self.find_editing && !self.find_rects.is_empty() {
+            let _ = find::overlay_highlights_dest_with_offset(
+                &mut buffer,
+                width,
+                height,
+                page_viewport_width,
                 self.metrics.css_height,
                 self.scroll.offset(),
                 &self.find_rects,
                 self.find.current(),
+                rail_px,
             );
         }
         // Browser chrome is an overlay in CSS coordinates over the page frame.
@@ -222,6 +310,13 @@ impl WindowApp {
         } else {
             ""
         };
+        let rail = rail_scalars.map(|(active, hover, expanded, width_css)| chrome::RailView {
+            labels: &chrome_titles,
+            active,
+            hover,
+            expanded,
+            width_css,
+        });
         let view = ChromeView {
             favicons: &favicons,
             tabs: &chrome_titles,
@@ -243,7 +338,7 @@ impl WindowApp {
             download_status: None,
             history_button: true,
             ime_preedit,
-            rail: None,
+            rail,
         };
         let download_status = self.download.status_text();
         // #1724: surface document-field IME preedit in the status bar; the address bar
@@ -259,6 +354,8 @@ impl WindowApp {
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
+        // Closed rail yields `None`, so this is a no-op for legacy frames.
+        let _ = chrome::draw_rail_over_pixmap(&mut buffer, chrome_scale, &view);
         if self.download_panel.open {
             let lines: Vec<String> = self
                 .download_manager
@@ -281,7 +378,7 @@ impl WindowApp {
         }
         // F7-A11Y / #2199: paint deterministic local widget patches for focused/dirty controls.
         for widget in &widget_overlays {
-            chrome::draw_native_widget_with_content(
+            chrome::draw_native_widget_with_content_with_offset(
                 &mut buffer,
                 width,
                 height,
@@ -296,6 +393,7 @@ impl WindowApp {
                     caret: widget.caret,
                     disabled: widget.disabled,
                 },
+                rail_px,
             );
         }
         if let Some(dialog) = &self.save_dialog {

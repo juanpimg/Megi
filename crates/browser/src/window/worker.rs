@@ -87,16 +87,13 @@ impl WindowApp {
             self.input.clone()
         };
         let page_height = self.page_viewport_height();
+        let page_width = self.page_viewport_width();
         let request = if self.find.query().is_empty() {
             self.store
-                .begin_request(&render_input, self.metrics.css_width, page_height)
+                .begin_request(&render_input, page_width, page_height)
         } else {
-            self.store.begin_find_request(
-                &render_input,
-                self.metrics.css_width,
-                page_height,
-                self.find.query(),
-            )
+            self.store
+                .begin_find_request(&render_input, page_width, page_height, self.find.query())
         };
         self.render_pending = true;
         self.send_render(request);
@@ -275,7 +272,7 @@ impl WindowApp {
             };
             let request = self.store.begin_history_event_request(
                 &snapshot,
-                self.metrics.css_width,
+                self.page_viewport_width(),
                 self.metrics.css_height,
                 base.as_deref(),
                 &events,

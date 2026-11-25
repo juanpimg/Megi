@@ -129,6 +129,9 @@ impl WindowApp {
             site_zooms,
             reader_html,
             tabs,
+            rail_open: false,
+            rail_hover: false,
+            rail_labels: Vec::new(),
         }
     }
 

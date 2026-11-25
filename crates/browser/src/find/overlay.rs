@@ -65,7 +65,40 @@ pub fn overlay_highlights_dest(
     rects: &[CssRect],
     current: usize,
 ) -> usize {
-    if dest_width == 0 || dest_height == 0 || css_width == 0 || css_viewport_height == 0 {
+    overlay_highlights_dest_with_offset(
+        dest,
+        dest_width,
+        dest_height,
+        css_width,
+        css_viewport_height,
+        scroll_y,
+        rects,
+        current,
+        0,
+    )
+}
+
+/// Like [`overlay_highlights_dest`], but maps page X into the columns to the
+/// right of `dest_x_offset`, matching `present_region_with_insets` when the rail
+/// reserves a left-hand strip.
+#[allow(clippy::too_many_arguments)] // same blit geometry as present_region_with_insets
+pub fn overlay_highlights_dest_with_offset(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    css_width: u32,
+    css_viewport_height: u32,
+    scroll_y: u32,
+    rects: &[CssRect],
+    current: usize,
+    dest_x_offset: u32,
+) -> usize {
+    if dest_width == 0
+        || dest_height == 0
+        || css_width == 0
+        || css_viewport_height == 0
+        || dest_x_offset >= dest_width
+    {
         return 0;
     }
     if dest.len() < (dest_width as usize) * (dest_height as usize) {
@@ -91,11 +124,13 @@ pub fn overlay_highlights_dest(
         if css_x0 >= css_width as f32 || css_y0 >= css_viewport_height as f32 {
             continue;
         }
-        let scale_x = dest_width as f32 / css_width as f32;
+        let page_width = dest_width - dest_x_offset;
+        let scale_x = page_width as f32 / css_width as f32;
         let scale_y = dest_height as f32 / css_viewport_height as f32;
-        let dest_x0 = (css_x0 * scale_x) as u32;
+        let dest_x0 = dest_x_offset.saturating_add((css_x0 * scale_x) as u32);
         let dest_y0 = (css_y0 * scale_y) as u32;
-        let dest_x1 = ((rect.x + rect.width).max(0.0) * scale_x) as u32;
+        let dest_x1 =
+            dest_x_offset.saturating_add(((rect.x + rect.width).max(0.0) * scale_x) as u32);
         let dest_y1 = ((rect.y + rect.height - scroll).max(0.0) * scale_y) as u32;
         let x0 = dest_x0.min(dest_width.saturating_sub(1));
         let y0 = dest_y0.min(dest_height.saturating_sub(1));

@@ -332,4 +332,10 @@ pub(super) struct WindowApp {
     pub(super) site_zooms: Vec<(String, f64)>,
     /// Reader-mode data URL for the current `about:reader` view.
     pub(super) reader_html: Option<String>,
+    /// Vertical tab rail visibility. Closed by default so legacy pixels are unchanged.
+    pub(super) rail_open: bool,
+    /// Whether the pointer is over a rail row (hover highlight).
+    pub(super) rail_hover: bool,
+    /// Cached tab titles for `RailView`, refreshed before layout and paint.
+    pub(super) rail_labels: Vec<String>,
 }

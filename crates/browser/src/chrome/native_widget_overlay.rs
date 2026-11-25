@@ -36,6 +36,33 @@ pub fn draw_native_widget(
         rect,
         visual,
         None,
+        0,
+    );
+}
+
+/// [`draw_native_widget`] shifted right by `dest_x_offset` physical columns for
+/// the open rail, matching `present_region_with_insets`.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_native_widget_with_offset(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    scroll_y: u32,
+    rect: crate::links::CssRect,
+    visual: crate::forms::WidgetVisual,
+    dest_x_offset: u32,
+) {
+    draw_native_widget_inner(
+        dest,
+        dest_width,
+        dest_height,
+        scale,
+        scroll_y,
+        rect,
+        visual,
+        None,
+        dest_x_offset,
     );
 }
 
@@ -61,6 +88,34 @@ pub fn draw_native_widget_with_content(
         rect,
         visual,
         Some(content),
+        0,
+    );
+}
+
+/// [`draw_native_widget_with_content`] shifted right by `dest_x_offset` physical
+/// columns for the open rail.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_native_widget_with_content_with_offset(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    scroll_y: u32,
+    rect: crate::links::CssRect,
+    visual: crate::forms::WidgetVisual,
+    content: NativeWidgetContent<'_>,
+    dest_x_offset: u32,
+) {
+    draw_native_widget_inner(
+        dest,
+        dest_width,
+        dest_height,
+        scale,
+        scroll_y,
+        rect,
+        visual,
+        Some(content),
+        dest_x_offset,
     );
 }
 
@@ -74,6 +129,7 @@ fn draw_native_widget_inner(
     rect: crate::links::CssRect,
     visual: crate::forms::WidgetVisual,
     content: Option<NativeWidgetContent<'_>>,
+    dest_x_offset: u32,
 ) {
     if dest_width == 0 || dest_height == 0 || rect.width <= 0.0 || rect.height <= 0.0 {
         return;
@@ -83,7 +139,7 @@ fn draw_native_widget_inner(
     } else {
         1.0
     };
-    let screen_x = rect.x * scale;
+    let screen_x = dest_x_offset as f32 + rect.x * scale;
     let screen_y = (rect.y + CHROME_HEIGHT - scroll_y as f32) * scale;
     let (patch_w, patch_h) = native_widgets::widget_patch_size(rect, scale, visual.focus_ring);
     let pad = if visual.focus_ring {
