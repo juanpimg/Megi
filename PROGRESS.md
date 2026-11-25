@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `c8237158` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **45/64** (**70%**) · **3,585** tests · conformance **PASS** · **18** crates · **264,488** lines of Rust
+**Snapshot** — commit `d46f5f11` (2026-11-25) · hitos cerrados **5/13** · criterios verificados **46/64** (**71%**) · **3,585** tests · conformance **PASS** · **18** crates · **265,717** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -23,13 +23,13 @@
 | **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `█████████████░░░░░░░` 4/6 | 66% |
-| **M7** | Herramientas de desarrollador | `████████████████░░░░` 4/5 | 80% |
+| **M7** | Herramientas de desarrollador | `████████████████████` 5/5 | 100% |
 | **M8** | Motor ofensivo | `████████████░░░░░░░░` 3/5 | 60% |
 | **M9** | Producción | `████████████░░░░░░░░` 3/5 | 60% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `██████████████░░░░░░` 45/64 | **70%** |
+| | **Roadmap** | `██████████████░░░░░░` 46/64 | **71%** |
 
 ## Detalle de criterios por hito
 
@@ -119,7 +119,7 @@
 - AVIF/JPEG XL — sin decodificadores
 - Audio y vídeo con códecs libres — sin implementación
 
-### M7 — Herramientas de desarrollador (80%)
+### M7 — Herramientas de desarrollador (100%)
 
 **Verificado**
 
@@ -127,10 +127,7 @@
 - Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS
 - DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target y sin WebDriver BiDi (el perfilador se cerró por separado)
 - Perfilador usable — `crates/browser/src/devtools/performance.rs` exporta `Performance.getMetrics` (13 fases en µs) y `Performance.getTrace` (eventos `ph="X"` apilables como flamegraph) desde los `RenderTimings` reales del render adjunto (`RenderStats.timings` → `DevToolsPage.timings`); `crates/browser/tests/devtools_protocol.rs::devtools_performance_exports_real_render_timings` compara el total exportado con `output.stats.timings.total.as_micros()` y exige el evento `Layout` con `dur`; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target, sin grabación interactiva ni símbolos JS
-
-**Pendiente**
-
-- WebDriver BiDi
+- WebDriver BiDi — `crates/browser/src/webdriver.rs` y `webdriver/{browsing_context,script,input}.rs` sobre transporte RFC 6455 compartido (`devtools/ws.rs`) y flag `--webdriver-bidi-port`: soporta `GET /status`, `session.{status,new,end,subscribe,unsubscribe}`, `browsingContext.{create,getTree,navigate,reload,captureScreenshot,close}` (con `render_url` real, evento `browsingContext.load` y PNG real en base64), `script.{evaluate,callFunction}` (Boa sobre el DOM real del contexto) e `input.{performActions,releaseActions}` (puntero sobre formularios/enlaces reales y teclado sobre `TextEdit` + DOM); `cargo test -p megi-browser --test webdriver_bidi --test devtools_protocol` (1+4 passed, EXIT=0); `python3 tools/check_milestone.py M7 5` PASS; límites: loopback HTTP/WebSocket sin navegador multi-proceso por contexto ni eventos de consola/red BiDi adicionales
 
 ### M8 — Motor ofensivo (60%)
 
@@ -193,9 +190,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `c8237158` (2026-11-25) |
+| Commit | `d46f5f11` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 264488 |
+| Lines of Rust (tracked `.rs`) | 265717 |
 | Tests (`cargo test --workspace -- --list`) | 3585 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |

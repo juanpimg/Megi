@@ -38,12 +38,12 @@ tests = 3585
 tests_commit = "c8237158"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 264488
+rust_lines = 265717
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "c8237158"
+verified_commit = "d46f5f11"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -168,10 +168,9 @@ items = [
   "Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS",
   "DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target y sin WebDriver BiDi (el perfilador se cerró por separado)",
   "Perfilador usable — `crates/browser/src/devtools/performance.rs` exporta `Performance.getMetrics` (13 fases en µs) y `Performance.getTrace` (eventos `ph=\"X\"` apilables como flamegraph) desde los `RenderTimings` reales del render adjunto (`RenderStats.timings` → `DevToolsPage.timings`); `crates/browser/tests/devtools_protocol.rs::devtools_performance_exports_real_render_timings` compara el total exportado con `output.stats.timings.total.as_micros()` y exige el evento `Layout` con `dur`; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target, sin grabación interactiva ni símbolos JS",
+  "WebDriver BiDi — `crates/browser/src/webdriver.rs` y `webdriver/{browsing_context,script,input}.rs` sobre transporte RFC 6455 compartido (`devtools/ws.rs`) y flag `--webdriver-bidi-port`: soporta `GET /status`, `session.{status,new,end,subscribe,unsubscribe}`, `browsingContext.{create,getTree,navigate,reload,captureScreenshot,close}` (con `render_url` real, evento `browsingContext.load` y PNG real en base64), `script.{evaluate,callFunction}` (Boa sobre el DOM real del contexto) e `input.{performActions,releaseActions}` (puntero sobre formularios/enlaces reales y teclado sobre `TextEdit` + DOM); `cargo test -p megi-browser --test webdriver_bidi --test devtools_protocol` (1+4 passed, EXIT=0); `python3 tools/check_milestone.py M7 5` PASS; límites: loopback HTTP/WebSocket sin navegador multi-proceso por contexto ni eventos de consola/red BiDi adicionales",
 ]
-pending = [
-  "WebDriver BiDi",
-]
+pending = []
 
 # --- M8 — Motor ofensivo ----------------------------------------------------------------
 [[phase]]
