@@ -263,10 +263,24 @@ pub fn apply_orientation(
     image: RgbaImage,
     orientation: Option<u8>,
 ) -> Result<RgbaImage, ImageError> {
-    let Some(orientation) = orientation else {
-        return Ok(image);
+    let orientation = match orientation {
+        None => return Ok(image),
+        Some(value) if (1..=8).contains(&value) => value,
+        Some(_) => {
+            return Err(ImageError::InvalidData {
+                reason: "invalid EXIF orientation value",
+            });
+        }
     };
     let (width, height) = (image.width, image.height);
+    // `RgbaImage`'s fields are public: a caller can build an image whose buffer
+    // does not match its dimensions. Validate before any pixel indexing (#2300).
+    let expected = rgba_len(width, height)?;
+    if image.data.len() != expected {
+        return Err(ImageError::InvalidData {
+            reason: "RGBA buffer length does not match the declared dimensions",
+        });
+    }
     let src = image.data;
     let pixel = |x: u32, y: u32| -> [u8; 4] {
         let offset = ((y as usize) * (width as usize) + (x as usize)) * 4;
@@ -282,17 +296,10 @@ pub fn apply_orientation(
     } else {
         (width, height)
     };
-    let mut data = vec![0u8; (dst_width as usize) * (dst_height as usize) * 4];
+    let dst_len = rgba_len(dst_width, dst_height)?;
+    let mut data = vec![0u8; dst_len];
     for y in 0..dst_height {
         for x in 0..dst_width {
-            let orientation = match orientation {
-                1..=8 => orientation,
-                _ => {
-                    return Err(ImageError::InvalidData {
-                        reason: "invalid EXIF orientation value",
-                    });
-                }
-            };
             let (sx, sy) = match orientation {
                 2 => (width - 1 - x, y),
                 3 => (width - 1 - x, height - 1 - y),

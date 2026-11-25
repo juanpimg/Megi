@@ -1,4 +1,5 @@
 use super::{RgbaImage, apply_orientation};
+use crate::ImageError;
 
 /// 4x2 image whose red channel encodes the source index, so every transform
 /// can be checked against its exact destination pixel.
@@ -41,4 +42,21 @@ fn applies_all_eight_orientations() {
     }
     let identity = apply_orientation(indexed_image(), None).expect("identity");
     assert_eq!(reds(&identity), [0, 1, 2, 3, 4, 5, 6, 7]);
+}
+
+#[test]
+fn rejects_rgba_buffer_inconsistent_with_dimensions() {
+    // #2300: `RgbaImage`'s fields are public, so callers can construct an image
+    // whose buffer is shorter than `width * height * 4`. Applying an EXIF
+    // transform must report an error instead of indexing past the buffer.
+    let malformed = RgbaImage {
+        width: 2,
+        height: 2,
+        data: vec![0; 4],
+    };
+    let result = apply_orientation(malformed, Some(6));
+    assert!(
+        matches!(result, Err(ImageError::InvalidData { .. })),
+        "expected InvalidData, got {result:?}"
+    );
 }
