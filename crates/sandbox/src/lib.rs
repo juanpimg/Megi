@@ -98,6 +98,21 @@ pub fn apply_renderer_sandbox_with_reads(
     }
 }
 
+/// Whether this kernel can deny `connect(2)` to an AF_UNIX path via Landlock.
+///
+/// This needs `AccessFs::Refer` (Landlock ABI V8+). On older kernels the restriction is
+/// not expressible, so negative probes must report `unsupported` instead of failing.
+pub fn unix_socket_connect_restriction_supported() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        linux::refer_right_supported()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
 /// Static, serde-friendly security matrix published in reports.
 pub fn render_security_matrix() -> &'static str {
     "linux: enforced; macos: unsupported; windows: unsupported"

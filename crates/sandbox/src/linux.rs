@@ -86,6 +86,19 @@ fn build_ruleset(
     Ok(created)
 }
 
+/// Landlock ABI V8 added `AccessFs::Refer`, which is what denies `connect(2)` to an
+/// existing AF_UNIX socket path. Older kernels cannot express that restriction; callers
+/// must report the probe as unsupported instead of claiming a sandbox failure.
+pub(super) fn refer_right_supported() -> bool {
+    match Ruleset::default()
+        .set_compatibility(CompatLevel::HardRequirement)
+        .handle_access(AccessFs::from_all(ABI::V8))
+    {
+        Ok(ruleset) => ruleset.create().is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// Decides whether the obtained restriction is a real sandbox. `all_threads` is requested
 /// only when the kernel can grant it; the renderer applies the policy before spawning any
 /// worker thread, so a fully enforced single-thread ruleset is still `Enforced` (M3#4).

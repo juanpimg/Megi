@@ -183,7 +183,7 @@ crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	cove
 crates/browser/tests/ipc_semantic_tests.rs	135	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
 crates/browser/tests/ipc_validation_tests.rs	166	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
 crates/browser/tests/process_e2e_tests.rs	161	test	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	re-read
-crates/browser/tests/sandbox_e2e_tests.rs	291	test	F1	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
+crates/browser/tests/sandbox_e2e_tests.rs	297	test	F1	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
 crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1228,8 +1228,8 @@ crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#ma
 crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/worker_tests.rs	50	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/sandbox/Cargo.toml	16	manifest	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
-crates/sandbox/src/lib.rs	124	src	F2	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
-crates/sandbox/src/linux.rs	180	src	F2	lead	2026-11-25	covered	CI-SANDBOX-PREV8	All-threads fallback for Landlock pre-V8 CI runners
+crates/sandbox/src/lib.rs	139	src	F2	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
+crates/sandbox/src/linux.rs	193	src	F2	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
 crates/sandbox/src/unsupported.rs	10	src	F2	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 crates/svg/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/examples/svg_to_png.rs	114	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
