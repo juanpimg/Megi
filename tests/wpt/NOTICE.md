@@ -138,3 +138,5 @@
 | `url/urlsearchparams-set.any.js` | 986 | `41771dec1616c4715c33a2a77b3125483c4bce24998e344222e9b8d1f49d68de` | skip |
 | `url/urlsearchparams-sort.any.js` | 1811 | `cdfc1ef89cfcefa5fae94ebdeaa2a869c47b47b47d08aba4c7db0b6e44b31fca` | skip |
 | `url/urlsearchparams-stringifier.any.js` | 3791 | `c6e9ece0ff07de304acf2a28a328c516840034255c294b7392f7c414c57b2b4e` | skip |
+| `webgl/bufferSubData.html` | 747 | `b8d18fed91fc4ae290b7ce3246cbc5d36e5db441bcef6e61e6931dc42afca99c` | testharness |
+| `webgl/common.js` | 377 | `4d96208b69759ef9980b66dd1b6ae8c4b887484a67040797ad875abd8431b4b6` | support |

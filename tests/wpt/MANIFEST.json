@@ -1328,5 +1328,25 @@
     "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
     "dir": "url",
     "subtest_count_expected": 0
+  },
+  {
+    "path": "webgl/bufferSubData.html",
+    "sha256": "b8d18fed91fc4ae290b7ce3246cbc5d36e5db441bcef6e61e6931dc42afca99c",
+    "bytes": 747,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "webgl",
+    "subtest_count_expected": 1
+  },
+  {
+    "path": "webgl/common.js",
+    "sha256": "4d96208b69759ef9980b66dd1b6ae8c4b887484a67040797ad875abd8431b4b6",
+    "bytes": 377,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "shared context helper for the WebGL conformance fixtures",
+    "dir": "webgl",
+    "subtest_count_expected": 0
   }
 ]
