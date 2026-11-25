@@ -1179,7 +1179,7 @@ crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/background_layers_tests.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/backgrounds_tests.rs	365	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/browser_api_tests.rs	220	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/canvas_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/canvas_tests.rs	155	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1340,7 +1340,7 @@ crates/test_harness/src/css_harness/expanded.rs	105	src	F2	wpt-expand	2026-11-24
 crates/test_harness/src/js_executor.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/lib.rs	391	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/main.rs	43	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
-crates/test_harness/src/run.rs	497	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/run.rs	500	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/serializer_harness/mod.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1349,16 +1349,16 @@ crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	cover
 crates/test_harness/src/wpt/manifest.rs	146	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/mod.rs	15	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/runner.rs	256	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
-crates/test_harness/src/wpt/shim.rs	33	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
-crates/test_harness/src/wpt/summary.rs	49	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
-crates/test_harness/src/wpt/testharness_shim.js	225	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/shim.rs	34	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/summary.rs	59	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/testharness_shim.js	244	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/tests/closed_loop/common.rs	43	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/css_serializer.rs	136	test	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/tests/closed_loop/fixtures.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/main.rs	25	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tokenizer.rs	190	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tree.rs	89	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/tests/wpt_runner.rs	152	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/tests/wpt_runner.rs	206	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/src/lib.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1832,6 +1832,8 @@ tests/fixtures/render/browser_api.html	65	fixture	F1	waveF1	2026-11-17	covered	#
 tests/fixtures/render/calc_gap.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_margin.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/calc_width.html	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/canvas_full.html	68	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
+tests/fixtures/render/canvas_full/golden.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/canvas_paths.html	50	fixture	F1	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 tests/fixtures/render/cascade_layers.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/cascade_layers_nested.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -2129,11 +2131,15 @@ tests/html5lib-tests/tree-construction/tricky01.dat	0	vendored	-			exempt		not r
 tests/html5lib-tests/tree-construction/void-in-phrasing.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit01.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not read line by line: vendored
-tests/wpt/MANIFEST.json	1292	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
-tests/wpt/NOTICE.md	137	docs	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
+tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html	32	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
+tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html	29	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
+tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html	30	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
+tests/wpt/MANIFEST.json	1332	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
+tests/wpt/NOTICE.md	140	docs	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/WPT-REVISION.json	6	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/allowlist.toml	2	manifest	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/baseline.json	9	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
+tests/wpt/common/canvas-tests.js	109	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
 tests/wpt/css/css-syntax/META.yml	5	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/css/css-syntax/README.md	74	docs	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/css/css-syntax/anb-parsing.html	125	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
@@ -2280,7 +2286,7 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/progress_render.py	401	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
 tools/progress_stats.py	278	tool	F3	jp	2026-11-25	covered	#2290	re-read after dirty-tree cache guard
 tools/real_site_check.py	357	tool	F3	lead	2026-11-25	covered	M2-RELEASE-REMEASURE	
-tools/render_fixture.sh	82	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/render_fixture.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
@@ -2305,7 +2311,7 @@ tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotat
 tools/test_update_bench_baseline.py	112	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_update_progress.py	229	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-numeric manifest tests regression test
-tools/test_vendor_wpt.py	116	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
+tools/test_vendor_wpt.py	148	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
@@ -2316,7 +2322,7 @@ tools/update_bench_baseline.py	177	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISI
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	372	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
+tools/vendor_wpt.py	461	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
