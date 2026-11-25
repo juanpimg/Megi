@@ -1114,10 +1114,10 @@
     "sha256": "a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e",
     "bytes": 8228,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "not adopted: flatten fallback contents are empty because importNode does not preserve slot children",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "shadow-dom",
-    "subtest_count_expected": 0
+    "subtest_count_expected": 13
   },
   {
     "path": "shadow-dom/slots.html",

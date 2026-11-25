@@ -47,6 +47,7 @@ SEED_COUNTS = {
     "shadow-dom/Element-interface-attachShadow.html": 6,
     "shadow-dom/Element-interface-shadowRoot-attribute.html": 3,
     "shadow-dom/historical.html": 5,
+    "shadow-dom/slots-fallback.html": 13,
     "custom-elements/historical.html": 3,
     "custom-elements/CustomElementRegistry.html": 36,
 }
@@ -74,7 +75,6 @@ SKIP_PATHS = {
     "custom-elements/Document-createElement.html": "not adopted: 'is'-based autonomous custom elements are not upgraded",
     "custom-elements/upgrading.html": "not adopted: document.implementation.createHTMLDocument is not callable",
     "shadow-dom/slots.html": "not adopted: assignedNodes returns 7 nodes instead of 1 in the complex case and 13 instead of 3 after adding a slot",
-    "shadow-dom/slots-fallback.html": "not adopted: flatten fallback contents are empty because importNode does not preserve slot children",
     "custom-elements/HTMLElement-constructor.html": "not adopted: eight subtests still fail (instanceof Element not callable; inferred localName undefined; proxy counting)",
     "custom-elements/Document-createElementNS.html": "not adopted: two subtests still fail (HTMLUnknownElement not callable; string third argument ignored mismatch)",
     "shadow-dom/Slotable-interface.html": "not adopted: assignedSlot on text nodes is not exposed through Text.prototype",
