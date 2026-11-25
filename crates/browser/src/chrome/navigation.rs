@@ -66,25 +66,32 @@ pub fn navigation_buttons_width() -> f32 {
 
 pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
     let buttons = navigation_buttons(view.css_width);
-    let mut draw = |rect: Rect, label: &str, enabled: bool| {
-        // A subtle rounded button surface reads as clickable without needing hover state.
+    // A subtle rounded surface reads as clickable; the glyphs are drawn geometry,
+    // not text, so they stay crisp at every device scale.
+    for rect in [buttons.back, buttons.forward, buttons.reload] {
         fill_round(pixmap, rect, scale, 4.0, COLOR_ADDRESS_BG);
-        let color = if enabled {
+    }
+    paint_chevron(
+        pixmap,
+        buttons.back,
+        scale,
+        true,
+        if view.can_go_back {
             COLOR_ADDRESS_TEXT
         } else {
             COLOR_DISABLED
-        };
-        draw_text(
-            pixmap,
-            label,
-            rect.x + 6.0,
-            rect.y + 5.0,
-            scale,
-            NAV_TEXT_SIZE,
-            color,
-        );
-    };
-    draw(buttons.back, "<", view.can_go_back);
-    draw(buttons.forward, ">", view.can_go_forward);
-    draw(buttons.reload, "R", true);
+        },
+    );
+    paint_chevron(
+        pixmap,
+        buttons.forward,
+        scale,
+        false,
+        if view.can_go_forward {
+            COLOR_ADDRESS_TEXT
+        } else {
+            COLOR_DISABLED
+        },
+    );
+    paint_reload(pixmap, buttons.reload, scale, COLOR_ADDRESS_TEXT);
 }

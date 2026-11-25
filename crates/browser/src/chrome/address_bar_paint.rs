@@ -1,7 +1,7 @@
 //! Painting for the address bar and the history button that shares its strip.
 
 use megi_webview::layout::Rect;
-use megi_webview::paint::Pixmap;
+use megi_webview::paint::{Color, Pixmap};
 
 use super::address_bar::{address_text_x, split_url_for_display};
 use super::drawing::*;
@@ -23,11 +23,13 @@ pub(crate) fn paint_address_bar(
         ),
         COLOR_ADDRESS_STRIP,
     );
-    // One-pixel separator gives the taller band a clear top edge.
-    pixmap.fill_rect(
-        Rect::new(0.0, TAB_STRIP_HEIGHT * scale, width * scale, scale),
-        COLOR_BORDER,
-    );
+    // One-pixel separators give the taller band clear top and bottom edges.
+    for y in [TAB_STRIP_HEIGHT, CHROME_HEIGHT - 1.0] {
+        pixmap.fill_rect(
+            Rect::new(0.0, y * scale, width * scale, scale),
+            COLOR_BORDER,
+        );
+    }
     // Rounded pill: a soft shadow behind a 1 px border makes the field distinct
     // from the strip without adding a second accent or a GPU effect.
     let shadow = Rect::new(bar.x + 1.0, bar.y + 2.0, bar.width, bar.height);
@@ -44,6 +46,17 @@ pub(crate) fn paint_address_bar(
         scale,
         (PILL_RADIUS - 1.0).max(0.0),
         COLOR_ADDRESS_BG,
+    );
+    // Inset highlight and a 1 px bottom rule give the pill a bevel instead of a
+    // flat dark rectangle. Both are pure fill operations in the same palette.
+    pixmap.fill_rect(
+        Rect::new(
+            (bar.x + 3.0) * scale,
+            (bar.y + 1.0) * scale,
+            (bar.width - 6.0).max(0.0) * scale,
+            scale,
+        ),
+        Color::new(0x5C, 0x64, 0x73, 0xFF),
     );
     let editing = view.address.is_editing();
     let mut text_x = address_text_x(width);

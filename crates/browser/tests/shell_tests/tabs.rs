@@ -280,10 +280,17 @@ fn chrome_geometry_scales_with_the_device_scale() {
         .filter(|pixel| **pixel != 0x00FF_FFFF)
         .count();
     assert!(band > 1000, "scaled chrome painted: {band}");
-    assert_eq!(
-        dest[(159 * 640) as usize],
+    // A three-row soft shadow (6 physical rows at scale 2) now sits below the
+    // band; the page starts clean only after it.
+    assert_ne!(
+        dest[(158 * 640) as usize],
         0x00FF_FFFF,
-        "page below chrome intact"
+        "shadow under the band"
+    );
+    assert_eq!(
+        dest[(164 * 640) as usize],
+        0x00FF_FFFF,
+        "page below chrome and shadow intact"
     );
 }
 

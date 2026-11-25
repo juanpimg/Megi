@@ -12,6 +12,12 @@ fn tab_strip_layout_distributes_and_reserves_buttons() {
         assert!(tab.close.x >= tab.rect.x);
     }
     assert!(layout.new_tab.x >= layout.tabs.last().expect("tab").rect.x);
+    // Refreshed controls must be comfortably clickable.
+    let close_target = TAB_CLOSE_WIDTH;
+    let new_target = NEW_TAB_WIDTH;
+    assert!(close_target >= 24.0, "close target: {close_target}");
+    assert!(new_target >= 24.0, "new-tab target: {new_target}");
+    assert!(layout.new_tab.height >= 24.0);
 }
 
 #[test]

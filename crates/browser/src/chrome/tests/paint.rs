@@ -21,6 +21,40 @@ fn chrome_paints_tab_strip_and_address_bar() {
     // The page below the chrome is untouched.
     assert_eq!(pixel(300, 200), 0x00FF_FFFF);
     assert_visual_refresh_text_measures_wider_than_the_legacy_scale();
+    assert_favicon_fallback_is_a_rounded_accent_tile();
+    assert_chrome_band_has_depth(&dest, 640);
+}
+
+fn assert_favicon_fallback_is_a_rounded_accent_tile() {
+    // A bare square dot is not a favicon: the fallback must be a rounded tile
+    // carrying the single-accent identity.
+    let mut pixmap = Pixmap::new(24, 24);
+    let icon = crate::favicon::Favicon::fallback("tile");
+    crate::chrome::drawing::paint_favicon(&mut pixmap, &icon, 4.0, 4.0, 1.0);
+    assert_eq!(
+        pixmap.pixels[4 * 24 + 4].a,
+        0,
+        "the fallback tile corner must be rounded"
+    );
+    let center = pixmap.pixels[10 * 24 + 10];
+    assert!(
+        u16::from(center.r) + u16::from(center.g) + u16::from(center.b) > 260,
+        "the tile must show the accent: {center:?}"
+    );
+}
+
+fn assert_chrome_band_has_depth(dest: &[u32], width: usize) {
+    let bottom = CHROME_HEIGHT as usize;
+    assert_ne!(
+        dest[bottom * width + 100],
+        0x00FF_FFFF,
+        "a bottom separator ends the chrome band"
+    );
+    assert_ne!(
+        dest[(bottom + 2) * width + 100],
+        0x00FF_FFFF,
+        "a soft shadow sits under the band"
+    );
 }
 
 #[test]
@@ -181,6 +215,30 @@ fn chrome_paints_navigation_buttons() {
         }
     }
     assert!(dark > 0, "reload glyph painted");
+    assert_navigation_icons_are_drawn(&dest, &buttons);
+}
+
+fn assert_navigation_icons_are_drawn(dest: &[u32], buttons: &NavigationButtons) {
+    // Drawn chevrons cover noticeably more pixels than the old 14 px text glyph.
+    let ink = |rect: Rect| -> usize {
+        let mut count = 0;
+        for y in rect.y as usize..(rect.y + rect.height) as usize {
+            for x in rect.x as usize..(rect.x + rect.width) as usize {
+                let pixel = dest[y * 480 + x];
+                if pixel != rgb(COLOR_ADDRESS_BG) && pixel != rgb(COLOR_ADDRESS_STRIP) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    };
+    let back = ink(buttons.back);
+    assert!(
+        back >= 35,
+        "back must be a drawn chevron, not a tiny text glyph: {back}"
+    );
+    let reload = ink(buttons.reload);
+    assert!(reload >= 35, "reload must be a drawn arc/arrow: {reload}");
 }
 
 #[test]

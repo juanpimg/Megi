@@ -1,23 +1,17 @@
 //! Browser chrome over the page: tab strip, address bar and floating menus.
 //!
-//! One accent drives focus/loading/active-tab affordances; surfaces use the
-//! antialiased rounded-rect primitives from `paint`, and the address pill splits
-//! scheme/authority/path into a text hierarchy. All painting is pure (`Pixmap` in,
-//! pixels out), deterministic and dependency-free.
+//! One accent drives focus/loading/active-tab affordances; surfaces use `paint`'s
+//! rounded-rect primitives and the pill splits scheme/authority/path. Painting is
+//! pure (`Pixmap` in, pixels out), deterministic and dependency-free.
+//! The chrome is an **overlay**: the page keeps its viewport, the top
+//! [`CHROME_HEIGHT`] CSS pixels are occluded and clicks there go to the shell.
+//! Geometry is CSS pixels, scaled at paint time; `--chrome` includes it in
+//! headless screenshots.
 //!
-//! The chrome is an **overlay** on the page frame: the page keeps its full viewport,
-//! so the top [`CHROME_HEIGHT`] CSS pixels are occluded and clicks there are handled by
-//! the shell. Geometry is in CSS pixels, scaled at paint time; unit tests need no
-//! display and headless screenshots can include the chrome with `--chrome`.
-//!
-//! Deliberate limits: no autocomplete UI, no favicon fetching in the painter (the
-//! worker supplies decoded icons or a dot), no native menus, and the address bar
-//! edits URLs only. Tabs show a compact title with `+`/`×` and a `+N` overflow
-//! marker; there is no drag/reorder.
-//!
-//! Feature submodules own layout/hit-testing/painting; this file keeps the shared
-//! tokens, the [`ChromeView`] contract and the two entry points, re-exporting the
-//! API so `crate::chrome::*` paths stay stable for the shell.
+//! Limits: no autocomplete UI, no favicon fetching in the painter, no native
+//! menus, URL-only address edits, no tab drag/reorder. Feature submodules own
+//! layout/hit-testing/painting; this file keeps tokens, [`ChromeView`] and the
+//! two entry points, re-exporting the stable `crate::chrome::*` API.
 
 use megi_webview::layout::Rect;
 use megi_webview::paint::{Color, Pixmap};
@@ -122,8 +116,8 @@ pub const TAB_MIN_WIDTH: f32 = 72.0;
 pub const TAB_MAX_WIDTH: f32 = 200.0;
 /// Width reserved for the `+` new-tab button, in CSS pixels.
 pub const NEW_TAB_WIDTH: f32 = 34.0;
-/// Width and height of the tab close affordance, in CSS pixels.
-pub const TAB_CLOSE_WIDTH: f32 = 18.0;
+/// Width and height of the tab close affordance, in CSS pixels (clickable target).
+pub const TAB_CLOSE_WIDTH: f32 = 24.0;
 /// Width reserved for the `+N` overflow marker, in CSS pixels.
 pub const TAB_OVERFLOW_WIDTH: f32 = 40.0;
 
@@ -320,6 +314,12 @@ pub fn draw_chrome(
     if let Some(menu) = view.menu {
         paint_context_menu(&mut pixmap, scale, view, menu);
     }
+    let band_css = if view.compact {
+        COMPACT_CHROME_HEIGHT
+    } else {
+        CHROME_HEIGHT
+    };
+    drawing::paint_band_shadow(&mut pixmap, scale, css_width, band_css);
     let mut painted = 0usize;
     for (index, color) in pixmap.pixels.iter().enumerate() {
         if color.a == 0 {
@@ -368,11 +368,9 @@ pub fn draw_chrome_over_pixmap(
     // Compact mode paints the address strip at `TAB_STRIP_HEIGHT` and then shifts
     // it up, so the scratch layer must cover the full legacy band even though only
     // `rows` of it end up visible. Transparent vacated rows are skipped below.
-    let band_rows = if view.compact {
-        ((CHROME_HEIGHT * scale).ceil() as u32).min(height)
-    } else {
-        rows
-    };
+    let band_rows = (((CHROME_HEIGHT * scale).ceil() as u32) + 4)
+        .max(rows)
+        .min(height);
     let mut band = Pixmap::new(width, band_rows);
     let css_width = view.css_width.max(1.0);
     if !view.compact {
@@ -384,6 +382,12 @@ pub fn draw_chrome_over_pixmap(
     if view.compact {
         compact::shift_band_up(&mut band, scale);
     }
+    let band_css = if view.compact {
+        COMPACT_CHROME_HEIGHT
+    } else {
+        CHROME_HEIGHT
+    };
+    drawing::paint_band_shadow(&mut band, scale, css_width, band_css);
     debug_assert!(view.dropdown.is_none());
     debug_assert!(view.overflow.is_none());
     debug_assert!(view.menu.is_none());

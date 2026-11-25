@@ -98,7 +98,7 @@ pub fn layout_tabs(titles: &[String], width: f32, active: usize) -> TabStripLayo
             TAB_CLOSE_WIDTH,
             TAB_CLOSE_WIDTH,
         );
-        let max_chars = ((tab_width - TAB_CLOSE_WIDTH - 12.0) / 8.0).max(4.0) as usize;
+        let max_chars = ((tab_width - TAB_CLOSE_WIDTH - 14.0) / 8.0).max(4.0) as usize;
         tabs.push(TabRect {
             index,
             rect,
@@ -288,6 +288,8 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
         Rect::new(0.0, 0.0, width * scale, TAB_STRIP_HEIGHT * scale),
         COLOR_TAB_STRIP,
     );
+    // A subtle top rule frames the strip instead of letting it fade into the edge.
+    pixmap.fill_rect(Rect::new(0.0, 0.0, width * scale, scale), COLOR_BORDER);
     let layout = layout_tabs(view.tabs, width, view.active_tab);
     for tab in &layout.tabs {
         let active = tab.index == view.active_tab;
@@ -371,11 +373,19 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
         );
     }
     let new_tab = layout.new_tab;
+    // A rounded 24 px tile makes the new-tab control obvious and clickable.
+    fill_round(
+        pixmap,
+        Rect::new(new_tab.x + 5.0, new_tab.y + 8.0, 24.0, 24.0),
+        scale,
+        6.0,
+        COLOR_ADDRESS_BG,
+    );
     draw_text(
         pixmap,
         "+",
         new_tab.x + 11.0,
-        new_tab.y + 9.0,
+        new_tab.y + 10.0,
         scale,
         18.0,
         COLOR_TEXT,
