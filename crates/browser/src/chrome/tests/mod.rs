@@ -8,6 +8,7 @@ mod dropdown;
 mod menus;
 mod paint;
 mod tabs;
+mod tokens;
 
 fn view<'a>(
     address: &'a AddressBar,
