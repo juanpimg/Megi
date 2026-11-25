@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import re
 import sys
-import unicodedata
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +42,6 @@ def slugify(text: str) -> str:
     text = re.sub(r"<a[^>]*>.*?</a>", "", text)
     text = INLINE_CODE.sub(lambda m: m.group(0).strip("`"), text)
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
-    text = unicodedata.normalize("NFKD", text)
     kept = []
     for ch in text.lower():
         if ch.isalnum() or ch in "-_ ":

@@ -45,6 +45,28 @@ class CheckDocsLinksTests(unittest.TestCase):
                 ],
             )
 
+    def test_headings_of_preserves_unicode_letters(self) -> None:
+        # GitHub keeps accented letters in heading anchors: `# Código` yields
+        # `#código`, not `#codigo`.
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = Path(tmp) / "a.md"
+            doc.write_text("# Código\n", encoding="utf-8")
+            self.assertEqual(check_docs_links.headings_of(doc), {"código"})
+
+    def test_check_accepts_unicode_anchor(self) -> None:
+        # A link spelled exactly like GitHub's anchor must not be a false
+        # positive just because the checker decomposes diacritics.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "a.md").write_text("# Código\n", encoding="utf-8")
+            (root / "index.md").write_text("[x](docs/a.md#código)\n", encoding="utf-8")
+            with (
+                mock.patch.object(check_docs_links, "REPO_ROOT", root),
+                mock.patch.object(check_docs_links, "ROOT_DOCS", ["index.md"]),
+            ):
+                self.assertEqual(check_docs_links.check(), [])
+
     def test_check_reports_no_false_positives_for_balanced_parentheses(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
