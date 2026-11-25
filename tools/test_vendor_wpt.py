@@ -74,6 +74,17 @@ class VendorWptTest(unittest.TestCase):
     def test_valid_manifest_is_clean(self) -> None:
         self.assertEqual(vendor_wpt.check_manifest(self.root), [])
 
+    def test_non_integer_phase_is_reported_with_clean_error(self) -> None:
+        """A malformed `phase` (e.g. `[]`) must not crash the offline checker."""
+        self.write(
+            {"revision": PIN, "source": "web-platform-tests/wpt", "phase": []},
+            manifest_bytes(self.wpt),
+        )
+        self.assertEqual(
+            vendor_wpt.check_manifest(self.root),
+            ["WPT-REVISION.json: phase must be one of [1, 2, 3], got []"],
+        )
+
     def test_undeclared_file_is_reported_with_path(self) -> None:
         extra = self.wpt / "css/css-syntax/extra.html"
         extra.write_bytes(b"<html></html>\n")

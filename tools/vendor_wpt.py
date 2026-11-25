@@ -173,7 +173,7 @@ def check_manifest(root: Path) -> list[str]:
     if not isinstance(pin, str) or not SHA_RE.fullmatch(pin):
         errors.append(f"{REVISION_FILE}: revision must be a 40-hex commit SHA, got {pin!r}")
     phase = revision.get("phase")
-    if phase not in MAX_BYTES_BY_PHASE:
+    if type(phase) is not int or phase not in MAX_BYTES_BY_PHASE:
         errors.append(f"{REVISION_FILE}: phase must be one of {sorted(MAX_BYTES_BY_PHASE)}, got {phase!r}")
 
     try:
@@ -228,10 +228,11 @@ def check_manifest(root: Path) -> list[str]:
     present = {str(path) for path in declared_files(root)}
     for path in sorted(present - by_path.keys()):
         errors.append(f"{path}: file under tests/wpt/ is not declared in {MANIFEST_FILE}")
-    limit = MAX_BYTES_BY_PHASE.get(phase, 0)
-    for directory, size in sorted(used_bytes.items()):
-        if size > limit:
-            errors.append(f"{directory}: {size} bytes exceed phase {phase} budget of {limit}")
+    if type(phase) is int:
+        limit = MAX_BYTES_BY_PHASE.get(phase, 0)
+        for directory, size in sorted(used_bytes.items()):
+            if size > limit:
+                errors.append(f"{directory}: {size} bytes exceed phase {phase} budget of {limit}")
     return errors
 
 
