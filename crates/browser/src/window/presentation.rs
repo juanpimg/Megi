@@ -355,7 +355,7 @@ impl WindowApp {
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
         // Closed rail yields `None`, so this is a no-op for legacy frames.
-        let _ = chrome::draw_rail_over_pixmap(&mut buffer, chrome_scale, &view);
+        let _ = chrome::draw_rail(&mut buffer, width, height, chrome_scale, &view);
         if self.download_panel.open {
             let lines: Vec<String> = self
                 .download_manager

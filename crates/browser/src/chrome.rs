@@ -75,8 +75,8 @@ pub use navigation::{
     navigation_buttons_width,
 };
 pub use rail::{
-    RailHit, RailLayout, RailTabRect, RailView, draw_rail_over_pixmap, layout_rail, paint_rail,
-    rail_hit,
+    RailHit, RailLayout, RailTabRect, RailView, draw_rail, draw_rail_over_pixmap, layout_rail,
+    paint_rail, rail_hit,
 };
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{

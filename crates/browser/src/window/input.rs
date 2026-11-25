@@ -21,20 +21,22 @@ impl WindowApp {
     /// Updates the bottom status-bar hover URL and the context-menu hover selection.
     pub(super) fn update_hover(&mut self, physical_x: f64, physical_y: f64) {
         self.sync_rail_labels();
-        let rail_hover = {
-            let Some(view) = self.rail_view() else { false };
-            let layout = chrome::layout_rail(
-                self.metrics.css_width as f32,
-                self.metrics.css_height as f32,
-                self.metrics.scale as f32,
-                &view,
-            );
-            chrome::rail_hit(
-                &layout,
-                (physical_x / self.metrics.scale) as f32,
-                (physical_y / self.metrics.scale) as f32,
-            )
-            .is_some()
+        let rail_hover = match self.rail_view() {
+            Some(view) => {
+                let layout = chrome::layout_rail(
+                    self.metrics.css_width as f32,
+                    self.metrics.css_height as f32,
+                    self.metrics.scale as f32,
+                    &view,
+                );
+                chrome::rail_hit(
+                    &layout,
+                    (physical_x / self.metrics.scale) as f32,
+                    (physical_y / self.metrics.scale) as f32,
+                )
+                .is_some()
+            }
+            None => false,
         };
         if rail_hover != self.rail_hover {
             self.rail_hover = rail_hover;
@@ -267,8 +269,7 @@ impl WindowApp {
         // The rail starts below the chrome band, so it must be hit before the
         // legacy chrome/page split. Keep the borrow short: actions need &mut self.
         self.sync_rail_labels();
-        let rail_hit = {
-            let Some(view) = self.rail_view() else { None };
+        let rail_hit = self.rail_view().and_then(|view| {
             let layout = chrome::layout_rail(
                 self.metrics.css_width as f32,
                 self.metrics.css_height as f32,
@@ -276,7 +277,7 @@ impl WindowApp {
                 &view,
             );
             chrome::rail_hit(&layout, chrome_x, chrome_y)
-        };
+        });
         if let Some(hit) = rail_hit {
             match hit {
                 chrome::RailHit::Activate(index) => self.activate_tab(index),

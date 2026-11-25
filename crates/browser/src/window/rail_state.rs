@@ -19,8 +19,10 @@ pub fn toggle(open: bool) -> bool {
 
 /// Page viewport width after reserving the rail column.
 #[must_use]
-pub fn page_viewport_width(css_width: u32, open: bool) -> u32 {
-    css_width.saturating_sub(css_width(open) as u32).max(1)
+pub fn page_viewport_width(total_css_width: u32, open: bool) -> u32 {
+    total_css_width
+        .saturating_sub(css_width(open) as u32)
+        .max(1)
 }
 
 fn safe_scale(scale: f64) -> f64 {

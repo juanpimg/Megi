@@ -274,6 +274,54 @@ pub fn paint_rail(dest: &mut Pixmap, scale: f32, layout: &RailLayout, view: &Rai
 /// Paints the rail over an RGBA page pixmap using the same alpha blend as
 /// [`draw_chrome_over_pixmap`](super::draw_chrome_over_pixmap). Returns the
 /// number of touched pixels, or zero when the view has no rail.
+pub fn draw_rail(
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    scale: f32,
+    view: &ChromeView<'_>,
+) -> usize {
+    let Some(rail) = view.rail else {
+        return 0;
+    };
+    if dest_width == 0
+        || dest_height == 0
+        || dest.len() < (dest_width as usize) * (dest_height as usize)
+    {
+        return 0;
+    }
+    let scale = safe_scale(scale);
+    let layout = layout_rail(
+        dest_width as f32 / scale,
+        dest_height as f32 / scale,
+        scale,
+        &rail,
+    );
+    let mut layer = Pixmap::new(dest_width, dest_height);
+    paint_rail(&mut layer, scale, &layout, &rail);
+
+    let mut painted = 0usize;
+    for (index, color) in layer.pixels.iter().enumerate() {
+        if color.a == 0 {
+            continue;
+        }
+        let base = dest[index];
+        let alpha = f32::from(color.a) / 255.0;
+        let mix = |channel: u32, target: u8| -> u32 {
+            let value = channel as f32 * (1.0 - alpha) + f32::from(target) * alpha;
+            value.round().clamp(0.0, 255.0) as u32
+        };
+        dest[index] = (mix(base >> 16 & 0xFF, color.r) << 16)
+            | (mix(base >> 8 & 0xFF, color.g) << 8)
+            | mix(base & 0xFF, color.b);
+        painted += 1;
+    }
+    painted
+}
+
+/// Paints the rail over an RGBA page pixmap using the same alpha blend as
+/// [`draw_chrome_over_pixmap`](super::draw_chrome_over_pixmap). Returns the
+/// number of touched pixels, or zero when the view has no rail.
 pub fn draw_rail_over_pixmap(dest: &mut Pixmap, scale: f32, view: &ChromeView<'_>) -> usize {
     let Some(rail) = view.rail else {
         return 0;
