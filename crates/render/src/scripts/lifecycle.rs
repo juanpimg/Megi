@@ -1,5 +1,7 @@
 //! Lifecycle/host event dispatch and finalization after the script evaluation loop.
 
+use megi_core::terminal_text::sanitize_terminal_text;
+
 use super::VIRTUAL_EPOCH_MS;
 use super::event_loop::{
     EventLoopState, drain_microtasks, resolve_host_dom_target, run_event_loop, truncate_utf8,
@@ -239,9 +241,11 @@ pub(crate) fn run_lifecycle_events(
     execution.timers_pending = runtime.pending_timers();
 
     for entry in runtime.take_console() {
+        // #2309: console text is page-controlled and is mirrored into warnings
+        // printed to the operator's stderr; strip terminal controls at the source.
         let message = ConsoleMessage {
-            level: entry.level.clone(),
-            message: entry.message,
+            level: sanitize_terminal_text(&entry.level),
+            message: sanitize_terminal_text(&entry.message),
         };
         if matches!(message.level.as_str(), "warn" | "error") {
             warnings.push(format!("console.{}: {}", message.level, message.message));

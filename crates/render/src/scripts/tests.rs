@@ -87,6 +87,49 @@ mod unit_tests {
 
     #[cfg(feature = "js")]
     #[test]
+    fn console_warnings_have_no_terminal_control_bytes() {
+        // #2309: `console.warn` text comes from the page and is mirrored into
+        // `RenderStats::warnings`; ESC/BEL must never reach the operator's stderr.
+        let script_text = "console.warn('ready \\u001b[31mBOOM\\u0007 \\u009b1mESC');";
+        let document = document_with(&format!(
+            "<!DOCTYPE html><body><script>{script_text}</script></body>"
+        ));
+        let scripts = vec![LoadedScript {
+            element: document.root(),
+            text: script_text.to_owned(),
+            source_name: "inline-script-0".to_owned(),
+            bytes: script_text.len(),
+            is_module: false,
+            module_url: None,
+        }];
+        let host = ScriptingHostContext::new(
+            None,
+            megi_css::MediaContext::with_viewport(320.0, 200.0),
+            (320, 200),
+        );
+        let mut warnings = Vec::new();
+        let _execution = execute_scripts(
+            document,
+            &Url::parse("https://example.test/").expect("url"),
+            scripts,
+            ScriptingLimits::default(),
+            &host,
+            &mut warnings,
+        );
+        assert!(
+            warnings.iter().any(|w| w.starts_with("console.warn:")),
+            "{warnings:?}"
+        );
+        for warning in &warnings {
+            assert!(
+                warning.chars().all(|c| !c.is_control()),
+                "terminal control byte in warning: {warning:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
     fn worker_loader_enforces_the_file_policy() {
         let path = std::env::temp_dir().join(format!("megi-worker-{}.js", std::process::id()));
         std::fs::write(&path, "self.onmessage = function () {};").expect("write worker");

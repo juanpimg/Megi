@@ -374,8 +374,10 @@ impl WindowApp {
             Some(url) => title::page_title(self.doc_title.as_deref(), url),
             None => title::FALLBACK_NAME.to_owned(),
         };
-        println!("url: {url}");
-        println!("title: {title}");
+        // #2309: both strings come from the loaded page; never emit their
+        // escape sequences verbatim into the operator's terminal.
+        println!("url: {}", crate::sanitize_terminal_text(&url));
+        println!("title: {}", crate::sanitize_terminal_text(&title));
     }
 
     /// Navigates to the first history entry (home) — `Alt+Home`.

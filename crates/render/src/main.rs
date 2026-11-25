@@ -11,6 +11,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use megi_core::terminal_text::sanitize_terminal_text;
 use megi_render::{RenderOptions, ScriptingLimits, ScriptingMode, Viewport, render_url};
 
 mod dom_summary;
@@ -62,11 +63,11 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(CliError::Usage(message)) => {
-            eprintln!("render: {message}\n\n{USAGE}");
+            eprintln!("render: {}\n\n{USAGE}", sanitize_terminal_text(&message));
             ExitCode::from(2)
         }
         Err(CliError::Render(message)) => {
-            eprintln!("render: {message}");
+            eprintln!("render: {}", sanitize_terminal_text(&message));
             ExitCode::FAILURE
         }
     }
@@ -149,7 +150,7 @@ fn run() -> Result<(), CliError> {
             stats.timings.total.as_millis()
         );
         for warning in &stats.warnings {
-            eprintln!("warning: {warning}");
+            eprintln!("warning: {}", sanitize_terminal_text(warning));
         }
     }
     Ok(())

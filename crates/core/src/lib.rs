@@ -46,6 +46,8 @@
 
 pub mod geometry;
 pub mod iter;
+/// Safe text for terminal output (#2309).
+pub mod terminal_text;
 
 mod clone;
 mod document;

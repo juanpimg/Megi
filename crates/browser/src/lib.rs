@@ -270,6 +270,8 @@ pub use links::{
     CssRect, LinkError, LinkRegion, collect_link_regions, find_link_at, is_navigable, link_url_at,
     physical_to_page, resolve_href,
 };
+/// Terminal-safe filter for page-derived text printed by the shell (#2309).
+pub use megi_webview::core::terminal_text::sanitize_terminal_text;
 pub use navigation::{MAX_HISTORY, NavigationOutcome, NavigationState};
 pub use pages::{
     about_kv_row, about_page_html, about_page_html_with_locale, about_shell,

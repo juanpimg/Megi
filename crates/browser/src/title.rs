@@ -27,8 +27,14 @@ pub const FALLBACK_NAME: &str = "Megi";
 pub const CAPPED_MARKER: &str = " [recortado]";
 
 /// Collapses runs of ASCII whitespace into single spaces and trims the ends.
+///
+/// Terminal control bytes are removed first (#2309): a page-supplied `<title>` or
+/// error message must not be able to emit ESC/BEL when the shell prints it.
 pub fn collapse_whitespace(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    crate::sanitize_terminal_text(text)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn current_strings() -> crate::i18n::Strings {
@@ -36,10 +42,14 @@ fn current_strings() -> crate::i18n::Strings {
 }
 
 /// Truncates `text` to `max` characters, appending `…` when it was shortened.
+///
+/// Applies the same terminal filter as [`collapse_whitespace`] because URLs and
+/// pre-composed page titles also pass through here before reaching stdout (#2309).
 fn truncate_chars(text: &str, max: usize) -> String {
     if max == 0 {
         return String::new();
     }
+    let text = crate::sanitize_terminal_text(text);
     let mut chars = text.char_indices();
     let mut cut = None;
     for (count, (index, _)) in chars.by_ref().enumerate() {
@@ -221,6 +231,30 @@ mod tests {
         assert_eq!(collapse_whitespace("  a \n\t b  "), "a b");
         assert_eq!(collapse_whitespace(""), "");
         assert_eq!(collapse_whitespace("solo"), "solo");
+    }
+
+    #[test]
+    fn collapse_whitespace_removes_terminal_control_bytes() {
+        // #2309: page-controlled text must not carry ESC/BEL/C1 into a terminal.
+        let clean = collapse_whitespace("ready\u{001b}[31mBOOM\u{0007}\u{009b}1m!");
+        assert!(clean.chars().all(|c| !c.is_control()), "{clean:?}");
+        assert!(clean.contains("BOOM"), "{clean:?}");
+    }
+
+    #[test]
+    fn document_title_strips_controls_from_page_text() {
+        // #2309: the `<title>` element is page-controlled; the window title is printed
+        // by `Ctrl+D` and can reach the operator's terminal.
+        let document = megi_webview::html::parse_document(
+            "<html><head><title>Hello &#x1b;[31mWorld&#x7;!</title></head><body>x</body></html>",
+            false,
+        );
+        let title = document_title(&document).expect("title");
+        assert!(title.chars().all(|c| !c.is_control()), "{title:?}");
+        assert!(
+            title.contains("Hello") && title.contains("World"),
+            "{title:?}"
+        );
     }
 
     #[test]

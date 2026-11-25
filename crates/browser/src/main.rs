@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use megi_browser::{
     CliArgs, LaunchMode, RefreshPolicy, ShellError, WindowViewOptions, finish_args, parse_args,
-    zoom,
+    sanitize_terminal_text, zoom,
 };
 
 /// Builds the render options for one CLI invocation.
@@ -42,7 +42,10 @@ fn main() -> ExitCode {
         return match megi_browser::ipc::run_ipc_worker() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
-                eprintln!("megi renderer: {error}");
+                eprintln!(
+                    "megi renderer: {}",
+                    sanitize_terminal_text(&error.to_string())
+                );
                 ExitCode::FAILURE
             }
         };
@@ -50,11 +53,11 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(ShellError::Usage(message)) => {
-            eprintln!("megi: {message}");
+            eprintln!("megi: {}", sanitize_terminal_text(&message));
             ExitCode::from(2)
         }
         Err(error) => {
-            eprintln!("megi: {error}");
+            eprintln!("megi: {}", sanitize_terminal_text(&error.to_string()));
             ExitCode::FAILURE
         }
     }
@@ -242,7 +245,8 @@ fn run() -> Result<(), ShellError> {
             // A degraded capture must be visible to CI, not reported as clean (#1457).
             let violations = output.stats.limit_violations.total();
             for warning in &output.stats.warnings {
-                eprintln!("warning: {warning}");
+                // #2309: warnings carry page-derived console/script text.
+                eprintln!("warning: {}", sanitize_terminal_text(warning));
             }
             if violations > 0 {
                 eprintln!("warning: {violations} parser/layout limit violation(s) during render");
