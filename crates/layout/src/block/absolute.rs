@@ -223,6 +223,7 @@ pub(crate) fn layout_absolutely_positioned(
             abs_cb: cb,
             abs_cb_height: cb_height,
             viewport: pos.viewport,
+            wrap_long_words: pos.wrap_long_words,
         },
     );
     layout_box_contents(child, cb_height, false, measurer, child_pos);

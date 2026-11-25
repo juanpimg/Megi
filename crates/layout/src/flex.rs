@@ -39,7 +39,8 @@
 use std::sync::Arc;
 
 use megi_css::{
-    AlignItems, AlignSelf, ComputedStyle, FlexDirection, FlexWrap, JustifyContent, Length, Position,
+    AlignItems, AlignSelf, ComputedStyle, FlexDirection, FlexWrap, JustifyContent, Length,
+    Position, WhiteSpace,
 };
 
 use crate::block::{calculate_block_height, layout_box_contents, translate_box};

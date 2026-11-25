@@ -159,6 +159,110 @@ fn first_visible_token(line: &std::collections::VecDeque<InlineToken>) -> Option
     })
 }
 
+/// Breaks words that are wider than their container into chunks that fit, adding a
+/// zero-width soft wrap opportunity between chunks (CSS Text 3 §5.2, `overflow-wrap:
+/// break-word`; CSS Flexbox 1 §4.5 for the flex-item case where the used width can be
+/// smaller than the min-content width).
+///
+/// Each chunk is appended to `text_pool` and re-emitted as a `Word` token so the
+/// regular line breaker still owns all width accounting. Unbreakable text
+/// (`white-space: nowrap`/`pre`) and words that already fit are left untouched.
+fn split_long_words(
+    tokens: Vec<InlineToken>,
+    text_pool: &mut String,
+    styles: &[Arc<ComputedStyle>],
+    container_width: f32,
+    measurer: &dyn TextMeasurer,
+) -> Vec<InlineToken> {
+    if container_width <= 0.0 {
+        return tokens;
+    }
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let InlineToken::Word {
+            start,
+            end,
+            width,
+            style,
+            ascent,
+            descent,
+        } = &token
+        else {
+            out.push(token);
+            continue;
+        };
+        let style_ref = &styles[*style as usize];
+        if *width <= container_width
+            || matches!(style_ref.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre)
+        {
+            out.push(token);
+            continue;
+        }
+        // Own the text before touching the pool: the original slice borrows it.
+        let word = text_pool[*start..*end].to_owned();
+        let boundaries: Vec<usize> = word
+            .char_indices()
+            .map(|(index, _)| index)
+            .chain(std::iter::once(word.len()))
+            .collect();
+        if boundaries.len() < 2 {
+            out.push(token);
+            continue;
+        }
+        let mut chunk_start_idx = 0usize;
+        let mut first = true;
+        while chunk_start_idx + 1 < boundaries.len() {
+            let chunk_start = boundaries[chunk_start_idx];
+            let end = if shaped_width(measurer, &word[chunk_start..], style_ref) <= container_width
+            {
+                word.len()
+            } else {
+                // Longest character boundary whose prefix still fits.
+                let mut lo = chunk_start_idx + 1;
+                let mut hi = boundaries.len() - 1;
+                while lo < hi {
+                    let mid = (lo + hi).div_ceil(2);
+                    if shaped_width(measurer, &word[chunk_start..boundaries[mid]], style_ref)
+                        <= container_width
+                    {
+                        lo = mid;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+                boundaries[lo]
+            };
+            if !first {
+                // A zero-width break opportunity lets `last_soft_wrap` end the
+                // previous line here instead of pushing the chunk past the edge.
+                out.push(InlineToken::Space {
+                    text: '\0',
+                    width: 0.0,
+                    style: *style,
+                    ascent: *ascent,
+                    descent: *descent,
+                    collapsible: false,
+                    allow_wrap: true,
+                });
+            }
+            let chunk = &word[chunk_start..end];
+            let pool_start = text_pool.len();
+            text_pool.push_str(chunk);
+            out.push(InlineToken::Word {
+                start: pool_start,
+                end: text_pool.len(),
+                width: shaped_width(measurer, chunk, style_ref),
+                style: *style,
+                ascent: *ascent,
+                descent: *descent,
+            });
+            chunk_start_idx = boundaries.partition_point(|&boundary| boundary < end);
+            first = false;
+        }
+    }
+    out
+}
+
 /// Splits the token stream into lines at soft wrap opportunities (CSS 2.2 §16.6.1).
 ///
 /// A line break is only inserted where the content provides a break opportunity:
@@ -181,11 +285,17 @@ pub(crate) fn break_into_lines(
     styles: &[Arc<ComputedStyle>],
     container_width: f32,
     measurer: &dyn TextMeasurer,
+    wrap_long_words: bool,
 ) -> Vec<Line> {
     let mut lines: Vec<Line> = Vec::with_capacity(tokens.len() / 16 + 1);
     if tokens.is_empty() {
         return lines;
     }
+    let tokens = if wrap_long_words {
+        split_long_words(tokens, text_pool, styles, container_width, measurer)
+    } else {
+        tokens
+    };
 
     let mut current: std::collections::VecDeque<InlineToken> =
         std::collections::VecDeque::with_capacity(32);

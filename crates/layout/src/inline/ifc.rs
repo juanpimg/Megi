@@ -75,7 +75,16 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     }
 
     // 2. Break tokens into lines at valid soft wrap opportunities.
-    let lines = break_into_lines(tokens, &mut text_pool, &styles, container_width, measurer);
+    // A flex item shrunk below its min-content width also allows breaks inside
+    // an otherwise unbreakable word (CSS Flexbox 1 §4.5, min-width: auto -> 0).
+    let lines = break_into_lines(
+        tokens,
+        &mut text_pool,
+        &styles,
+        container_width,
+        measurer,
+        pos.wrap_long_words,
+    );
 
     if lines.is_empty() {
         layout_box.children.clear();

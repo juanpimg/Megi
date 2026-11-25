@@ -26,6 +26,7 @@ pub(crate) fn self_positioning_context(
         abs_cb: padding_box,
         abs_cb_height: definite,
         viewport: inherited.viewport,
+        wrap_long_words: inherited.wrap_long_words,
     }
 }
 /// Resolves the used vertical padding, border and margin widths of a box.
