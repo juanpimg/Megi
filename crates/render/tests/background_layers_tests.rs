@@ -63,12 +63,13 @@ fn multi_layer_background_order_origin_and_clip() {
     assert_eq!(pixel(&output, 5, 5), WHITE, "page background");
     assert_eq!(pixel(&output, 11, 11), BLACK, "4px black border");
 
-    // `background-clip: content-box`: padding area keeps the background color, so the
+    // CSS Backgrounds 3 §2.5: `background-clip: content-box` clips both the image
+    // and the background colour, so the padding shows the page background and the
     // bullet cannot paint in the left padding strip of `.clipped`.
     assert_eq!(
         pixel(&output, 18, 140),
-        BLACK,
-        "clipped layer hidden in the padding"
+        WHITE,
+        "background colour is clipped to the content box"
     );
 
     // `background-origin: content-box`: the bullet is centered in the content box, which is
