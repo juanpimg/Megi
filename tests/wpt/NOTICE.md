@@ -117,7 +117,7 @@
 | `shadow-dom/resources/shadow-dom-utils.js` | 4965 | `44ffe47d4d606a1140441f6ca59cd8c27551c275c091148ef1a2a714e8cceebf` | support |
 | `shadow-dom/resources/shadow-dom.js` | 5240 | `5b4dee64fba8f18407a8cb4e0461a2612066c2d4abf5125100d946bffff2ba59` | support |
 | `shadow-dom/slotchange.html` | 6458 | `cce62017454e5b14164680e19a39acca41fb299dd5a8cc84953fe627ddfcd55a` | testharness |
-| `shadow-dom/slots-fallback.html` | 8228 | `a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e` | skip |
+| `shadow-dom/slots-fallback.html` | 8228 | `a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e` | testharness |
 | `shadow-dom/slots.html` | 15806 | `62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d` | skip |
 | `url/historical.any.js` | 909 | `0cce2e984b3296d3aab14949c710bcd369b12d29f4f8622bbcdf5e5c033c63d0` | skip |
 | `url/idlharness.any.js` | 290 | `fbd89f9a801742d4177a90417d14cff7916eb44fd1389ad9206c07687b981dd1` | skip |

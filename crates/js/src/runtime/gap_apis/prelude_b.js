@@ -567,7 +567,30 @@ if (typeof IntersectionObserver !== 'function') {
   if (typeof HTMLCollection !== 'function') define('HTMLCollection', StubCtor('HTMLCollection'));
   if (typeof DOMTokenList !== 'function') define('DOMTokenList', StubCtor('DOMTokenList'));
   if (typeof NamedNodeMap !== 'function') define('NamedNodeMap', StubCtor('NamedNodeMap'));
-  if (typeof Node !== 'undefined' && typeof Node.prototype === 'undefined') Node.prototype = {};
+  // WHATWG DOM §4.4: node type constants are exposed on both the interface and prototype.
+  var nodeConstants = {
+    ELEMENT_NODE: 1, ATTRIBUTE_NODE: 2, TEXT_NODE: 3, CDATA_SECTION_NODE: 4,
+    ENTITY_REFERENCE_NODE: 5, ENTITY_NODE: 6, PROCESSING_INSTRUCTION_NODE: 7,
+    COMMENT_NODE: 8, DOCUMENT_NODE: 9, DOCUMENT_TYPE_NODE: 10,
+    DOCUMENT_FRAGMENT_NODE: 11, NOTATION_NODE: 12
+  };
+  var legacyNode = typeof Node !== 'undefined' ? Node : null;
+  if (typeof Node !== 'function') {
+    var NodeCtor = function Node() {
+      throw new DOMException('Illegal constructor', 'TypeError');
+    };
+    NodeCtor.prototype = {};
+    if (legacyNode) {
+      Object.getOwnPropertyNames(legacyNode).forEach(function (key) {
+        NodeCtor[key] = legacyNode[key];
+      });
+    }
+    define('Node', NodeCtor);
+  }
+  for (var nodeType in nodeConstants) {
+    if (typeof Node[nodeType] !== 'number') Node[nodeType] = nodeConstants[nodeType];
+    if (typeof Node.prototype[nodeType] !== 'number') Node.prototype[nodeType] = nodeConstants[nodeType];
+  }
   if (typeof DOMParser !== 'function') {
     function DOMParser() {}
     DOMParser.prototype.parseFromString = function () { return {}; };

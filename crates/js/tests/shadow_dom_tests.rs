@@ -105,6 +105,65 @@ fn assigned_slot_tracks_light_children_and_closed_trees() {
 }
 
 #[test]
+fn flattened_slot_distributes_fallback_children() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var host = document.createElement('div'); \
+             document.body.appendChild(host); \
+             var root = host.attachShadow({mode: 'open'}); \
+             var slot = document.createElement('slot'); \
+             root.appendChild(slot); \
+             var fallback = document.createElement('b'); \
+             slot.appendChild(fallback); \
+             var nodes = slot.assignedNodes({flatten: true}); \
+             String(nodes.length === 1 && nodes[0] === fallback);",
+            "t",
+        )
+        .expect("flatten fallback");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn dom_node_type_constants_are_exposed() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "String(Node.ELEMENT_NODE === 1 && Node.TEXT_NODE === 3 && \
+             Node.DOCUMENT_FRAGMENT_NODE === 11 && \
+             document.createElement('div').nodeType === 1);",
+            "t",
+        )
+        .expect("node constants");
+    assert_eq!(out, "true");
+}
+
+#[test]
+fn parsed_template_content_survives_import_node() {
+    let html = "<div id=test1><div id=host><template data-mode=open><slot id=s1 name=slot1><div id=f1></div></slot></template></div></div>";
+    let document = megi_html::parse_document(html, false);
+    let mut runtime = JsRuntime::with_document(document, "http://web-platform.test/".into())
+        .expect("runtime with fixture");
+    let out = runtime
+        .eval(
+            "var n = {}; \
+             for (var e of document.querySelectorAll('[id]')) n[e.id] = e; \
+             var t = document.querySelector('template'); \
+             n.host = t.parentNode; \
+             n.host.removeChild(t); \
+             var root = n.host.attachShadow({mode:'open'}); \
+             root.appendChild(document.importNode(t.content, true)); \
+             n.s1 = root.querySelector('slot'); \
+             n.f1 = root.querySelector('div'); \
+             String(root.childNodes.length + ',' + n.s1.childNodes.length + ',' + \
+                    n.s1.assignedNodes({flatten:true}).length);",
+            "t",
+        )
+        .expect("probe");
+    assert_eq!(out, "1,1,1");
+}
+
+#[test]
 fn attach_shadow_validates_mode_and_safelisted_elements() {
     let mut runtime = runtime();
     let out = runtime
