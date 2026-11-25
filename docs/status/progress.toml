@@ -193,10 +193,10 @@ id = "M9"
 title = "Producción"
 items = [
   "Corpus de 4 sitios con snapshots versionados — `tests/fixtures/real-sites/`",
+  "100/100 sitios del corpus (4/4) PASS sin warnings — `docs/status/real-sites.json` 2026-11-25: example/rust/wikipedia/hn PASS, 0 warnings",
   "Distribución multiplataforma firmada (sólo sha256 en release) — `.github/workflows/release.yml:17-33` matriz ubuntu-24.04/x86_64-unknown-linux-gnu (.tar.gz), macos-latest/aarch64-apple-darwin (.tar.gz), windows-latest/x86_64-pc-windows-msvc (.zip); `:147-190` job `verify` valida sha256 en todas las plataformas y firma con `cosign sign-blob --yes --bundle signatures/$name.bundle --output-signature signatures/$name.sig` (cosign-installer@398d4b0, v3.9.1); `:198-201` `publish.needs=[build, sbom, verify]`, `:220-224` descarga firmas, `:253-262` publica `*.sig`/`*.bundle`; `python3 -m unittest tools.test_release_workflow -v` (Ran 5 OK); `python3 tools/check_milestone.py M9 --match \"Distribución multiplataforma firmada\"` PASS; commit `104da7f2`",
 ]
 pending = [
-  "100/100 sitios PASS sin warnings — `docs/status/real-sites.json`: 1/4 PASS hoy",
   "Allowlists WPT/Test262 a 0 — sin informes publicados",
   "Auditoría externa y bus factor > 1",
 ]
