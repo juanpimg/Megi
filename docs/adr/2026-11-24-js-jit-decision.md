@@ -36,7 +36,7 @@ Se adopta la **rama (a)**: **contribuir/actualizar Boa mientras sirva**, y se pr
 2. **No se implementa un JIT propio** en este WP (rama (b) queda diferida, no abandonada): el único coste aislado con datos es el puente Rust (4,229 ms / 20 000 llamadas), mientras que el script de corpus real tarda 0,136 ms. Un JIT atacaría `engine_time_ms`, que hoy no domina la medida.
 3. **No se migra a rquickjs** en este WP (rama (c) queda como contingencia documentada): no hay medición local de Test262 que justifique el cambio y el coste incluye toolchain C, `build.rs` nativo y frontera FFI `unsafe`, además de reimplementar la capa DOM de `crates/js`.
 4. Revisar este ADR y abrir un WP nuevo **sólo** si aparece evidencia medible: (i) con el bridge optimizado, `engine_time_ms` pasa a dominar el presupuesto de scripts de la barra §2 (p. ej. >50 % del tiempo de script en el corpus de 100 sitios) con A/B intercalado reproducible; o (ii) un arnés Test262 local publicado muestra un hueco de conformidad de Boa que bloquee la barra y que no se pueda cubrir contribuyendo upstream.
-5. Cerrar M8#1 significa «decisión con datos publicada», **no** «JIT implementado», «migración hecha», «Test262 en 0» ni «barra §2 alcanzada». M8#2 (HTTP/3/QUIC) y M8#3 (paralelismo real) siguen pendientes, y M9 mantiene su barra intacta.
+5. Cerrar M8#1 significa «decisión con datos publicada», **no** «JIT implementado», «migración hecha», «Test262 en 0» ni «barra §2 alcanzada». Los otros dos criterios `pending` (HTTP/3/QUIC y paralelismo real de estilo/layout/paint) siguen abiertos, y M9 mantiene su barra intacta.
 
 ## Coste y consecuencias de la decisión
 
