@@ -53,6 +53,25 @@ impl FontDatabase {
         if let Some(id) = self.query_face(families, weight, style, stretch) {
             return self.build_font(id);
         }
+        // CSS Fonts 4 §5.2: an unsatisfied generic must select a real face of
+        // that class, not the last-resort face. The render pipeline's DB holds
+        // only bundled Sans faces, so `serif`/`monospace` would otherwise
+        // degrade to DejaVu Sans and render the Wikipedia h1 in sans (#wiki-typography).
+        // System databases resolve their own generics below; only bundled-only
+        // databases with faces take this path, so deterministic sans goldens stay
+        // unchanged and an empty DB keeps reporting `NoFontAvailable`.
+        // Quoted generic-like names stay literal and must not take this path (#1239).
+        let has_generic = families.iter().any(|family| {
+            !family.starts_with(QUOTED_FAMILY_PREFIX)
+                && GENERIC_FAMILIES.contains(&unmark_family(family).to_ascii_lowercase().as_str())
+        });
+        if has_generic
+            && !self.system_loaded
+            && !self.is_empty()
+            && let Some(font) = Self::system_generic_font(families, weight, style, stretch)
+        {
+            return Ok(font);
+        }
         // A quoted generic-like name is literal (so it must not select the generic face),
         // but if no such family is installed the browser falls back to the default face.
         let uses_generic = families.iter().any(|family| {

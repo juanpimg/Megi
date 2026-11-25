@@ -161,6 +161,73 @@ mod system_ui_tests {
 }
 
 #[cfg(test)]
+mod generic_serif_tests {
+    use super::*;
+
+    /// Real-site typography (Wikipedia Vector 2022 h1):
+    /// `'Linux Libertine','Georgia','Times','Source Serif 4',serif`. The render
+    /// pipeline uses a bundled-only DB (DejaVu Sans + Bold), so the trailing
+    /// `serif` generic must reach the shared system DB instead of degrading to
+    /// the last-resort sans face (CSS Fonts 4 §5.2).
+    #[test]
+    fn bundled_database_resolves_serif_generic_from_system_fonts() {
+        let system = system_fallback_db();
+        if system.is_empty() {
+            return; // fontless CI container: bundled fallback is the best we can do
+        }
+        let db = FontDatabase::new_with_bundled_fonts();
+        let quoted = |name: &str| format!("{QUOTED_FAMILY_PREFIX}{name}");
+        let libertine = quoted("Linux Libertine");
+        let georgia = quoted("Georgia");
+        let times = quoted("Times");
+        let source_serif = quoted("Source Serif 4");
+        let families: Vec<&str> = vec![&libertine, &georgia, &times, &source_serif, "serif"];
+        // Expected face: first installed family in CSS order (explicit names,
+        // then the documented `serif` fallbacks). fontdb's coarse `Family::Serif`
+        // can select a symbol font, so assert against the named fallback list.
+        let serif_family = [libertine.as_str(), &georgia, &times, &source_serif]
+            .into_iter()
+            .map(unmark_family)
+            .chain(SERIF_FALLBACKS.iter().copied())
+            .find_map(|name| {
+                system
+                    .font(&[name], 400, FontStyle::Normal, Stretch::Normal)
+                    .ok()
+            })
+            .expect("a real serif fallback must be installed")
+            .family_name()
+            .to_owned();
+        assert_ne!(serif_family, "DejaVu Sans", "test needs a real serif face");
+        let font = db
+            .font(&families, 400, FontStyle::Normal, Stretch::Normal)
+            .expect("serif generic must resolve through the system fallback DB");
+        assert_eq!(
+            font.family_name(),
+            serif_family,
+            "a trailing generic serif must not degrade to the bundled sans last resort"
+        );
+
+        // CSS Fonts 4 §3.1: `sans-serif` keeps its deterministic bundled face (#parity).
+        let sans = db
+            .font(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("sans-serif resolves against bundled fonts");
+        assert_eq!(sans.family_name(), "DejaVu Sans");
+    }
+
+    /// A database with no faces must keep its documented contract: an unresolved
+    /// generic reports `NoFontAvailable` instead of borrowing a system face
+    /// (`crates/fonts/tests/font_engine/database.rs`).
+    #[test]
+    fn empty_database_does_not_borrow_system_generic_faces() {
+        let db = FontDatabase::new();
+        assert!(matches!(
+            db.font(&["serif"], 400, FontStyle::Normal, Stretch::Normal),
+            Err(FontError::NoFontAvailable)
+        ));
+    }
+}
+
+#[cfg(test)]
 mod identity_digest_tests {
     use super::*;
 

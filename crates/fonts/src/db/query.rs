@@ -3,6 +3,39 @@
 use super::*;
 
 impl FontDatabase {
+    /// Resolves a CSS family list that contains an unsatisfied generic against the
+    /// shared system database, using only the **named** fallbacks from
+    /// [`Self::expand_families`].
+    ///
+    /// `query_face` ranks `Family::Serif` (and the other coarse generic classes)
+    /// above explicit names, and fontdb's class can match symbol fonts such as
+    /// "Standard Symbols PS" on Linux. Dropping the generic leaves the documented
+    /// family-name list (DejaVu Serif, Liberation Serif, …) in CSS order, which is
+    /// what a browser's generic fallback must select (CSS Fonts 4 §5.2).
+    pub(crate) fn system_generic_font(
+        families: &[&str],
+        weight: u16,
+        style: FontStyle,
+        stretch: Stretch,
+    ) -> Option<Font> {
+        let system = system_fallback_db();
+        if system.is_empty() {
+            return None;
+        }
+        let names: Vec<&str> = Self::expand_families(families)
+            .into_iter()
+            .filter_map(|family| match family {
+                Family::Name(name) => Some(name),
+                _ => None,
+            })
+            .collect();
+        if names.is_empty() {
+            return None;
+        }
+        let id = system.query_face(&names, weight, style, stretch)?;
+        system.build_font(id).ok()
+    }
+
     pub(crate) fn expand_families<'a>(families: &'a [&'a str]) -> Vec<Family<'a>> {
         let mut expanded: Vec<Family<'a>> = Vec::new();
         for family in families {
