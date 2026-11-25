@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # repository-root Markdown files.
 ROOT_DOCS = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md"]
 
-INLINE_LINK = re.compile(r"(?<![!\\])\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+INLINE_LINK = re.compile(r"(?<![!\\])\[[^\]]*\]\(([^()\s]+(?:\([^()\s]*\)[^()\s]*)*)(?:\s+\"[^\"]*\")?\)")
 REFERENCE_LINK = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$", re.MULTILINE)
 FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)

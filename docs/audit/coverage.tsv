@@ -2105,7 +2105,7 @@ tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	210	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
-tools/check_docs_links.py	140	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/check_docs_links.py	140	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
@@ -2122,6 +2122,7 @@ tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	r
 tools/test_audit_negative_matrix.py	182	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	87	tool	F3	juanpimg	2026-11-20	covered	N/A	bench_compare regression tests from main
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
+tools/test_check_docs_links.py	71	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	95	tool	F3	jp	2026-11-24	covered	#2290	re-read for milestone evidence fix
 tools/test_check_sbom.py	91	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	65	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding CI unittest list regression test
