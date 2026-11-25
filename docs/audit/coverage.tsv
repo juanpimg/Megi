@@ -191,7 +191,7 @@ crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	
 crates/browser/src/window/shortcuts.rs	234	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
 crates/browser/src/window/tests/chrome_mode.rs	61	src	F2	lead	2026-11-25	covered	UI-ZEN-PHASE2	re-read after stash restore onto current main
 crates/browser/src/window/tests/mod.rs	399	src	F2	integration	2026-11-25	covered	#2295	read after rebase
-crates/browser/src/window/tests/rail.rs	123	src	F2			pending		
+crates/browser/src/window/tests/rail.rs	123	src	F2	integration	2026-11-25	covered	#2290	read after rebase
 crates/browser/src/window/ui.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/worker.rs	448	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
