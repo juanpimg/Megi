@@ -32,7 +32,7 @@ def main(argv: list[str]) -> int:
     for path in files:
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             print(f"error: invalid SBOM JSON {path}: {exc}", file=sys.stderr)
             return 1
         if not isinstance(doc, dict) or doc.get("bomFormat") != "CycloneDX":
