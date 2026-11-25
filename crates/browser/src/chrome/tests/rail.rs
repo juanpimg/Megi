@@ -36,7 +36,10 @@ fn rail_layout_collapses_and_expands() {
         &rail_view(&labels, 0, false, RAIL_COLLAPSED_WIDTH),
     );
     assert_eq!(collapsed.rect.x, 0.0);
-    assert_eq!(collapsed.rect.y, CHROME_HEIGHT, "rail starts below the band");
+    assert_eq!(
+        collapsed.rect.y, CHROME_HEIGHT,
+        "rail starts below the band"
+    );
     assert_eq!(collapsed.rect.width, RAIL_COLLAPSED_WIDTH);
     assert_eq!(collapsed.rect.height, 400.0 - CHROME_HEIGHT);
     assert_eq!(collapsed.tabs.len(), 3);
@@ -58,7 +61,10 @@ fn rail_layout_collapses_and_expands() {
     );
     assert_eq!(expanded.rect.width, RAIL_EXPANDED_WIDTH);
     for tab in &expanded.tabs {
-        assert_eq!(tab.title, labels[tab.index], "expanded rail shows full title");
+        assert_eq!(
+            tab.title, labels[tab.index],
+            "expanded rail shows full title"
+        );
         assert!(
             tab.rect.height >= 22.0,
             "an expanded row is at least 22 physical px"
@@ -143,11 +149,19 @@ fn rail_paint_is_deterministic_and_does_not_touch_page_rows() {
     let mut second = Pixmap::new(640, 400);
     paint_rail(&mut first, 1.0, &layout, &view);
     paint_rail(&mut second, 1.0, &layout, &view);
-    assert_eq!(first.pixels, second.pixels, "rail painting is deterministic");
+    assert_eq!(
+        first.pixels, second.pixels,
+        "rail painting is deterministic"
+    );
 
     let mut base = Pixmap::new(640, 400);
     for (index, pixel) in base.pixels.iter_mut().enumerate() {
-        *pixel = Color::new((index & 0xFF) as u8, ((index >> 8) & 0xFF) as u8, 0x33, 0xFF);
+        *pixel = Color::new(
+            (index & 0xFF) as u8,
+            ((index >> 8) & 0xFF) as u8,
+            0x33,
+            0xFF,
+        );
     }
     let mut painted = base.clone();
     paint_rail(&mut painted, 1.0, &layout, &view);

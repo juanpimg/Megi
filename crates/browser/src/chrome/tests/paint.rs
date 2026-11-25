@@ -308,7 +308,8 @@ fn draw_chrome_without_rail_keeps_legacy_pixels() {
         for x in 0..640u32 {
             if y < CHROME_HEIGHT as u32 || x >= RAIL_EXPANDED_WIDTH as u32 {
                 assert_eq!(
-                    with_rail[(y * 640 + x) as usize], legacy[(y * 640 + x) as usize],
+                    with_rail[(y * 640 + x) as usize],
+                    legacy[(y * 640 + x) as usize],
                     "rail changed a legacy pixel at ({x},{y})"
                 );
             }
@@ -331,7 +332,10 @@ fn draw_rail_over_pixmap_is_noop_when_rail_is_none() {
         0,
         "no rail means no painted pixels"
     );
-    assert_eq!(pixmap, before, "a rail-less view leaves the pixmap untouched");
+    assert_eq!(
+        pixmap, before,
+        "a rail-less view leaves the pixmap untouched"
+    );
 }
 
 #[test]
