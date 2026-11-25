@@ -6,7 +6,7 @@
 
 use megi_webview::display::{DisplayItem, DisplayList};
 
-use super::PdfTextRun;
+use super::{PdfTextRun, page::PageGeometry};
 
 /// One PDF text line after merging same-baseline runs.
 #[derive(Clone, Debug, PartialEq)]
@@ -95,10 +95,9 @@ fn lines(runs: &[PdfTextRun]) -> Vec<PdfLine> {
     merged
 }
 
-/// Splits lines into pages by their baseline; page height is one PDF unit height.
-pub(super) fn paginate(runs: &[PdfTextRun], page_height: u32) -> Vec<Vec<PdfLine>> {
+/// Splits lines into pages by their baseline within the `@page` content height.
+pub(super) fn paginate(runs: &[PdfTextRun], height: f32) -> Vec<Vec<PdfLine>> {
     let lines = lines(runs);
-    let height = page_height as f32;
     let max_baseline = lines.last().map_or(0.0, |line| line.baseline_y.max(0.0));
     let pages = ((max_baseline / height).ceil() as usize).max(1);
     let mut result: Vec<Vec<PdfLine>> = (0..pages).map(|_| Vec::new()).collect();
@@ -133,11 +132,15 @@ fn pdf_string(text: &str) -> String {
 
 /// Builds one page's content stream: the raster background on page 1, then a
 /// single ISO 32000-1 §9.4 text object holding that page's positioned lines.
+///
+/// CSS Paged Media 3 §4 margins inset the text from the `/MediaBox` edges; the
+/// raster keeps its natural size and is not scaled to the page box.
 pub(super) fn content_stream(
     width: u32,
     height: u32,
     page_index: usize,
     lines: &[PdfLine],
+    page: &PageGeometry,
 ) -> String {
     let mut content = String::new();
     if page_index == 0 {
@@ -146,12 +149,12 @@ pub(super) fn content_stream(
     if !lines.is_empty() {
         content.push_str("BT\n");
         for line in lines {
-            let local_baseline = line.baseline_y - page_index as f32 * height as f32;
-            let y = height as f32 - local_baseline;
+            let local_baseline = line.baseline_y - page_index as f32 * page.content_height();
+            let y = page.height - page.margin[0] - local_baseline;
             content.push_str(&format!(
                 "/F1 {} Tf\n1 0 0 1 {} {} Tm\n({}) Tj\n",
                 line.font_size,
-                line.x,
+                page.margin[3] + line.x,
                 y,
                 pdf_string(&line.text)
             ));
