@@ -1771,6 +1771,7 @@ dependencies = [
  "megi-fonts",
  "megi-html",
  "megi-image",
+ "megi-js",
  "megi-layout",
  "megi-paint",
  "megi-render",

@@ -11,6 +11,7 @@ mod effects;
 mod fonts;
 mod html;
 mod image;
+mod js_hot;
 mod layout;
 mod png;
 
@@ -23,6 +24,7 @@ use effects::{register_fixture_effect_rows, register_layer_effects};
 use fonts::register_fonts;
 use html::{register_css, register_html};
 use image::{register_image, register_render_pipeline};
+use js_hot::register_js_hot;
 use layout::{register_feature_e2e, register_layout_and_paint};
 use png::register_png_rows;
 
@@ -129,6 +131,7 @@ pub fn register(suite: &mut Suite, opts: &Options) {
     register_png_region_encoders(suite);
     register_backdrop_blur_rows(suite);
     register_image(suite);
+    register_js_hot(suite, opts.scale);
     register_render_pipeline(suite);
     register_png_rows(suite);
     #[cfg(feature = "fonts")]
