@@ -3,7 +3,7 @@
 use crate::fast_hash::{FastMap, FastSet};
 use crate::scripting::ScriptExecutor;
 use crate::tokenizer::Token;
-use megi_core::{Document, Namespace, NodeId};
+use megi_core::{Document, MAX_SLOTS, Namespace, NodeId};
 
 use super::*;
 
@@ -26,9 +26,16 @@ impl TreeBuilder {
     /// children there at the end.
     pub fn with_document(
         scripting_enabled: bool,
-        parse_options: ParseOptions,
+        mut parse_options: ParseOptions,
         doc: Document,
     ) -> Self {
+        // #2296: `ParseOptions` is public and unbounded, but the arena's `alloc_slot`
+        // panics once it reaches `MAX_SLOTS`. Keep the effective node/depth budgets
+        // inside the arena's index space so an oversized caller value still degrades
+        // to a counted `LimitViolations` instead of a crash. Defaults are far below
+        // `MAX_SLOTS`, so this is a no-op for them.
+        parse_options.max_nodes = parse_options.max_nodes.min(MAX_SLOTS);
+        parse_options.max_depth = parse_options.max_depth.min(MAX_SLOTS);
         Self {
             doc,
             mode: InsertionMode::Initial,
@@ -373,5 +380,42 @@ impl TreeBuilder {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod parse_options_clamp_tests {
+    use super::*;
+    use megi_core::MAX_SLOTS;
+
+    /// #2296: `ParseOptions` is public and its node/depth fields are unbounded. The
+    /// arena's `alloc_slot` panics at `MAX_SLOTS`, so an unclamped `usize::MAX` turns a
+    /// graceful `LimitViolations::nodes_exceeded` into a crash before the parser's
+    /// `doc.len() >= max_nodes` gate can ever fire. Allocating a real 1M-node document
+    /// is prohibitively expensive here, so the observable contract asserted below is
+    /// the effective configuration stored by the builder.
+    #[test]
+    fn effective_limits_never_exceed_arena_slots() {
+        let unbounded = ParseOptions {
+            max_nodes: usize::MAX,
+            max_depth: usize::MAX,
+            ..ParseOptions::default()
+        };
+        let tb = TreeBuilder::with_options(false, unbounded);
+        assert!(
+            tb.parse_options.max_nodes <= MAX_SLOTS,
+            "max_nodes must be clamped to the arena: {} > {MAX_SLOTS}",
+            tb.parse_options.max_nodes
+        );
+        assert!(
+            tb.parse_options.max_depth <= MAX_SLOTS,
+            "max_depth must be clamped to the arena: {} > {MAX_SLOTS}",
+            tb.parse_options.max_depth
+        );
+
+        // The clamp must not change the documented defaults.
+        let defaults = TreeBuilder::new(false).parse_options;
+        assert_eq!(defaults.max_nodes, ParseOptions::DEFAULT.max_nodes);
+        assert_eq!(defaults.max_depth, ParseOptions::DEFAULT.max_depth);
     }
 }

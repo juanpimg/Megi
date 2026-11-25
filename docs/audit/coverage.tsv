@@ -434,7 +434,7 @@ crates/html/src/tree_builder.rs	406	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/html/src/tree_builder/adoption.rs	267	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/body.rs	383	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/body_tail.rs	364	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tree_builder/builder.rs	377	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tree_builder/builder.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/dispatch.rs	323	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/dispatch_tail.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/document.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
