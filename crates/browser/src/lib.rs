@@ -295,7 +295,10 @@ pub use session::{
     Session, SessionLock, SessionTab, default_session_path, load as load_session,
     resolve_session_path, save as save_session,
 };
-pub use tabs::{BLANK_TAB_TITLE, BLANK_TAB_URL, CloseOutcome, MAX_TABS, Tab, TabsState};
+pub use tabs::{
+    BLANK_TAB_TITLE, BLANK_TAB_URL, CloseOutcome, MAX_TABS, MAX_WORKSPACES, Tab, TabsState,
+    Workspace,
+};
 pub use title::{
     CAPPED_MARKER, FALLBACK_NAME, MAX_SHORT_URL_CHARS, MAX_TITLE_CHARS, document_title, page_title,
     short_url, window_title,

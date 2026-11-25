@@ -18,11 +18,20 @@
 //! switching tabs copies the active tab's state back into its [`Tab`], loads the target tab
 //! and requests a fresh render for its URL, so frames never leak between tabs. There is no
 //! persistent session, no tab bar, no tab reordering and no per-tab process isolation yet.
+//!
+//! Local workspaces ([`Workspace`]) group tabs in memory: only the active group is visible
+//! in the rail/tab strip, and `Ctrl+Alt+W` cycles groups without touching their tab state.
+//! With a single workspace all indices and painted bytes stay identical to the legacy path;
+//! persistence of the workspace assignment is deferred to phase 5.
 
 use crate::find::FindState;
 use crate::navigation::NavigationState;
 use crate::scroll::ScrollState;
 use crate::zoom;
+
+mod workspaces;
+
+pub use workspaces::{MAX_WORKSPACES, Workspace};
 
 /// Maximum number of open tabs.
 pub const MAX_TABS: usize = 32;
@@ -42,7 +51,7 @@ fn blank_tab_title() -> &'static str {
 pub enum CloseOutcome {
     /// The tab was removed; the active index was adjusted and remains valid.
     Closed,
-    /// It was the last tab: it was reset to a blank New Tab instead of closing the window.
+    /// It was the last tab of its workspace: reset to blank instead of emptying the group.
     ResetLast,
     /// The index did not reference an existing tab.
     Invalid,
@@ -73,6 +82,8 @@ pub struct Tab {
     pub history_log: crate::history::HistoryLog,
     /// Last completed download name in this tab (in-memory only).
     pub last_download: Option<String>,
+    /// Local workspace id (`0..MAX_WORKSPACES`); other groups stay open but hidden.
+    pub workspace: u8,
 }
 
 impl Tab {
@@ -94,6 +105,7 @@ impl Tab {
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
             last_download: None,
+            workspace: 0,
         })
     }
 
@@ -111,6 +123,7 @@ impl Tab {
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
             last_download: None,
+            workspace: 0,
         });
         tab.title = Some(blank_tab_title().to_string());
         tab
@@ -135,6 +148,7 @@ impl Tab {
             content_capped: false,
             history_log: crate::history::HistoryLog::new(),
             last_download: None,
+            workspace: 0,
         }
     }
 
@@ -155,6 +169,8 @@ impl Tab {
 pub struct TabsState {
     tabs: Vec<Tab>,
     active: usize,
+    workspace: u8,
+    workspace_active: [Option<usize>; MAX_WORKSPACES as usize],
 }
 
 impl TabsState {
@@ -164,6 +180,8 @@ impl TabsState {
         Self {
             tabs: vec![tab],
             active: 0,
+            workspace: 0,
+            workspace_active: workspaces::initial_slots(),
         }
     }
 
@@ -177,7 +195,12 @@ impl TabsState {
             tabs.push(Tab::blank());
         }
         tabs.truncate(MAX_TABS);
-        Self { tabs, active: 0 }
+        Self {
+            tabs,
+            active: 0,
+            workspace: 0,
+            workspace_active: workspaces::initial_slots(),
+        }
     }
 
     /// Number of distinct effective sites across open tabs (ADR-004 phase 1).
@@ -205,8 +228,22 @@ impl TabsState {
             return Self::new(BLANK_TAB_URL);
         }
         tabs.truncate(MAX_TABS);
+        // Restored tabs have no persisted workspace id yet (deferred to phase 5):
+        // clamp any out-of-range id so the workspace invariants always hold.
+        for tab in &mut tabs {
+            if usize::from(tab.workspace) >= usize::from(MAX_WORKSPACES) {
+                tab.workspace = MAX_WORKSPACES - 1;
+            }
+        }
         let active = active.min(tabs.len() - 1);
-        Self { tabs, active }
+        let workspace_active = workspaces::rebuild_slots(&tabs, active);
+        let workspace = tabs[active].workspace;
+        Self {
+            tabs,
+            active,
+            workspace,
+            workspace_active,
+        }
     }
 
     /// Number of open tabs (always at least 1).
@@ -250,8 +287,10 @@ impl TabsState {
             return None;
         }
         let tab = Tab::new(url)?;
+        let workspace = self.workspace;
         self.tabs.push(tab);
         self.active = self.tabs.len() - 1;
+        self.workspace_active[usize::from(workspace)] = Some(self.active);
         Some(self.active)
     }
 
@@ -260,43 +299,23 @@ impl TabsState {
         if index >= self.tabs.len() {
             return false;
         }
-        self.active = index;
+        self.note_active(index);
         true
     }
 
-    /// Activates the next tab, wrapping around to the first one.
+    /// Activates the next tab of the active workspace, wrapping to its first one.
     pub fn next_tab(&mut self) -> usize {
-        self.active = (self.active + 1) % self.tabs.len();
-        self.active
+        self.step_tab(true)
     }
 
-    /// Activates the previous tab, wrapping around to the last one.
+    /// Activates the previous tab of the active workspace, wrapping to its last one.
     pub fn previous_tab(&mut self) -> usize {
-        self.active = if self.active == 0 {
-            self.tabs.len() - 1
-        } else {
-            self.active - 1
-        };
-        self.active
+        self.step_tab(false)
     }
 
     /// Closes the tab at `index` and applies the documented last-tab/neighbour policy.
     pub fn close(&mut self, index: usize) -> CloseOutcome {
-        if index >= self.tabs.len() {
-            return CloseOutcome::Invalid;
-        }
-        if self.tabs.len() == 1 {
-            self.tabs[0] = Tab::blank();
-            self.active = 0;
-            return CloseOutcome::ResetLast;
-        }
-        self.tabs.remove(index);
-        if index < self.active {
-            self.active -= 1;
-        } else if index == self.active {
-            self.active = self.active.min(self.tabs.len() - 1);
-        }
-        CloseOutcome::Closed
+        self.close_tab(index)
     }
 
     /// Closes the active tab (see [`TabsState::close`]).
@@ -315,7 +334,11 @@ impl TabsState {
 
     /// Window title of the active tab, including its 1-based index when there are several.
     pub fn window_title(&self) -> String {
-        Self::indexed_title(self.active, self.tabs.len(), &self.active().display_title())
+        Self::indexed_title(
+            self.visible_active_index(),
+            self.visible_len(),
+            &self.active().display_title(),
+        )
     }
 }
 

@@ -68,6 +68,8 @@ pub struct Strings {
     pub no_history_menu: &'static str,
     /// Fallback title for a blank/new tab.
     pub new_tab: &'static str,
+    /// Noun used in local workspace labels (`Workspace 1`) and accessibility names.
+    pub workspace: &'static str,
     // Context menu / chrome labels.
     pub open_link_in_new_tab: &'static str,
     pub copy_link_address: &'static str,
@@ -127,6 +129,7 @@ pub fn strings(locale: Locale) -> Strings {
             truncated: "listing truncated",
             no_history_menu: "No history yet",
             new_tab: "New Tab",
+            workspace: "Workspace",
             open_link_in_new_tab: "Open link in new tab",
             copy_link_address: "Copy link address",
             save_image: "Save image",
@@ -171,6 +174,7 @@ pub fn strings(locale: Locale) -> Strings {
             truncated: "listado truncado",
             no_history_menu: "Aún no hay historial",
             new_tab: "Nueva pestaña",
+            workspace: "Espacio de trabajo",
             open_link_in_new_tab: "Abrir enlace en una pestaña nueva",
             copy_link_address: "Copiar dirección del enlace",
             save_image: "Guardar imagen",
@@ -226,6 +230,7 @@ mod tests {
                 s.truncated,
                 s.no_history_menu,
                 s.new_tab,
+                s.workspace,
                 s.open_link_in_new_tab,
                 s.copy_link_address,
                 s.save_image,
