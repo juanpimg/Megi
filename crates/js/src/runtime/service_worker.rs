@@ -162,14 +162,26 @@ pub(crate) fn try_fetch(context: &mut Context, request: &SwRequest) -> Option<Ca
         return None;
     }
     let registration = (ops.take_registration)(context)?;
-    // WHATWG SW §4.1: only requests inside the worker's scope are controlled.
-    if registration.state != SwState::Activated || !request.url.starts_with(&registration.scope) {
+    // WHATWG SW Appendix A «Match Service Worker Registration»: scope matches
+    // a serialized URL prefix with a path boundary, not a raw string prefix.
+    if registration.state != SwState::Activated || !scope_matches(&registration.scope, &request.url)
+    {
         (ops.put_registration)(context, registration);
         return None;
     }
     let captured = dispatch_fetch(context, ops, &registration, request);
     (ops.put_registration)(context, registration);
     captured
+}
+
+fn scope_matches(scope: &str, url: &str) -> bool {
+    if url == scope {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix(scope) else {
+        return false;
+    };
+    scope.ends_with('/') || rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#')
 }
 
 fn dispatch_fetch(

@@ -2,6 +2,15 @@
 // (W3C Cache API §5 / §5.4) over the narrow native bridges in prelude.rs.
 (function () {
   if (typeof globalThis.self === "undefined") { globalThis.self = globalThis; }
+  // W3C Cache API §5.4: quota failures are typed DOMExceptions. Worker realms
+  // do not install the XHR prelude that normally defines this constructor.
+  if (typeof globalThis.DOMException !== "function") {
+    globalThis.DOMException = function DOMException(message, name) {
+      var error = new Error(message);
+      error.name = name || "DOMException";
+      return error;
+    };
+  }
   var swUrl = __megi_sw_script_url();
   var originMatch = /^([a-z]+:\/\/[^/?#]+)/i.exec(swUrl);
   globalThis.location = { href: swUrl, origin: originMatch ? originMatch[1] : "" };
