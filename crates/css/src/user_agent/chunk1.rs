@@ -274,10 +274,9 @@ textarea {
 
 select {
     display: inline-block;
-    width: 8em;
     height: 1.6em;
     padding: 0 2px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 option {

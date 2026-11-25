@@ -100,6 +100,7 @@ mod backgrounds;
 mod blocks;
 mod display_list;
 mod effects;
+mod forms;
 mod hit_regions;
 mod images;
 mod inline;
@@ -120,11 +121,11 @@ use effects::{
     MAX_TEXT_MASK_COLLECTORS, collect_text_mask_runs, effect_padding, has_effects,
     inline_filtered_solid, overflow_rounded_clip, tree_has_effects,
 };
+use forms::paint_replaced_element;
 use hit_regions::{
     pop_clip_item, pop_mask_group, pop_rounded_group, pop_text_mask_group, push_clip_item,
     push_mask_group, push_rounded_group, push_text_mask_group,
 };
-use images::paint_replaced_element;
 use inline::paint_inline_content;
 use stacking::{index_stacking_contexts, paint_stacking_context};
 use text::{is_list_item, paint_marker, paint_text_decorations, paint_text_run};
