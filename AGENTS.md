@@ -112,3 +112,16 @@ Cero advertencias. Reporta cada comando con su código de salida. Nunca digas
 - Commits atómicos, Conventional Commits en inglés, DCO (`git commit -s`).
 - Entrega: (a) qué cambió y por qué, (b) comandos + códigos de salida,
   (c) salida del gate, (d) limitaciones conocidas por nombre.
+
+## 8. Auditoría arquitectónica con deslop-please
+- Antes de reportar verde, ejecuta `deslop-please --allow .deslop-please.allow`
+  (workspace completo, configuración por defecto). Cero hallazgos nuevos.
+- `.deslop-please.allow` congela la deuda preexistente; **no** es una lista de
+  problemas resueltos. Nunca lo uses para esconder código nuevo.
+- Los hallazgos se corrigen desde los principios (módulos profundos,
+  interfaces estrechas), no con movimientos mecánicos: `field-leak` ⇒
+  métodos del tipo; `shallow-module` ⇒ contraer la interfaz; ciclos ⇒
+  reordenar capas de abstracción. Detalle y procedimiento en
+  [`docs/DESLOP-AUDIT.md`](docs/DESLOP-AUDIT.md).
+- Si el arreglo cruza crates, requiere PR de arquitectura y actualización del
+  DAG (§3); no lo agrupes con otros cambios.

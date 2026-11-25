@@ -54,7 +54,10 @@ EXEMPT_DIRS = ("fuzz/corpus/",)
 GENERATED_FILES = {"Cargo.lock", "docs/audit/coverage.tsv"}
 GENERATED_SUFFIXES = (".proptest-regressions",)
 # Files without an extension that are prose/config worth auditing.
-NAMED_TEXT_FILES = {"LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "justfile", "Dockerfile", "CODEOWNERS"}
+NAMED_TEXT_FILES = {
+    "LICENSE", "LICENSE-APACHE", "LICENSE-MIT", "justfile", "Dockerfile",
+    "CODEOWNERS", ".deslop-please.allow",
+}
 
 STATUSES = {"pending", "covered", "exempt"}
 
