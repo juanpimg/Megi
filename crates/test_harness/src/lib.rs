@@ -20,6 +20,7 @@ pub mod js_executor;
 pub mod serializer_harness;
 pub mod tokenizer_harness;
 pub mod tree_harness;
+pub mod wpt;
 
 use std::path::{Path, PathBuf};
 

@@ -441,6 +441,12 @@ pub fn run() {
         }
     }
 
+    // ------------------------------------------------ WPT components (real JavaScript)
+    #[cfg(feature = "js")]
+    unknown_failures.extend(megi_test_harness::wpt::summary::print_component_suites(
+        &megi_test_harness::workspace_root(),
+    ));
+
     // ---------------------------------------------------------------- gate status
     println!("----------------------------------------------------------------------");
     println!("Known-failure allowlist:");
