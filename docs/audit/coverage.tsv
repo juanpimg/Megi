@@ -2318,7 +2318,7 @@ tools/check_milestone.py	116	tool	F3	lead	2026-11-25	covered	M9-RELEASE-SIGN-EVI
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/megi.sh	73	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/progress_render.py	401	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
 tools/progress_stats.py	278	tool	F3	jp	2026-11-25	covered	#2290	re-read after dirty-tree cache guard
