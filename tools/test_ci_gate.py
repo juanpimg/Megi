@@ -65,6 +65,12 @@ class ToolsTestListTests(unittest.TestCase):
         # list (#1402): otherwise a passing local test never protects merges.
         self.assertIn("tools.test_check_docs_links", CI.read_text(encoding="utf-8"))
 
+    def test_wpt_report_tests_run_in_ci(self):
+        # A new unittest module is invisible to the explicit list in the docs job
+        # (#1402) until it is added there; this keeps the WPT --check regression
+        # from passing locally while CI never runs it.
+        self.assertIn("tools.test_wpt_report", CI.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

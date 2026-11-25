@@ -212,10 +212,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
     if args.check:
-        stale = [
-            name for name, generated in (("wpt.json", json_bytes), ("wpt.md", md_bytes))
-            if (root / STATUS_DIR / name).read_bytes() != generated
-        ]
+        stale = []
+        for name, generated in (("wpt.json", json_bytes), ("wpt.md", md_bytes)):
+            artifact = root / STATUS_DIR / name
+            if not artifact.is_file() or artifact.read_bytes() != generated:
+                stale.append(name)
         if stale:
             print("stale: " + ", ".join(stale), file=sys.stderr)
             return 1
