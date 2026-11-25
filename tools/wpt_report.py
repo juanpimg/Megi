@@ -3,9 +3,9 @@
 
 The numbers are parsed from `megi-test-harness --summary` (no hand-written P/T), the epoch comes
 from the SHA-pinned WPT revision plus the byte hash of the manifest, and each subtest carries the
-canonical key `sha256(test + NUL + subtest)`. The report covers the four vendored CSS Syntax
-fixtures actually executed by the harness; `scope` states that explicitly so 100/100 is never
-mistaken for full WPT conformance.
+canonical key `sha256(test + NUL + subtest)`. The report covers all vendored fixtures actually
+executed by the harness (CSS Syntax extractor plus the offline JavaScript component runner);
+`scope` states that explicitly so a green local total is never mistaken for full WPT conformance.
 
 Usage:
     python3 tools/wpt_report.py --write
@@ -23,8 +23,9 @@ import sys
 from pathlib import Path
 
 STATUS_DIR = Path("docs/status")
-RESULT_RE = re.compile(r"^  \[(PASS|FAIL)\] (.+)$")
-TOTAL_RE = re.compile(r"^CSS Syntax Total: (\d+) / (\d+) tests passed\s*$")
+RESULT_RE = re.compile(r"^  \[(PASS|FAIL|TIMEOUT|NOTRUN|harness_error)\] (.+)$")
+SECTION_RE = re.compile(r"^--- WPT (.+?) Suites ")
+TOTAL_RE = re.compile(r"^(.+?) Total: (\d+) / (\d+) tests passed\s*$")
 COUNT_FIELD = {"PASS": "pass", "FAIL": "fail", "TIMEOUT": "timeout",
                "NOTRUN": "notrun", "harness_error": "error"}
 
@@ -34,35 +35,52 @@ def sha256_text(text: str) -> str:
 
 
 def parse_summary(output: str) -> tuple[list[tuple[str, str]], int, int]:
-    """Parse the CSS section of `--summary`; never infer a missing result from silence."""
-    lines = output.splitlines()
-    start = next(
-        (index for index, line in enumerate(lines) if line.startswith("--- WPT CSS Syntax Suites")),
-        None,
-    )
-    if start is None:
-        raise ValueError("harness output has no WPT CSS Syntax Suites section")
-    results: list[tuple[str, str]] = []
-    passed, total = 0, 0
-    seen_total = False
-    for line in lines[start + 1:]:
+    """Parse every WPT section of `--summary`; never infer a missing result from silence."""
+    sections: list[dict] = []
+    current: dict | None = None
+    for line in output.splitlines():
+        if line.startswith("--- WPT "):
+            match = SECTION_RE.match(line)
+            if match is None:
+                raise ValueError(f"malformed WPT section header: {line!r}")
+            current = {"name": match.group(1), "results": [], "total": None}
+            sections.append(current)
+            continue
         if line.startswith("---"):
-            break
+            current = None
+            continue
+        if current is None:
+            continue
         match = RESULT_RE.match(line)
         if match:
-            results.append((match.group(2), match.group(1)))
+            current["results"].append((match.group(2), match.group(1)))
             continue
         total_match = TOTAL_RE.match(line)
         if total_match:
-            passed, total = int(total_match.group(1)), int(total_match.group(2))
-            seen_total = True
-    if not seen_total:
-        raise ValueError("harness output has no 'CSS Syntax Total' line")
-    if len(results) != total:
-        raise ValueError(f"harness printed {len(results)} results but declared total {total}")
-    if sum(1 for _, status in results if status == "PASS") != passed:
-        raise ValueError("harness passed count does not match its result lines")
-    return results, passed, total
+            name, passed, total = total_match.group(1), int(total_match.group(2)), int(total_match.group(3))
+            if name == current["name"] and current["total"] is None:
+                current["total"] = (passed, total)
+    if not sections:
+        raise ValueError("harness output has no WPT Suites section")
+    results: list[tuple[str, str]] = []
+    passed_total, tests_total = 0, 0
+    for section in sections:
+        if section["total"] is None:
+            raise ValueError(f"WPT section {section['name']!r} has no Total line")
+        declared_passed, declared_total = section["total"]
+        section_results = section["results"]
+        if len(section_results) != declared_total:
+            raise ValueError(
+                f"WPT {section['name']}: harness printed {len(section_results)} results "
+                f"but declared total {declared_total}"
+            )
+        section_passed = sum(1 for _, status in section_results if status == "PASS")
+        if section_passed != declared_passed:
+            raise ValueError(f"WPT {section['name']}: passed count does not match its result lines")
+        results.extend(section_results)
+        passed_total += declared_passed
+        tests_total += declared_total
+    return results, passed_total, tests_total
 
 
 def load_report(path: Path) -> dict:
@@ -131,7 +149,7 @@ def build_report(root: Path, output: str | None = None) -> dict:
         filename = name.split(":", 1)[0]
         if filename.endswith(" (newline normalization)"):
             filename = filename.replace(" (newline normalization)", "")
-        matches = [path for path in expected if path.endswith("/" + filename)]
+        matches = [path for path in expected if path == filename or path.endswith("/" + filename)]
         if len(matches) != 1:
             raise ValueError(f"result {name!r} does not map to exactly one manifest fixture")
         test = "tests/wpt/" + matches[0]
@@ -147,6 +165,11 @@ def build_report(root: Path, output: str | None = None) -> dict:
     for result in results:
         counts[COUNT_FIELD[result["status"]]] += 1
     dirs = sorted({str(Path(r["test"]).parent) for r in results})
+    harness = "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)"
+    scope = (
+        f"{len(expected)} vendored WPT fixtures ({total} executed subtests, "
+        f"{len(dirs)} dirs); NOT full WPT conformance"
+    )
     return {
         "schema": "megi-wpt-report/1",
         "epoch": {
@@ -154,8 +177,8 @@ def build_report(root: Path, output: str | None = None) -> dict:
             "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         },
         "run_info": {
-            "harness": "megi-test-harness --summary (CSS Syntax suites)",
-            "scope": "4 vendored CSS Syntax fixtures (100 executed subtests); NOT full WPT conformance",
+            "harness": harness,
+            "scope": scope,
             "adopted_subtests": total,
             "dirs": dirs,
         },
