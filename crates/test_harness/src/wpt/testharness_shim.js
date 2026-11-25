@@ -6,6 +6,7 @@
 
   var results = [];
   var completionCallbacks = [];
+  var loadCallbacks = [];
   globalThis.__megi_wpt_results__ = results;
   // Vendored WPT resources are injected as parsed JSON by the Rust runner. This
   // local `fetch` is test-harness plumbing only; it never reimplements an engine API.
@@ -182,13 +183,19 @@
     var done = false;
     var pending = {
       name: name,
-      step: function (stepFn) {
+      step: function (stepFn, thisObj) {
         if (done) return;
-        try { stepFn(pending); }
-        catch (error) { status = "FAIL"; message = text(error); }
+        // testharness.js: step(fn, this_obj, ...args) — the second argument is the
+        // receiver, not the first callback argument. Canvas helpers rely on it.
+        var receiver = arguments.length === 1 ? pending : thisObj;
+        var args = Array.prototype.slice.call(arguments, 2);
+        try { stepFn.apply(receiver, args); }
+        catch (error) { status = "FAIL"; message = text(error && error.message ? error.message : error); }
       },
-      step_func: function (stepFn) {
-        return function () { pending.step(function () { stepFn.apply(pending, arguments); }); };
+      step_func: function (stepFn, thisObj) {
+        return function () {
+          pending.step(function () { stepFn.apply(thisObj === undefined ? pending : thisObj, arguments); });
+        };
       },
       done: function () {
         if (done) return;
@@ -200,6 +207,14 @@
       try { fn(pending); } catch (error) { status = "FAIL"; message = text(error); done = true; record(name, status, message); }
     }
     return pending;
+  };
+
+  // WPT's canvas helpers wait for `window.load` through this plumbing function.
+  // The offline runner fires it once at FLUSH; no browser event loop is involved.
+  globalThis.on_event = function (target, eventName, fn) {
+    if (typeof fn === "function" && String(eventName) === "load") {
+      loadCallbacks.push(fn);
+    }
   };
 
   globalThis.promise_test = function (fn, name) {
@@ -214,6 +229,10 @@
   };
 
   globalThis.__megi_wpt_flush__ = function () {
+    for (var index = 0; index < loadCallbacks.length; index += 1) {
+      try { loadCallbacks[index](); }
+      catch (error) { record("<load>", "harness_error", error); }
+    }
     for (var index = 0; index < completionCallbacks.length; index += 1) {
       try { completionCallbacks[index]({ status: 0, message: "" }); }
       catch (error) { record("<completion>", "harness_error", error); }

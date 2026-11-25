@@ -11,6 +11,11 @@ use super::{manifest, runner};
 /// Returns gate failure messages; the allowlist is empty for component suites, so any
 /// non-PASS result must be reported instead of silently dropped from the denominator.
 pub fn print_component_suites(root: &Path) -> Vec<String> {
+    print_component_suites_at(root)
+}
+
+/// Same gate reporting for an explicit workspace root (used by integration tests).
+pub fn print_component_suites_at(root: &Path) -> Vec<String> {
     // css/css-syntax is replayed by the specialized extractor; printing it here would
     // double-count the same 100 subtests in the generated WPT report.
     let dirs: Vec<String> = manifest::adopted_dirs(root)

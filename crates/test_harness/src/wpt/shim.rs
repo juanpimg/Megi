@@ -22,6 +22,7 @@ mod tests {
             "__megi_wpt_flush__",
             "__megi_wpt_resources__",
             "globalThis.fetch = function",
+            "globalThis.on_event = function",
         ] {
             assert!(TESHARNESS_SHIM.contains(symbol), "shim lacks {symbol}");
         }

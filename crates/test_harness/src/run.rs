@@ -443,9 +443,15 @@ pub fn run() {
 
     // ------------------------------------------------ WPT components (real JavaScript)
     #[cfg(feature = "js")]
-    unknown_failures.extend(megi_test_harness::wpt::summary::print_component_suites(
-        &megi_test_harness::workspace_root(),
-    ));
+    {
+        let component_failures = megi_test_harness::wpt::summary::print_component_suites(
+            &megi_test_harness::workspace_root(),
+        );
+        if !component_failures.is_empty() {
+            gate_failed = true;
+        }
+        unknown_failures.extend(component_failures);
+    }
 
     // ---------------------------------------------------------------- gate status
     println!("----------------------------------------------------------------------");

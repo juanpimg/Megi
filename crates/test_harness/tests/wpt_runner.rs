@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use megi_test_harness::wpt::runner::{WptResult, run_wpt_dir};
+use megi_test_harness::wpt::summary::print_component_suites_at;
 
 fn workspace_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -142,6 +143,59 @@ fn wpt_component_suites_exceed_the_m4_floor() {
             .collect::<Vec<_>>()
             .join("; ")
     );
+}
+
+#[test]
+fn wpt_canvas_rect_fixtures_execute_real_js_subtests() {
+    let results = run_wpt_dir(
+        workspace_root(),
+        "2dcontext/drawing-rectangles-to-the-canvas",
+    )
+    .expect("canvas fixtures must be declared in tests/wpt/MANIFEST.json");
+    let (passed, total) = summary(&results);
+    assert_eq!(
+        total, 3,
+        "the adopted canvas subset has exactly three cases"
+    );
+    let failures: Vec<&WptResult> = results.iter().filter(|r| r.status != "PASS").collect();
+    assert!(
+        failures.is_empty(),
+        "allowlist is empty: {} non-PASS canvas subtests: {}",
+        failures.len(),
+        failures
+            .iter()
+            .map(|r| format!("{} ({})", r.display_name(), r.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    assert_eq!(passed, total);
+}
+
+#[test]
+fn wpt_gate_reports_component_failures() {
+    let root = std::env::temp_dir().join(format!("megi-wpt-gate-{}", std::process::id()));
+    let suite = root.join("tests/wpt/fail");
+    std::fs::create_dir_all(&suite).expect("temp suite");
+    std::fs::write(
+        root.join("tests/wpt/MANIFEST.json"),
+        r#"[{"path":"fail/a.html","dir":"fail","kind":"testharness","subtest_count_expected":1,"sha256":"x","bytes":1,"license":"MIT"}]"#,
+    )
+    .expect("temp manifest");
+    std::fs::write(
+        suite.join("a.html"),
+        r#"<script>test(function(){assert_true(false)},"deliberate")</script>"#,
+    )
+    .expect("temp fixture");
+    let failures = print_component_suites_at(&root);
+    assert!(
+        failures.iter().any(|f| f.contains("failing subtests")),
+        "a real FAIL must become a gate failure: {failures:?}"
+    );
+    assert!(
+        root.starts_with(std::env::temp_dir()),
+        "refusing to delete {root:?}"
+    );
+    std::fs::remove_dir_all(&root).expect("cleanup temp suite");
 }
 
 #[test]
