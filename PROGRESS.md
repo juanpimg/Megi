@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `1aff89bd` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **43/64** (**67%**) · **3,580** tests · conformance **PASS** · **18** crates · **264,375** lines of Rust
+**Snapshot** — commit `7e3003d6` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **44/64** (**68%**) · **3,244** tests · conformance **PASS** · **18** crates · **264,531** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -23,13 +23,13 @@
 | **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
 | **M6** | Gráficos y media | `█████████████░░░░░░░` 4/6 | 66% |
-| **M7** | Herramientas de desarrollador | `████████████░░░░░░░░` 3/5 | 60% |
+| **M7** | Herramientas de desarrollador | `████████████████░░░░` 4/5 | 80% |
 | **M8** | Motor ofensivo | `████████████░░░░░░░░` 3/5 | 60% |
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `█████████████░░░░░░░` 43/64 | **67%** |
+| | **Roadmap** | `█████████████░░░░░░░` 44/64 | **68%** |
 
 ## Detalle de criterios por hito
 
@@ -119,18 +119,18 @@
 - AVIF/JPEG XL — sin decodificadores
 - Audio y vídeo con códecs libres — sin implementación
 
-### M7 — Herramientas de desarrollador (60%)
+### M7 — Herramientas de desarrollador (80%)
 
 **Verificado**
 
 - Consola JS y diagnóstico básico — `crates/js/src/host.rs`, `crates/browser/src/find/`
 - Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS
-- DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 3 passed; límites: un único target, sin WebDriver BiDi ni perfilador
+- DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 3 passed; límites: un único target y sin WebDriver BiDi (el perfilador se cerró por separado)
+- Perfilador usable — `crates/browser/src/devtools/performance.rs` exporta `Performance.getMetrics` (13 fases en µs) y `Performance.getTrace` (eventos `ph="X"` apilables como flamegraph) desde los `RenderTimings` reales del render adjunto (`RenderStats.timings` → `DevToolsPage.timings`); `crates/browser/tests/devtools_protocol.rs::devtools_performance_exports_real_render_timings` compara el total exportado con `output.stats.timings.total.as_micros()` y exige el evento `Layout` con `dur`; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target, sin grabación interactiva ni símbolos JS
 
 **Pendiente**
 
 - WebDriver BiDi
-- Perfilador usable
 
 ### M8 — Motor ofensivo (60%)
 
@@ -193,10 +193,10 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `1aff89bd` (2026-11-25) |
+| Commit | `7e3003d6` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 264375 |
-| Tests (`cargo test --workspace -- --list`) | 3580 |
+| Lines of Rust (tracked `.rs`) | 264531 |
+| Tests (`cargo test --workspace -- --list`) | 3244 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
 
