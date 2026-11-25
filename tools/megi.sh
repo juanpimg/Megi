@@ -43,7 +43,6 @@
 #     deterministic per-origin dot fallback
 #   - tabs: Ctrl+T new, Ctrl+W close (last tab -> New Tab), Ctrl+Tab / Ctrl+Shift+Tab
 #     cycle, Alt+1..9 activate; --tabs URL repeatable (headless renders the first/active tab)
-#   - Ctrl+L: print the current URL; title shows page — zoom% — scroll% (+warnings)
 #   - form controls: click an input/textarea to focus and type (Backspace, Tab); click
 #     checkbox/radio to toggle; buttons flash pressed; Enter never submits (no backend)
 #   - --zoom F (0.5–3.0): initial page zoom; --refresh-ms [MS]: auto-refresh pages whose

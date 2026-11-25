@@ -29,7 +29,7 @@ Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subte
 
 [![Tests](docs/status/badge-tests.svg)](PROGRESS.md) [![Conformance](docs/status/badge-conformance.svg)](PROGRESS.md) [![Crates](docs/status/badge-crates.svg)](PROGRESS.md) [![unsafe](docs/status/badge-unsafe.svg)](PROGRESS.md)
 
-**Pre-Alpha `v0.1.0`** · **17 crates** (17/17 con `#![forbid(unsafe_code)]`) · gate de conformidad **PASS** (4 suites) · tests, hitos cerrados y pendientes detallados en **[`PROGRESS.md`](PROGRESS.md)**. La [cobertura de capacidades](docs/status/coverage.html) es un informe aparte y autorreferencial: ya no se usa como titular del progreso. El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)**. Historial de versiones: **[`CHANGELOG.md`](CHANGELOG.md)**.
+**Pre-Alpha `v0.1.0`** · **18 crates** (18/18 con `#![forbid(unsafe_code)]`) · gate de conformidad **PASS** (4 suites) · tests, hitos cerrados y pendientes detallados en **[`PROGRESS.md`](PROGRESS.md)**. La [cobertura de capacidades](docs/status/coverage.html) es un informe aparte y autorreferencial: ya no se usa como titular del progreso. El aspecto real en webs se comprueba con [`real_site_check.py`](tools/real_site_check.py) y se publica en **[`real-sites.html`](docs/status/real-sites.html)**. Historial de versiones: **[`CHANGELOG.md`](CHANGELOG.md)**.
 
 ## 🤝 Contribuciones
 
@@ -110,7 +110,7 @@ cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/rend
 
 ##  Arquitectura del Workspace
 
-El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 17 crates especializados:
+El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 18 crates especializados:
 
 ```mermaid
 graph TD

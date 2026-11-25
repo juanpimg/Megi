@@ -45,7 +45,7 @@ BINARY_EXTENSIONS = {
     ".otf", ".wasm", ".gz", ".zip", ".bin",
 }
 # Third-party material: kept in the ledger so the exemption is a recorded
-# decision, but audited as data (feature matrix in docs/audit/fixtures.md).
+# decision, but audited as data (feature matrix in docs/audit/findings/f5/00-summary.md).
 VENDORED_PREFIXES = ("tests/html5lib-tests/",)
 # Binary payloads and vendored corpora cannot be read line by line.
 EXEMPT_DIRS = ("fuzz/corpus/",)
