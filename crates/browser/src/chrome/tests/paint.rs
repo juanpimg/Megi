@@ -20,6 +20,7 @@ fn chrome_paints_tab_strip_and_address_bar() {
     );
     // The page below the chrome is untouched.
     assert_eq!(pixel(300, 200), 0x00FF_FFFF);
+    assert_visual_refresh_text_measures_wider_than_the_legacy_scale();
 }
 
 #[test]
@@ -339,6 +340,43 @@ fn draw_rail_over_pixmap_is_noop_when_rail_is_none() {
     );
 }
 
+fn assert_visual_refresh_palette_is_bright_and_high_contrast() {
+    // The refreshed chrome text reads as near-white on the dark surfaces and the
+    // secondary tokens stay comfortably above the background luminance.
+    let luminance = |color: Color| {
+        0.2126 * f32::from(color.r) + 0.7152 * f32::from(color.g) + 0.0722 * f32::from(color.b)
+    };
+    assert!(
+        luminance(COLOR_TEXT) >= 240.0,
+        "primary chrome text must be near-white: {}",
+        luminance(COLOR_TEXT)
+    );
+    assert!(
+        luminance(COLOR_ADDRESS_TEXT) >= 240.0,
+        "address text must be near-white"
+    );
+    assert!(
+        luminance(COLOR_TEXT) - luminance(COLOR_TAB_STRIP) >= 200.0,
+        "tab titles must have strong contrast on the strip"
+    );
+    assert!(
+        luminance(COLOR_TEXT_MUTED) - luminance(COLOR_ADDRESS_BG) >= 120.0,
+        "muted URL parts must remain readable"
+    );
+}
+
+fn assert_visual_refresh_text_measures_wider_than_the_legacy_scale() {
+    // Observable font-metric consequence of the larger type scale: the same
+    // strings occupy measurably more width than with the old 11/13 px sizes.
+    let width = crate::chrome::drawing::measure_text_width;
+    let title = width("Megi", ADDRESS_TEXT_SIZE);
+    let legacy_title = width("Megi", 11.0);
+    assert!(
+        title > legacy_title * 1.25,
+        "refreshed text must be visibly larger: {title} vs {legacy_title}"
+    );
+}
+
 #[test]
 fn palette_uses_one_accent_and_keeps_readable_contrast() {
     assert_eq!(COLOR_CARET, ACCENT, "the caret follows the accent");
@@ -372,4 +410,5 @@ fn palette_uses_one_accent_and_keeps_readable_contrast() {
     ] {
         assert_eq!(color.a, 0xFF, "chrome surfaces are opaque");
     }
+    assert_visual_refresh_palette_is_bright_and_high_contrast();
 }

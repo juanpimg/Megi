@@ -12,16 +12,14 @@ use megi_webview::paint::{Color, Pixmap};
 use super::drawing::{contains, draw_text, fill_round, paint_favicon};
 use super::*;
 
-/// Minimum height of one rail row, in physical pixels.
-const ROW_MIN_PHYSICAL: f32 = 22.0;
+/// Minimum height of one rail row, in physical pixels (clears the 24 px target).
+const ROW_MIN_PHYSICAL: f32 = 26.0;
 /// Width of the close affordance in an expanded row, in CSS pixels.
-const CLOSE_WIDTH: f32 = 14.0;
+const CLOSE_WIDTH: f32 = 18.0;
 /// Height of the close affordance, in CSS pixels.
-const CLOSE_HEIGHT: f32 = 12.0;
-/// Conservative CSS width of one 11 px glyph, used to truncate rail titles.
-const GLYPH_WIDTH: f32 = 8.0;
-/// Text size for rail titles and glyphs, in CSS pixels.
-const TEXT_SIZE: f32 = 11.0;
+const CLOSE_HEIGHT: f32 = 16.0;
+/// Conservative CSS width of one 13 px glyph, used to truncate rail titles.
+const GLYPH_WIDTH: f32 = 10.0;
 
 /// Rectangle, close target and accessible name of one rail tab.
 #[derive(Clone, Debug, PartialEq)]
@@ -75,12 +73,12 @@ pub struct RailView<'a> {
     pub expanded: bool,
     /// Rail width in CSS pixels (collapsed, expanded or peek token).
     pub width_css: f32,
-    /// Top chrome band height in CSS pixels (58 normally, 40 in compact mode).
+    /// Top chrome band height in CSS pixels (78 normally, 38 in compact mode).
     pub top_css: f32,
 }
 
 impl<'a> RailView<'a> {
-    /// View with the default 58 px top band.
+    /// View with the default 78 px top band.
     pub fn new(
         labels: &'a [String],
         active: usize,
@@ -266,10 +264,10 @@ pub fn paint_rail(dest: &mut Pixmap, scale: f32, layout: &RailLayout, view: &Rai
     draw_text(
         dest,
         if view.expanded { "<" } else { ">" },
-        toggle.x + 5.0,
-        toggle.y + 5.0,
+        toggle.x + 6.0,
+        toggle.y + 6.0,
         scale,
-        TEXT_SIZE,
+        RAIL_TEXT_SIZE,
         COLOR_TEXT,
     );
 
@@ -298,14 +296,14 @@ pub fn paint_rail(dest: &mut Pixmap, scale: f32, layout: &RailLayout, view: &Rai
         let label = view.labels.get(tab.index).map_or("", String::as_str);
         let icon = crate::favicon::Favicon::fallback(label);
         if view.expanded {
-            paint_favicon(dest, &icon, tab.rect.x + 3.0, tab.rect.y + 3.0, scale);
+            paint_favicon(dest, &icon, tab.rect.x + 4.0, tab.rect.y + 5.0, scale);
             draw_text(
                 dest,
                 &tab.title,
-                tab.rect.x + 22.0,
+                tab.rect.x + 25.0,
                 tab.rect.y + 6.0,
                 scale,
-                TEXT_SIZE,
+                RAIL_TEXT_SIZE,
                 COLOR_TEXT,
             );
             let close = tab.close;
@@ -317,7 +315,7 @@ pub fn paint_rail(dest: &mut Pixmap, scale: f32, layout: &RailLayout, view: &Rai
                     close.x + 3.0,
                     close.y + 2.0,
                     scale,
-                    TEXT_SIZE,
+                    RAIL_TEXT_SIZE,
                     COLOR_TEXT,
                 );
             }
@@ -331,10 +329,10 @@ pub fn paint_rail(dest: &mut Pixmap, scale: f32, layout: &RailLayout, view: &Rai
         draw_text(
             dest,
             "+",
-            new_tab.x + 5.0,
+            new_tab.x + 7.0,
             new_tab.y + 5.0,
             scale,
-            14.0,
+            16.0,
             COLOR_TEXT,
         );
     }

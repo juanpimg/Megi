@@ -57,10 +57,10 @@ pub(crate) fn paint_history_menu(
         draw_text(
             pixmap,
             strings.no_history_menu,
-            layout.rect.x + 8.0,
+            layout.rect.x + 10.0,
             layout.rect.y + 6.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_SCROLL,
         );
         return;
@@ -89,15 +89,15 @@ pub(crate) fn paint_history_menu(
         );
         let label = truncate_title(
             &format!("{} — {}", entry.title, entry.url),
-            ((row.width - 30.0) / 6.6).max(8.0) as usize,
+            ((row.width - 34.0) / 8.0).max(8.0) as usize,
         );
         draw_text(
             pixmap,
             &label,
-            row.x + 24.0,
-            row.y + 5.0,
+            row.x + 26.0,
+            row.y + 4.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
     }

@@ -80,7 +80,7 @@ pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &C
             rect.x + 6.0,
             rect.y + 5.0,
             scale,
-            12.0,
+            NAV_TEXT_SIZE,
             color,
         );
     };

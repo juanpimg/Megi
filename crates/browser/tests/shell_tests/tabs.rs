@@ -273,14 +273,15 @@ fn chrome_geometry_scales_with_the_device_scale() {
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = megi_browser::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
     assert!(painted > 0);
-    // The whole chrome band is 58 CSS px ⇒ 116 physical rows.
-    let band = dest[..(116 * 640) as usize]
+    // The refreshed chrome band is 78 CSS px ⇒ 156 physical rows at scale 2.
+    // (Old band: 58 CSS px / 116 rows; updated for the deliberate geometry change.)
+    let band = dest[..(156 * 640) as usize]
         .iter()
         .filter(|pixel| **pixel != 0x00FF_FFFF)
         .count();
     assert!(band > 1000, "scaled chrome painted: {band}");
     assert_eq!(
-        dest[(119 * 640) as usize],
+        dest[(159 * 640) as usize],
         0x00FF_FFFF,
         "page below chrome intact"
     );
@@ -290,7 +291,7 @@ fn chrome_geometry_scales_with_the_device_scale() {
 fn single_workspace_chrome_render_is_byte_identical_to_legacy_inputs() {
     // Phase 3 red test: the expected failure before the workspace API exists is
     // `no method named visible_tabs found for struct TabsState`. No PNG assertion is
-    // changed: this compares two in-memory paints of the same 58 px chrome band.
+    // changed: this compares two in-memory paints of the same 78 px chrome band.
     use megi_browser::tabs::TabsState;
     let tabs = TabsState::from_urls(vec![
         "https://example.com/one".to_string(),

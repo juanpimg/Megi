@@ -363,20 +363,20 @@ pub(crate) fn paint_dropdown(
             draw_text(
                 pixmap,
                 &format!("{}:", item.label),
-                rect.x + 5.0,
-                rect.y + 5.0,
+                rect.x + 6.0,
+                rect.y + 4.0,
                 scale,
-                11.0,
+                MENU_TEXT_SIZE,
                 COLOR_SCROLL,
             );
         } else {
             draw_text(
                 pixmap,
                 &item.label,
-                rect.x + 9.0,
-                rect.y + 5.0,
+                rect.x + 10.0,
+                rect.y + 4.0,
                 scale,
-                11.0,
+                MENU_TEXT_SIZE,
                 COLOR_ADDRESS_TEXT,
             );
         }

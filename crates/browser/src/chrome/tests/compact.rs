@@ -1,7 +1,7 @@
 //! Phase 2 — compact chrome band and collapsed-rail hover peek.
 //!
-//! The band shrinks from 58 to 40 CSS pixels by hiding (not shrinking) the tab
-//! strip; the address bar keeps its 28 px hit target. Peek widens the rail only
+//! The band shrinks from 78 to 38 CSS pixels by hiding (not shrinking) the tab
+//! strip; the address bar keeps its 38 px hit target. Peek widens the rail only
 //! while hovered and jumps straight to the final width under reduced motion.
 
 use super::*;
@@ -11,9 +11,9 @@ use crate::chrome::compact::{
 };
 
 #[test]
-fn compact_band_is_40px_and_keeps_every_hit_target_at_least_22px() {
-    assert_eq!(CHROME_HEIGHT, 58.0);
-    assert_eq!(COMPACT_CHROME_HEIGHT, 40.0);
+fn compact_band_is_38px_and_keeps_every_hit_target_at_least_24px() {
+    assert_eq!(CHROME_HEIGHT, 78.0);
+    assert_eq!(COMPACT_CHROME_HEIGHT, 38.0);
     assert_eq!(band_css_height(false), CHROME_HEIGHT);
     assert_eq!(band_css_height(true), COMPACT_CHROME_HEIGHT);
     const {
@@ -28,14 +28,14 @@ fn compact_band_is_40px_and_keeps_every_hit_target_at_least_22px() {
             "navigation buttons must stay clickable in compact mode"
         )
     };
-    const { assert!(MIN_HIT_TARGET_CSS >= 22.0) };
+    const { assert!(MIN_HIT_TARGET_CSS >= 24.0) };
 }
 
 #[test]
 fn compact_band_pixels_follow_scale_and_clamp_to_frame() {
-    assert_eq!(band_pixels(false, 1.0, 600), 58);
-    assert_eq!(band_pixels(true, 1.0, 600), 40);
-    assert_eq!(band_pixels(true, 2.0, 600), 80);
+    assert_eq!(band_pixels(false, 1.0, 600), 78);
+    assert_eq!(band_pixels(true, 1.0, 600), 38);
+    assert_eq!(band_pixels(true, 2.0, 600), 76);
     // Same clamp as `present::chrome_band_pixels`: the page keeps at least one row.
     assert_eq!(band_pixels(true, 2.0, 30), 29);
 }
@@ -57,22 +57,14 @@ fn compact_paint_shifts_address_rows_and_drops_tab_strip() {
         &view(&address, None, &tabs),
     );
     crate::chrome::draw_chrome(&mut compact_dest, width, height, 1.0, &compact_view);
-    // "Hide before shrink": the first 12 rows are the hidden tab strip and keep
-    // their page pixels; the address strip (legacy 30..58) moves to rows 12..40.
+    // "Hide before shrink": the 40 px tab strip disappears entirely and the
+    // address strip (legacy 40..78) moves up to rows 0..38. Because the compact
+    // band equals the address strip height, no empty row is left at the top.
     let shift = (CHROME_HEIGHT - COMPACT_CHROME_HEIGHT) as usize;
-    let hidden_rows = (TAB_STRIP_HEIGHT - CHROME_HEIGHT + COMPACT_CHROME_HEIGHT) as usize;
-    for y in 0..hidden_rows {
-        for x in 0..width as usize {
-            assert_eq!(
-                compact_dest[y * width as usize + x],
-                0x00FF_FFFF,
-                "hidden tab strip must not repaint page pixels at ({x},{y})"
-            );
-        }
-    }
-    // Compare the address pill and buttons, skipping the strip boundary row where
-    // the legacy tab strip antialiases its bottom edge.
-    for y in (hidden_rows + 2)..COMPACT_CHROME_HEIGHT as usize {
+    assert_eq!(shift, 40);
+    // Compare the address pill and buttons, skipping the two border rows where
+    // the legacy strip antialiases its top edge.
+    for y in 2..COMPACT_CHROME_HEIGHT as usize {
         for x in 0..width as usize {
             assert_eq!(
                 compact_dest[y * width as usize + x],
