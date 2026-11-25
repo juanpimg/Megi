@@ -1,6 +1,6 @@
 //! Minimal software WebGL 1 foundation (WebGL 1.0 §5.14, §6.2).
 //!
-//! A context writes straight into the canvas [`CanvasSurface`] RGBA buffer: no
+//! A context writes straight into the canvas `CanvasSurface` RGBA buffer: no
 //! GPU, no shaders, no buffers, no textures. This is a foundation for M6, not
 //! WebGL 1. Framebuffer coordinates use the WebGL bottom-left origin and are
 //! translated to the surface's top-left origin on every access.

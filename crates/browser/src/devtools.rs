@@ -8,7 +8,7 @@
 //! WebSocket framing and the upgrade digest reuse `megi-net` via `megi-webview::net`:
 //! RFC 6455 §4.2.2 defines `Sec-WebSocket-Accept`, §5.1 requires masked client frames,
 //! §5.2 requires unmasked server frames. The endpoint stays loopback-only and opt-in.
-//! Commands are dispatched in [`protocol`]: with a real page attached, DOM/CSS commands
+//! Commands are dispatched in the `protocol` module: with a real page attached, DOM/CSS commands
 //! read the live arena (WHATWG DOM §4.2.3 / CSSOM §6); without one, evaluation falls back
 //! to the isolated realm. No Network domain, multiple targets or WebDriver BiDi yet.
 
