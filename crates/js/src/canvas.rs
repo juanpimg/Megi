@@ -167,6 +167,16 @@ pub struct CanvasSurface {
 /// Maximum number of path primitives retained by a canvas context (#1959).
 pub const MAX_CANVAS_PATH_ITEMS: usize = 4096;
 
+/// A `fillStyle`/`strokeStyle` value: either a solid color or a gradient handle.
+///
+/// Bindings pass the parsed value here; the surface decides how it is stored
+/// (a solid paint replaces any active gradient).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaintStyle {
+    Color(Rgba),
+    Gradient(usize),
+}
+
 impl CanvasSurface {
     /// Creates a transparent surface, or `None` when dimensions exceed the caps.
     pub fn new(width: u32, height: u32) -> Option<Self> {
@@ -204,6 +214,33 @@ impl CanvasSurface {
             fill_gradient: None,
             stroke_gradient: None,
         })
+    }
+
+    /// Applies a parsed `fillStyle`/`strokeStyle` (WHATWG HTML §4.12.5.1).
+    /// The surface owns the invariant that a solid color clears the active gradient.
+    pub fn set_paint(&mut self, is_fill: bool, style: PaintStyle) {
+        let (color, gradient) = match style {
+            PaintStyle::Color(color) => (Some(color), None),
+            PaintStyle::Gradient(id) => (None, Some(id)),
+        };
+        let (slot_color, slot_gradient) = if is_fill {
+            (&mut self.fill_style, &mut self.fill_gradient)
+        } else {
+            (&mut self.stroke_style, &mut self.stroke_gradient)
+        };
+        if let Some(color) = color {
+            *slot_color = color;
+        }
+        *slot_gradient = gradient;
+    }
+
+    /// Sets the `lineWidth` used by `stroke()` (WHATWG HTML §4.12.5.1.18).
+    /// Non-finite and non-positive values are ignored; the surface decides,
+    /// so callers cannot leave it in an invalid drawing state.
+    pub fn set_line_width(&mut self, width: f64) {
+        if width.is_finite() && width > 0.0 {
+            self.line_width = width;
+        }
     }
 
     /// Blends a pixel into the surface using straight-alpha source-over compositing.

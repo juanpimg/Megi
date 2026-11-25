@@ -118,6 +118,35 @@ fn put_image_data_replaces_including_transparent_pixels() {
 }
 
 #[test]
+fn surface_owns_paint_and_line_width_mutations() {
+    // WHATWG HTML §4.12.5.1: fill/stroke style and line width are drawing-state
+    // of the surface, so the surface — not its callers — owns their mutation.
+    let mut surface = CanvasSurface::new(2, 2).expect("surface");
+    let color = Rgba {
+        r: 1,
+        g: 2,
+        b: 3,
+        a: 255,
+    };
+    surface.set_paint(true, PaintStyle::Gradient(7));
+    assert_eq!(surface.fill_gradient, Some(7));
+    surface.set_paint(true, PaintStyle::Color(color));
+    assert_eq!(surface.fill_style, color);
+    assert_eq!(
+        surface.fill_gradient, None,
+        "a solid paint clears the gradient"
+    );
+    surface.set_paint(false, PaintStyle::Gradient(9));
+    assert_eq!(surface.stroke_gradient, Some(9));
+    assert_eq!(
+        surface.fill_gradient, None,
+        "stroke paint leaves fill untouched"
+    );
+    surface.set_line_width(2.5);
+    assert_eq!(surface.line_width, 2.5);
+}
+
+#[test]
 fn get_put_image_data_round_trips() {
     let mut surface = CanvasSurface::new(2, 2).expect("surface");
     surface.fill_style = Rgba {

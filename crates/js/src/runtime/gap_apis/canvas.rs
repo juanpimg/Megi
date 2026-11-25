@@ -1,3 +1,4 @@
+use super::canvas_support::{canvas_context_node, canvas_number};
 use super::*;
 
 /// Rejects a JS-supplied `ImageData.data.length` that is not a bounded integer count (#1774).
@@ -8,24 +9,6 @@ fn bounded_data_len(raw: f64, expected: usize) -> Option<usize> {
     } else {
         Some(raw as usize)
     }
-}
-
-/// Resolves a canvas 2D context receiver to its `<canvas>` node id.
-pub(crate) fn canvas_context_node(this: &JsValue, context: &mut Context) -> JsResult<NodeId> {
-    let object = this
-        .as_object()
-        .ok_or_else(|| js_error("canvas method called with a non-object receiver"))?;
-    let value = object
-        .get(js_string!("__megi_canvas_node"), context)
-        .map_err(|error| js_error(error.to_string()))?;
-    let handle = value
-        .as_number()
-        .filter(|n| *n >= 0.0 && *n <= u32::MAX as f64 && n.fract() == 0.0)
-        .map(|n| n as u32)
-        .ok_or_else(|| js_error("invalid canvas context"))?;
-    with_context_host(context, |host| host.node_for_handle(handle))
-        .ok_or_else(|| js_error("no active JavaScript host"))?
-        .map_err(js_error)
 }
 
 /// `HTMLCanvasElement.getContext('2d')` (#1545): returns a context object bound to the canvas
@@ -118,17 +101,6 @@ pub(crate) fn canvas_get_context(
     let _ = context_object.define_property_or_throw(js_string!("globalAlpha"), descriptor, context);
     super::canvas_paths::register_canvas_2d_accessors(&context_object, context);
     Ok(context_object.into())
-}
-
-pub(crate) fn canvas_number(
-    args: &[JsValue],
-    index: usize,
-    context: &mut Context,
-) -> JsResult<f64> {
-    args.get(index)
-        .map(|value| value.to_number(context))
-        .transpose()?
-        .ok_or_else(|| js_error("canvas method: missing numeric argument"))
 }
 
 pub(crate) fn canvas_begin_path(

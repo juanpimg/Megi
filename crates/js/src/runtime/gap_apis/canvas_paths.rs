@@ -3,8 +3,9 @@
 //! Plan: docs/superpowers/plans/2026-11-24-engine-depth-plan.md §Task 6.
 //! Spec: WHATWG HTML §4.12.5.1.
 
-use super::canvas::{canvas_context_node, canvas_number};
+use super::canvas_support::{canvas_context_node, canvas_number};
 use super::*;
+use crate::canvas::PaintStyle;
 
 /// Registers extended 2D path, transform, gradient, and `drawImage` methods on the builder.
 pub(crate) fn register_canvas_2d_methods(init: &mut ObjectInitializer<'_>) {
@@ -70,11 +71,7 @@ pub(crate) fn set_paint_style(
         let grad_id = grad_num as usize;
         with_context_host(context, |host| {
             host.canvas_store.with_surface_mut(node, |s| {
-                if is_fill {
-                    s.fill_gradient = Some(grad_id);
-                } else {
-                    s.stroke_gradient = Some(grad_id);
-                }
+                s.set_paint(is_fill, PaintStyle::Gradient(grad_id))
             });
         });
         return Ok(());
@@ -85,15 +82,8 @@ pub(crate) fn set_paint_style(
         .map_err(|error| js_error(error.to_string()))?;
     if let Some(color) = crate::canvas::Rgba::parse(&text) {
         with_context_host(context, |host| {
-            host.canvas_store.with_surface_mut(node, |s| {
-                if is_fill {
-                    s.fill_style = color;
-                    s.fill_gradient = None;
-                } else {
-                    s.stroke_style = color;
-                    s.stroke_gradient = None;
-                }
-            });
+            host.canvas_store
+                .with_surface_mut(node, |s| s.set_paint(is_fill, PaintStyle::Color(color)));
         });
     }
     Ok(())
@@ -309,12 +299,10 @@ fn canvas_line_width_set(
     let Some(raw) = args.first().and_then(|v| v.as_number()) else {
         return Ok(JsValue::undefined());
     };
-    if raw.is_finite() && raw > 0.0 {
-        with_context_host(context, |host| {
-            host.canvas_store
-                .with_surface_mut(node, |s| s.line_width = raw)
-        });
-    }
+    with_context_host(context, |host| {
+        host.canvas_store
+            .with_surface_mut(node, |s| s.set_line_width(raw))
+    });
     Ok(JsValue::undefined())
 }
 
