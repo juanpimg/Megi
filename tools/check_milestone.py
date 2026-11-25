@@ -47,6 +47,9 @@ def check(
         return 1
     pending = phase.get("pending", [])
     items = phase.get("items", [])
+    if not isinstance(items, list) or not isinstance(pending, list):
+        print(f"FAIL: {milestone} malformed criterion list")
+        return 1
 
     # Stable text mode: search both lists independently of their length, so a
     # criterion closed out of order keeps its verification command usable.
