@@ -59,6 +59,8 @@ pub(super) fn paint_background_border(
 
     let node_id = layout_box.node_id();
     let border_box = layout_box.dimensions.border_box();
+    let padding_box = layout_box.dimensions.padding_box();
+    let content_box = layout_box.dimensions.content;
     if alpha_scale > 0.0 {
         resources.record(border_box, node_id, HitKind::Background);
     }
@@ -156,6 +158,20 @@ pub(super) fn paint_background_border(
         .last()
         .is_some_and(|layer| layer.clip == megi_css::BackgroundClip::Text);
     if !background_is_propagated && style.background_color.a > 0 {
+        // CSS Backgrounds 3 §2.5: the colour is clipped like the bottom-most
+        // layer. Synthetic styles that only fill the legacy scalar fields keep
+        // the border box so existing golden fixtures stay byte-identical.
+        // `background-clip: text` still resolves to the border box and relies
+        // on the text mask group below, so it is intentionally not applied here.
+        let color_rect = if style.background_geometry_explicit {
+            let clip = style
+                .background_layers
+                .last()
+                .map_or(megi_css::BackgroundClip::BorderBox, |layer| layer.clip);
+            crate::background::background_clip_rect(clip, border_box, padding_box, content_box)
+        } else {
+            border_box
+        };
         if color_clips_to_text
             && let Some(runs) = text_mask_runs.as_ref()
             && !text_mask_active
@@ -165,13 +181,13 @@ pub(super) fn paint_background_border(
         }
         if has_radius {
             list.push(DisplayItem::RoundedRect {
-                rect: border_box,
+                rect: color_rect,
                 radii,
                 color: scaled(style.background_color, alpha_scale),
             });
         } else {
             list.push(DisplayItem::SolidColor {
-                rect: border_box,
+                rect: color_rect,
                 color: scaled(style.background_color, alpha_scale),
             });
         }
@@ -179,9 +195,6 @@ pub(super) fn paint_background_border(
 
     // `background-image`, on top of the color; missing URL => nothing painted.
     if !background_is_propagated {
-        let border_box = layout_box.dimensions.border_box();
-        let padding_box = layout_box.dimensions.padding_box();
-        let content_box = layout_box.dimensions.content;
         if style.background_geometry_explicit {
             // Full CSS Backgrounds 3 geometry for every layer, painted
             // bottom-to-top (CSS lists the top layer first).

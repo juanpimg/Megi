@@ -1045,7 +1045,7 @@ crates/paint/src/background.rs	444	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/paint/src/background/tests.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/lib.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter.rs	353	src	F2	wave-max-mod	2026-11-25	covered	#2296	per-pass text-mask collector state; re-read after change
-crates/paint/src/painter/backgrounds.rs	355	src	F2	wave-max-mod	2026-11-25	covered	#2296	claim collector from pass resources; re-read after change
+crates/paint/src/painter/backgrounds.rs	368	src	F2	wave-max-mod	2026-11-25	covered	#2296	re-read after background-clip colour rect fix; legacy path preserved
 crates/paint/src/painter/blocks.rs	185	src	F2	juanpimg	2026-11-20	covered	#1884	inline-block background paint
 crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-25	covered	#2296	removed global counter reset; budget created with per-pass resources
 crates/paint/src/painter/effects.rs	207	src	F2	wave-max-mod	2026-11-25	covered	#2296	global counter removed; re-read after change
@@ -1055,9 +1055,10 @@ crates/paint/src/painter/inline.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/paint/src/painter/stacking.rs	263	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
 crates/paint/src/painter/text.rs	407	src	F2	wave-max-mod	2026-11-25	covered	#2296	unit-test resources initializer; re-read after change
 crates/paint/src/style.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/background_geometry/color_clip.rs	88	test	F1	wave1	2026-11-25	covered	#2296	read at creation; pixel assertions for background-clip colour
 crates/paint/tests/background_geometry/common.rs	149	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_geometry/layers.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/background_geometry/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/background_geometry/main.rs	8	test	F1	wave1	2026-11-25	covered	#2296	re-read after registering colour_clip test module
 crates/paint/tests/background_geometry/tiling.rs	174	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/background_images.rs	388	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/clipping.rs	486	test	F1	wave-max-mod	2026-11-25	covered	#2296	re-read after regression test moved to its own file
