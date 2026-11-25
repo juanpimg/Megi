@@ -10,7 +10,8 @@ use std::collections::HashMap;
 
 use megi_core::{Document, Namespace, NodeId};
 use megi_css::{
-    AlignItems, AlignSelf, ComputedStyle, Display, FlexDirection, FlexWrap, JustifyContent, Length,
+    AlignItems, AlignSelf, ComputedStyle, Display, FlexDirection, FlexWrap, Float, JustifyContent,
+    Length,
 };
 use megi_layout::{BoxType, LayoutBox, Rect, layout_document};
 
@@ -107,3 +108,27 @@ impl Case {
 
 mod alignment;
 mod placement;
+
+#[test]
+fn wiki_header_flex_ignores_float_on_items() {
+    // CSS Flexbox 1 §4: `float` on an in-flow child of a flex container is
+    // ignored — it stays a flex item. Wikipedia's titlebar language selector is
+    // `float:right` inside a flex container; skipping it left the h1 alone at
+    // the flex-end edge.
+    let mut first = item_style(Length::Px(50.0), Length::Px(20.0));
+    first.float = Float::Left;
+    let second = item_style(Length::Px(50.0), Length::Px(20.0));
+    let case = layout_case(
+        flex_container_style(Length::Px(300.0), Length::Px(80.0)),
+        vec![first, second],
+    );
+    assert!(
+        !case.item(0).is_float,
+        "a flex item must not be laid out as an out-of-flow float"
+    );
+    assert_eq!(
+        case.item(1).dimensions.content.x,
+        case.item(0).dimensions.content.x + 50.0,
+        "both floated and non-floated children are flex items in tree order"
+    );
+}

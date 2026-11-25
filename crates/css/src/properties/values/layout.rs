@@ -31,6 +31,11 @@ impl Display {
         match s.trim().to_ascii_lowercase().as_str() {
             "inline" => Some(Self::Inline),
             "block" => Some(Self::Block),
+            // CSS Display 3 §2.4: `flow-root` is a block-level block container
+            // that establishes a block formatting context. Megi has no separate
+            // `Display` variant for it: mapping to `Block` keeps the block-level
+            // behaviour and the existing BFC machinery for floated content.
+            "flow-root" => Some(Self::Block),
             "inline-block" => Some(Self::InlineBlock),
             "none" => Some(Self::None),
             "flex" => Some(Self::Flex),
@@ -49,6 +54,21 @@ impl Display {
             "table-caption" => Some(Self::TableCaption),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod wiki_header_tests {
+    use super::Display;
+
+    #[test]
+    fn wiki_header_flow_root_computes_block() {
+        // CSS Display 3 §2.4: `flow-root` is a block-level block container that
+        // establishes a new block formatting context. Wikipedia's Vector skin
+        // sets `display:flow-root` on its headings; an unknown keyword must not
+        // silently compute to `inline` (which turns a flex item into an
+        // anonymous block and drops its `flex-grow`).
+        assert_eq!(Display::parse("flow-root"), Some(Display::Block));
     }
 }
 

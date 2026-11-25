@@ -46,10 +46,6 @@ pub(super) fn build_box_for_node(
 
             let style = style?;
 
-            // CSS 2.2 §9.7: `float` blockifies the box; §9.6/§9.3: absolutely
-            // positioned boxes are out of flow and also blockified.
-            let blockified = style.float != Float::None
-                || matches!(style.position, Position::Absolute | Position::Fixed);
             let tag = node
                 .as_element()
                 .map(|el| el.local_name.as_str())
@@ -62,6 +58,23 @@ pub(super) fn build_box_for_node(
                 std::borrow::Cow::Borrowed(tag)
             };
             let select_content = (tag == "select").then(|| select_control_content(doc, node_id));
+            let is_replaced_tag = matches!(
+                tag.as_ref(),
+                "img"
+                    | "input"
+                    | "select"
+                    | "textarea"
+                    | "canvas"
+                    | "video"
+                    | "audio"
+                    | "iframe"
+                    | "embed"
+                    | "object"
+            );
+            // CSS 2.2 §9.7/§9.5: floats blockify non-replaced inline boxes only;
+            // §9.6/§9.3 blockifies absolutely positioned boxes.
+            let blockified = (style.float != Float::None && !is_replaced_tag)
+                || matches!(style.position, Position::Absolute | Position::Fixed);
 
             // CSS 2.1 §17: table parts. `display` is authoritative; the HTML tag is a
             // fallback for documents whose UA stylesheet is incomplete (or for styles
@@ -90,19 +103,6 @@ pub(super) fn build_box_for_node(
                 "col" | "colgroup" => Some(BoxType::TableColumn(node_id)),
                 _ => None,
             };
-            let is_replaced = matches!(
-                tag.as_ref(),
-                "img"
-                    | "input"
-                    | "select"
-                    | "textarea"
-                    | "canvas"
-                    | "video"
-                    | "audio"
-                    | "iframe"
-                    | "embed"
-                    | "object"
-            );
             let is_explicit_table = matches!(
                 style.display,
                 Display::Table
@@ -116,7 +116,7 @@ pub(super) fn build_box_for_node(
                     | Display::TableColumn
                     | Display::TableColumnGroup
             );
-            let box_type = if is_replaced && !blockified && !is_explicit_table {
+            let box_type = if is_replaced_tag && !blockified && !is_explicit_table {
                 BoxType::Replaced(node_id)
             } else if let Some(role) = display_role {
                 role
@@ -146,7 +146,7 @@ pub(super) fn build_box_for_node(
             if pseudo_styles.is_some() {
                 counters.apply(style, depth);
             }
-            let allow_pseudos = !is_replaced && pseudo_styles.is_some();
+            let allow_pseudos = !is_replaced_tag && pseudo_styles.is_some();
 
             // Size the children buffer to the exact DOM child count instead of a fixed
             // `with_capacity(4)`: most elements have 1–2 children, so the old capacity
