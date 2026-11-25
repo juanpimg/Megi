@@ -59,3 +59,30 @@ fn peek_never_changes_the_band_height_or_the_page_inset_basis() {
     mode.set_peek(false, now);
     assert_eq!(mode.state(now).inset_css, chrome::RAIL_COLLAPSED_WIDTH);
 }
+
+#[test]
+fn settings_toggle_setters_drive_live_chrome_state() {
+    // Phase 4: the settings page writes the same fields the shortcuts write.
+    let now = Instant::now();
+    let mut mode = ChromeMode::new(false);
+    assert!(!mode.compact());
+    assert!(!mode.reduced_motion());
+
+    mode.set_compact(true);
+    assert!(mode.compact());
+    assert_eq!(mode.state(now).band_css, chrome::COMPACT_CHROME_HEIGHT);
+
+    mode.set_reduced_motion(true);
+    mode.set_peek(true, now);
+    assert!(mode.peek_deadline().is_none());
+    assert_eq!(mode.state(now).rail_width_css, chrome::RAIL_PEEK_WIDTH);
+
+    mode.set_rail_open(true);
+    assert_eq!(mode.state(now).inset_css, chrome::RAIL_EXPANDED_WIDTH);
+    assert!(mode.peek_deadline().is_none());
+
+    mode.set_reduced_motion(false);
+    mode.set_rail_open(false);
+    mode.set_peek(true, now);
+    assert!(mode.peek_deadline().is_some(), "animation restored");
+}

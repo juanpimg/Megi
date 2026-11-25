@@ -252,8 +252,7 @@ mod tests {
                 s.settings_vertical_rail,
                 s.settings_compact_mode,
                 s.settings_reduced_motion,
-                s.settings_coming_phase,
-                s.settings_coming_phase_note,
+                s.settings_toggle_note,
             ] {
                 assert!(!value.is_empty(), "{locale:?} has an empty string");
             }
