@@ -67,6 +67,8 @@ use crate::url::{Scheme, Url};
 pub const HEURISTIC_FRESHNESS: Duration = Duration::from_secs(300);
 const MAX_CACHE_ENTRIES: usize = 256;
 const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
+/// Cap for the DevTools Network log (bounded memory; older events are dropped first).
+const MAX_NETWORK_EVENTS: usize = 256;
 
 /// A successfully loaded resource.
 #[derive(Clone, Debug)]
@@ -92,6 +94,43 @@ impl Resource {
     /// Returns the MIME hint implied by the payload bytes.
     pub fn sniffed(&self) -> MimeHint {
         mime::sniff(&self.bytes)
+    }
+}
+
+/// One request/response observation made by this loader (M7 DevTools Network domain).
+///
+/// DevTools emits its waterfall from these values: they are the loader's own measurements,
+/// never a snapshot invented in the protocol layer.
+#[derive(Clone, Debug)]
+pub struct NetworkEvent {
+    pub url: String,
+    pub method: String,
+    pub status: u16,
+    pub content_type: String,
+    pub encoded_bytes: usize,
+    pub from_cache: bool,
+    pub duration: Duration,
+    pub error: Option<String>,
+}
+
+impl NetworkEvent {
+    /// Builds a successful observation from the resource the loader actually returned.
+    pub(super) fn from_resource(
+        resource: &Resource,
+        method: &str,
+        from_cache: bool,
+        duration: Duration,
+    ) -> Self {
+        Self {
+            url: resource.url.as_str().to_owned(),
+            method: method.to_owned(),
+            status: resource.status,
+            content_type: resource.content_type.clone(),
+            encoded_bytes: resource.bytes.len(),
+            from_cache,
+            duration,
+            error: None,
+        }
     }
 }
 
@@ -178,6 +217,8 @@ pub struct ResourceLoader {
     /// Scheme of the document this loader serves (#1528). When `https:`, `http:` subresources
     /// are blocked (active content) or upgraded (passive content) by [`Self::load_checked`].
     mixed_content_context: Option<Scheme>,
+    /// Real request/response observations for the DevTools Network domain.
+    events: Vec<NetworkEvent>,
 }
 
 impl Default for ResourceLoader {

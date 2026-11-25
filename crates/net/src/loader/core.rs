@@ -80,6 +80,7 @@ impl ResourceLoader {
             h1_pool,
             allow_file: true,
             mixed_content_context: None,
+            events: Vec::new(),
         }
     }
 
@@ -99,7 +100,27 @@ impl ResourceLoader {
             h1_pool: crate::http::H1Pool::new(4, std::time::Duration::from_secs(30)),
             allow_file: true,
             mixed_content_context: None,
+            events: Vec::new(),
         }
+    }
+
+    /// Real request/response observations recorded by this loader (M7 Network domain).
+    pub fn network_events(&self) -> &[NetworkEvent] {
+        &self.events
+    }
+
+    /// Records one observation, keeping the log bounded (oldest events are dropped first).
+    pub(super) fn record_network_event(&mut self, event: NetworkEvent) {
+        if self.events.len() == MAX_NETWORK_EVENTS {
+            self.events.remove(0);
+        }
+        self.events.push(event);
+    }
+
+    /// Merges the navigation loader's observations into the subresource loader that
+    /// becomes the render session's event log.
+    pub fn absorb_network_events_from(&mut self, other: &mut Self) {
+        self.events.append(&mut other.events);
     }
 
     /// Allows or forbids loading `file:` URLs (allowed by default).
@@ -313,7 +334,37 @@ impl ResourceLoader {
     /// transfer the warm pool to the loader that serves the page's subresources. Keeping the
     /// pool behind this method avoids exposing the connection store as a field.
     pub fn fetch_navigation_pooled(&mut self, url: &Url) -> Result<Response, FetchError> {
-        crate::http::fetch_pooled_following_redirects(url, &self.options, &mut self.h1_pool)
+        // M7 Network domain: a navigation is a real request of this load session.
+        let started = Instant::now();
+        let result =
+            crate::http::fetch_pooled_following_redirects(url, &self.options, &mut self.h1_pool);
+        match &result {
+            Ok(response) => {
+                let resource = Resource {
+                    status: response.status,
+                    url: response.final_url.clone(),
+                    bytes: response.body.clone(),
+                    content_type: mime::resolve_content_type(&response.headers, &response.body),
+                };
+                self.record_network_event(NetworkEvent::from_resource(
+                    &resource,
+                    "GET",
+                    false,
+                    started.elapsed(),
+                ));
+            }
+            Err(error) => self.record_network_event(NetworkEvent {
+                url: url.as_str().to_owned(),
+                method: "GET".to_owned(),
+                status: 0,
+                content_type: String::new(),
+                encoded_bytes: 0,
+                from_cache: false,
+                duration: started.elapsed(),
+                error: Some(error.to_string()),
+            }),
+        }
+        result
     }
 
     /// Transfers the warmed keep-alive pool of `other` into this loader. Both loaders belong

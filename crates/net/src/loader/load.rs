@@ -9,16 +9,24 @@ impl ResourceLoader {
         self.check_file_access(url)?;
         // `data:` URLs are immutable inline payloads: decode on demand, no cache.
         if url.scheme() == Scheme::Data {
+            let started = Instant::now();
             let data = decode_data_url(url)?;
             if data.bytes.len() > self.options.max_response_bytes {
                 return Err(LoadError::Fetch(FetchError::ResponseTooLarge));
             }
-            return Ok(Arc::new(Resource {
+            let resource = Resource {
                 status: 200,
                 url: url.clone(),
                 bytes: data.bytes,
                 content_type: data.mime_type,
-            }));
+            };
+            self.record_network_event(NetworkEvent::from_resource(
+                &resource,
+                "GET",
+                false,
+                started.elapsed(),
+            ));
+            return Ok(Arc::new(resource));
         }
 
         // Server-pushed preloads are consumed before any cache/network work (per session).

@@ -12,6 +12,8 @@ impl ResourceLoader {
         &mut self,
         url: &Url,
     ) -> Result<(Resource, Option<Headers>, Option<u16>), FetchError> {
+        // M7 Network domain: record the loader's own observation of every real fetch.
+        let started = Instant::now();
         match url.scheme() {
             Scheme::Http | Scheme::Https => {
                 let mut response =
@@ -24,38 +26,47 @@ impl ResourceLoader {
                 let status = response.status;
                 self.store_pushed(std::mem::take(&mut response.pushed));
                 let headers = response.headers.clone();
-                Ok((
-                    resource_from_response(response),
-                    Some(headers),
-                    Some(status),
-                ))
+                let resource = resource_from_response(response);
+                self.record_network_event(NetworkEvent::from_resource(
+                    &resource,
+                    "GET",
+                    false,
+                    started.elapsed(),
+                ));
+                Ok((resource, Some(headers), Some(status)))
             }
             Scheme::File => {
                 let bytes = load_file_url_with_limit(url, self.options.max_response_bytes)?;
-                Ok((
-                    Resource {
-                        status: 200,
-                        url: url.clone(),
-                        content_type: mime::sniff(&bytes).mime_type().to_owned(),
-                        bytes,
-                    },
-                    None,
-                    None,
-                ))
+                let resource = Resource {
+                    status: 200,
+                    url: url.clone(),
+                    content_type: mime::sniff(&bytes).mime_type().to_owned(),
+                    bytes,
+                };
+                self.record_network_event(NetworkEvent::from_resource(
+                    &resource,
+                    "GET",
+                    false,
+                    started.elapsed(),
+                ));
+                Ok((resource, None, None))
             }
             Scheme::Data => {
                 // Handled before the cache lookup in `load`; defensive fallback.
                 let data = decode_data_url(url)?;
-                Ok((
-                    Resource {
-                        status: 200,
-                        url: url.clone(),
-                        bytes: data.bytes,
-                        content_type: data.mime_type,
-                    },
-                    None,
-                    None,
-                ))
+                let resource = Resource {
+                    status: 200,
+                    url: url.clone(),
+                    bytes: data.bytes,
+                    content_type: data.mime_type,
+                };
+                self.record_network_event(NetworkEvent::from_resource(
+                    &resource,
+                    "GET",
+                    false,
+                    started.elapsed(),
+                ));
+                Ok((resource, None, None))
             }
         }
     }

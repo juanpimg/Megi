@@ -214,7 +214,7 @@ pub use integrity::{
     IntegrityError, IntegrityHash, matches_sha256_base64, matches_sha384_base64,
     matches_sha512_base64, parse_integrity, sha256, sha384, sha512, verify_integrity,
 };
-pub use loader::{HEURISTIC_FRESHNESS, Resource, ResourceLoader};
+pub use loader::{HEURISTIC_FRESHNESS, NetworkEvent, Resource, ResourceLoader};
 pub use mime::{MimeHint, resolve_content_type, sniff};
 pub use mixed_content::{MixedContentAction, MixedContentPolicy};
 pub use proxy::{ProxyConfig, proxy_authorization, proxy_authorization_for};
