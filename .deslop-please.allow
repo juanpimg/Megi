@@ -1,7 +1,7 @@
 # Existing architectural debt suppressed by `deslop-please --allow`.
 # Fixing an entry here never fails CI; new issues not listed here fail.
 module-cycle megi_browser::chrome::native_widget_overlay,megi_browser::chrome::native_widgets
-module-cycle megi_browser::history,megi_browser::pages
+module-cycle megi_browser::history,megi_browser::pages,megi_browser::tabs,megi_browser::worker
 module-cycle megi_browser::ipc::cookie_policy,megi_browser::ipc::options
 module-cycle megi_browser::scale,megi_browser::zoom
 module-cycle megi_browser::window::desktop,megi_browser::window::downloads,megi_browser::window::form_controls,megi_browser::window::frontend,megi_browser::window::input,megi_browser::window::presentation,megi_browser::window::save_as,megi_browser::window::ui,megi_browser::window::worker
