@@ -38,12 +38,12 @@ tests = 3418
 tests_commit = "a8f26814"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 250244
+rust_lines = 250733
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "a8f26814"
+verified_commit = "cf819505"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -52,13 +52,13 @@ css_syntax = "100 / 100"
 # --- M0 — Verdad y cimiento -------------------------------------------------------------
 [wpt]
 revision = "ab2ef95d3a7c512a6e7321688c80e428086af426"
-manifest_sha256 = "bc7a89e96337b0253d22a7448bd5da938ff58dc0308548ea3ff0ae388a87a40d"
-passed = 100
-total = 100
-dirs = 1
+manifest_sha256 = "6e705178405838132ddb89da90c56490920b6b6d0abb7ecfd2ad816a4cdbcd0a"
+passed = 478
+total = 478
+dirs = 2
 allowlist = 0
-distribution = "PASS=100; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
-headline = "WPT ab2ef95 — 100/100 subtests pasados (dirs: 1)"
+distribution = "PASS=478; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
+headline = "WPT ab2ef95 — 478/478 subtests pasados (dirs: 2)"
 status = "PASS"
 
 [[phase]]
