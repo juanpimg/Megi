@@ -62,106 +62,163 @@ pub(crate) fn iframe_content_document(
     Ok(init.build().into())
 }
 
-pub(crate) fn slot_host(slot: NodeId, context: &mut Context) -> Option<NodeId> {
-    with_context_host(context, |host| {
-        let mut current = Some(slot);
-        while let Some(id) = current {
-            if let Some(host_node) = host.shadow_hosts.get(&id) {
-                return Some(*host_node);
-            }
-            current = host.document.try_node(id).and_then(|node| node.parent);
+/// `Slotable.assignedSlot` (WHATWG DOM §4.9.2): the slot in the parent's shadow tree
+/// whose name matches this node's `slot` attribute. Closed trees expose no slot.
+pub(crate) fn node_assigned_slot_get(
+    this: &JsValue,
+    _args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = this_node(this, context)?;
+    let slot = with_context_host(context, |host| {
+        let parent = host.document.try_node(node).and_then(|n| n.parent)?;
+        let root = host.shadow_roots.get(&parent).copied()?;
+        if host
+            .shadow_modes
+            .get(&parent)
+            .is_some_and(|mode| mode == "closed")
+        {
+            return None;
         }
-        None
+        let name = host
+            .document
+            .try_node(node)
+            .and_then(|n| n.as_element())
+            .and_then(|e| e.get_attribute("slot").map(str::to_owned))
+            .unwrap_or_default();
+        host.document.descendants(root).find(|id| {
+            host.document
+                .try_node(*id)
+                .and_then(|n| n.as_element())
+                .is_some_and(|e| {
+                    e.local_name == "slot" && e.get_attribute("name").unwrap_or("") == name
+                })
+        })
     })
-    .flatten()
+    .flatten();
+    match slot {
+        Some(id) => wrap_node(context, id),
+        None => Ok(JsValue::null()),
+    }
 }
 
-/// `HTMLSlotElement.assignedNodes()` (#1541): returns the light-DOM children of the shadow host
-/// assigned to this slot. Named slots take children with a matching `slot` attribute; the
-/// default slot takes children without one. `flatten` is accepted for API compatibility.
+fn slot_name_of(host: &crate::host::Host, slot: megi_core::NodeId) -> String {
+    host.document
+        .try_node(slot)
+        .and_then(|node| node.as_element())
+        .and_then(|element| element.get_attribute("name").map(str::to_owned))
+        .unwrap_or_default()
+}
+
+fn slot_root(
+    host: &crate::host::Host,
+    slot: megi_core::NodeId,
+) -> Option<(megi_core::NodeId, megi_core::NodeId)> {
+    let mut current = Some(slot);
+    while let Some(id) = current {
+        if let Some(host_node) = host.shadow_hosts.get(&id) {
+            return Some((*host_node, id));
+        }
+        current = host.document.try_node(id).and_then(|node| node.parent);
+    }
+    None
+}
+
+fn is_slottable(host: &crate::host::Host, id: megi_core::NodeId) -> bool {
+    host.document.try_node(id).is_some_and(|node| {
+        matches!(
+            node.kind,
+            megi_core::NodeKind::Element(_) | megi_core::NodeKind::Text(_)
+        )
+    })
+}
+
+fn is_slot(host: &crate::host::Host, id: megi_core::NodeId) -> bool {
+    host.document
+        .try_node(id)
+        .and_then(|node| node.as_element())
+        .is_some_and(|element| element.local_name == "slot")
+}
+
+/// WHATWG DOM §4.9.3: only the first slot with a given name in a shadow tree receives
+/// slottables; later slots with the same name stay empty.
+fn assigned_nodes_of(host: &crate::host::Host, slot: megi_core::NodeId) -> Vec<megi_core::NodeId> {
+    let Some((host_node, root)) = slot_root(host, slot) else {
+        return Vec::new();
+    };
+    let name = slot_name_of(host, slot);
+    let first = host
+        .document
+        .descendants(root)
+        .find(|id| is_slot(host, *id) && slot_name_of(host, *id) == name);
+    if first != Some(slot) {
+        return Vec::new();
+    }
+    host.document
+        .children(host_node)
+        .filter(|id| {
+            is_slottable(host, *id)
+                && host
+                    .document
+                    .try_node(*id)
+                    .and_then(|node| node.as_element())
+                    .and_then(|element| element.get_attribute("slot").map(str::to_owned))
+                    .unwrap_or_default()
+                    == name
+        })
+        .collect()
+}
+
+fn flatten_node(
+    host: &crate::host::Host,
+    id: megi_core::NodeId,
+    seen: &mut std::collections::HashSet<megi_core::NodeId>,
+    out: &mut Vec<megi_core::NodeId>,
+) {
+    if !seen.insert(id) {
+        return;
+    }
+    if !is_slot(host, id) {
+        out.push(id);
+        return;
+    }
+    let assigned = assigned_nodes_of(host, id);
+    if assigned.is_empty() {
+        for child in host.document.children(id) {
+            flatten_node(host, child, seen, out);
+        }
+    } else {
+        for child in assigned {
+            flatten_node(host, child, seen, out);
+        }
+    }
+}
+
+/// `HTMLSlotElement.assignedNodes()` (WHATWG DOM §4.9.3): assigned slottables, or,
+/// with `flatten`, their distributed nodes with fallback children for empty slots.
 pub(crate) fn slot_assigned_nodes(
     this: &JsValue,
     args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let slot = this_node(this, context)?;
-    let Some(host_node) = slot_host(slot, context) else {
-        return wrap_list(context, Vec::new());
-    };
-    let slot_name = with_context_host(context, |host| {
-        host.document
-            .try_node(slot)
-            .and_then(|node| node.as_element())
-            .and_then(|element| element.get_attribute("name").map(str::to_owned))
-    })
-    .flatten()
-    .unwrap_or_default();
     let flatten = args
         .first()
         .and_then(JsValue::as_object)
         .and_then(|options| options.get(js_string!("flatten"), context).ok())
         .and_then(|value| value.as_boolean())
         .unwrap_or(false);
-
     let assigned = with_context_host(context, |host| {
-        let document = &host.document;
-        let mut children = Vec::new();
-        let mut child = document
-            .try_node(host_node)
-            .and_then(|node| node.first_child);
-        while let Some(id) = child {
-            let child_slot = document
-                .try_node(id)
-                .and_then(|node| node.as_element())
-                .and_then(|element| element.get_attribute("slot").map(str::to_owned))
-                .unwrap_or_default();
-            let matches = if slot_name.is_empty() {
-                child_slot.is_empty()
-            } else {
-                child_slot == slot_name
-            };
-            if matches {
-                children.push(id);
-            }
-            child = document.try_node(id).and_then(|node| node.next_sibling);
+        let direct = assigned_nodes_of(host, slot);
+        if !flatten {
+            return direct;
         }
-        if flatten {
-            let mut flattened = Vec::new();
-            for id in children {
-                let is_slot = document
-                    .try_node(id)
-                    .and_then(|node| node.as_element())
-                    .is_some_and(|element| element.local_name == "slot");
-                if is_slot && id != slot {
-                    let name = document
-                        .try_node(id)
-                        .and_then(|node| node.as_element())
-                        .and_then(|element| element.get_attribute("name").map(str::to_owned))
-                        .unwrap_or_default();
-                    let mut nested = document
-                        .try_node(host_node)
-                        .and_then(|node| node.first_child);
-                    while let Some(candidate) = nested {
-                        let candidate_slot = document
-                            .try_node(candidate)
-                            .and_then(|node| node.as_element())
-                            .and_then(|element| element.get_attribute("slot").map(str::to_owned))
-                            .unwrap_or_default();
-                        if candidate_slot == name {
-                            flattened.push(candidate);
-                        }
-                        nested = document
-                            .try_node(candidate)
-                            .and_then(|node| node.next_sibling);
-                    }
-                } else {
-                    flattened.push(id);
-                }
-            }
-            flattened
-        } else {
-            children
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for id in direct {
+            flatten_node(host, id, &mut seen, &mut out);
         }
+        out
     })
     .unwrap_or_default();
     wrap_list(context, assigned)

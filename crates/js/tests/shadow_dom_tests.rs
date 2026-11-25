@@ -74,6 +74,37 @@ fn closed_shadow_root_is_hidden_but_exposes_its_host() {
 }
 
 #[test]
+fn assigned_slot_tracks_light_children_and_closed_trees() {
+    let mut runtime = runtime();
+    let out = runtime
+        .eval(
+            "var host = document.createElement('div'); \
+             document.body.appendChild(host); \
+             var root = host.attachShadow({mode: 'open'}); \
+             var slot = document.createElement('slot'); \
+             slot.setAttribute('name', 'one'); \
+             root.appendChild(slot); \
+             var light = document.createElement('span'); \
+             light.setAttribute('slot', 'one'); \
+             host.appendChild(light); \
+             var open = light.assignedSlot === slot \
+                     && slot.assignedNodes()[0] === light; \
+             var closedHost = document.createElement('div'); \
+             document.body.appendChild(closedHost); \
+             var closed = closedHost.attachShadow({mode: 'closed'}); \
+             var closedSlot = document.createElement('slot'); \
+             closed.appendChild(closedSlot); \
+             var closedLight = document.createElement('span'); \
+             closedHost.appendChild(closedLight); \
+             String(open && closedLight.assignedSlot === null \
+                    && closedSlot.assignedNodes()[0] === closedLight);",
+            "t",
+        )
+        .expect("assignedSlot");
+    assert_eq!(out, "true");
+}
+
+#[test]
 fn attach_shadow_validates_mode_and_safelisted_elements() {
     let mut runtime = runtime();
     let out = runtime

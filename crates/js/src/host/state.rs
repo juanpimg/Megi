@@ -166,4 +166,9 @@ pub(crate) struct Host {
     /// WHATWG Custom Elements §4.4.3: `super()` in a custom element constructor must
     /// create the element for that registry name instead of throwing.
     pub custom_element_construction: Option<String>,
+    /// Node whose existing JS wrapper must be returned by `super()` while upgrading.
+    /// WHATWG Custom Elements §4.2: upgrade reactions reuse the element's identity.
+    pub custom_element_upgrade_target: Option<NodeId>,
+    /// Nodes already upgraded for a registry name, in insertion order per name.
+    pub custom_element_upgraded: std::collections::HashMap<NodeId, String>,
 }

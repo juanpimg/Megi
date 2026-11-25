@@ -31,9 +31,15 @@ fn element_illegal_constructor(
     // the HTMLElement constructor creates the element with the registry's local name.
     let mut tag =
         with_context_host(context, |host| host.custom_element_construction.take()).flatten();
-    if tag.is_none()
-        && let Some(new_target_prototype) = this.as_object().and_then(|object| object.prototype())
-    {
+    // Boa passes `new.target` (the constructor function) as `this` for `new`.
+    // WHATWG Custom Elements §4.4.3: compare its `prototype` with the registry.
+    let new_target_prototype = this
+        .as_object()
+        .filter(|object| object.is_callable())
+        .and_then(|object| object.get(js_string!("prototype"), context).ok())
+        .and_then(|value| value.as_object())
+        .or_else(|| this.as_object().and_then(|object| object.prototype()));
+    if tag.is_none() && new_target_prototype.is_some() {
         // Direct `new X()` in a custom element constructor's `super()` carries the
         // registered constructor's prototype as the fresh `this` prototype (WHATWG
         // Custom Elements §4.4.3). Match it against the registry to infer the local name.
@@ -50,12 +56,25 @@ fn element_illegal_constructor(
                 .get(js_string!(format!("__megi_ce_{handle}")), context)
                 && let Some(constructor) = constructor.as_callable()
                 && let Ok(prototype) = constructor.get(js_string!("prototype"), context)
-                && prototype.as_object() == Some(new_target_prototype.clone())
+                && prototype.as_object() == new_target_prototype
             {
                 tag = Some(name);
                 break;
             }
         }
+    }
+    // WHATWG Custom Elements §4.2: an upgrade reaction reuses the existing wrapper;
+    // `super()` returns that object to the derived constructor instead of a new node.
+    if let Some(target) =
+        with_context_host(context, |host| host.custom_element_upgrade_target.take()).flatten()
+    {
+        let wrapper = wrap_node(context, target)?;
+        if let (Some(object), Some(prototype)) =
+            (wrapper.as_object(), new_target_prototype.as_ref())
+        {
+            object.set_prototype(Some(prototype.clone()));
+        }
+        return Ok(wrapper);
     }
     if let Some(tag) = tag {
         let node = with_context_host(context, |host| {
@@ -63,7 +82,15 @@ fn element_illegal_constructor(
                 .create_element(Namespace::Html, tag, Vec::new())
         });
         if let Some(node) = node {
-            return wrap_node(context, node);
+            let wrapper = wrap_node(context, node)?;
+            // WHATWG Custom Elements §4.4.3: `new X()` must inherit from X.prototype,
+            // not from HTMLElement.prototype (so `instanceof X` holds).
+            if let (Some(object), Some(prototype)) =
+                (wrapper.as_object(), new_target_prototype.as_ref())
+            {
+                object.set_prototype(Some(prototype.clone()));
+            }
+            return Ok(wrapper);
         }
     }
     Err(boa_engine::JsNativeError::typ()
@@ -165,6 +192,11 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
         js_string!("__megi_slot_assigned_nodes_native"),
         0,
         native(crate::runtime::slot_assigned_nodes),
+    );
+    let _ = context.register_global_builtin_callable(
+        js_string!("__megi_assigned_slot_native"),
+        0,
+        native(crate::runtime::node_assigned_slot_get),
     );
     let _ = context.register_global_builtin_callable(
         js_string!("__megi_attach_shadow_native"),

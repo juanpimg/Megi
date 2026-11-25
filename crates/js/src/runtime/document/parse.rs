@@ -204,6 +204,49 @@ pub(crate) fn is_valid_element_name(name: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '.' | '_' | ':'))
 }
 
+/// Collects connected elements to upgrade in shadow-including tree order.
+/// WHATWG Custom Elements §4.2: upgrade reactions run for connected candidates only.
+fn upgrade_candidates(host: &Host, name: &str) -> Vec<NodeId> {
+    let mut candidates = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let mut stack = vec![host.document.root()];
+    while let Some(node_id) = stack.pop() {
+        if !visited.insert(node_id) {
+            continue;
+        }
+        if let Some(node) = host.document.try_node(node_id)
+            && let megi_core::NodeKind::Element(data) = &node.kind
+            && data.namespace == Namespace::Html
+            && data.local_name == name
+            && !host.custom_element_upgraded.contains_key(&node_id)
+        {
+            candidates.push(node_id);
+        }
+        // LIFO: push light children first so shadow trees are visited before them.
+        for child in host
+            .document
+            .children(node_id)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            stack.push(child);
+        }
+        if let Some(shadow) = host.shadow_roots.get(&node_id) {
+            for child in host
+                .document
+                .children(*shadow)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
+                stack.push(child);
+            }
+        }
+    }
+    candidates
+}
+
 /// `customElements.define(name, constructor)` (#1541): registers a constructor for a custom tag.
 /// The name must contain a hyphen (Custom Elements spec). The constructor is stored on the global
 /// object under an opaque key so `createElement` can invoke it to upgrade new instances.
@@ -237,11 +280,30 @@ pub(crate) fn custom_elements_define(
         .global_object()
         .set(
             js_string!(format!("__megi_ce_{handle}")),
-            JsValue::from(constructor),
+            JsValue::from(constructor.clone()),
             false,
             context,
         )
         .map_err(|error| js_error(error.to_string()))?;
+    let candidates =
+        with_context_host(context, |host| upgrade_candidates(host, &name)).unwrap_or_default();
+    for node in candidates {
+        let skip = with_context_host(context, |host| {
+            if host.custom_element_upgraded.contains_key(&node) {
+                return true;
+            }
+            host.custom_element_upgraded.insert(node, name.clone());
+            host.custom_element_upgrade_target = Some(node);
+            false
+        })
+        .unwrap_or(true);
+        if skip {
+            continue;
+        }
+        // WHATWG Custom Elements §4.2: upgrade reactions reuse the connected element.
+        let _ = constructor.construct(&[], Some(&constructor), context);
+        let _ = with_context_host(context, |host| host.custom_element_upgrade_target.take());
+    }
     Ok(JsValue::undefined())
 }
 

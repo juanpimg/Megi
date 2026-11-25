@@ -602,13 +602,6 @@ if (typeof IntersectionObserver !== 'function') {
     Object.defineProperty(ShadowRoot.prototype, 'activeElement', { get: function () { return null; }, configurable: true });
     Object.defineProperty(ShadowRoot.prototype, 'styleSheets', { get: function () { return []; }, configurable: true });
   }
-  // WHATWG DOM §4.10: Slotable.assignedSlot is null outside a shadow tree.
-  if (typeof Element === 'function') {
-    Object.defineProperty(Element.prototype, 'assignedSlot', { get: function () { return null; }, configurable: true });
-  }
-  if (typeof Text === 'function') {
-    Object.defineProperty(Text.prototype, 'assignedSlot', { get: function () { return null; }, configurable: true });
-  }
   // WHATWG DOM §4.9: attachShadow validates `mode`, rejects a second attach and
   // disallows non-safelisted elements. The native entry point only creates the root.
   if (typeof Element !== 'undefined' && Element.prototype && typeof globalThis.__megi_attach_shadow_native === 'function') {
@@ -645,6 +638,18 @@ if (typeof IntersectionObserver !== 'function') {
     });
   }
   if (typeof Text !== 'function') define('Text', StubCtor('Text'));
+  // WHATWG DOM §4.9.2: Slotable.assignedSlot is shared by Element and Text wrappers;
+  // the native returns null for closed trees and for nodes without a shadow parent.
+  if (typeof globalThis.__megi_assigned_slot_native === 'function') {
+    var nativeAssignedSlot = globalThis.__megi_assigned_slot_native;
+    var slotableGetter = function () { return nativeAssignedSlot.call(this); };
+    Object.defineProperty(Element.prototype, 'assignedSlot', {
+      get: slotableGetter, configurable: true
+    });
+    Object.defineProperty(Text.prototype, 'assignedSlot', {
+      get: slotableGetter, configurable: true
+    });
+  }
   if (typeof Comment !== 'function') define('Comment', StubCtor('Comment'));
   if (typeof Attr !== 'function') define('Attr', StubCtor('Attr'));
   if (typeof Document !== 'function') define('Document', StubCtor('Document'));
