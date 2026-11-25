@@ -12,12 +12,16 @@ pub(crate) use std::fmt::Write as _;
 pub(crate) use std::io;
 pub(crate) use std::path::{Path, PathBuf};
 
+mod about;
+pub use about::*;
 mod html;
 pub use html::*;
 mod listing;
 pub use listing::*;
 mod input;
 pub use input::*;
+#[cfg(test)]
+mod about_tests;
 #[cfg(test)]
 mod i18n_tests;
 #[cfg(test)]

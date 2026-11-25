@@ -61,6 +61,37 @@ fn headless_about_history_renders_known_entries_and_dimensions() {
 }
 
 #[test]
+fn headless_about_pages_render_expected_text() {
+    for (url, expected) in [("about:megi", "Megi"), ("about:config", "Config")] {
+        let prepared = megi_browser::pages::prepare_input(url).expect("about input");
+        assert!(
+            prepared.starts_with("data:text/html;charset=utf-8,"),
+            "{url} prepared as data URL"
+        );
+        let output = megi_browser::render_target(&prepared, 480, 320)
+            .unwrap_or_else(|error| panic!("{url} render: {error}"));
+        assert_eq!(output.dimensions(), (480, 320));
+        let text = output
+            .document
+            .text_content(output.document.body().expect("body"));
+        assert!(text.contains(expected), "{url} text: {text}");
+        assert!(!text.contains("script"), "{url} text: {text}");
+    }
+    let megi_html = megi_browser::pages::about_page_html_with_locale(
+        "about:megi",
+        megi_browser::i18n::Locale::En,
+    );
+    assert!(megi_html.contains("docs/status/progress.toml"));
+    assert!(megi_html.contains("generated snapshot, not a live measurement"));
+    let config_html = megi_browser::pages::about_page_html_with_locale(
+        "about:config",
+        megi_browser::i18n::Locale::En,
+    );
+    assert!(config_html.contains("browser.tabs.max"));
+    assert!(!config_html.contains("p95"));
+}
+
+#[test]
 fn chrome_and_find_outputs_are_encoded_exactly_once() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");

@@ -56,6 +56,9 @@ pub fn prepare_input(input: &str) -> Result<String, (String, String)> {
     if crate::history::is_history_url(input) {
         return Ok(data_url(&crate::history::history_page_html(&[])));
     }
+    if is_about_page_url(input) {
+        return Ok(data_url(&about_page_html(input)));
+    }
     match resolve_directory(input) {
         Some(Ok(url)) => Ok(url),
         Some(Err(error)) => Err(error),

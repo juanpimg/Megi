@@ -267,6 +267,10 @@ pub use links::{
     physical_to_page, resolve_href,
 };
 pub use navigation::{MAX_HISTORY, NavigationOutcome, NavigationState};
+pub use pages::{
+    about_kv_row, about_page_html, about_page_html_with_locale, about_shell,
+    about_shell_with_locale, is_about_page_url,
+};
 pub use present::{present_region, viewport_slice};
 pub use reader::{Article, is_reader_url, reader_page};
 pub use refresh::{DEFAULT_REFRESH_MS, MIN_REFRESH_MS, RefreshPolicy, RefreshTimer};

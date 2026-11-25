@@ -87,6 +87,10 @@ pub struct Strings {
     pub script_error: &'static str,
     /// Plural script-error label in the window title.
     pub script_errors: &'static str,
+    /// Honest provenance note on generated `about:` diagnostics pages.
+    pub about_snapshot_note: &'static str,
+    /// Label for diagnostics that are not measured in this build.
+    pub about_not_available: &'static str,
 }
 
 /// Returns the strings table for `locale`.
@@ -125,6 +129,8 @@ pub fn strings(locale: Locale) -> Strings {
             warnings: "warnings",
             script_error: "script error",
             script_errors: "script errors",
+            about_snapshot_note: "generated snapshot, not a live measurement",
+            about_not_available: "not available in this build",
         },
         Locale::Es => Strings {
             error_loading: "Error al cargar la página",
@@ -159,6 +165,8 @@ pub fn strings(locale: Locale) -> Strings {
             warnings: "avisos",
             script_error: "error de script",
             script_errors: "errores de script",
+            about_snapshot_note: "instantánea generada, no medición en vivo",
+            about_not_available: "no disponible en esta compilación",
         },
     }
 }
@@ -204,6 +212,8 @@ mod tests {
                 s.warnings,
                 s.script_error,
                 s.script_errors,
+                s.about_snapshot_note,
+                s.about_not_available,
             ] {
                 assert!(!value.is_empty(), "{locale:?} has an empty string");
             }
