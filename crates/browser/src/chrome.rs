@@ -39,6 +39,7 @@ mod history_menu;
 mod menus;
 mod native_widgets;
 mod navigation;
+mod rail;
 mod status_bar;
 mod tab_strip;
 pub mod tokens;
@@ -72,6 +73,10 @@ pub use menus::{
 pub use navigation::{
     NavigationButton, NavigationButtons, navigation_button_at, navigation_buttons,
     navigation_buttons_width,
+};
+pub use rail::{
+    RailHit, RailLayout, RailTabRect, RailView, draw_rail_over_pixmap, layout_rail, paint_rail,
+    rail_hit,
 };
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{
@@ -247,6 +252,9 @@ pub struct ChromeView<'a> {
     /// IME preedit (composition) text shown at the address-bar caret while editing.
     /// Empty when no composition is active or the address bar is not the IME target.
     pub ime_preedit: &'a str,
+    /// Optional vertical tab rail painted below the top band (Phase 1 UI).
+    /// `None` keeps every existing chrome pixel byte-identical.
+    pub rail: Option<RailView<'a>>,
 }
 
 /// Paints the chrome over a physical `0RGB` framebuffer; returns the painted pixel count.
@@ -274,6 +282,12 @@ pub fn draw_chrome(
     let css_width = view.css_width.max(1.0);
     paint_tab_strip(&mut pixmap, scale, view, css_width);
     paint_address_bar(&mut pixmap, scale, view, css_width);
+    // The rail is painted before floating menus so those keep their layering.
+    // With `rail: None` this block is a no-op and all legacy pixels are intact.
+    if let Some(rail) = view.rail {
+        let rail_layout = layout_rail(css_width, dest_height as f32 / scale, scale, &rail);
+        paint_rail(&mut pixmap, scale, &rail_layout, &rail);
+    }
     if let Some(dropdown) = view.dropdown {
         paint_dropdown(&mut pixmap, scale, view, dropdown);
     }

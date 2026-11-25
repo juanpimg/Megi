@@ -243,6 +243,7 @@ impl WindowApp {
             download_status: None,
             history_button: true,
             ime_preedit,
+            rail: None,
         };
         let download_status = self.download.status_text();
         // #1724: surface document-field IME preedit in the status bar; the address bar

@@ -37,6 +37,7 @@ fn view<'a>(
         download_status: None,
         history_button: false,
         ime_preedit: "",
+        rail: None,
     }
 }
 
