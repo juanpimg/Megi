@@ -2,12 +2,12 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "2bd5439fa2862b5afe0d97f25d893e697df3d4c7a2bcc88d831c20ca7f1b7e65"
+    "manifest_sha256": "fdceead4268d342f7d297992e4d2fc63582a75604ec365e27d6f9e87e50a2b60"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "10 vendored WPT fixtures (531 executed subtests, 4 dirs); NOT full WPT conformance",
-    "adopted_subtests": 531,
+    "scope": "11 vendored WPT fixtures (544 executed subtests, 4 dirs); NOT full WPT conformance",
+    "adopted_subtests": 544,
     "dirs": [
       "tests/wpt/css/css-syntax",
       "tests/wpt/custom-elements",
@@ -16,13 +16,13 @@
     ]
   },
   "counts": {
-    "pass": 531,
+    "pass": 544,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 531,
+  "total": 544,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -3208,6 +3208,84 @@
       "key": "7a29937773763ec421f6ab33d4b19785d0bb981b66e61a04e4689e69af728c51",
       "test": "tests/wpt/shadow-dom/historical.html",
       "subtest": "shadow-dom/historical.html::HTMLContentElement should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "f47efb92e48e75342f4bc29bdf1dc310e45165351ef4793b34045ffd9a15ec8e",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Basic.",
+      "status": "PASS"
+    },
+    {
+      "key": "3edc2a697b4384d58560eb8f20f940bc2c2b0a780dabb84ed18b2643c82880c2",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Basic, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "121f299b9efd13edac31c635eabbd658709de857d27d4a78a59903d1c211e722",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Slots in Slots.",
+      "status": "PASS"
+    },
+    {
+      "key": "5ab7e2b27a610dbe1b6e5d9a00d2cd90ce201816a8cca3da78b7b6556eb15939",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Slots in Slots, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "26911a13efaa909802b2a826cdc00f8a431314b9647cda4b65569f2297abdb01",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Fallback contents should not be used if a node is assigned.",
+      "status": "PASS"
+    },
+    {
+      "key": "c1c9e4f327ad40d7d3a3b9cd46417f861ae7f184f7d9310fc69ab52ae0041e9f",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Slots in Slots: Assigned nodes should be used as fallback contents of another slot",
+      "status": "PASS"
+    },
+    {
+      "key": "a3e27c01bf1a98cc2775e5c00097a4950204b8c73167aef19dce777f2df4247f",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Complex case.",
+      "status": "PASS"
+    },
+    {
+      "key": "58742cbf9e28bb0a6a7f66ac4b579685c596250d9f188722aab859f92c0b3a3f",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Complex case, elements only.",
+      "status": "PASS"
+    },
+    {
+      "key": "0ca7e65cce2faa49256235a1bbde0add110c68dccb9f6d41c3c0634047a1d434",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation. Append fallback contents.",
+      "status": "PASS"
+    },
+    {
+      "key": "361034e96946400712bccb6265ed6ea7789c35bb908191222284d6ba110a66d9",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation. Remove fallback contents.",
+      "status": "PASS"
+    },
+    {
+      "key": "da4f94dd435534092f2a1086e75ede71e09566d01956d5e50151a324aa448f40",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation. Assign a node to a slot so that fallback contens are no longer used.",
+      "status": "PASS"
+    },
+    {
+      "key": "9a8deed319243d01ac5990489f0768b4a516c4f55312c59b2e54b2cf11fe0037",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation. Remove an assigned node from a slot so that fallback contens will be used.",
+      "status": "PASS"
+    },
+    {
+      "key": "46c267e397d958d5947d2f4ec7a48e6733d0fa558b4b803d2ec4aec78f2dd11d",
+      "test": "tests/wpt/shadow-dom/slots-fallback.html",
+      "subtest": "shadow-dom/slots-fallback.html::Slots fallback: Mutation.  Remove a slot which is a fallback content of another slot.",
       "status": "PASS"
     }
   ]
