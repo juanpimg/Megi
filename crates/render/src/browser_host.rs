@@ -30,7 +30,11 @@ use megi_css::{
 };
 
 /// Serializes one computed style into `(kebab-case property, CSS value)` pairs.
-pub(crate) fn computed_style_pairs(style: &ComputedStyle) -> Vec<(String, String)> {
+///
+/// CSSOM §6 (`getComputedStyle`): the CSS declaration block exposes computed values in
+/// CSS syntax. Public so protocol bridges (DevTools `CSS.getComputedStyle`) can reuse the
+/// exact same serialization as the page's `window.getComputedStyle`.
+pub fn computed_style_pairs(style: &ComputedStyle) -> Vec<(String, String)> {
     let mut pairs = Vec::with_capacity(42);
     let mut push = |name: &str, value: String| pairs.push((name.to_owned(), value));
 

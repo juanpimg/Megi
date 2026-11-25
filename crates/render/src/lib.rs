@@ -204,6 +204,9 @@ pub mod backgrounds;
 mod browser_host;
 pub mod cache;
 pub mod charset;
+/// DevTools `Runtime.evaluate` bridges (only linked with the `js` feature).
+#[cfg(feature = "js")]
+mod devtools;
 pub mod error;
 pub mod frames;
 pub mod images;
@@ -255,11 +258,16 @@ mod svg;
 #[path = "pipeline/url.rs"]
 mod url;
 
+/// CSSOM §6 computed-style serialization shared by scripts and DevTools.
+pub use browser_host::computed_style_pairs;
 pub use cache::{RenderCache, RenderCacheStats};
-pub use error::RenderError;
-/// Isolated `Runtime.evaluate` bridge used by the DevTools endpoint (M7 foundation).
+/// Isolated `Runtime.evaluate` bridge used by the DevTools endpoint (no page attached).
 #[cfg(feature = "js")]
-pub use script::evaluate_expression;
+pub use devtools::evaluate_expression;
+/// `Runtime.evaluate` bridge bound to a real loaded document and its computed styles.
+#[cfg(feature = "js")]
+pub use devtools::evaluate_on_document;
+pub use error::RenderError;
 pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 pub use options::{

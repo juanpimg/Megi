@@ -191,6 +191,12 @@ fn run() -> Result<(), ShellError> {
             // The render either produced the PNG eagerly (plain path) or skipped it and the
             // overlay helpers encoded it once at the end (chrome/find). Reuse those bytes so
             // exactly one encode happens per screenshot (R201).
+            // M7: attach the real loaded document to the DevTools target so DOM/CSS commands
+            // and `Runtime.evaluate` run against the page arena, not the isolated realm.
+            #[cfg(feature = "full")]
+            if let Some(endpoint) = &_devtools {
+                endpoint.attach(megi_browser::devtools::DevToolsPage::from_render(&output));
+            }
             let png = if output.png.is_empty() {
                 output.pixmap.to_png()
             } else {

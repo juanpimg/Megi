@@ -7,12 +7,20 @@
 //!
 //! WebSocket framing and the upgrade digest reuse `megi-net` via `megi-webview::net`:
 //! RFC 6455 §4.2.2 defines `Sec-WebSocket-Accept`, §5.1 requires masked client frames,
-//! §5.2 requires unmasked server frames. This is a FOUNDATION, not full DevTools: one
-//! target, no page attachment, no DOM/CSS/Network domains and no WebDriver BiDi.
+//! §5.2 requires unmasked server frames. The endpoint stays loopback-only and opt-in.
+//! Commands are dispatched in [`protocol`]: with a real page attached, DOM/CSS commands
+//! read the live arena (WHATWG DOM §4.2.3 / CSSOM §6); without one, evaluation falls back
+//! to the isolated realm. No Network domain, multiple targets or WebDriver BiDi yet.
+
+mod protocol;
+
+pub use protocol::DevToolsPage;
+use protocol::{SharedPage, lock_page, rpc_response};
 
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -39,6 +47,7 @@ pub struct DebugEndpoint {
     /// Actual bound address (`127.0.0.1:<port>`); port 0 selects an ephemeral port.
     pub addr: SocketAddr,
     stop: Option<Sender<()>>,
+    page: SharedPage,
 }
 
 impl Drop for DebugEndpoint {
@@ -50,7 +59,20 @@ impl Drop for DebugEndpoint {
 }
 
 /// Starts the DevTools endpoint on `127.0.0.1:<port>` (port 0 = ephemeral, for tests).
+///
+/// No page is attached yet: `Runtime.evaluate` uses the isolated realm and DOM/CSS
+/// commands report that no target is loaded. The shell attaches the real document once a
+/// render succeeds ([`DebugEndpoint::attach`]).
 pub fn spawn(port: u16, target: DebugTarget) -> Result<DebugEndpoint, String> {
+    spawn_with_page(port, target, None)
+}
+
+/// Starts the endpoint with an already loaded page attached.
+pub fn spawn_with_page(
+    port: u16,
+    target: DebugTarget,
+    page: Option<DevToolsPage>,
+) -> Result<DebugEndpoint, String> {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .map_err(|error| format!("cannot bind 127.0.0.1:{port}: {error}"))?;
     listener
@@ -60,6 +82,8 @@ pub fn spawn(port: u16, target: DebugTarget) -> Result<DebugEndpoint, String> {
         .local_addr()
         .map_err(|error| format!("cannot read local address: {error}"))?;
     let (stop, stopped) = mpsc::channel::<()>();
+    let page: SharedPage = Arc::new(Mutex::new(page));
+    let accept_page = Arc::clone(&page);
     thread::Builder::new()
         .name("megi-devtools".to_owned())
         .spawn(move || {
@@ -68,7 +92,8 @@ pub fn spawn(port: u16, target: DebugTarget) -> Result<DebugEndpoint, String> {
                     Ok((stream, _)) => {
                         let target = target.clone();
                         let addr = addr;
-                        thread::spawn(move || serve_connection(stream, addr, &target));
+                        let page = Arc::clone(&accept_page);
+                        thread::spawn(move || serve_connection(stream, addr, &target, &page));
                     }
                     Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(10));
@@ -81,7 +106,15 @@ pub fn spawn(port: u16, target: DebugTarget) -> Result<DebugEndpoint, String> {
     Ok(DebugEndpoint {
         addr,
         stop: Some(stop),
+        page,
     })
+}
+
+impl DebugEndpoint {
+    /// Attaches a loaded page (or replaces the previous attachment after a navigation).
+    pub fn attach(&self, page: DevToolsPage) {
+        *lock_page(&self.page) = Some(page);
+    }
 }
 
 /// Reads the request line and headers, stopping at the blank line (RFC 6455 §4.1).
@@ -119,7 +152,7 @@ fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
-fn serve_connection(stream: TcpStream, addr: SocketAddr, target: &DebugTarget) {
+fn serve_connection(stream: TcpStream, addr: SocketAddr, target: &DebugTarget, page: &SharedPage) {
     let _ = stream.set_read_timeout(Some(SOCKET_TIMEOUT));
     let _ = stream.set_write_timeout(Some(SOCKET_TIMEOUT));
     let mut stream = stream;
@@ -157,7 +190,7 @@ fn serve_connection(stream: TcpStream, addr: SocketAddr, target: &DebugTarget) {
             let version_ok = header(&head, "sec-websocket-version") == Some("13");
             // RFC 6455 §4.2.2: a valid upgrade carries a key and version 13.
             if let (Some(key), true, true, true) = (key, upgrade_ok, connection_ok, version_ok) {
-                serve_websocket(&mut stream, key);
+                serve_websocket(&mut stream, key, page);
             } else {
                 send_http(&mut stream, 400, b"invalid WebSocket upgrade");
             }
@@ -216,7 +249,7 @@ fn send_frame(stream: &mut TcpStream, opcode: Opcode, payload: &[u8]) -> io::Res
 }
 
 /// Completes the HTTP Upgrade handshake, then serves JSON-RPC over WebSocket frames.
-fn serve_websocket(stream: &mut TcpStream, key: &str) {
+fn serve_websocket(stream: &mut TcpStream, key: &str, page: &SharedPage) {
     // RFC 6455 §4.2.2: Accept = base64(SHA1(key + GUID)), computed by megi-net.
     let accept = format!(
         "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n\
@@ -246,7 +279,7 @@ fn serve_websocket(stream: &mut TcpStream, key: &str) {
                     };
                     match frame.opcode {
                         Opcode::Text => {
-                            let response = rpc_response(&frame.payload);
+                            let response = rpc_response(&frame.payload, page);
                             if send_frame(stream, Opcode::Text, response.as_bytes()).is_err() {
                                 return;
                             }
@@ -322,51 +355,4 @@ fn unmask_client_frame(bytes: &[u8]) -> Result<Option<(Vec<u8>, usize)>, ()> {
     decoded[1] &= 0x7F; // clear MASK so megi-net's decoder accepts the frame
     decoded.extend_from_slice(&payload);
     Ok(Some((decoded, total)))
-}
-
-/// DevTools Protocol JSON-RPC dispatch. Only `Runtime.evaluate` is implemented in this
-/// foundation; results are produced by the real JS runtime via `megi-render`.
-fn rpc_response(payload: &[u8]) -> String {
-    let request: Value = match serde_json::from_slice(payload) {
-        Ok(request) => request,
-        Err(_) => return rpc_error(Value::Null, -32700, "Parse error"),
-    };
-    let id = request.get("id").cloned().unwrap_or(Value::Null);
-    match request.get("method").and_then(Value::as_str) {
-        Some("Runtime.evaluate") => {
-            let expression = request
-                .get("params")
-                .and_then(|params| params.get("expression"))
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            match megi_webview::render::evaluate_expression(expression) {
-                Ok(text) => {
-                    // Completion values are text; parse primitives into JSON types so a
-                    // client sees the number 2 for `1+1`, not the string "2".
-                    let value =
-                        serde_json::from_str::<Value>(&text).unwrap_or(Value::String(text.clone()));
-                    let kind = match &value {
-                        Value::Number(_) => "number",
-                        Value::Bool(_) => "boolean",
-                        Value::Null => "object",
-                        _ => "string",
-                    };
-                    json!({
-                        "id": id,
-                        "result": {
-                            "result": { "type": kind, "value": value, "description": text },
-                        },
-                    })
-                    .to_string()
-                }
-                Err(message) => rpc_error(id, -32000, message),
-            }
-        }
-        Some(method) => rpc_error(id, -32601, format!("Method not found: {method}")),
-        None => rpc_error(id, -32600, "Invalid Request"),
-    }
-}
-
-fn rpc_error(id: Value, code: i64, message: impl Into<String>) -> String {
-    json!({ "id": id, "error": { "code": code, "message": message.into() } }).to_string()
 }
