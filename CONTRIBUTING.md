@@ -79,7 +79,7 @@ crates/
 └── test_harness/  # Gate de conformidad html5lib-tests/WPT.
 
 Reglas: DAG unidireccional verificado por tools/check_arch.py; .rs <= 500 líneas
-(objetivo 400); #![forbid(unsafe_code)] en los 17 crates; sin Rc<RefCell> salvo el
+(objetivo 400); #![forbid(unsafe_code)] en los 18 crates; sin Rc<RefCell> salvo el
 ContextHost de Boa; TDD y gates antes de cada commit (ver AGENTS.md).
 ```
 
