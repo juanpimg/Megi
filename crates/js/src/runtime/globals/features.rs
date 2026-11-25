@@ -27,47 +27,62 @@ fn element_illegal_constructor(
     _args: &[JsValue],
     context: &mut Context,
 ) -> JsResult<JsValue> {
-    // WHATWG Custom Elements §4.4.3: during a registered constructor's `super()` call,
-    // the HTMLElement constructor creates the element with the registry's local name.
-    let mut tag =
-        with_context_host(context, |host| host.custom_element_construction.take()).flatten();
     // Boa passes `new.target` (the constructor function) as `this` for `new`.
-    // WHATWG Custom Elements §4.4.3: compare its `prototype` with the registry.
-    let new_target_prototype = this
-        .as_object()
-        .filter(|object| object.is_callable())
-        .and_then(|object| object.get(js_string!("prototype"), context).ok())
-        .and_then(|value| value.as_object())
-        .or_else(|| this.as_object().and_then(|object| object.prototype()));
-    if tag.is_none() && new_target_prototype.is_some() {
-        // Direct `new X()` in a custom element constructor's `super()` carries the
-        // registered constructor's prototype as the fresh `this` prototype (WHATWG
-        // Custom Elements §4.4.3). Match it against the registry to infer the local name.
-        let registered = with_context_host(context, |host| {
-            host.custom_elements
-                .iter()
-                .map(|(name, handle)| (name.clone(), *handle))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-        for (name, handle) in registered {
-            if let Ok(constructor) = context
-                .global_object()
-                .get(js_string!(format!("__megi_ce_{handle}")), context)
-                && let Some(constructor) = constructor.as_callable()
-                && let Ok(prototype) = constructor.get(js_string!("prototype"), context)
-                && prototype.as_object() == new_target_prototype
-            {
-                tag = Some(name);
-                break;
-            }
+    // WHATWG HTML §3.2.3 step 1: NewTarget equal to the active function object is a TypeError.
+    let html_constructor = context
+        .global_object()
+        .get(js_string!("HTMLElement"), context)
+        .ok()
+        .and_then(|value| value.as_object());
+    if html_constructor
+        .as_ref()
+        .is_some_and(|constructor| JsValue::from(constructor.clone()).strict_equals(this))
+    {
+        return Err(boa_engine::JsNativeError::typ()
+            .with_message("Illegal constructor")
+            .into());
+    }
+    // Lookup the definition by constructor identity, before reading `.prototype`
+    // (WHATWG HTML §3.2.3 steps 2-4; proxy get-count tests rely on this ordering).
+    let registered = with_context_host(context, |host| {
+        host.custom_elements
+            .iter()
+            .map(|(name, handle)| {
+                (
+                    name.clone(),
+                    *handle,
+                    host.custom_element_extends.get(name).cloned(),
+                )
+            })
+            .collect::<Vec<_>>()
+    })
+    .unwrap_or_default();
+    let mut definition = None;
+    for (name, handle, extends) in registered {
+        if let Ok(constructor) = context
+            .global_object()
+            .get(js_string!(format!("__megi_ce_{handle}")), context)
+            && constructor.strict_equals(this)
+        {
+            definition = Some((name, extends));
+            break;
         }
     }
+    let Some((name, extends)) = definition else {
+        return Err(boa_engine::JsNativeError::typ()
+            .with_message("Illegal constructor")
+            .into());
+    };
     // WHATWG Custom Elements §4.2: an upgrade reaction reuses the existing wrapper;
     // `super()` returns that object to the derived constructor instead of a new node.
     if let Some(target) =
         with_context_host(context, |host| host.custom_element_upgrade_target.take()).flatten()
     {
+        let new_target_prototype = this
+            .as_object()
+            .filter(|object| object.is_callable())
+            .and_then(|object| object.get(js_string!("prototype"), context).ok())
+            .and_then(|value| value.as_object());
         let wrapper = wrap_node(context, target)?;
         if let (Some(object), Some(prototype)) =
             (wrapper.as_object(), new_target_prototype.as_ref())
@@ -76,26 +91,87 @@ fn element_illegal_constructor(
         }
         return Ok(wrapper);
     }
-    if let Some(tag) = tag {
-        let node = with_context_host(context, |host| {
-            host.document
-                .create_element(Namespace::Html, tag, Vec::new())
-        });
-        if let Some(node) = node {
-            let wrapper = wrap_node(context, node)?;
-            // WHATWG Custom Elements §4.4.3: `new X()` must inherit from X.prototype,
-            // not from HTMLElement.prototype (so `instanceof X` holds).
-            if let (Some(object), Some(prototype)) =
-                (wrapper.as_object(), new_target_prototype.as_ref())
-            {
-                object.set_prototype(Some(prototype.clone()));
-            }
-            return Ok(wrapper);
+    // WHATWG HTML §3.2.3: autonomous definitions require HTMLElement as the active
+    // interface; customized built-ins require the interface for `extends`.
+    let active_local_name = html_interface_local_name(this, context);
+    match extends.as_deref() {
+        None if !active_local_name.is_empty() => {
+            return Err(boa_engine::JsNativeError::typ()
+                .with_message("Custom element constructor does not extend HTMLElement")
+                .into());
         }
+        Some(expected) if expected != active_local_name => {
+            return Err(boa_engine::JsNativeError::typ()
+                .with_message(
+                    "Custom element constructor does not extend the proper element interface",
+                )
+                .into());
+        }
+        _ => {}
+    }
+    // Read `.prototype` exactly once, after all sanity checks.
+    let new_target_prototype = this
+        .as_object()
+        .filter(|object| object.is_callable())
+        .and_then(|object| object.get(js_string!("prototype"), context).ok())
+        .and_then(|value| value.as_object());
+    let tag = extends.filter(|text| !text.is_empty()).unwrap_or(name);
+    let node = with_context_host(context, |host| {
+        host.document
+            .create_element(Namespace::Html, tag.clone(), Vec::new())
+    });
+    if let Some(node) = node {
+        let wrapper = wrap_node(context, node)?;
+        // WHATWG Custom Elements §4.4.3: `new X()` must inherit from X.prototype,
+        // not from HTMLElement.prototype (so `instanceof X` holds).
+        if let (Some(object), Some(prototype)) =
+            (wrapper.as_object(), new_target_prototype.as_ref())
+        {
+            object.set_prototype(Some(prototype.clone()));
+        }
+        return Ok(wrapper);
     }
     Err(boa_engine::JsNativeError::typ()
         .with_message("Illegal constructor")
         .into())
+}
+
+/// Resolves the HTML interface constructor active in a `super()` call by walking
+/// `new.target`'s constructor prototype chain (WHATWG HTML §3.2.3). Returns an empty
+/// string for HTMLElement itself, which is the autonomous custom element base.
+fn html_interface_local_name(new_target: &JsValue, context: &mut Context) -> String {
+    let interfaces = [
+        ("HTMLElement", ""),
+        ("HTMLParagraphElement", "p"),
+        ("HTMLButtonElement", "button"),
+        ("HTMLAddressElement", "address"),
+        ("HTMLUnknownElement", ""),
+        ("HTMLLinkElement", "link"),
+    ];
+    let mut known = Vec::new();
+    for (global_name, local_name) in interfaces {
+        if let Some(object) = context
+            .global_object()
+            .get(js_string!(global_name), context)
+            .ok()
+            .and_then(|value| value.as_object())
+        {
+            known.push((object, local_name));
+        }
+    }
+    let mut current = new_target
+        .as_object()
+        .filter(|object| object.is_callable())
+        .and_then(|object| object.prototype());
+    while let Some(object) = current {
+        for (candidate, local_name) in &known {
+            if candidate == &object {
+                return (*local_name).to_owned();
+            }
+        }
+        current = object.prototype();
+    }
+    String::new()
 }
 
 pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsError> {

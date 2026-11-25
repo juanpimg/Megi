@@ -141,6 +141,73 @@ fn define_upgrades_existing_elements_in_shadow_including_tree_order() {
 }
 
 #[test]
+fn html_constructor_enforces_new_target_and_base_interface() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "var results = []; \
+             function check(f) { try { f(); results.push('no-throw'); } catch (e) { results.push(e.name); } } \
+             customElements.define('html-ctor-self', HTMLElement); \
+             check(function () { new HTMLElement(); }); \
+             check(function () { new (class Unregistered extends HTMLElement {})(); }); \
+             class ParagraphCtor extends HTMLParagraphElement {}; \
+             customElements.define('html-ctor-paragraph', ParagraphCtor); \
+             check(function () { new ParagraphCtor(); }); \
+             class ButtonCtor extends HTMLButtonElement {}; \
+             customElements.define('html-ctor-button', ButtonCtor, { extends: 'p' }); \
+             check(function () { new ButtonCtor(); }); \
+             String(results.join(','));",
+            "t",
+        )
+        .expect("HTMLElement constructor checks");
+    assert_eq!(out, "TypeError,TypeError,TypeError,TypeError", "{out}");
+}
+
+#[test]
+fn html_constructor_infers_registered_name_and_prototype_once() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "class Concrete extends HTMLElement {}; \
+             class Sub extends Concrete {}; \
+             customElements.define('ctor-concrete', Concrete); \
+             customElements.define('ctor-sub', Sub); \
+             var gets = 0; \
+             var counted = new Proxy(Concrete, { get: function (t, k) { \
+               if (k === 'prototype') gets++; return Reflect.get(t, k); } }); \
+             customElements.define('ctor-counted', counted); \
+             gets = 0; \
+             var a = new Concrete(); var b = new Sub(); var c = new counted(); \
+             String([a.localName, b.localName, c.localName, a instanceof Concrete, \
+                    b instanceof Sub, gets].join(','));",
+            "t",
+        )
+        .expect("constructor inference");
+    assert_eq!(
+        out, "ctor-concrete,ctor-sub,ctor-counted,true,true,1",
+        "WHATWG Custom Elements §4.4.3: {out}"
+    );
+}
+
+#[test]
+fn create_element_ns_upgrades_prefixed_and_builtin_custom_elements() {
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let out = runtime
+        .eval(
+            "class Prefixed extends HTMLElement {}; \
+             customElements.define('ns-prefixed', Prefixed); \
+             var a = document.createElementNS('http://www.w3.org/1999/xhtml', 'p:ns-prefixed'); \
+             class Builtin extends HTMLElement {}; \
+             customElements.define('ns-builtin', Builtin, { extends: 'address' }); \
+             var b = document.createElementNS('http://www.w3.org/1999/xhtml', 'p:address', { is: 'ns-builtin' }); \
+             String([a instanceof Prefixed, a.prefix, b instanceof Builtin, b.prefix, b.hasAttribute('is')].join(','));",
+            "t",
+        )
+        .expect("createElementNS upgrade");
+    assert_eq!(out, "true,p,true,p,false", "WHATWG DOM §4.5: {out}");
+}
+
+#[test]
 fn custom_elements_compose_with_shadow_dom() {
     let mut runtime = JsRuntime::new().expect("runtime");
     let out = runtime

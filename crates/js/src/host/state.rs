@@ -171,4 +171,7 @@ pub(crate) struct Host {
     pub custom_element_upgrade_target: Option<NodeId>,
     /// Nodes already upgraded for a registry name, in insertion order per name.
     pub custom_element_upgraded: std::collections::HashMap<NodeId, String>,
+    /// Optional `extends` local name for each registered custom element.
+    /// WHATWG Custom Elements §4.2: customized built-ins keep their base interface.
+    pub custom_element_extends: std::collections::HashMap<String, String>,
 }

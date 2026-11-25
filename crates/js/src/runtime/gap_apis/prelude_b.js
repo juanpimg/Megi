@@ -519,6 +519,19 @@ if (typeof IntersectionObserver !== 'function') {
     C.prototype.constructor = C;
     return C;
   }
+  // WHATWG HTML §3.2.3: concrete HTML element constructors run the HTMLConstructor
+  // steps through HTMLElement, carrying `new.target` so the registry can validate it.
+  function HtmlElementCtor(name, parent) {
+    function C() {
+      if (typeof HTMLElement === 'function' && typeof Reflect !== 'undefined') {
+        return Reflect.construct(HTMLElement, [], new.target);
+      }
+    }
+    Object.defineProperty(C, 'name', { value: name });
+    if (parent && parent.prototype) C.prototype = Object.create(parent.prototype);
+    C.prototype.constructor = C;
+    return C;
+  }
   if (typeof Blob !== 'function') {
     define('Blob', function Blob(parts, options) {
       var chunks = parts || [];
@@ -657,9 +670,10 @@ if (typeof IntersectionObserver !== 'function') {
   var htmlNames = ['HTMLDivElement','HTMLAnchorElement','HTMLInputElement','HTMLButtonElement',
     'HTMLFormElement','HTMLTableElement','HTMLCanvasElement','HTMLVideoElement','HTMLAudioElement',
     'HTMLScriptElement','HTMLLinkElement','HTMLSpanElement','HTMLImageElement','HTMLUListElement',
-    'HTMLOListElement','HTMLLIElement','HTMLSelectElement','HTMLTextAreaElement','HTMLParagraphElement'];
+    'HTMLOListElement','HTMLLIElement','HTMLSelectElement','HTMLTextAreaElement','HTMLParagraphElement',
+    'HTMLAddressElement','HTMLQuoteElement','HTMLUnknownElement'];
   htmlNames.forEach(function (n) {
-    if (typeof globalThis[n] !== 'function') define(n, StubCtor(n, typeof HTMLElement !== 'undefined' ? HTMLElement : Element));
+    if (typeof globalThis[n] !== 'function') define(n, HtmlElementCtor(n, typeof HTMLElement !== 'undefined' ? HTMLElement : Element));
   });
   if (typeof escape !== 'function') {
     define('escape', function (s) { return encodeURI(String(s)).replace(/!/g, '%21').replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29'); });

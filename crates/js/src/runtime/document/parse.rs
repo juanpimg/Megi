@@ -266,6 +266,14 @@ pub(crate) fn custom_elements_define(
         .and_then(JsValue::as_callable)
         .ok_or_else(|| js_error("TypeError: custom element constructor must be callable"))?
         .clone();
+    // WHATWG Custom Elements §4.2: customized built-ins keep the extended local name;
+    // autonomous definitions create elements named after the definition itself.
+    let extends_name = args
+        .get(2)
+        .and_then(JsValue::as_string)
+        .map(|text| text.to_std_string_escaped().to_ascii_lowercase())
+        .filter(|text| !text.is_empty());
+    let local_name = extends_name.clone().unwrap_or_else(|| name.clone());
     let handle = with_context_host(context, |host| {
         if let Some(existing) = host.custom_elements.get(&name) {
             return *existing;
@@ -273,6 +281,10 @@ pub(crate) fn custom_elements_define(
         let handle = host.custom_element_next_handle;
         host.custom_element_next_handle = host.custom_element_next_handle.wrapping_add(1);
         host.custom_elements.insert(name.clone(), handle);
+        if let Some(extends) = extends_name.as_deref() {
+            host.custom_element_extends
+                .insert(name.clone(), extends.to_owned());
+        }
         handle
     })
     .ok_or_else(|| js_error("no active JavaScript host"))?;
@@ -285,8 +297,8 @@ pub(crate) fn custom_elements_define(
             context,
         )
         .map_err(|error| js_error(error.to_string()))?;
-    let candidates =
-        with_context_host(context, |host| upgrade_candidates(host, &name)).unwrap_or_default();
+    let candidates = with_context_host(context, |host| upgrade_candidates(host, &local_name))
+        .unwrap_or_default();
     for node in candidates {
         let skip = with_context_host(context, |host| {
             if host.custom_element_upgraded.contains_key(&node) {

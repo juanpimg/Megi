@@ -58,6 +58,7 @@ impl Host {
             custom_element_construction: None,
             custom_element_upgrade_target: None,
             custom_element_upgraded: std::collections::HashMap::new(),
+            custom_element_extends: std::collections::HashMap::new(),
             canvas_store: crate::canvas::CanvasStore::new(),
             custom_elements: std::collections::HashMap::new(),
             custom_element_next_handle: 1,

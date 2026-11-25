@@ -69,7 +69,10 @@ if (typeof customElements === 'object' && customElements) {
       } finally {
         ceDefinitionRunning = false;
       }
-      nativeCeDefine(name, constructor);
+      // WHATWG Custom Elements §4.2: remember the customized built-in local name.
+      var extendsName = options && typeof options.extends === 'string'
+        ? options.extends.toLowerCase() : '';
+      nativeCeDefine(name, constructor, extendsName);
       ceNames[name] = true;
       ceConstructors.push(constructor);
       var pending = ceWhenDefined[name];
@@ -100,7 +103,7 @@ if (typeof customElements === 'object' && customElements) {
       var all = root.querySelectorAll ? root.querySelectorAll('*') : [];
       for (var i = 0; i < all.length; i++) {
         var local = all[i].localName;
-        if (local && ceNames[local]) nativeCeDefine(local, nativeCeGet(local));
+        if (local && ceNames[local]) nativeCeDefine(local, nativeCeGet(local), '');
       }
     }
   });

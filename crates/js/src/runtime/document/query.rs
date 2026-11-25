@@ -109,7 +109,7 @@ pub(crate) fn document_create_element_ns(
     };
     let node = with_context_host(context, |host| {
         let document = &mut host.document;
-        let node_id = document.create_element(namespace, local_name, Vec::new());
+        let node_id = document.create_element(namespace, local_name.clone(), Vec::new());
         if let Some(element) = document
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
@@ -118,10 +118,66 @@ pub(crate) fn document_create_element_ns(
         }
         node_id
     });
-    match node {
-        Some(node_id) => wrap_node(context, node_id),
-        None => Err(js_error("no active JavaScript host")),
+    let Some(node_id) = node else {
+        return Err(js_error("no active JavaScript host"));
+    };
+    // WHATWG DOM §4.5 / Custom Elements §4.2: only HTML-namespace elements upgrade,
+    // using the local name (never the prefix) and the `is` option for built-ins.
+    if namespace == Namespace::Html {
+        let is_name = args
+            .get(2)
+            .and_then(|value| value.as_object())
+            .and_then(|object| object.get(js_string!("is"), context).ok())
+            .and_then(|value| value.as_string())
+            .map(|text| text.to_std_string_escaped().to_ascii_lowercase());
+        let handle = with_context_host(context, |host| {
+            if let Some(is) = is_name.as_deref() {
+                host.custom_element_extends
+                    .iter()
+                    .find(|(name, extends)| *name == is && *extends == &local_name)
+                    .and_then(|(name, _)| host.custom_elements.get(name).copied())
+            } else {
+                host.custom_elements.get(&local_name).copied()
+            }
+        })
+        .flatten();
+        if let Some(handle) = handle
+            && let Some(constructor) = context
+                .global_object()
+                .get(js_string!(format!("__megi_ce_{handle}")), context)
+                .ok()
+                .and_then(|value| value.as_callable())
+        {
+            let wrapper = wrap_node(context, node_id)?;
+            with_context_host(context, |host| {
+                host.custom_element_upgrade_target = Some(node_id);
+            });
+            let upgraded = constructor.construct(&[], Some(&constructor), context);
+            with_context_host(context, |host| host.custom_element_upgrade_target.take());
+            let mut constructed_node = false;
+            if let Ok(value) = upgraded {
+                constructed_node = value
+                    .get(js_string!("nodeType"), context)
+                    .ok()
+                    .and_then(|node_type| node_type.as_number())
+                    .is_some();
+                if constructed_node {
+                    return Ok(value.into());
+                }
+            }
+            if !constructed_node {
+                let _ = constructor.call(&wrapper, &[], context);
+                if let Ok(prototype) = constructor.get(js_string!("prototype"), context)
+                    && let Some(prototype) = prototype.as_object()
+                    && let Some(object) = wrapper.as_object()
+                {
+                    object.set_prototype(Some(prototype));
+                }
+            }
+            return Ok(wrapper);
+        }
     }
+    wrap_node(context, node_id)
 }
 
 pub(crate) fn document_create_text_node(
