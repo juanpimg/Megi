@@ -1,9 +1,9 @@
 {
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "2370664a899c5fb55aab4fdaf6328c8307c738dd5fda522ef08ca65418d15fbc"
+    "manifest_sha256": "3e74b4bff2b1907441b4779ea237466b1aae2e49007a3444e28d9ca16f9ad06f"
   },
-  "passed": 495,
-  "total": 495,
+  "passed": 531,
+  "total": 531,
   "allowlist": []
 }

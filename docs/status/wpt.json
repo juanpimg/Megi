@@ -2,12 +2,12 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "2370664a899c5fb55aab4fdaf6328c8307c738dd5fda522ef08ca65418d15fbc"
+    "manifest_sha256": "3e74b4bff2b1907441b4779ea237466b1aae2e49007a3444e28d9ca16f9ad06f"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "9 vendored WPT fixtures (495 executed subtests, 4 dirs); NOT full WPT conformance",
-    "adopted_subtests": 495,
+    "scope": "10 vendored WPT fixtures (531 executed subtests, 4 dirs); NOT full WPT conformance",
+    "adopted_subtests": 531,
     "dirs": [
       "tests/wpt/css/css-syntax",
       "tests/wpt/custom-elements",
@@ -16,13 +16,13 @@
     ]
   },
   "counts": {
-    "pass": 495,
+    "pass": 531,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 495,
+  "total": 531,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -622,6 +622,222 @@
       "key": "3911c6da0b726b8c6662b69e3e6e2139a9ca3d8c4c7d6247819e578fa9a79fca",
       "test": "tests/wpt/css/css-syntax/anb-serialization.html",
       "subtest": "anb-serialization.html: -2n - 2",
+      "status": "PASS"
+    },
+    {
+      "key": "e056d0f45ad9c8d6adea604ccc32e64e79060c800c8300960c188b78df0759b4",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::CustomElementRegistry interface must have define as a method",
+      "status": "PASS"
+    },
+    {
+      "key": "080a9836e36ef22deb2b37569a3ecde4bd31e27148b1e54868f5364704c40baa",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw when the element interface is not a constructor",
+      "status": "PASS"
+    },
+    {
+      "key": "b47317c40369e6a4ecf8eb60d4612ddb7d915acc66ae6ad40473aec5c833e1fa",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must not throw the constructor is HTMLElement",
+      "status": "PASS"
+    },
+    {
+      "key": "7b70aa1b231f1c48c0dbba5dbf360dffd66f21f3e40b79c2a082d2d6c4329766",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw with an invalid name",
+      "status": "PASS"
+    },
+    {
+      "key": "d5638543dc68d02efd6696a1cf4710922770dce76c50bf362b4422ac2d04832f",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw when there is already a custom element of the same name",
+      "status": "PASS"
+    },
+    {
+      "key": "97c5f5ee1db736ce6512bd6a0817f810ce7d97470a30fddf709f2ed5eaf83764",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw a NotSupportedError when there is already a custom element with the same class",
+      "status": "PASS"
+    },
+    {
+      "key": "8e23d4316bf263a467775dbaa473c3ba6ced2592d1f6531a426f49bd6b991ef7",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw a NotSupportedError when element definition is running flag is set",
+      "status": "PASS"
+    },
+    {
+      "key": "ab4b2ca48c8cb2673cfc0c1f4b642f12c6c5570537d5a81e90769bfa252a36c1",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must check IsConstructor on the constructor before checking the element definition is running flag",
+      "status": "PASS"
+    },
+    {
+      "key": "0f854c20f45aae1b8868fddae23558c99a950ad3b02a9622ec060681ac6510d9",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must validate the custom element name before checking the element definition is running flag",
+      "status": "PASS"
+    },
+    {
+      "key": "e63bc89c94fdc3c1cc4d458907349b5ef43bc11d44622b77d495f1a44885c3ab",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define unset the element definition is running flag before upgrading custom elements",
+      "status": "PASS"
+    },
+    {
+      "key": "0d99e1ea13cf47d1847036e5b9753cb00e273bf3f036ebbad2dddee32e7a7404",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::",
+      "status": "PASS"
+    },
+    {
+      "key": "942b256668a87b8bfa90490c1eeaf53920da068795aa544e4dfa21fc80451c75",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must get \"prototype\" property of the constructor",
+      "status": "PASS"
+    },
+    {
+      "key": "baf4285efa89bb9bd07e388c36c2175e217f8cbeae321d022994e295ad0405a4",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while getting \"prototype\" property of the constructor",
+      "status": "PASS"
+    },
+    {
+      "key": "6427e5d0d800252b04e8ae96d27e7e0f6665db40e78c08b575769030d898737a",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must throw when \"prototype\" property of the constructor is not an object",
+      "status": "PASS"
+    },
+    {
+      "key": "6f62013cd3dfc03f33250f1af9ca76e9cc5610615c2947a5ef0f1c7d4cb0cb4e",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must get callbacks of the constructor prototype",
+      "status": "PASS"
+    },
+    {
+      "key": "bc7db90a2aab6e7c08046979fadf90561e2392850c6cf0cb8ccbe3e59839d267",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while getting callbacks on the constructor prototype",
+      "status": "PASS"
+    },
+    {
+      "key": "b4bc9d0cd5092ca527324f73e1b3270589e3a8705efabd5b687d5c6977ae66c2",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while converting a callback value to Function callback type",
+      "status": "PASS"
+    },
+    {
+      "key": "202ff7aefd39d15e0c50cbf4bcdd6e700acb60c6330c2a837adb40279b3d96dd",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must get \"observedAttributes\" property on the constructor prototype when \"attributeChangedCallback\" is present",
+      "status": "PASS"
+    },
+    {
+      "key": "e4aa7c9f7bb60f9381e8021ca68a3e4be31200ef1f616f62c49832764c62d0e5",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while getting observedAttributes on the constructor prototype",
+      "status": "PASS"
+    },
+    {
+      "key": "3c25bf15e895c0dcdb2a1ad7441f74149646f7e5a5fedaba764faa6fbd55bd3f",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while converting the value of observedAttributes to sequence<DOMString>",
+      "status": "PASS"
+    },
+    {
+      "key": "23b575db17395cccf375b889a392800635487e52c13e6bd4ef837b295b1ed0d5",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while iterating over observedAttributes to sequence<DOMString>",
+      "status": "PASS"
+    },
+    {
+      "key": "f642bbdca6f00cb26156ce2b41b73c4c19e8bcf009243368a9e01de81ddc8a9b",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must rethrow an exception thrown while retrieving Symbol.iterator on observedAttributes",
+      "status": "PASS"
+    },
+    {
+      "key": "fbc963cc8443438972455722e4ea3768080ee5c58b8e10e68eb2fd0f3dbbcae1",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must not throw even if \"observedAttributes\" fails to convert if \"attributeChangedCallback\" is not defined",
+      "status": "PASS"
+    },
+    {
+      "key": "65939c5cf522ae21be387bd967c7be9520e062ff4a907c3e96a0ea13e3228e49",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must define an instantiatable custom element",
+      "status": "PASS"
+    },
+    {
+      "key": "6cd810f0c74e3d068f6293d964db290c320450ceab512447f1034e03548e8fb2",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.define must upgrade elements in the shadow-including tree order",
+      "status": "PASS"
+    },
+    {
+      "key": "20a26d8a059421b29ff5c8c7cd4214a92ac5281a91b9d3b2fa514dd446eca875",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::CustomElementRegistry interface must have get as a method",
+      "status": "PASS"
+    },
+    {
+      "key": "114da54b85a96e291b7038e487429ba2b2351590085ec2e3779fadd62859f507",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.get must return undefined when the registry does not contain an entry with the given name",
+      "status": "PASS"
+    },
+    {
+      "key": "08a26c88497ea27c0a15be30372fb86cd0cf3dc25196269cd56062b044497501",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.get must return undefined when the registry does not contain an entry with the given name even if the name was not a valid custom element name",
+      "status": "PASS"
+    },
+    {
+      "key": "8c47649a0d42475e25ebff0a7ee14bb52510d8b75393dad74c09bc84724922b5",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.get return the constructor of the entry with the given name when there is a matching entry.",
+      "status": "PASS"
+    },
+    {
+      "key": "383885d06cd9c46e77bc1aa1cfbc90967927689484dfc6275ff59f86b503fa7b",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return a promise for a valid custom element name",
+      "status": "PASS"
+    },
+    {
+      "key": "5369da2af43ade301aa950ee40e9a85b8cbe1a5eb0326621196b6a324e5ea984",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return the same promise each time invoked for a valid custom element name which has not been defined",
+      "status": "PASS"
+    },
+    {
+      "key": "42e710b9bd4ab583ff02ebd0b95bd6d95ee614203580c37167899d16a1700e5e",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return an unresolved promise when the registry does not contain the entry with the given name",
+      "status": "PASS"
+    },
+    {
+      "key": "2881b0fe4a7a88548f2b3a6cb1af91141445cfe0bd13308bfdf36b995c23d775",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return a rejected promise when the given name is not a valid custom element name",
+      "status": "PASS"
+    },
+    {
+      "key": "e9ac7e473474534c0c20e1f97713f489be89d2b8156ee5d01862bd60891c9f01",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return a resolved promise when the registry contains the entry with the given name",
+      "status": "PASS"
+    },
+    {
+      "key": "8201608720c7532766a57b23698cc27fb0f92ec4e882c1fed9cfb6a79693b117",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::customElements.whenDefined must return a new resolved promise each time invoked when the registry contains the entry with the given name",
+      "status": "PASS"
+    },
+    {
+      "key": "0b9d1d6d448a8b8d189f2e67827dea438b1ef069469689d6e6ae1633a12b51e9",
+      "test": "tests/wpt/custom-elements/CustomElementRegistry.html",
+      "subtest": "custom-elements/CustomElementRegistry.html::A promise returned by customElements.whenDefined must be resolved by \"define\"",
       "status": "PASS"
     },
     {
