@@ -2,6 +2,7 @@ use super::*;
 use crate::chrome::drawing::{top_radii, uniform_radii};
 use crate::forms::SelectOption;
 use crate::links::CssRect;
+use megi_webview::paint::Pixmap;
 
 #[test]
 fn chrome_paints_tab_strip_and_address_bar() {
@@ -274,6 +275,63 @@ fn chrome_radius_helpers_distinguish_tabs_from_panels() {
         tab.bottom_left.is_zero() && tab.bottom_right.is_zero(),
         "tabs meet the address strip flush at the bottom"
     );
+}
+
+#[test]
+fn draw_chrome_without_rail_keeps_legacy_pixels() {
+    let address = AddressBar::new();
+    let tabs = vec!["Megi".to_string()];
+    let legacy_view = view(&address, None, &tabs);
+    assert!(
+        legacy_view.rail.is_none(),
+        "the legacy view has no rail overlay"
+    );
+
+    let mut legacy = buffer(640, 400);
+    draw_chrome(&mut legacy, 640, 400, 1.0, &legacy_view);
+    assert_eq!(legacy[(2 * 640 + 620) as usize], rgb(COLOR_TAB_STRIP));
+    assert_eq!(legacy[(200 * 640 + 300) as usize], 0x00FF_FFFF);
+
+    // Painting a rail must leave every non-rail pixel of the legacy frame intact.
+    let labels = vec!["Megi".to_string()];
+    let mut rail_view = view(&address, None, &tabs);
+    rail_view.rail = Some(RailView {
+        labels: &labels,
+        active: 0,
+        hover: None,
+        expanded: true,
+        width_css: RAIL_EXPANDED_WIDTH,
+    });
+    let mut with_rail = buffer(640, 400);
+    draw_chrome(&mut with_rail, 640, 400, 1.0, &rail_view);
+    for y in 0..400u32 {
+        for x in 0..640u32 {
+            if y < CHROME_HEIGHT as u32 || x >= RAIL_EXPANDED_WIDTH as u32 {
+                assert_eq!(
+                    with_rail[(y * 640 + x) as usize], legacy[(y * 640 + x) as usize],
+                    "rail changed a legacy pixel at ({x},{y})"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn draw_rail_over_pixmap_is_noop_when_rail_is_none() {
+    let address = AddressBar::new();
+    let tabs = vec!["Megi".to_string()];
+    let view = view(&address, None, &tabs);
+    let mut pixmap = Pixmap::new(480, 300);
+    for pixel in &mut pixmap.pixels {
+        *pixel = Color::new(0x40, 0x50, 0x60, 0xFF);
+    }
+    let before = pixmap.clone();
+    assert_eq!(
+        draw_rail_over_pixmap(&mut pixmap, 1.0, &view),
+        0,
+        "no rail means no painted pixels"
+    );
+    assert_eq!(pixmap, before, "a rail-less view leaves the pixmap untouched");
 }
 
 #[test]

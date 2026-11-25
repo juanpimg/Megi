@@ -7,6 +7,7 @@ mod address_bar;
 mod dropdown;
 mod menus;
 mod paint;
+mod rail;
 mod tabs;
 mod tokens;
 
