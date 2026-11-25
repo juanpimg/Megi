@@ -28,14 +28,23 @@ fn fixture_html(items: usize) -> String {
     html
 }
 
+/// One-off setup for the engine variant, evaluated before the timed window.
+/// Keeping the shim allocation out of the loop is what makes the paired rows
+/// comparable: both variants select their `items` collection per evaluation.
+fn engine_setup_script(items: usize) -> String {
+    format!(
+        "var __shims = new Array({items});\
+         for (var i = 0; i < {items}; i++) {{\
+           __shims[i] = {{ getAttribute: function (name) {{ return name === 'data-index' ? 'x' : ''; }} }};\
+         }}"
+    )
+}
+
 /// Engine-only variant: identical loop and method calls on plain JS objects.
 fn engine_script(items: usize, reps: usize) -> String {
     format!(
         "(function () {{\
-           var items = new Array({items});\
-           for (var i = 0; i < {items}; i++) {{\
-             items[i] = {{ getAttribute: function (name) {{ return name === 'data-index' ? String(i) : ''; }} }};\
-           }}\
+           var items = __shims;\
            var acc = '';\
            for (var r = 0; r < {reps}; r++) {{\
              for (var i = 0; i < {items}; i++) {{ acc = items[i].getAttribute('data-index'); }}\
@@ -79,8 +88,9 @@ pub(super) fn register_js_hot(suite: &mut Suite, scale: f64) {
     let items = generators::scale(ITEMS, scale);
     let reps = generators::scale(REPS, scale);
     let html = fixture_html(items);
-    let expected = (items - 1).to_string();
+    let bindings_expected = (items - 1).to_string();
 
+    let engine_setup = engine_setup_script(items);
     let engine_script = engine_script(items, reps);
     let bindings_script = bindings_script(items, reps);
     let corpus_script = inline_script(CORPUS_HTML).to_owned();
@@ -101,13 +111,21 @@ pub(super) fn register_js_hot(suite: &mut Suite, scale: f64) {
     .expect("JS runtime with corpus document");
 
     // Fail at setup, not silently inside a timed sample.
-    for (label, script, runtime) in [
-        ("engine", &engine_script, &mut engine),
-        ("bindings", &bindings_script, &mut bindings),
-    ] {
-        let value = runtime.eval(script, "js_hot_probe").expect(label);
-        assert_eq!(value, expected, "{label} probe completion value");
-    }
+    engine
+        .eval(&engine_setup, "js_hot_setup")
+        .expect("engine setup");
+    assert_eq!(
+        engine
+            .eval(&engine_script, "js_hot_probe")
+            .expect("engine probe"),
+        "x"
+    );
+    assert_eq!(
+        bindings
+            .eval(&bindings_script, "js_hot_probe")
+            .expect("bindings probe"),
+        bindings_expected
+    );
     corpus
         .eval(&corpus_script, "js_hot_corpus_probe")
         .expect("corpus probe");
@@ -169,6 +187,13 @@ mod tests {
         let script = engine_script(ITEMS, REPS);
         assert!(!script.contains("document"), "{script}");
         assert!(script.contains("getAttribute"));
+    }
+
+    #[test]
+    fn engine_script_has_no_setup_work() {
+        let script = engine_script(ITEMS, REPS);
+        assert!(!script.contains("new Array"), "{script}");
+        assert!(engine_setup_script(ITEMS).contains("new Array"));
     }
 
     #[test]
