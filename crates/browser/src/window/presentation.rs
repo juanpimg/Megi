@@ -47,12 +47,7 @@ impl WindowApp {
     }
 
     pub(super) fn sync_rail_labels(&mut self) {
-        self.rail_labels = self
-            .tabs
-            .tabs()
-            .iter()
-            .map(crate::tabs::Tab::display_title)
-            .collect();
+        self.rail_labels = workspace_chrome_titles(&self.tabs);
     }
 
     /// Rail view used by both hit-testing and painting; `None` while closed.
@@ -61,7 +56,7 @@ impl WindowApp {
             self.rail_open,
             self.rail_expanded,
             &self.rail_labels,
-            self.tabs.active_index(),
+            workspace_chrome_active(&self.tabs),
             None,
         )?;
         if !self.rail_hover {
@@ -146,7 +141,11 @@ impl WindowApp {
             script_errors: self.frame_script_errors,
         };
         let title = title::status_title(&page, &status, self.error.as_deref(), self.content_capped);
-        let title = TabsState::indexed_title(self.tabs.active_index(), self.tabs.len(), &title);
+        let title = TabsState::indexed_title(
+            self.tabs.visible_active_index(),
+            self.tabs.visible_len(),
+            &title,
+        );
         window.set_title(&title);
     }
 
@@ -165,12 +164,7 @@ impl WindowApp {
         // Chrome paint inputs are captured before borrowing the surface mutably.
         self.sync_rail_labels();
         let rail_css_width = self.rail_css_width();
-        let chrome_titles: Vec<String> = self
-            .tabs
-            .tabs()
-            .iter()
-            .map(crate::tabs::Tab::display_title)
-            .collect();
+        let chrome_titles = workspace_chrome_titles(&self.tabs);
         let rail_scalars = self
             .rail_view()
             .map(|view| (view.active, view.hover, view.expanded, view.width_css));
@@ -182,7 +176,7 @@ impl WindowApp {
         if let Some(dropdown) = chrome_dropdown.as_mut() {
             dropdown.control_rect.x += rail_css_width;
         }
-        let chrome_active_tab = self.tabs.active_index();
+        let chrome_active_tab = workspace_chrome_active(&self.tabs);
         let chrome_scroll = self.scroll.offset();
         let chrome_css_height = self.metrics.css_height;
         let page_viewport_height = self.page_viewport_height();
@@ -371,6 +365,18 @@ impl WindowApp {
             download_status.as_deref(),
             self.hover_url.as_deref(),
         );
+        // The workspace label is only shown when a second group actually has tabs,
+        // keeping the single-workspace status bar byte-identical to the legacy frame.
+        let status_owned;
+        let status_text = if let Some(workspace) = self.tabs.workspace_status_text() {
+            status_owned = match status_text {
+                Some(text) if !text.is_empty() => format!("{workspace} — {text}"),
+                _ => workspace,
+            };
+            Some(status_owned.as_str())
+        } else {
+            status_text
+        };
         let view = ChromeView {
             download_status: status_text,
             ..view
@@ -443,4 +449,34 @@ impl WindowApp {
         self.error = Some(message);
         self.update_title();
     }
+}
+
+/// Titles of the tabs in the active workspace, in visible order.
+///
+/// The chrome strip and rail must not reveal or count tabs from other groups.
+pub(super) fn workspace_chrome_titles(tabs: &TabsState) -> Vec<String> {
+    tabs.visible_tabs()
+        .map(crate::tabs::Tab::display_title)
+        .collect()
+}
+
+/// Index of the active tab among the visible ones (not the global tab index).
+pub(super) fn workspace_chrome_active(tabs: &TabsState) -> usize {
+    tabs.visible_active_index()
+}
+
+/// Accessibility names for the visible tab strip.
+///
+/// With one workspace the names are unchanged. With several groups, each name
+/// carries the active workspace label so screen-reader users can name the group.
+pub(super) fn workspace_a11y_titles(tabs: &TabsState) -> Vec<String> {
+    let labels = workspace_chrome_titles(tabs);
+    if !tabs.has_multiple_workspaces() {
+        return labels;
+    }
+    let workspace = crate::tabs::Workspace::label(tabs.workspace());
+    labels
+        .into_iter()
+        .map(|title| format!("{workspace} — {title}"))
+        .collect()
 }

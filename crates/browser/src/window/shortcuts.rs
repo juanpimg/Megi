@@ -2,8 +2,8 @@
 //!
 //! `resolve_shortcut` is the single place that maps a modifier mask plus logical
 //! key to a [`ShellAction`]. The event loop uses it for the bindings listed here;
-//! actions introduced before their shell behaviour exists (rail, compact,
-//! workspace) resolve but are deliberately ignored by the handler.
+//! actions introduced before their shell behaviour exists resolve but are
+//! deliberately ignored by the handler; all workspace actions are dispatched.
 
 use winit::keyboard::{Key, NamedKey};
 
@@ -48,6 +48,8 @@ pub(super) enum ShellAction {
     ToggleRail,
     ToggleCompact,
     CycleWorkspace,
+    NewWorkspace,
+    CloseWorkspace,
 }
 
 /// One registered binding: a modifier mask and a logical key.
@@ -113,7 +115,14 @@ pub(super) fn resolve_shortcut(mods: Modifiers, key: &Key) -> Option<ShellAction
             Some("r") => Some(ShellAction::ToggleReader),
             Some("s") => Some(ShellAction::SaveAs),
             Some("b") => Some(ShellAction::ToggleCompact),
+            Some("w") => Some(ShellAction::NewWorkspace),
             _ if key == Key::Named(NamedKey::Tab) => Some(ShellAction::CycleTab { next: false }),
+            _ => None,
+        };
+    }
+    if mods.ctrl && mods.alt && mods.shift {
+        return match character {
+            Some("w") => Some(ShellAction::CloseWorkspace),
             _ => None,
         };
     }
@@ -165,6 +174,12 @@ fn all_bindings() -> Vec<ShortcutBinding> {
         alt: true,
         ..Modifiers::NONE
     };
+    let ctrl_alt_shift = Modifiers {
+        ctrl: true,
+        alt: true,
+        shift: true,
+        ..Modifiers::NONE
+    };
     let alt = Modifiers {
         alt: true,
         ..Modifiers::NONE
@@ -197,7 +212,9 @@ fn all_bindings() -> Vec<ShortcutBinding> {
         named(alt, Key::Named(NamedKey::ArrowRight)),
         named(ctrl, letter("b")),
         named(ctrl_shift, letter("b")),
+        named(ctrl_shift, letter("w")),
         named(ctrl_alt, letter("w")),
+        named(ctrl_alt_shift, letter("w")),
     ];
     for digit in '1'..='9' {
         bindings.push(named(alt, Key::Character(digit.to_string().into())));

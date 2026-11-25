@@ -224,8 +224,9 @@ impl WindowApp {
             Some(ShellAction::ActivateTab(index)) => self.activate_tab(index),
             Some(ShellAction::ToggleRail) => self.toggle_rail(),
             Some(ShellAction::ToggleCompact) => self.toggle_compact(),
-            // Workspaces land in a later phase: resolve only.
-            Some(ShellAction::CycleWorkspace) => {}
+            Some(ShellAction::CycleWorkspace) => self.cycle_workspace(),
+            Some(ShellAction::NewWorkspace) => self.new_workspace(),
+            Some(ShellAction::CloseWorkspace) => self.close_workspace(),
             _ => {}
         }
         // Only migrated actions return early; all other bindings keep falling through
@@ -246,6 +247,9 @@ impl WindowApp {
                     | ShellAction::ActivateTab(_)
                     | ShellAction::ToggleRail
                     | ShellAction::ToggleCompact
+                    | ShellAction::CycleWorkspace
+                    | ShellAction::NewWorkspace
+                    | ShellAction::CloseWorkspace
             )
         )
     }

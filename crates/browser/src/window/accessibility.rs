@@ -44,14 +44,14 @@ impl WindowApp {
         let snapshot = crate::a11y::snapshot(document, document.root());
         let mut signature = crate::a11y_backend::snapshot_signature(&snapshot, focused);
         // Phase 1: the open rail exposes the same tablist/tab names as the strip.
-        let chrome_titles: Vec<String> = self
-            .tabs
-            .tabs()
-            .iter()
-            .map(crate::tabs::Tab::display_title)
-            .collect();
+        // Phase 3: only the active workspace is published, with a group label when
+        // more than one workspace holds tabs.
+        let chrome_titles = super::presentation::workspace_a11y_titles(&self.tabs);
         let shell_tabs: Vec<crate::chrome::ShellTabA11y> = if self.rail_open {
-            crate::chrome::strip_tab_accessibility(&chrome_titles, self.tabs.active_index())
+            crate::chrome::strip_tab_accessibility(
+                &chrome_titles,
+                super::presentation::workspace_chrome_active(&self.tabs),
+            )
         } else {
             Vec::new()
         };

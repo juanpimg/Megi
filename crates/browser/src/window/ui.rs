@@ -104,11 +104,11 @@ impl WindowApp {
         self.finish_download(result);
     }
 
-    /// Unique URLs from every tab's history, newest first (address-bar autocomplete source).
+    /// Unique URLs from the active workspace's tabs, newest first (autocomplete source).
     pub(super) fn address_history(&self) -> Vec<String> {
         let mut seen = std::collections::BTreeSet::new();
         let mut urls = Vec::new();
-        for tab in self.tabs.tabs() {
+        for tab in self.tabs.visible_tabs() {
             for url in tab.navigation.history().iter().rev() {
                 let value = url.as_str();
                 if seen.insert(value.clone()) {
@@ -234,7 +234,7 @@ impl WindowApp {
         }
     }
 
-    /// Closes the active tab (`Ctrl+W`); the last tab is reset to New Tab.
+    /// Closes the active tab (`Ctrl+W`); the last tab of its workspace is reset to New Tab.
     pub(super) fn close_active_tab(&mut self) {
         self.session_autosave.mark_dirty(Instant::now());
         self.save_active_tab();
@@ -263,23 +263,52 @@ impl WindowApp {
             return;
         }
         self.save_active_tab();
-        let count = self.tabs.len();
-        let current = self.tabs.active_index() as i32;
+        let count = self.tabs.visible_len();
+        let current = self.tabs.visible_active_index() as i32;
         let target = (current + delta).rem_euclid(count as i32) as usize;
-        let _ = self.tabs.activate(target);
-        self.load_active_tab();
+        if let Some(index) = self.tabs.visible_tab_index(target) {
+            let _ = self.tabs.activate(index);
+            self.load_active_tab();
+        }
     }
 
-    /// Activates tab `index` (0-based) if it exists.
+    /// Activates the `index`-th tab of the active workspace (0-based visible index).
     pub(super) fn activate_tab(&mut self, index: usize) {
         self.session_autosave.mark_dirty(Instant::now());
-        if index >= self.tabs.len() || index == self.tabs.active_index() {
+        let Some(global) = self.tabs.visible_tab_index(index) else {
+            return;
+        };
+        if global == self.tabs.active_index() {
             return;
         }
         self.save_active_tab();
-        if self.tabs.activate(index) {
+        if self.tabs.activate(global) {
             self.load_active_tab();
         }
+    }
+
+    /// Cycles local workspaces (`Ctrl+Alt+W`), keeping each group's tabs intact.
+    pub(super) fn cycle_workspace(&mut self) {
+        self.session_autosave.mark_dirty(Instant::now());
+        self.save_active_tab();
+        self.tabs.cycle_workspace();
+        self.load_active_tab();
+    }
+
+    /// Creates or switches to a free local workspace (`Ctrl+Shift+W`).
+    pub(super) fn new_workspace(&mut self) {
+        self.session_autosave.mark_dirty(Instant::now());
+        self.save_active_tab();
+        self.tabs.new_workspace();
+        self.load_active_tab();
+    }
+
+    /// Closes the active local workspace (`Ctrl+Alt+Shift+W`).
+    pub(super) fn close_workspace(&mut self) {
+        self.session_autosave.mark_dirty(Instant::now());
+        self.save_active_tab();
+        self.tabs.close_workspace();
+        self.load_active_tab();
     }
 
     /// Opens the find prompt (Ctrl+F): next keystrokes edit the query.

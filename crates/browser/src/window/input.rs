@@ -297,7 +297,9 @@ impl WindowApp {
                 chrome::RailHit::Activate(index) => self.activate_tab(index),
                 chrome::RailHit::Close(index) => {
                     self.save_active_tab();
-                    let _ = self.tabs.close(index);
+                    if let Some(global) = self.tabs.visible_tab_index(index) {
+                        let _ = self.tabs.close(global);
+                    }
                     self.load_active_tab();
                 }
                 chrome::RailHit::NewTab => self.open_new_tab(),
@@ -313,16 +315,11 @@ impl WindowApp {
         }
         let (x, y) = self.page_coordinates(physical_x, physical_y);
         if let Some(menu) = &self.overflow_menu {
-            let titles: Vec<String> = self
-                .tabs
-                .tabs()
-                .iter()
-                .map(crate::tabs::Tab::display_title)
-                .collect();
+            let titles = super::presentation::workspace_chrome_titles(&self.tabs);
             let strip = chrome::layout_tabs(
                 &titles,
                 self.metrics.css_width as f32,
-                self.tabs.active_index(),
+                super::presentation::workspace_chrome_active(&self.tabs),
             );
             let layout = chrome::overflow_menu_layout(
                 &strip,
@@ -340,7 +337,9 @@ impl WindowApp {
                 Some(chrome::OverflowHit::Close(index)) => {
                     self.overflow_menu = None;
                     self.save_active_tab();
-                    let _ = self.tabs.close(index);
+                    if let Some(global) = self.tabs.visible_tab_index(index) {
+                        let _ = self.tabs.close(global);
+                    }
                     self.load_active_tab();
                     return;
                 }
@@ -420,16 +419,11 @@ impl WindowApp {
             self.open_address_bar();
             return;
         }
-        let titles: Vec<String> = self
-            .tabs
-            .tabs()
-            .iter()
-            .map(crate::tabs::Tab::display_title)
-            .collect();
+        let titles = super::presentation::workspace_chrome_titles(&self.tabs);
         let layout = chrome::layout_tabs(
             &titles,
             self.metrics.css_width as f32,
-            self.tabs.active_index(),
+            super::presentation::workspace_chrome_active(&self.tabs),
         );
         match chrome::tab_strip_hit(&layout, x, y) {
             Some(TabHit::Activate(index)) => {
@@ -439,7 +433,9 @@ impl WindowApp {
             Some(TabHit::Close(index)) => {
                 self.overflow_menu = None;
                 self.save_active_tab();
-                let _ = self.tabs.close(index);
+                if let Some(global) = self.tabs.visible_tab_index(index) {
+                    let _ = self.tabs.close(global);
+                }
                 self.load_active_tab();
             }
             Some(TabHit::NewTab) => {
@@ -448,7 +444,7 @@ impl WindowApp {
             }
             Some(TabHit::Overflow) => {
                 let first_hidden = layout.tabs.len();
-                let hidden: Vec<usize> = (first_hidden..self.tabs.len()).collect();
+                let hidden: Vec<usize> = (first_hidden..titles.len()).collect();
                 self.overflow_menu = Some(chrome::OverflowMenu::open(hidden));
             }
             None => self.overflow_menu = None,
