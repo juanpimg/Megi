@@ -10,7 +10,12 @@ impl WindowApp {
         physical_to_page(
             // The rail occupies the leftmost physical columns; page hit-testing
             // must use the same shifted window as `present_region_with_insets`.
-            physical_x - rail_state::physical_offset(self.metrics.scale, self.rail_open),
+            physical_x
+                - rail_state::physical_offset_for(
+                    self.metrics.scale,
+                    self.rail_open,
+                    self.rail_expanded,
+                ),
             (physical_y - chrome_px).max(0.0),
             // The effective scale includes page zoom: `present_region` maps CSS pixels
             // with device_scale * zoom, so hit-testing must use the same factor.
@@ -296,7 +301,8 @@ impl WindowApp {
                     self.load_active_tab();
                 }
                 chrome::RailHit::NewTab => self.open_new_tab(),
-                chrome::RailHit::Toggle => self.toggle_rail(),
+                // The rail row expands/collapses in place; Ctrl+B owns open/close.
+                chrome::RailHit::Toggle => self.rail_expanded = !self.rail_expanded,
             }
             self.request_repaint();
             return;

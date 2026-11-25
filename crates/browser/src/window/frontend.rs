@@ -132,6 +132,7 @@ impl WindowApp {
             reader_html,
             tabs,
             rail_open: false,
+            rail_expanded: false,
             rail_hover: false,
             rail_labels: Vec::new(),
         }

@@ -80,8 +80,9 @@ pub use navigation::{
     navigation_buttons_width,
 };
 pub use rail::{
-    RailHit, RailLayout, RailTabRect, RailView, draw_rail, draw_rail_over_pixmap, layout_rail,
-    paint_rail, rail_hit, rail_hover_hit,
+    RailHit, RailLayout, RailTabRect, RailView, ShellTabA11y, draw_rail, draw_rail_over_pixmap,
+    layout_rail, paint_rail, rail_hit, rail_hover_hit, rail_tab_accessibility,
+    strip_tab_accessibility,
 };
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{
@@ -407,6 +408,9 @@ pub fn draw_chrome_over_pixmap(
         );
         painted += 1;
     }
+    // Opt-in vertical rail (Phase 1). `None` is a no-op, keeping the default
+    // headless `--chrome` bytes exactly as before.
+    painted += draw_rail_over_pixmap(dest, scale, view);
     painted
 }
 

@@ -42,7 +42,22 @@ impl WindowApp {
             return;
         };
         let snapshot = crate::a11y::snapshot(document, document.root());
-        let signature = crate::a11y_backend::snapshot_signature(&snapshot, focused);
+        let mut signature = crate::a11y_backend::snapshot_signature(&snapshot, focused);
+        // Phase 1: the open rail exposes the same tablist/tab names as the strip.
+        let chrome_titles: Vec<String> = self
+            .tabs
+            .tabs()
+            .iter()
+            .map(crate::tabs::Tab::display_title)
+            .collect();
+        let shell_tabs: Vec<crate::chrome::ShellTabA11y> = if self.rail_open {
+            crate::chrome::strip_tab_accessibility(&chrome_titles, self.tabs.active_index())
+        } else {
+            Vec::new()
+        };
+        if !shell_tabs.is_empty() {
+            signature ^= shell_tabs_signature(&shell_tabs);
+        }
         if force {
             self.accessibility_publisher.invalidate();
         }
@@ -52,7 +67,17 @@ impl WindowApp {
         // `update_if_active` returns immediately when no AT is listening (CI/headless);
         // the mapping closure is only run when a real platform adapter is active.
         if let Some(adapter) = self.accessibility_adapter.as_mut() {
-            adapter.update_if_active(|| crate::a11y_backend::build_tree_update(&snapshot, focused));
+            adapter.update_if_active(|| {
+                if shell_tabs.is_empty() {
+                    crate::a11y_backend::build_tree_update(&snapshot, focused)
+                } else {
+                    crate::a11y_backend::build_tree_update_with_shell_tabs(
+                        &snapshot,
+                        focused,
+                        &shell_tabs,
+                    )
+                }
+            });
         }
     }
 
@@ -104,6 +129,20 @@ impl WindowApp {
             AtActionPlan::Noop => {}
         }
     }
+}
+
+/// FNV-1a hash of the shell tablist/tab names, folded into the DOM signature so
+/// toggling the rail or switching tabs republishes the tree.
+fn shell_tabs_signature(tabs: &[crate::chrome::ShellTabA11y]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for tab in tabs {
+        for byte in tab.role.as_bytes().iter().chain(tab.name.as_bytes()) {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100_0000_01b3);
+        }
+        hash ^= u64::from(tab.selected);
+    }
+    hash
 }
 
 /// A resolved AT action, ready for the window to apply. Keeping this pure makes the

@@ -218,3 +218,17 @@ pub(super) fn check_conflicts() -> Result<(), &'static str> {
     }
     Ok(())
 }
+
+/// Applies [`ShellAction::ToggleRail`] to the rail state. Opening starts expanded so
+/// titles are visible in the first usable slice; closing keeps the expansion
+/// preference for the next open. Other actions leave the state untouched.
+pub(super) fn toggle_rail(open: bool, expanded: bool, action: ShellAction) -> (bool, bool) {
+    if action != ShellAction::ToggleRail {
+        return (open, expanded);
+    }
+    if open {
+        (false, expanded)
+    } else {
+        (true, true)
+    }
+}

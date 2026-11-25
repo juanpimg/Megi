@@ -107,6 +107,45 @@ pub fn rail_hover_hit(x: f32, y: f32, band_height: f32, rail_css_width: f32) -> 
     x >= 0.0 && x <= zone && y >= band_height
 }
 
+/// One shell tab exposed to assistive technology (ADR-002). Both the horizontal
+/// strip and the vertical rail build this list from the same titles, so their
+/// `tablist`/`tab` names can never drift apart.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellTabA11y {
+    /// Semantic role string, mapped to `accesskit::Role` by `a11y_backend`.
+    pub role: &'static str,
+    /// Accessible name (the full title, not the visually truncated one).
+    pub name: String,
+    /// Whether this is the active tab.
+    pub selected: bool,
+}
+
+/// Accessibility data for the horizontal tab strip.
+#[must_use]
+pub fn strip_tab_accessibility(titles: &[String], active: usize) -> Vec<ShellTabA11y> {
+    let mut out = Vec::with_capacity(titles.len() + 1);
+    out.push(ShellTabA11y {
+        role: "tablist",
+        name: "Tabs".to_owned(),
+        selected: false,
+    });
+    for (index, title) in titles.iter().enumerate() {
+        out.push(ShellTabA11y {
+            role: "tab",
+            name: title.clone(),
+            selected: index == active,
+        });
+    }
+    out
+}
+
+/// Accessibility data for the vertical rail. Uses the same names as the strip,
+/// including while collapsed: hiding labels visually must not hide them from AT.
+#[must_use]
+pub fn rail_tab_accessibility(view: &RailView<'_>) -> Vec<ShellTabA11y> {
+    strip_tab_accessibility(view.labels, view.active)
+}
+
 fn safe_scale(scale: f32) -> f32 {
     if scale.is_finite() && scale > 0.0 {
         scale

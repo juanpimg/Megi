@@ -181,3 +181,23 @@ fn plain_render_still_encodes_eagerly_and_skips_on_request() {
     lazy.ensure_png();
     assert_eq!(lazy.png, eager.png, "lazy shell encode is byte-identical");
 }
+
+#[test]
+fn rail_wiring_headless_default_chrome_golden() {
+    // The rail is off by default: headless --chrome must keep its existing bytes.
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");
+    let input =
+        megi_browser::cli::normalize_input(&fixture.display().to_string()).expect("fixture URL");
+    let options = megi_webview::render::RenderOptions::default();
+    let first = megi_browser::headless::render_target_with_chrome(&input, 640, 400, &options, None)
+        .expect("chrome render");
+    let second =
+        megi_browser::headless::render_target_with_chrome(&input, 640, 400, &options, None)
+            .expect("chrome render again");
+    assert_eq!(
+        first.png, second.png,
+        "default headless chrome stays byte-identical"
+    );
+    assert_eq!(first.pixmap.pixels, second.pixmap.pixels);
+}

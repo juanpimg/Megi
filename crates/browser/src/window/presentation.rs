@@ -1,5 +1,6 @@
 //! Presentation: framebuffer painting, window title, scroll repaints and error frames.
 
+use super::shortcuts::{ShellAction, toggle_rail};
 use super::*;
 
 /// #1724: picks the status-bar text during IME composition. Preedit text composed inside
@@ -33,12 +34,16 @@ impl WindowApp {
 
     /// Page width available after the open rail column is reserved.
     pub fn page_viewport_width(&self) -> u32 {
-        rail_state::page_viewport_width(self.metrics.css_width, self.rail_open)
+        rail_state::page_viewport_width_for(
+            self.metrics.css_width,
+            self.rail_open,
+            self.rail_expanded,
+        )
     }
 
     /// CSS width of the rail column; zero while closed to preserve legacy pixels.
     pub fn rail_css_width(&self) -> f32 {
-        rail_state::css_width(self.rail_open)
+        rail_state::css_width_for(self.rail_open, self.rail_expanded)
     }
 
     pub(super) fn sync_rail_labels(&mut self) {
@@ -52,8 +57,9 @@ impl WindowApp {
 
     /// Rail view used by both hit-testing and painting; `None` while closed.
     pub fn rail_view(&self) -> Option<chrome::RailView<'_>> {
-        let view = rail_state::view(
+        let view = rail_state::view_for(
             self.rail_open,
+            self.rail_expanded,
             &self.rail_labels,
             self.tabs.active_index(),
             None,
@@ -91,7 +97,10 @@ impl WindowApp {
     /// Toggles the rail (Ctrl+B or the rail toggle row) and reflows the page.
     pub(super) fn toggle_rail(&mut self) {
         self.sync_rail_labels();
-        self.rail_open = rail_state::toggle(self.rail_open);
+        let (open, expanded) =
+            toggle_rail(self.rail_open, self.rail_expanded, ShellAction::ToggleRail);
+        self.rail_open = open;
+        self.rail_expanded = expanded;
         self.rail_hover = false;
         self.request_render();
         self.request_repaint();

@@ -28,6 +28,8 @@ pub fn map_role(role: &str) -> Role {
         "row" => Role::Row,
         "cell" | "columnheader" | "rowheader" => Role::Cell,
         "navigation" => Role::Navigation,
+        "tablist" => Role::TabList,
+        "tab" => Role::Tab,
         "main" => Role::Main,
         "banner" => Role::Banner,
         "contentinfo" => Role::ContentInfo,
@@ -162,6 +164,43 @@ pub fn build_tree_update(snapshot: &[SnapshotNode], focused: DomNodeId) -> TreeU
         focus,
         tree_id: accesskit::TreeId::ROOT,
     }
+}
+
+/// Publishes the shell tab strip (or vertical rail) as a `tablist` with one `tab`
+/// per title. The nodes use reserved high ids so they never collide with DOM ids.
+pub fn build_tree_update_with_shell_tabs(
+    snapshot: &[SnapshotNode],
+    focused: DomNodeId,
+    shell_tabs: &[crate::chrome::ShellTabA11y],
+) -> TreeUpdate {
+    let mut update = build_tree_update(snapshot, focused);
+    if shell_tabs.is_empty() {
+        return update;
+    }
+    let root = update.tree.as_ref().map_or(NodeId(0), |tree| tree.root);
+    let tablist_id = NodeId(u64::MAX - 4096);
+    let mut tablist = Node::new(Role::TabList);
+    tablist.set_label(shell_tabs[0].name.clone());
+    let mut children = Vec::with_capacity(shell_tabs.len());
+    for (offset, entry) in shell_tabs.iter().enumerate() {
+        if entry.role == "tablist" {
+            continue;
+        }
+        let id = NodeId(u64::MAX - 4095 - offset as u64);
+        let mut node = Node::new(map_role(entry.role));
+        node.set_label(entry.name.clone());
+        node.add_action(Action::Focus);
+        children.push(id);
+        update.nodes.push((id, node));
+    }
+    tablist.set_children(children);
+    update.nodes.push((tablist_id, tablist));
+    if let Some((_, root_node)) = update.nodes.iter_mut().find(|(id, _)| *id == root) {
+        let mut root_children = root_node.children().to_vec();
+        root_children.push(tablist_id);
+        root_node.set_children(root_children);
+    }
+    update
 }
 
 /// FNV-1a signature of a shell accessibility snapshot plus the focused DOM node.

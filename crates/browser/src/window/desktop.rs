@@ -336,6 +336,9 @@ pub(super) struct WindowApp {
     pub(super) reader_html: Option<String>,
     /// Vertical tab rail visibility. Closed by default so legacy pixels are unchanged.
     pub(super) rail_open: bool,
+    /// Whether the open rail shows titles and close targets. Phase 2 reuses this for
+    /// hover-peek without changing the page viewport.
+    pub(super) rail_expanded: bool,
     /// Whether the pointer is over a rail row (hover highlight).
     pub(super) rail_hover: bool,
     /// Cached tab titles for `RailView`, refreshed before layout and paint.
