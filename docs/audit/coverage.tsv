@@ -20,7 +20,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	267	ci	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	verify job + keyless cosign signing reviewed
 .github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-.gitignore	56	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+.gitignore	63	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	34	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	127	docs	F3	jp	2026-11-19	covered	#1759	
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
@@ -674,7 +674,7 @@ crates/js/src/runtime/gap_apis/canvas_support.rs	51	src	F2	arch-agent	2026-11-25
 crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/prelude_a.js	417	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_b.js	792	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/slots.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1312,20 +1312,27 @@ crates/test_harness/Cargo.toml	24	manifest	F3	wave-max-mod	2026-11-19	covered	#m
 crates/test_harness/src/css_harness.rs	452	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/css_harness/expanded.rs	105	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 crates/test_harness/src/js_executor.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/lib.rs	390	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
+crates/test_harness/src/lib.rs	391	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/main.rs	43	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
-crates/test_harness/src/run.rs	491	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
+crates/test_harness/src/run.rs	497	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/serializer_harness/mod.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/src/wpt/manifest.rs	119	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/mod.rs	15	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/runner.rs	198	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/shim.rs	33	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/summary.rs	49	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/testharness_shim.js	208	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/tests/closed_loop/common.rs	43	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/css_serializer.rs	136	test	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/tests/closed_loop/fixtures.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/main.rs	25	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tokenizer.rs	190	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/tests/closed_loop/tree.rs	89	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/tests/wpt_runner.rs	68	test	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/webview/Cargo.toml	29	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/src/lib.rs	254	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2095,8 +2102,8 @@ tests/html5lib-tests/tree-construction/tricky01.dat	0	vendored	-			exempt		not r
 tests/html5lib-tests/tree-construction/void-in-phrasing.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit01.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not read line by line: vendored
-tests/wpt/MANIFEST.json	62	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
-tests/wpt/NOTICE.md	14	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/MANIFEST.json	742	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/NOTICE.md	82	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/WPT-REVISION.json	6	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/allowlist.toml	2	manifest	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/baseline.json	9	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
@@ -2106,6 +2113,74 @@ tests/wpt/css/css-syntax/anb-parsing.html	125	fixture	F1	recon-wpt	2026-11-24	co
 tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/dom/events/AddEventListenerOptions-once.html	81	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/CustomEvent.html	35	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-cancelBubble.html	132	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-constants.html	23	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-constructors.html	119	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-defaultPrevented-after-dispatch.html	44	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-defaultPrevented.html	55	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-bubble-canceled.html	59	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-bubbles-false.html	98	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-bubbles-true.html	108	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-click.html	207	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-detached-click.html	20	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-handlers-changed.html	92	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-multiple-cancelBubble.html	51	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-multiple-stopPropagation.html	51	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-omitted-capture.html	70	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-order.html	26	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-propagation-stopped.html	59	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-redispatch.html	28	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-target-moved.html	73	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-dispatch-target-removed.html	72	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-initEvent.html	136	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-propagation.html	48	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-returnValue.html	64	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-subclasses-constructors.html	179	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-type-empty.html	35	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/Event-type.html	22	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/EventListener-handleEvent.html	42	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/EventTarget-addEventListener.html	16	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/EventTarget-dispatchEvent-returnvalue.html	71	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/EventTarget-dispatchEvent.html	104	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/events/EventTarget-removeEventListener.html	16	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-appendData.html	70	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-data.html	82	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-deleteData.html	95	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-insertData.html	90	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-replaceData.html	163	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/CharacterData-substringData.html	137	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/ChildNode-after.html	166	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/ChildNode-before.html	166	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/ChildNode-replaceWith.html	110	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Comment-constructor.html	11	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Document-createComment.html	21	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Document-createElement.html	157	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Document-createTextNode.html	21	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Element-tagName.html	50	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-appendChild.html	59	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-insertBefore.html	312	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-nodeName.html	32	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-nodeValue.html	71	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-removeChild.html	54	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-replaceChild.html	349	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/dom/nodes/Node-textContent.html	265	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/fetch/data-urls/resources/base64.json	80	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/html/webappapis/atob/base64.html	173	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/historical.any.js	29	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/url-tojson.any.js	4	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlencoded-parser.any.js	63	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-append.any.js	39	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-constructor.any.js	183	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-delete.any.js	45	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-foreach.any.js	76	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-get.any.js	21	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-getall.any.js	25	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-has.any.js	24	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-set.any.js	22	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-sort.any.js	62	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
+tests/wpt/url/urlsearchparams-stringifier.any.js	123	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
 tools/audit_coverage.py	409	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/audit_negative_matrix.py	269	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
@@ -2157,11 +2232,11 @@ tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regr
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	320	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
+tools/vendor_wpt.py	338	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
 tools/wpt_gate.py	220	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding string test/subtest validation
-tools/wpt_report.py	231	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check
+tools/wpt_report.py	254	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check

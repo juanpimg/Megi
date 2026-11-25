@@ -39,10 +39,11 @@ MANIFEST_KEYS = {
 # `expanded` submodule). The count is the denominator of the honest WPT report; it must never
 # exceed the number of cases the harness extracts from the vendored fixture.
 SEED_COUNTS = {
-    "css/css-syntax/declarations-trim-whitespace.html": 9,
-    "css/css-syntax/input-preprocessing.html": 13,
     "css/css-syntax/anb-parsing.html": 58,
     "css/css-syntax/anb-serialization.html": 20,
+    "css/css-syntax/declarations-trim-whitespace.html": 9,
+    "css/css-syntax/input-preprocessing.html": 13,
+    "html/webappapis/atob/base64.html": 378,
 }
 # Upstream files deliberately not imported: the first two need getComputedStyle, which the engine
 # does not expose yet; the third requires @charset removal, which the stylesheet parser has not
@@ -55,6 +56,18 @@ EXCLUDED_PATHS = {
 }
 SKIP_PATHS = {
     "css/css-syntax/META.yml": "upstream metadata (not a test fixture)",
+}
+# Support data is vendored byte-for-byte but is not an executed test: the offline
+# component runner hands it to the local `fetch` shim instead of opening a socket.
+SUPPORT_PATHS = {
+    "fetch/data-urls/resources/base64.json": "support data for the atob/base64 fixture",
+}
+# Directories probed while scoping the runner but not adopted: their engine APIs are
+# incomplete, so reporting their real failures would break the allowlist-free gate.
+NOT_ADOPTED_DIRS = {
+    "dom/nodes": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dom/events": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "url": "explored, not adopted by the component runner (engine URL APIs incomplete)",
 }
 
 
@@ -222,7 +235,8 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
             if relative in EXCLUDED_PATHS:
                 continue
             skipped = any(marker in relative for marker in SKIP_MARKERS)
-            explicit_skip = SKIP_PATHS.get(relative)
+            explicit_skip = SKIP_PATHS.get(relative) or NOT_ADOPTED_DIRS.get(directory)
+            support_reason = SUPPORT_PATHS.get(relative)
             data = path.read_bytes()
             target = base / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -233,9 +247,13 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
                     "sha256": sha256_bytes(data),
                     "bytes": len(data),
                     "license": license_name,
-                    "kind": "skip" if skipped or explicit_skip else "testharness",
+                    "kind": (
+                        "skip" if skipped or explicit_skip
+                        else "support" if support_reason
+                        else "testharness"
+                    ),
                     "skip_reason": explicit_skip
-                    or ("upstream manual/reference/testdriver file" if skipped else ""),
+                    or ("upstream manual/reference/testdriver file" if skipped else support_reason or ""),
                     "dir": directory,
                     "subtest_count_expected": SEED_COUNTS.get(relative, 0),
                 }

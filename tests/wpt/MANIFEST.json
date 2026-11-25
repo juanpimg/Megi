@@ -14,8 +14,8 @@
     "sha256": "4c973b42488aad84ec305456a2815a3c36dcb0a5720bb1f3bb51db785a190455",
     "bytes": 4992,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "documentation (not a WPT fixture)",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "css/css-syntax",
     "subtest_count_expected": 0
   },
@@ -58,5 +58,685 @@
     "skip_reason": "",
     "dir": "css/css-syntax",
     "subtest_count_expected": 13
+  },
+  {
+    "path": "dom/events/AddEventListenerOptions-once.html",
+    "sha256": "7eb04358565fd82c3efe34efc12f929c0a45a2c3228188ea094e5d1adad6abb8",
+    "bytes": 2916,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/CustomEvent.html",
+    "sha256": "ce69ced25e7e067c575b5adadd5faa63a2d67ae3c527e1f5f6806814bf24191f",
+    "bytes": 1084,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-cancelBubble.html",
+    "sha256": "863af4ba15f1dba39423e91ff1d96f9a1b1fbf176c0156a0137829eaea08a372",
+    "bytes": 5341,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-constants.html",
+    "sha256": "68e38865775319d0800cc4a55a263104671a0e71a09dd7d0cdafb21701f0e16a",
+    "bytes": 618,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-constructors.html",
+    "sha256": "5ca9c7b4676b32c3025277d1609378a5b7f591b21276f48fdc2cf0900daa02de",
+    "bytes": 3511,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-defaultPrevented-after-dispatch.html",
+    "sha256": "e0b40af0ba403151d2d3cb3f254a4254764229066bbe1f3e02f705b8470e755b",
+    "bytes": 1434,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-defaultPrevented.html",
+    "sha256": "49f29907bddebfe35070e8fff23adcceba8c98b689948a0cdf77dd3947af8ac4",
+    "bytes": 2482,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-bubble-canceled.html",
+    "sha256": "afa7b61cd7cc2ebd6dea7ae6c0412006bab1665ae1b1c21298e543a1430af193",
+    "bytes": 1756,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-bubbles-false.html",
+    "sha256": "f4a5214354110d1618aa10935c0f8449439ee5f22dd5bb840b9e2c9dba207682",
+    "bytes": 3316,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-bubbles-true.html",
+    "sha256": "5b5dd38907cb8edda62a2c4ec909009c9648e6fd586a5ebc4e5fadc24ca400eb",
+    "bytes": 3604,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-click.html",
+    "sha256": "026ba6eef54b0b41e860bc6d137bd281727e62cb86ec6819b3037aaef027e14f",
+    "bytes": 6412,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-detached-click.html",
+    "sha256": "79c405a7ddc7a4538013c378fce548e0ca0f09cefa49b1d806441ce184b3b1bb",
+    "bytes": 695,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-handlers-changed.html",
+    "sha256": "00b9659b1f7c629a080774a4fa931a310ca6e9c622b0107580e210912cc47ca9",
+    "bytes": 2758,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-multiple-cancelBubble.html",
+    "sha256": "cffd6288cfd153d28dda1eed4e8777dd80f126547e8a57bbb79f6dff84a32769",
+    "bytes": 1388,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-multiple-stopPropagation.html",
+    "sha256": "6d01d79dbeae450e1fa86d5feba1605f7024feb434d9825a2fe3a57172adc16f",
+    "bytes": 1393,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-omitted-capture.html",
+    "sha256": "b19131d2ddd6ec92e2f6407fb9d37579727b6b88d6f4ed82a6fcef54c1dcaf80",
+    "bytes": 2113,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-order.html",
+    "sha256": "eab3c16fe04011aab013c4454f80bd56b7117e4d6e01c3b182dd18a2386b0bbf",
+    "bytes": 921,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-propagation-stopped.html",
+    "sha256": "c6fb9c7d4bbaf127cf1cd64f8447486af52013c75f7b3f06ab38e015c7aee78f",
+    "bytes": 1754,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-redispatch.html",
+    "sha256": "f4fdfd03461d40024a1766522a460ca6bf12e0bea60f39573785abaeaa69f3ce",
+    "bytes": 1009,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-target-moved.html",
+    "sha256": "4bea9c1e8d599aa06d6f833d35a6dc60fb94c6a0be34301b0a961cc94ec4a8ce",
+    "bytes": 2552,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-dispatch-target-removed.html",
+    "sha256": "b5c3166a0ec16ffc4a482e83f416f3ad01ef4acd7b46f045c5486bfbed08d189",
+    "bytes": 2463,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-initEvent.html",
+    "sha256": "34890021d360db2d2fd4cb7ea78c9827b719dcc52874bf44500b21d10603a39e",
+    "bytes": 5139,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-propagation.html",
+    "sha256": "19e0e500eecd965fde092939c948d6d32280f22ace2dcd007fb2d5cd3d726bab",
+    "bytes": 1772,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-returnValue.html",
+    "sha256": "cdab17047c6c3b8b9f673d4927f500f24ea887d2cb86a46921fb8e4324798586",
+    "bytes": 2472,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-subclasses-constructors.html",
+    "sha256": "4bb590ff15857e280cc511024c7c130c7606cac568fb53f6c19789546a874a1e",
+    "bytes": 4545,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-type-empty.html",
+    "sha256": "db62300e80bb6452b84312c438bb55920fd493e35312253e66ab690b034c5731",
+    "bytes": 981,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/Event-type.html",
+    "sha256": "bf6d1fd2dbbed77e8b75008dfb5d17a83cd6ac1fbae6c9fc6fba9db56bf60635",
+    "bytes": 777,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/EventListener-handleEvent.html",
+    "sha256": "d778111da714130eec1ffdc79166b5f2c1fa9eb2e8a76378095ef78be6fb3087",
+    "bytes": 1179,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/EventTarget-addEventListener.html",
+    "sha256": "a1d897267dd2f8281b0da1eb407553860eda91aabc78091aa50cfbdd001fb0a7",
+    "bytes": 673,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/EventTarget-dispatchEvent-returnvalue.html",
+    "sha256": "a1892b3d3f67f32c7c623768ac3d080e92fa3138b42fa52e8a4f0f4a2ece29e6",
+    "bytes": 2546,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/EventTarget-dispatchEvent.html",
+    "sha256": "4c2a9cc4edc488e954f97577a292014f4e65eb9bfef454a27f86fd4c24a1f127",
+    "bytes": 3523,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/events/EventTarget-removeEventListener.html",
+    "sha256": "4882f233527b347f02a3201c4f16d75eef2bdc30653b6ab682535163f29b11e3",
+    "bytes": 690,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine event APIs incomplete)",
+    "dir": "dom/events",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-appendData.html",
+    "sha256": "edd46cc7581d8af311a92e90259f55e14dc00d2d31c4d4400a35c5e26ca19fa1",
+    "bytes": 1998,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-data.html",
+    "sha256": "598c6c56e1b33f16d659a7345bfdfece5a2f1a6dc35455a5f3d3a8425aff7d8f",
+    "bytes": 2136,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-deleteData.html",
+    "sha256": "090d9e817edac9fff6b7978bc6eea64782a8228c4fb9d47e31aeee997ab619b4",
+    "bytes": 2924,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-insertData.html",
+    "sha256": "c2db35115a859f770765358b628c7398b6876e1f1ecf8769c46cca2db5c993b1",
+    "bytes": 2843,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-replaceData.html",
+    "sha256": "42ab086b132f9751021fce8e5c08212870430fe9e8eecef359880676ea689563",
+    "bytes": 4808,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/CharacterData-substringData.html",
+    "sha256": "b79fa8479e995ae0e7db00b5328f24e1271ec0e846c78ddb1dae8c487c0b73e9",
+    "bytes": 4617,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/ChildNode-after.html",
+    "sha256": "b72ad3984ad5ea96f5277cdca095225a0dba2a7b57ba0e6b5bf4a69d3ff8c38e",
+    "bytes": 6353,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/ChildNode-before.html",
+    "sha256": "ee61c00b9503ca41b34b22dc88759893fa60cf2c7f4fb14ec45f3b547501a00e",
+    "bytes": 6394,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/ChildNode-replaceWith.html",
+    "sha256": "81b10f695d7f3e46982b5916fdc5d3a58dd505b2b5751c741f704e57244d6f09",
+    "bytes": 4254,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Comment-constructor.html",
+    "sha256": "a751d73a93177f4b3590be009a5780a7bbde56218cdf61a03fa7158c4357c8ac",
+    "bytes": 363,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Document-createComment.html",
+    "sha256": "7c779fb3a3e847a7b776f1a014b2f24781ef3a9bd0228edcc68805a57e7bdab8",
+    "bytes": 1150,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Document-createElement.html",
+    "sha256": "b0f1fc02bd937697700b34764dbbcea39a87c1d7edda4521142cd34aea1f670f",
+    "bytes": 4639,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Document-createTextNode.html",
+    "sha256": "939a6330119af3ba4d91b255668771473ea390803560df8ad83c02aaebe5a3db",
+    "bytes": 1147,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Element-tagName.html",
+    "sha256": "c542046237f144f02f011797ce9f171f89c32224a11a403fb23b3f91de6b4f4e",
+    "bytes": 2314,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-appendChild.html",
+    "sha256": "1f8485c9bdbedb7b5e364b6245b1835bc9696b023a82efd6553613319be8f658",
+    "bytes": 1924,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-insertBefore.html",
+    "sha256": "149b1d6a7ba1c4570c1b7ab32386da9949e6309758fb1c61807275628f881774",
+    "bytes": 13274,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-nodeName.html",
+    "sha256": "31380b41b81a17e11e24f76d78f41c1fda2ce84edb03dea4a83cbdb1d510a837",
+    "bytes": 1470,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-nodeValue.html",
+    "sha256": "e06dade66ac4b9b2d78333a48cbcb94240024287de87ea192befe243da006e4d",
+    "bytes": 2402,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-removeChild.html",
+    "sha256": "8aa1d46e0549a6e386959b778f08cd6b0c00849d678f6cb7d0c823ef45f759f8",
+    "bytes": 2015,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-replaceChild.html",
+    "sha256": "812eaea7b8f7458ce062ff3c8025f7d563f9b50acd7407d2a7957807d46480b1",
+    "bytes": 13704,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "dom/nodes/Node-textContent.html",
+    "sha256": "7c1c6ed8d44f08026fdbf8d851147fa09ff0bec5ff0f730979fade639bd75cbe",
+    "bytes": 9526,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dir": "dom/nodes",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "fetch/data-urls/resources/base64.json",
+    "sha256": "d630751663c6fe3c3eb42a1561fd6f0fccbbc46c8cdb744bb7a9c06e7c905c76",
+    "bytes": 1683,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support data for the atob/base64 fixture",
+    "dir": "fetch/data-urls/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "html/webappapis/atob/base64.html",
+    "sha256": "7d817d8be9136e628c02f29f2568b3b158c9594312f9446ffef997da80efe0e4",
+    "bytes": 5525,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "html/webappapis/atob",
+    "subtest_count_expected": 378
+  },
+  {
+    "path": "url/historical.any.js",
+    "sha256": "0cce2e984b3296d3aab14949c710bcd369b12d29f4f8622bbcdf5e5c033c63d0",
+    "bytes": 909,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/url-tojson.any.js",
+    "sha256": "dc5707460963a2cc4dd2e77d48b369ac174515b8fd2f76083f0ade9328b5551a",
+    "bytes": 123,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlencoded-parser.any.js",
+    "sha256": "5902ffd4c0accae0c7ac20225be1afd874ddfe35c51745ad8c9cffb3073f5471",
+    "bytes": 2709,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-append.any.js",
+    "sha256": "b3fdef26237562dee586c7768af5b484b3ff9d372595d8a8e59b7ebd1099c19b",
+    "bytes": 1479,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-constructor.any.js",
+    "sha256": "b6a55733f10c523e9050a59cde0c55b1f8c40eabd4b1316a0619958b677378f2",
+    "bytes": 7897,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-delete.any.js",
+    "sha256": "60f393ce2dabdf26ff78a03f36c40764fcf783397b72b750bc47c5c16462adb4",
+    "bytes": 1894,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-foreach.any.js",
+    "sha256": "b51088975079e0f737a12d8f59c5816632a7491da9c30146cbd256856484eba3",
+    "bytes": 2311,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-get.any.js",
+    "sha256": "0bfd999026f963ffc3f021cf509d1e8f3300cddd52c21ebffcd392d8d43bca34",
+    "bytes": 1050,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-getall.any.js",
+    "sha256": "f6501e719a9ab88c648d1bff0da30b2efda7aaa16d9e4220e95a952fdc17be8c",
+    "bytes": 1318,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-has.any.js",
+    "sha256": "ee68cac117ae0d9cc584e7eb499fe3a5b9ce34eb8daa417aeccbad4f3737dd93",
+    "bytes": 998,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-set.any.js",
+    "sha256": "41771dec1616c4715c33a2a77b3125483c4bce24998e344222e9b8d1f49d68de",
+    "bytes": 986,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-sort.any.js",
+    "sha256": "cdfc1ef89cfcefa5fae94ebdeaa2a869c47b47b47d08aba4c7db0b6e44b31fca",
+    "bytes": 1811,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "url/urlsearchparams-stringifier.any.js",
+    "sha256": "c6e9ece0ff07de304acf2a28a328c516840034255c294b7392f7c414c57b2b4e",
+    "bytes": 3791,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dir": "url",
+    "subtest_count_expected": 0
   }
 ]
