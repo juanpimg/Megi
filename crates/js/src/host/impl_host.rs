@@ -1,11 +1,16 @@
 use super::*;
 
+fn console_entry_bytes(entry: &ConsoleEntry) -> usize {
+    entry.level.len() + entry.message.len()
+}
+
 impl Host {
     /// Creates the host around a document.
     pub fn new(document: Document, url: String) -> Self {
         Self {
             document,
             console: VecDeque::new(),
+            console_bytes: 0,
             title: String::new(),
             url,
             nodes: Vec::new(),
@@ -286,10 +291,39 @@ impl Host {
     }
 
     /// Pushes a console entry, dropping oldest when the cap is exceeded (issue #566).
+    ///
+    /// #2310: page-controlled messages are bounded here, before they are copied into
+    /// the runtime/renderer/warnings. Both caps are byte-based and UTF-8 safe; the
+    /// entry count and the `console_entries` format are unchanged.
     pub fn push_console(&mut self, entry: ConsoleEntry) {
-        if self.console.len() >= MAX_CONSOLE_ENTRIES {
-            self.console.pop_front();
+        let mut entry = entry;
+        let _ = truncate_utf8(&mut entry.message, MAX_CONSOLE_MESSAGE_BYTES);
+        let incoming = entry.level.len() + entry.message.len();
+        if self.console.len() >= MAX_CONSOLE_ENTRIES
+            && let Some(dropped) = self.console.pop_front()
+        {
+            self.console_bytes = self
+                .console_bytes
+                .saturating_sub(console_entry_bytes(&dropped));
         }
+        // Keep every entry (never drop them to meet the byte budget): trim the
+        // oldest messages instead, on character boundaries.
+        let excess = self
+            .console_bytes
+            .saturating_add(incoming)
+            .saturating_sub(MAX_CONSOLE_BYTES);
+        if excess > 0 {
+            let mut freed = 0;
+            for oldest in self.console.iter_mut() {
+                if freed >= excess {
+                    break;
+                }
+                let limit = oldest.message.len().saturating_sub(excess - freed);
+                freed += truncate_utf8(&mut oldest.message, limit);
+            }
+            self.console_bytes = self.console_bytes.saturating_sub(freed);
+        }
+        self.console_bytes = self.console_bytes.saturating_add(incoming);
         self.console.push_back(entry);
     }
 
@@ -317,6 +351,7 @@ impl Host {
 
     /// Drains captured console entries.
     pub fn take_console(&mut self) -> Vec<ConsoleEntry> {
+        self.console_bytes = 0;
         std::mem::take(&mut self.console).into()
     }
 }

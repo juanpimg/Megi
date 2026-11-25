@@ -38,7 +38,7 @@ pub(crate) fn charge_document_parse(host: &mut Host, bytes: usize, sink: &str) -
     {
         if !host.document_write_warned {
             host.document_write_warned = true;
-            host.console.push_back(ConsoleEntry {
+            host.push_console(ConsoleEntry {
                 level: "warn".to_string(),
                 message: format!(
                     "{sink} ignored: the cumulative document budget ({} bytes / {} nodes) is exhausted",
@@ -94,7 +94,7 @@ pub(crate) fn document_write(
             megi_html::document_write_with_options(&mut host.document, &text, false, &options);
         // Surface parser truncation to script instead of silently discarding it (#431).
         if !violations.is_empty() {
-            host.console.push_back(ConsoleEntry {
+            host.push_console(ConsoleEntry {
                 level: "warn".to_string(),
                 message: format!(
                     "document.write: {} parse limit violation(s) ({} node(s), {} depth, {} text bytes)",

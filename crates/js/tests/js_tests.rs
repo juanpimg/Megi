@@ -74,6 +74,42 @@ fn console_is_captured() {
 }
 
 #[test]
+fn console_messages_are_byte_bounded_without_splitting_utf8() {
+    // #2310: a single page-controlled console message must not grow the capture
+    // buffer without limit. The cap is applied to the UTF-8 byte length and must
+    // land on a character boundary (€ is 3 bytes, so 8 KiB is not one).
+    let mut runtime = JsRuntime::new().expect("runtime");
+    runtime
+        .eval(
+            "console.log('A'.repeat(20000)); console.warn('€'.repeat(10000));",
+            "huge-console.js",
+        )
+        .expect("eval");
+    let entries = runtime.take_console();
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    const CAP: usize = 8 * 1024;
+    assert_eq!(entries[0].level, "log");
+    assert_eq!(entries[0].message.len(), CAP);
+    assert!(entries[0].message.bytes().all(|byte| byte == b'A'));
+    let warn = &entries[1].message;
+    assert_eq!(entries[1].level, "warn");
+    assert!(
+        warn.len() <= CAP,
+        "warn message is {} bytes, cap is {CAP}",
+        warn.len()
+    );
+    assert!(
+        warn.len() >= CAP - 2,
+        "message truncated too early: {}",
+        warn.len()
+    );
+    assert!(
+        warn.chars().all(|character| character == '€'),
+        "UTF-8 character was split by truncation"
+    );
+}
+
+#[test]
 fn mutates_dom_with_get_element_by_id_and_attributes() {
     let mut runtime = runtime();
     runtime
