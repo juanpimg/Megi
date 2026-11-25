@@ -4,13 +4,15 @@
 Default mode renders versioned HTML snapshots (deterministic, no network). Pass --live to
 fetch the real URLs through Megi's own `render` pipeline (TLS, CSS, images, JS included).
 
-    python3 tools/real_site_check.py            # snapshots
-    python3 tools/real_site_check.py --live     # real network
+    python3 tools/real_site_check.py              # snapshots
+    python3 tools/real_site_check.py --live       # real network
+    python3 tools/real_site_check.py --refresh-hashes  # republish md5 of existing PNGs
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import subprocess
@@ -33,6 +35,14 @@ ISSUE_BASE = "https://github.com/juanpimg/Megi/issues/"
 def png_relative(site_id: str) -> Path:
     """Path stored in the report, relative to docs/status/real-sites.html."""
     return Path("real-sites") / f"{site_id}.png"
+
+
+def png_md5(path: Path) -> str:
+    """MD5 of a captured PNG; empty string when the capture is absent (M2-MD5-EVIDENCE)."""
+    try:
+        return hashlib.md5(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""
 
 
 def load_sites(root: Path) -> list[dict]:
@@ -141,7 +151,9 @@ def render_one(root: Path, site: dict, live: bool) -> dict:
         message = detail[-1] if detail else "error al renderizar"
         return _result(site, "ERROR", {}, message, png_rel, source)
     stats = _json_from(process.stdout)
-    return _result(site, classify(stats, site), stats, "", png_rel, source)
+    return _result(
+        site, classify(stats, site), stats, "", png_rel, source, png_md5=png_md5(png_path)
+    )
 
 
 def _total_time_ms(stats: dict) -> float:
@@ -153,7 +165,15 @@ def _total_time_ms(stats: dict) -> float:
         return 0.0
 
 
-def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, source: str) -> dict:
+def _result(
+    site: dict,
+    result: str,
+    stats: dict,
+    error: str,
+    png_rel: Path,
+    source: str,
+    png_md5: str = "",
+) -> dict:
     return {
         "id": site["id"],
         "name": site.get("name", site["id"]),
@@ -172,6 +192,7 @@ def _result(site: dict, result: str, stats: dict, error: str, png_rel: Path, sou
         "issue": site.get("issue", 0),
         "error": error,
         "png": png_rel.as_posix(),
+        "png_md5": png_md5,
     }
 
 
@@ -185,13 +206,20 @@ def render_html(results: list[dict], mode: str = "snapshot", generated_at: str =
         issue_link = f'<a href="{ISSUE_BASE}{issue}">#{issue}</a>' if issue else "—"
         warnings = "<br>".join(html.escape(str(w)) for w in item["warnings"][:4]) or "—"
         note = html.escape(str(item.get("note", "")))
+        digest = str(item.get("png_md5") or "")
+        md5_label = (
+            f"<br><span class='meta'>md5 <code title='md5 completo'>{html.escape(digest)}</code></span>"
+            if digest
+            else ""
+        )
         rows.append(
             f"<tr><td><b>{html.escape(str(item['name']))}</b><br><span class='meta'>{note}</span></td>"
             f"<td style='color:{color}'><b>{result}</b></td>"
             f"<td>{item.get('display_items', 0)}</td><td>{item.get('time_ms', 0)} ms</td>"
             f"<td>{warnings}</td><td>{item.get('console_errors', 0)}</td><td>{issue_link}</td>"
             f"<td><a href='{html.escape(str(item['png']))}'><img src='{html.escape(str(item['png']))}' "
-            f"alt='captura de {html.escape(str(item['name']))}' style='width:220px;border:1px solid #d0d7de'></a></td></tr>"
+            f"alt='captura de {html.escape(str(item['name']))}' style='width:220px;border:1px solid #d0d7de'></a>"
+            f"{md5_label}</td></tr>"
         )
     summary = " · ".join(f"{key}: {value}" for key, value in counts.items())
     return f"""<!DOCTYPE html>
@@ -246,13 +274,47 @@ def failure_reasons(sites: list[dict], results: list[dict]) -> list[str]:
     return reasons
 
 
+def refresh_hashes(root: Path) -> int:
+    """Recompute png_md5 from the captures already on disk; never invokes cargo.
+
+    Rewrites JSON and HTML in place, preserving mode, generated_at, every result
+    field and its classification. Running it twice produces identical bytes.
+    """
+    json_path = root / STATUS_DIR / "real-sites.json"
+    html_path = root / STATUS_DIR / "real-sites.html"
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    results = payload.get("results", [])
+    for item in results:
+        png_rel = str(item.get("png") or "")
+        item["png_md5"] = png_md5(root / STATUS_DIR / png_rel) if png_rel else ""
+    json_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    html_path.write_text(
+        render_html(results, payload.get("mode", "snapshot"), payload.get("generated_at", "")),
+        encoding="utf-8",
+    )
+    for item in results:
+        print(f"{item['png_md5'] or '(missing)':>32}  {item.get('name', item.get('id', '?'))}")
+    print(f"refreshed {len(results)} capture hash(es) in {json_path.relative_to(root)}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Real-site render check for Megi.")
     parser.add_argument("--live", action="store_true", help="fetch real URLs instead of snapshots")
     parser.add_argument("--offline", action="store_true", help="use versioned snapshots (default)")
+    parser.add_argument(
+        "--refresh-hashes",
+        action="store_true",
+        help="recompute png_md5 from existing PNGs without rendering (no cargo)",
+    )
     parser.add_argument("--root", default=None)
     args = parser.parse_args(argv)
     root = Path(args.root).resolve() if args.root else Path(__file__).resolve().parent.parent
+
+    if args.refresh_hashes:
+        return refresh_hashes(root)
 
     live = args.live and not args.offline
     sites = load_sites(root)

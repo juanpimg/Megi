@@ -17,7 +17,8 @@
       "time_ms": 2055.0,
       "issue": 0,
       "error": "",
-      "png": "real-sites/example.png"
+      "png": "real-sites/example.png",
+      "png_md5": "56bd351593b4c1525002360cb0dc6abc"
     },
     {
       "id": "rust",
@@ -36,7 +37,8 @@
       "time_ms": 8209.7,
       "issue": 0,
       "error": "",
-      "png": "real-sites/rust.png"
+      "png": "real-sites/rust.png",
+      "png_md5": "fe5bc97548a9a984ab51ba9c931dbeff"
     },
     {
       "id": "wikipedia",
@@ -56,7 +58,8 @@
       "time_ms": 1926.7,
       "issue": 1013,
       "error": "",
-      "png": "real-sites/wikipedia.png"
+      "png": "real-sites/wikipedia.png",
+      "png_md5": "d648a7778f73ad207428bb5870272875"
     },
     {
       "id": "hn",
@@ -76,7 +79,8 @@
       "time_ms": 3181.2,
       "issue": 1011,
       "error": "",
-      "png": "real-sites/hn.png"
+      "png": "real-sites/hn.png",
+      "png_md5": "15712139d9f24bfc56349e2d1bbe2a7e"
     }
   ]
 }

@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -280,6 +282,154 @@ class ConsoleErrorTests(unittest.TestCase):
                 )
         self.assertEqual(result["console_errors"], 1)
         self.assertEqual(result["result"], "DEGRADADO")
+
+
+class Md5EvidenceTests(unittest.TestCase):
+    """M2-MD5-EVIDENCE: every published capture must carry stable md5 evidence."""
+
+    @staticmethod
+    def _png_bytes() -> bytes:
+        return b"\x89PNG\r\n\x1a\n" + b"fixture-payload"
+
+    def test_png_md5_is_hex_digest_of_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "x.png"
+            path.write_bytes(self._png_bytes())
+            expected = hashlib.md5(self._png_bytes()).hexdigest()
+            self.assertEqual(real_site_check.png_md5(path), expected)
+
+    def test_png_md5_missing_file_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(real_site_check.png_md5(Path(tmp) / "missing.png"), "")
+
+    def test_result_carries_png_md5(self) -> None:
+        digest = "0123456789abcdef0123456789abcdef"
+        result = real_site_check._result(
+            {"id": "x"},
+            "PASS",
+            {"display_items": 3},
+            "",
+            Path("real-sites/x.png"),
+            "snap",
+            png_md5=digest,
+        )
+        self.assertEqual(result["png_md5"], digest)
+
+    def test_result_defaults_png_md5_to_empty(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"}, "PASS", {"display_items": 3}, "", Path("real-sites/x.png"), "snap"
+        )
+        self.assertEqual(result["png_md5"], "")
+
+    def test_render_one_propagates_png_md5(self) -> None:
+        fake = mock.Mock(
+            returncode=0,
+            stdout='{"display_items": 1, "warnings": [], "status": 200}',
+            stderr="",
+        )
+        with tempfile.TemporaryDirectory() as root:
+            png_path = Path(root) / "docs/status/real-sites/x.png"
+            png_path.parent.mkdir(parents=True, exist_ok=True)
+            png_path.write_bytes(self._png_bytes())
+            with mock.patch.object(real_site_check.subprocess, "run", return_value=fake):
+                result = real_site_check.render_one(
+                    Path(root), {"id": "x", "name": "X", "snapshot": "x.html"}, live=False
+                )
+        self.assertEqual(result["png_md5"], hashlib.md5(self._png_bytes()).hexdigest())
+
+    def test_render_html_shows_png_md5(self) -> None:
+        item = {
+            "id": "x",
+            "name": "x.example",
+            "result": "DEGRADADO",
+            "display_items": 3,
+            "warnings": [],
+            "console_errors": 0,
+            "issue": 0,
+            "png": "real-sites/x.png",
+            "png_md5": "abcdef0123456789abcdef0123456789",
+        }
+        html = real_site_check.render_html([item])
+        self.assertIn("md5", html)
+        self.assertIn(item["png_md5"][:8], html)
+
+
+class RefreshHashesTests(unittest.TestCase):
+    """--refresh-hashes republishes evidence from existing PNGs, never via cargo."""
+
+    @staticmethod
+    def _seed(root: str) -> tuple[dict, bytes]:
+        status = Path(root) / "docs/status"
+        (status / "real-sites").mkdir(parents=True, exist_ok=True)
+        png_bytes = b"\x89PNG\r\n\x1a\n" + b"refresh-fixture"
+        (status / "real-sites/x.png").write_bytes(png_bytes)
+        result = {
+            "id": "x",
+            "name": "x.example",
+            "source": "https://x.example",
+            "mode": "live",
+            "result": "DEGRADADO",
+            "display_items": 7,
+            "status": 200,
+            "warnings": ["performance budget: total 9 > 3s"],
+            "console_errors": 0,
+            "images_failed": 0,
+            "time_ms": 42.0,
+            "issue": 1011,
+            "error": "",
+            "png": "real-sites/x.png",
+        }
+        payload = {"mode": "live", "generated_at": "2026-11-24", "results": [result]}
+        (status / "real-sites.json").write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        return payload, png_bytes
+
+    @staticmethod
+    def _no_cargo():
+        return mock.patch.object(
+            real_site_check.subprocess,
+            "run",
+            side_effect=AssertionError("cargo must not run in --refresh-hashes"),
+        )
+
+    def test_refresh_hashes_rewrites_json_without_cargo(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            payload, png_bytes = self._seed(root)
+            with self._no_cargo():
+                rc = real_site_check.main(["--refresh-hashes", "--root", root])
+            self.assertEqual(rc, 0)
+            updated = json.loads(
+                (Path(root) / "docs/status/real-sites.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(updated["mode"], payload["mode"])
+            self.assertEqual(updated["generated_at"], payload["generated_at"])
+            self.assertEqual(len(updated["results"]), 1)
+            new_result = dict(updated["results"][0])
+            self.assertEqual(new_result.pop("png_md5"), hashlib.md5(png_bytes).hexdigest())
+            self.assertEqual(new_result, payload["results"][0])
+
+    def test_refresh_hashes_writes_html_with_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            _, png_bytes = self._seed(root)
+            with self._no_cargo():
+                real_site_check.main(["--refresh-hashes", "--root", root])
+            page = (Path(root) / "docs/status/real-sites.html").read_text(encoding="utf-8")
+            self.assertIn(hashlib.md5(png_bytes).hexdigest()[:8], page)
+
+    def test_refresh_hashes_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            self._seed(root)
+            paths = [
+                Path(root) / "docs/status/real-sites.json",
+                Path(root) / "docs/status/real-sites.html",
+            ]
+            with self._no_cargo():
+                first = real_site_check.main(["--refresh-hashes", "--root", root])
+                snapshots = [path.read_bytes() for path in paths]
+                second = real_site_check.main(["--refresh-hashes", "--root", root])
+            self.assertEqual((first, second), (0, 0))
+            self.assertEqual([path.read_bytes() for path in paths], snapshots)
 
 
 if __name__ == "__main__":
