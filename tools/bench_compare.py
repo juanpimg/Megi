@@ -194,13 +194,16 @@ def main() -> int:
             print(f"missing rows (bench renamed/removed?): {', '.join(missing)}")
         print()
 
+    # Diagnostics must not corrupt --json stdout: json.loads(stdout) would fail
+    # with "Extra data" once a regression or missing row appends a human line.
+    stream = sys.stderr if args.json else sys.stdout
     if regressions:
-        print(f"{len(regressions)} regression(s): {', '.join(regressions)}")
+        print(f"{len(regressions)} regression(s): {', '.join(regressions)}", file=stream)
         return 1
     # #1836: a dropped slow row must fail the gate unless the baseline is being
     # updated deliberately (--allow-missing); otherwise the regression vanishes.
     if missing and not args.allow_missing:
-        print(f"{len(missing)} missing baseline row(s): {', '.join(missing)}")
+        print(f"{len(missing)} missing baseline row(s): {', '.join(missing)}", file=stream)
         return 1
     print(f"no regressions above {args.threshold:g} % / {args.min_ms:g} ms")
     return 0
