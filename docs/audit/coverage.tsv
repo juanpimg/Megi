@@ -94,9 +94,10 @@ crates/browser/src/cli/finish.rs	246	src	F2	subagent-settings	2026-11-25	covered
 crates/browser/src/cli/parse.rs	179	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: both new flags parsed and validated
 crates/browser/src/cli/tests.rs	364	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Re-read: headless PDF mode and flag conflict tests
 crates/browser/src/convert.rs	92	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/devtools.rs	361	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: loopback discovery and page-attached RPC transport
+crates/browser/src/devtools.rs	363	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: loopback discovery and page-attached RPC transport
 crates/browser/src/devtools/network.rs	99	src	F2	roadmap-next	2026-11-25	covered	WP-DEPTH-m7-devtools-network	Read during DevTools Network integration review
-crates/browser/src/devtools/protocol.rs	228	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: DOM/CSS JSON-RPC commands over live arena
+crates/browser/src/devtools/performance.rs	110	src	F2	round35-fast-criterion	2026-11-25	covered	#M7#2	
+crates/browser/src/devtools/protocol.rs	244	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: DOM/CSS JSON-RPC commands over live arena
 crates/browser/src/download.rs	29	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/download/batch.rs	146	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/download/manager.rs	274	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -178,22 +179,21 @@ crates/browser/src/tabs.rs	421	src	F2	subagent	2026-11-25	covered	#2290	Deepen t
 crates/browser/src/tabs/tests.rs	302	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/tabs/workspaces.rs	387	src	F2	subagent	2026-11-25	covered	#2290	Extract workspace operations into internal helpers; behavior unchanged
 crates/browser/src/title.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window.rs	177	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
+crates/browser/src/window.rs	178	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
 crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
 crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	428	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
-crates/browser/src/window/form_controls.rs	443	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
-crates/browser/src/window/frontend.rs	257	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
+crates/browser/src/window/form_controls.rs	437	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
+crates/browser/src/window/frontend.rs	412	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
 crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/window/presentation.rs	482	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/rail_state.rs	117	src	F2	round35-fast-criterion	2026-11-25	covered	#M7#2-inventory	
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/settings/chrome_mode.rs	152	src	F2	jp	2026-11-25	covered	#2290	Re-read moved rail_state and chrome-state-owned settings bridge
-crates/browser/src/window/settings/mod.rs	46	src	F2	jp	2026-11-25	covered	#2290	Re-read moved rail_state and chrome-state-owned settings bridge
-crates/browser/src/window/settings/rail_state.rs	117	src	F2	jp	2026-11-25	covered	#2290	Re-read moved rail_state and chrome-state-owned settings bridge
+crates/browser/src/window/shell_settings.rs	34	src	F2	round35-fast-criterion	2026-11-25	covered	#M7#2-inventory	
 crates/browser/src/window/shortcuts.rs	250	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
-crates/browser/src/window/tests/chrome_mode.rs	95	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
+crates/browser/src/window/tests/chrome_mode.rs	88	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
 crates/browser/src/window/tests/mod.rs	486	src	F2	integration	2026-11-25	covered	#2295	read after rebase
 crates/browser/src/window/tests/rail.rs	123	src	F2	integration	2026-11-25	covered	#2290	read after rebase
 crates/browser/src/window/ui.rs	456	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -206,7 +206,7 @@ crates/browser/src/worker/tests_extra.rs	198	src	F2	wave-max-mod	2026-11-19	cove
 crates/browser/src/worker/types.rs	124	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/unit_tests.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/devtools_protocol.rs	288	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
+crates/browser/tests/devtools_protocol.rs	337	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
 crates/browser/tests/file_grant_tests.rs	119	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/ipc_semantic_tests.rs	135	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
