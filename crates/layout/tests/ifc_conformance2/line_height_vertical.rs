@@ -1,4 +1,5 @@
 use super::*;
+use megi_css::resolve_document_styles_with_viewport;
 
 // ---------------------------------------------------------------------------
 // 3. F-12: numeric line-height inherited as a factor and resolved per element
@@ -33,6 +34,43 @@ fn test_numeric_line_height_is_resolved_per_element() {
         p_box.children[0].dimensions.content.height,
         48.0,
         "line box height (1.5 * 32px child font-size)",
+    );
+}
+
+#[test]
+fn test_normal_line_height_is_resolved_per_element() {
+    // CSS 2.2 §10.8.1: `normal` is inherited as a factor (1.2 in Megi), not as the
+    // parent's fixed px value. A 32px child of a 16px parent therefore gets a used
+    // line-height of 1.2 * 32px = 38.4px, which is the HN/Rust typography regression.
+    let mut doc = Document::new();
+    let html = doc.create_element(Namespace::Html, "html", vec![]);
+    let body = doc.create_element(Namespace::Html, "body", vec![]);
+    doc.append_child(doc.root(), html);
+    doc.append_child(html, body);
+    let p = make_element(&mut doc, body, "p");
+    let span = make_element(&mut doc, p, "span");
+    doc.append_text(span, "Hi");
+
+    let css = "p { font-size: 16px; line-height: normal; } span { font-size: 32px; }";
+    let styles = resolve_document_styles_with_viewport(&doc, Some(css), 800.0, 600.0);
+
+    assert_eq!(
+        styles.get(&p).expect("parent style").line_height_factor,
+        Some(1.2),
+        "parent `normal` must be carried as the 1.2 factor"
+    );
+    assert_eq!(
+        styles.get(&span).expect("child style").line_height_factor,
+        Some(1.2),
+        "child must inherit the `normal` factor"
+    );
+
+    let tree = layout_doc(&doc, &styles);
+    let p_box = paragraph_box(&tree);
+    assert_close(
+        p_box.children[0].dimensions.content.height,
+        38.4,
+        "line box height (inherited `normal` factor 1.2 * 32px child font-size)",
     );
 }
 

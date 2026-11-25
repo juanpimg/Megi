@@ -73,10 +73,20 @@ impl ComputedStyle {
         }
     }
 
-    /// Returns the unitless `<number>` factor of a `line-height` declaration, if any.
+    /// Returns the unitless factor of a `line-height` declaration, if any.
+    ///
+    /// CSS 2.2 §10.8.1: `normal` and `<number>` are inherited as specified and
+    /// re-resolved against each element's own `font-size`, while `<length>` and
+    /// `<percentage>` compute to an absolute length inherited verbatim. Megi represents
+    /// `normal` as the same 1.2 factor already used by [`Self::parse_line_height`] and
+    /// the layout `FontMetrics` fallback, so descendants recompute `1.2 * font-size`
+    /// instead of freezing the declaring element's px value.
     pub(crate) fn parse_line_height_factor(val: &str) -> Option<f32> {
         let val = val.trim();
-        if val.eq_ignore_ascii_case("normal") || val.ends_with('%') {
+        if val.eq_ignore_ascii_case("normal") {
+            return Some(1.2);
+        }
+        if val.ends_with('%') {
             return None;
         }
         // #1671: reject NaN/infinity and negative numbers, not just `>= 0`.
@@ -87,6 +97,9 @@ impl ComputedStyle {
 
     pub(crate) fn parse_line_height(val: &str, font_size: f32, root_font_size: f32) -> Option<f32> {
         let val = val.trim().to_ascii_lowercase();
+        // On the `compute` path `normal` is carried as the 1.2 factor from
+        // `parse_line_height_factor` so descendants re-resolve it; keep the px fallback
+        // for direct callers of this helper.
         if val == "normal" {
             let px = font_size * 1.2;
             return (px.is_finite() && px >= 0.0).then_some(px);
