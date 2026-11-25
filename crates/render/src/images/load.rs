@@ -1,6 +1,8 @@
 //! Fetching, decoding and measuring every `<img>` (the load stage).
 
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use megi_core::Document;
@@ -58,12 +60,20 @@ pub fn load_images_with_context(
         svgs_rendered: 0,
         warnings: Vec::new(),
     };
-    // Identical URLs are fetched and decoded once: the decoded bitmap is shared through an
-    // `Arc` across every `<img>` that references it (backgrounds already deduplicate this
-    // way). The raw `(intrinsic_size, scale_with_density)` tuple lets each `<img srcset>`
-    // apply its own selected density divisor while still sharing the bitmap buffer.
-    type CachedImageEntry = ((f32, f32), bool, Arc<megi_image::RgbaImage>);
-    let mut cache: HashMap<String, CachedImageEntry> = HashMap::new();
+    // Identical URLs are fetched once (the loader coalesces requests). The decoded bitmap is
+    // shared through an `Arc` across every `<img>` whose response has the same bytes and
+    // content type — cache-busted CDN aliases therefore pay for only one decode. The raw
+    // `(intrinsic_size, scale_with_density)` tuple lets each `<img srcset>` apply its own
+    // selected density divisor while still sharing the bitmap buffer.
+    // The `Arc<Resource>` is kept only to verify the hash hit byte-for-byte, so a
+    // collision can never substitute another image's bitmap.
+    type CachedImageEntry = (
+        Arc<megi_net::Resource>,
+        (f32, f32),
+        bool,
+        Arc<megi_image::RgbaImage>,
+    );
+    let mut cache: HashMap<u64, CachedImageEntry> = HashMap::new();
     let sources = collect_responsive_image_sources(document, media, limits.device_pixel_ratio);
     if sources.len() > limits.max_images {
         result.capped = sources.len() - limits.max_images;
@@ -131,15 +141,6 @@ pub fn load_images_with_context(
     for ((node_id, url, _use_cors, density), loaded_res) in
         resolved.into_iter().zip(loaded_resources)
     {
-        let cache_key = url.to_string();
-        if let Some((raw_size, scale_density, bitmap)) = cache.get(&cache_key) {
-            result
-                .sizes
-                .insert(node_id, css_size(*raw_size, *scale_density, density));
-            result.store.insert(node_id, Arc::clone(bitmap));
-            result.loaded += 1;
-            continue;
-        }
         let resource = match loaded_res {
             Ok(resource) => resource,
             Err(error) => {
@@ -157,6 +158,30 @@ pub fn load_images_with_context(
                 resource.bytes.len(),
                 limits.max_image_bytes
             ));
+            continue;
+        }
+        // Content-addressed decode cache: the media type participates in the key because
+        // SVG sniffing depends on it, while two URLs with identical bytes share one bitmap.
+        let cache_key = {
+            let mut hasher = DefaultHasher::new();
+            resource.bytes.hash(&mut hasher);
+            resource
+                .content_type
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .hash(&mut hasher);
+            hasher.finish()
+        };
+        if let Some((cached_resource, raw_size, scale_density, bitmap)) = cache.get(&cache_key)
+            && cached_resource.bytes == resource.bytes
+        {
+            result
+                .sizes
+                .insert(node_id, css_size(*raw_size, *scale_density, density));
+            result.store.insert(node_id, Arc::clone(bitmap));
+            result.loaded += 1;
             continue;
         }
         if result.downloaded_bytes + resource.bytes.len() > limits.max_total_bytes {
@@ -202,7 +227,7 @@ pub fn load_images_with_context(
                     let bitmap = Arc::new(decoded);
                     result.sizes.insert(node_id, css_size(size, true, density));
                     result.store.insert(node_id, Arc::clone(&bitmap));
-                    cache.insert(cache_key.clone(), (size, true, bitmap));
+                    cache.insert(cache_key, (Arc::clone(&resource), size, true, bitmap));
                     result.loaded += 1;
                 }
                 Err(error) => {
@@ -243,7 +268,10 @@ pub fn load_images_with_context(
                     let bitmap = Arc::new(rendered.raster);
                     result.sizes.insert(node_id, rendered.intrinsic);
                     result.store.insert(node_id, Arc::clone(&bitmap));
-                    cache.insert(cache_key.clone(), (rendered.intrinsic, false, bitmap));
+                    cache.insert(
+                        cache_key,
+                        (Arc::clone(&resource), rendered.intrinsic, false, bitmap),
+                    );
                     result.loaded += 1;
                     result.svgs_rendered += 1;
                 }

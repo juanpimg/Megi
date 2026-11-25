@@ -33,6 +33,45 @@ mod dedup_tests {
     }
 
     #[test]
+    fn byte_identical_images_share_one_decode_across_urls() {
+        // WHATWG HTML §4.8.4: the selected image URL is per element, but the decoded
+        // bitmap is an implementation detail. Two URLs carrying identical bytes (e.g.
+        // cache-busted CDN variants) must not pay for a second decode (#M9-IMAGE).
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/render/layout_aspect_ratio.png");
+        let bytes = std::fs::read(fixture.canonicalize().expect("image fixture")).expect("read");
+        let encoded = megi_net::base64_encode(&bytes);
+        let source = format!(
+            "<body><img src='data:image/png;base64,{encoded}#one'><img src='data:image/png;base64,{encoded}#two'></body>"
+        );
+        let document = megi_html::parse_document(&source, false);
+        let base = megi_net::Url::parse("file:///tmp/page.html").expect("base URL");
+        let mut loader = ResourceLoader::with_options(FetchOptions::default());
+        let loaded = load_images(
+            &document,
+            &base,
+            &mut loader,
+            false,
+            ImageLimits::default(),
+            &mut Vec::new(),
+        );
+        assert_eq!(loaded.loaded, 2, "both <img> elements resolve");
+        assert_eq!(
+            loaded.downloaded_bytes,
+            bytes.len(),
+            "identical bytes must be downloaded once"
+        );
+        let bitmaps: Vec<_> = loaded.store.values().collect();
+        let (w, h) = bitmaps[0].dimensions();
+        assert_eq!(
+            loaded.decoded_pixels,
+            u64::from(w) * u64::from(h),
+            "identical bytes must be decoded once"
+        );
+        assert!(std::sync::Arc::ptr_eq(bitmaps[0], bitmaps[1]));
+    }
+
+    #[test]
     fn identical_image_urls_share_one_decode() {
         let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/render/layout_aspect_ratio.png");
