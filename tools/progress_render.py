@@ -357,11 +357,12 @@ def update_manifest(text: str, stats: dict, gate: dict[str, str], wpt: dict | No
         ]
     lines = text.splitlines()
     output: list[str] = []
+    has_wpt = any(line.strip() == "[wpt]" for line in lines)
     wpt_seen = not wpt_block
     index = 0
     while index < len(lines):
         stripped = lines[index].strip()
-        if wpt_block and not wpt_seen and (
+        if wpt_block and not wpt_seen and not has_wpt and (
             stripped.startswith("[[") or stripped.startswith("[area")
             or stripped.startswith("[next_up")
         ):

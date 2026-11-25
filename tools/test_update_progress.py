@@ -7,6 +7,7 @@ import io
 import json
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -71,6 +72,23 @@ class UpdateProgressWptTest(unittest.TestCase):
         self.assertIn('revision = "abc"', result)
         self.assertNotIn("stale", result)
         self.assertIn("[[phase]]", result)
+
+    def test_update_manifest_wpt_after_phase_is_not_duplicated(self) -> None:
+        # A [wpt] block placed after [[phase]] must be rewritten in place, not
+        # inserted preventively before the phase and then duplicated (#2290).
+        text = ("[stats]\nhtml = 1\n\n"
+                '[[phase]]\nname = "M0"\n\n'
+                "[wpt]\nrevision = stale\npassed = 1\ntotal = 2\n")
+        stats = {"tests": 2, "tests_commit": "abc", "tests_date": "2026-11-24",
+                 "crates": 1, "rust_lines": 1, "unsafe_forbidden": 1}
+        gate = {"status": "PASS", "verified_commit": "abc", "tokenizer": "7050/7050"}
+        result = update_progress.update_manifest(
+            text, stats, gate,
+            {"revision": "abc", "passed": "30", "total": "30", "dirs": "1",
+             "distribution": "PASS=30 FAIL=0"},
+        )
+        self.assertEqual(result.count("[wpt]"), 1)
+        tomllib.loads(result)
 
     def test_render_badges_includes_wpt(self) -> None:
         stats = {"tests": 1, "unsafe_forbidden": 1, "crates": 1}
