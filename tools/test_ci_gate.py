@@ -71,6 +71,11 @@ class ToolsTestListTests(unittest.TestCase):
         # from passing locally while CI never runs it.
         self.assertIn("tools.test_wpt_report", CI.read_text(encoding="utf-8"))
 
+    def test_bench_baseline_tests_run_in_ci(self):
+        # The partial-baseline publisher must be exercised by CI, not only by a
+        # local discover run (#1402, M8#1 addendum).
+        self.assertIn("tools.test_update_bench_baseline", CI.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

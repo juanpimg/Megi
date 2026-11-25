@@ -115,6 +115,7 @@ jobs:
           tools.test_check_arch
           tools.test_soak_fuzz
           tools.test_bench_compare
+          tools.test_update_bench_baseline
           tools.test_check_sbom
           tools.test_ci_gate
           tools.test_exif_generators
