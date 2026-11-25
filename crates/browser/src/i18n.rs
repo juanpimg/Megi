@@ -91,6 +91,17 @@ pub struct Strings {
     pub about_snapshot_note: &'static str,
     /// Label for diagnostics that are not measured in this build.
     pub about_not_available: &'static str,
+    /// Title and section headings of the generated `megi://settings` page.
+    pub settings: &'static str,
+    pub settings_zen_features: &'static str,
+    pub settings_diagnostics: &'static str,
+    /// Accessible labels of the three (not yet wired) shell toggles.
+    pub settings_vertical_rail: &'static str,
+    pub settings_compact_mode: &'static str,
+    pub settings_reduced_motion: &'static str,
+    /// Honest status marker: the controls are shown but do not change window state yet.
+    pub settings_coming_phase: &'static str,
+    pub settings_coming_phase_note: &'static str,
 }
 
 /// Returns the strings table for `locale`.
@@ -131,6 +142,14 @@ pub fn strings(locale: Locale) -> Strings {
             script_errors: "script errors",
             about_snapshot_note: "generated snapshot, not a live measurement",
             about_not_available: "not available in this build",
+            settings: "Settings",
+            settings_zen_features: "Zen features",
+            settings_diagnostics: "Diagnostics pages",
+            settings_vertical_rail: "Vertical rail",
+            settings_compact_mode: "Compact mode",
+            settings_reduced_motion: "Reduced motion",
+            settings_coming_phase: "Coming in this phase",
+            settings_coming_phase_note: "These switches are shown for review but are not yet connected to the window state.",
         },
         Locale::Es => Strings {
             error_loading: "Error al cargar la página",
@@ -167,6 +186,14 @@ pub fn strings(locale: Locale) -> Strings {
             script_errors: "errores de script",
             about_snapshot_note: "instantánea generada, no medición en vivo",
             about_not_available: "no disponible en esta compilación",
+            settings: "Ajustes",
+            settings_zen_features: "Funciones Zen",
+            settings_diagnostics: "Páginas de diagnóstico",
+            settings_vertical_rail: "Rail vertical",
+            settings_compact_mode: "Modo compacto",
+            settings_reduced_motion: "Movimiento reducido",
+            settings_coming_phase: "Se implementará en esta fase",
+            settings_coming_phase_note: "Estos interruptores se muestran para revisión pero aún no están conectados al estado de la ventana.",
         },
     }
 }
@@ -214,6 +241,14 @@ mod tests {
                 s.script_errors,
                 s.about_snapshot_note,
                 s.about_not_available,
+                s.settings,
+                s.settings_zen_features,
+                s.settings_diagnostics,
+                s.settings_vertical_rail,
+                s.settings_compact_mode,
+                s.settings_reduced_motion,
+                s.settings_coming_phase,
+                s.settings_coming_phase_note,
             ] {
                 assert!(!value.is_empty(), "{locale:?} has an empty string");
             }

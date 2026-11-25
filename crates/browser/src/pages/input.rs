@@ -59,6 +59,9 @@ pub fn prepare_input(input: &str) -> Result<String, (String, String)> {
     if is_about_page_url(input) {
         return Ok(data_url(&about_page_html(input)));
     }
+    if is_settings_url(input) {
+        return Ok(data_url(&settings_page_html()));
+    }
     match resolve_directory(input) {
         Some(Ok(url)) => Ok(url),
         Some(Err(error)) => Err(error),

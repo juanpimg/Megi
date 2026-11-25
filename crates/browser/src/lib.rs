@@ -276,7 +276,8 @@ pub use megi_webview::core::terminal_text::sanitize_terminal_text;
 pub use navigation::{MAX_HISTORY, NavigationOutcome, NavigationState};
 pub use pages::{
     about_kv_row, about_page_html, about_page_html_with_locale, about_shell,
-    about_shell_with_locale, is_about_page_url,
+    about_shell_with_locale, is_about_page_url, is_settings_url, settings_page_html,
+    settings_page_html_with_locale,
 };
 pub use pdf::{
     PdfInfo, PdfTextRun, build_pdf, build_pdf_with_text, print_pdf, print_pdf_with_options,

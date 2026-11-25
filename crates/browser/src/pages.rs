@@ -20,9 +20,13 @@ mod listing;
 pub use listing::*;
 mod input;
 pub use input::*;
+mod settings;
+pub use settings::*;
 #[cfg(test)]
 mod about_tests;
 #[cfg(test)]
 mod i18n_tests;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod tests;
