@@ -127,9 +127,8 @@ fn settings_page_has_localized_headings_labels_and_clean_markup() {
         for (node, label) in checkboxes.iter().zip(expected) {
             assert_eq!(node.name, label, "accessible name: {node:?}");
             assert!(!node.disabled, "toggles must be enabled: {node:?}");
-            assert_eq!(
-                node.checked.unwrap_or(false),
-                false,
+            assert!(
+                !node.checked.unwrap_or(false),
                 "default state is off: {node:?}"
             );
             assert!(
