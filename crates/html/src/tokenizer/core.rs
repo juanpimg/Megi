@@ -153,9 +153,12 @@ impl Tokenizer {
         // then inserting `partition_point`-located entries is O(lines) inserts of O(n) memmoves
         // per call — quadratic for the normal `document.write` pattern of many small writes
         // (#639).
+        // Keep the synthetic line start at offset 0 (and any start exactly at the insertion
+        // point): a strict `<` drops the former when inserting at 0, making `line_col_at(0)`
+        // underflow and shifting a line start that the inserted text may already supply.
         let split = self
             .line_starts
-            .partition_point(|&start| (start as usize) < insert_at);
+            .partition_point(|&start| (start as usize) <= insert_at);
         let mut merged = Vec::with_capacity(self.line_starts.len() + inserted_line_starts.len());
         merged.extend_from_slice(&self.line_starts[..split]);
         merged.extend(

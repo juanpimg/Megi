@@ -132,6 +132,39 @@ mod tests {
     }
 
     #[test]
+    fn insert_input_at_start_preserves_line_zero_and_eof_line() {
+        // #2298: `document.write` before the first code point must keep the synthetic line
+        // start at offset 0. Dropping it makes `line_col_at(0)` underflow and shortens the
+        // EOF-after-LF line number (WHATWG HTML §13.2.6.4.7).
+        let mut tok = Tokenizer::from_str_input("b\n", TokenizerConfig::default());
+        assert_eq!(tok.line_starts, vec![0, 2]);
+        tok.insert_input("a\n");
+        assert_eq!(
+            tok.line_starts,
+            vec![0, 2, 4],
+            "insert at 0 must keep line_starts[0] and the trailing LF start"
+        );
+        assert_eq!(tok.line_col_at(0), (1, 1));
+        assert_eq!(tok.line_col_at(tok.input.len()), (3, 1), "EOF after LF");
+    }
+
+    #[test]
+    fn insert_input_at_eof_after_lf_keeps_trailing_line_start() {
+        // #2298: the line start at the EOF position (right after a trailing LF) must not be
+        // shifted when input is written at EOF; the inserted text begins on that line.
+        let mut tok = Tokenizer::from_str_input("a\n", TokenizerConfig::default());
+        tok.run();
+        assert_eq!(tok.line_starts, vec![0, 2]);
+        tok.insert_input("b");
+        assert_eq!(
+            tok.line_starts,
+            vec![0, 2],
+            "the trailing line start at offset 2 must survive"
+        );
+        assert_eq!(tok.line_col_at(tok.input.len()), (2, 2));
+    }
+
+    #[test]
     fn test_tokenize_basic_tags_and_attributes() {
         let mut tok = Tokenizer::from_str_input(
             r#"<!DOCTYPE html><div id="main" class='box' disabled><br/>Hi &amp; &#x41;</div>"#,
