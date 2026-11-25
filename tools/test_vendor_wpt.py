@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +111,37 @@ class VendorWptTest(unittest.TestCase):
             100,
             f"manifest adopts only {adopted} subtests; the M4 floor is 100",
         )
+
+    def test_import_files_records_canvas_subset_without_dropping_existing_entries(self) -> None:
+        """M6#3: explicit files can be adopted without revendoring whole directories."""
+        source = self.root / "wpt-source"
+        source.mkdir()
+        (source / "LICENSE").write_text("BSD 3-Clause\n", encoding="utf-8")
+        fixture = source / "2dcontext/rect/2d.fillRect.basic.html"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"<title>canvas</title>\n")
+        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "-c", "user.email=test@example.invalid",
+             "-c", "user.name=Test", "commit", "-qm", "fixture"],
+            check=True,
+        )
+        subprocess_run = vendor_wpt.import_files(
+            source, PIN, ["2dcontext/rect/2d.fillRect.basic.html"], self.root,
+            verify_commit=False,
+        )
+        self.assertEqual(subprocess_run, [])
+        entries = vendor_wpt.load_manifest(self.root)
+        new = [entry for entry in entries if entry["path"].endswith("2d.fillRect.basic.html")]
+        self.assertEqual(len(new), 1)
+        self.assertEqual(new[0]["kind"], "testharness")
+        self.assertEqual(new[0]["subtest_count_expected"], 1)
+        self.assertEqual(
+            (self.wpt / "2dcontext/rect/2d.fillRect.basic.html").read_bytes(),
+            fixture.read_bytes(),
+        )
+        self.assertEqual(vendor_wpt.check_manifest(self.root), [])
 
 
 if __name__ == "__main__":

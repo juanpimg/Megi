@@ -95,6 +95,15 @@ SUPPORT_PATHS = {
     "custom-elements/resources/empty-html-document.html": "support document for custom-elements fixtures",
     "custom-elements/resources/my-custom-element-html-document.html": "support document for custom-elements fixtures",
     "custom-elements/resources/navigation-destination.html": "support document for custom-elements fixtures",
+    "common/canvas-tests.js": "pixel assertion helpers for the 2D canvas fixtures",
+}
+# Explicit 2D-canvas fixtures adopted for the M6 component subset. Every entry is a
+# real upstream testharness case executed by crates/test_harness/src/wpt/runner.rs;
+# a fixture whose API is not ready is recorded as `skip` with its observed reason.
+CANVAS_SUBSET_COUNTS = {
+    "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html": 1,
+    "2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html": 1,
+    "2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html": 1,
 }
 # Directories probed while scoping the runner but not adopted: their engine APIs are
 # incomplete, so reporting their real failures would break the allowlist-free gate.
@@ -339,11 +348,84 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
         raise ValueError("vendor produced an invalid manifest:\n  " + "\n  ".join(errors))
 
 
+def import_files(
+    source: Path, commit: str, files: list[str], root: Path, verify_commit: bool = True
+) -> list[str]:
+    """Import an explicit subset of pinned WPT files without dropping existing entries.
+
+    Unlike `vendor`, which rewrites the manifest from whole directories, this merges
+    byte-verified entries into the current manifest. It is the only supported way to
+    adopt a named 2D-canvas fixture; skipped APIs stay out of the denominator.
+    """
+    if not SHA_RE.fullmatch(commit):
+        raise ValueError(f"--commit must be a full 40-hex SHA, got {commit!r}")
+    source = source.resolve()
+    if not source.is_dir():
+        raise ValueError(f"source is not a directory: {source}")
+    if verify_commit:
+        resolved = subprocess.run(
+            ["git", "-C", str(source), "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"],
+            capture_output=True, text=True, check=False,
+        )
+        if resolved.returncode != 0:
+            raise ValueError(f"commit {commit} is not present in {source}")
+    revision = load_revision(root)
+    if revision.get("revision") != commit:
+        raise ValueError(
+            f"explicit import needs the pinned revision {revision.get('revision')!r}, got {commit!r}"
+        )
+    license_name = _license_of(source)
+    by_path = {entry["path"]: entry for entry in load_manifest(root)}
+    base = root / WPT_DIR
+    for relative in files:
+        path = Path(relative)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError(f"unsafe --files entry: {relative!r}")
+        origin = source / relative
+        if not origin.is_file():
+            raise ValueError(f"missing source file: {origin}")
+        data = origin.read_bytes()
+        target = base / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        count = SEED_COUNTS.get(relative) or CANVAS_SUBSET_COUNTS.get(relative, 1)
+        support_reason = SUPPORT_PATHS.get(relative)
+        skip_reason = SKIP_PATHS.get(relative)
+        by_path[relative] = {
+            "path": relative,
+            "sha256": sha256_bytes(data),
+            "bytes": len(data),
+            "license": license_name,
+            "kind": "skip" if skip_reason else "support" if support_reason else "testharness",
+            "skip_reason": skip_reason or support_reason or "",
+            "dir": str(path.parent),
+            "subtest_count_expected": 0 if skip_reason or support_reason else count,
+        }
+    entries = sorted(by_path.values(), key=lambda entry: entry["path"])
+    (base / MANIFEST_FILE).write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
+    notice = [
+        "# Vendored WPT provenance\n",
+        f"- Upstream: web-platform-tests/wpt\n- Pinned commit: `{commit}` (never `master`)\n",
+        f"- License: {license_name} (allowlisted)\n",
+        "\n| Fixture | Bytes | SHA-256 | Kind |\n|---|---:|---|---|\n",
+    ]
+    for entry in entries:
+        notice.append(
+            f"| `{entry['path']}` | {entry['bytes']} | `{entry['sha256']}` | {entry['kind']} |\n"
+        )
+    (base / NOTICE_FILE).write_text("".join(notice), encoding="utf-8")
+    errors = check_manifest(root)
+    if errors:
+        raise ValueError("import produced an invalid manifest:\n  " + "\n  ".join(errors))
+    return errors
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="", help="local WPT checkout to import from")
     parser.add_argument("--commit", default="", help="40-hex upstream commit SHA to pin")
     parser.add_argument("--dirs", default="", help="comma-separated directories under the WPT root")
+    parser.add_argument("--files", default="", help="comma-separated explicit paths to merge into the manifest")
     parser.add_argument("--check", action="store_true", help="verify the manifest offline")
     parser.add_argument("--root", default="", help="repository root (default: parent of tools/)")
     args = parser.parse_args(argv)
@@ -357,9 +439,16 @@ def main(argv: list[str] | None = None) -> int:
         entries = load_manifest(root)
         print(f"vendor_wpt: OK — {len(entries)} declared file(s), pin {load_revision(root)['revision']}")
         return 0
-    if not (args.source and args.commit and args.dirs):
-        parser.error("--source, --commit and --dirs are required unless --check is used")
     try:
+        if args.files:
+            if not (args.source and args.commit):
+                parser.error("--source and --commit are required with --files")
+            files = [f.strip() for f in args.files.split(",") if f.strip()]
+            import_files(Path(args.source), args.commit, files, root)
+            print(f"vendor_wpt: imported {args.files} at {args.commit}")
+            return 0
+        if not (args.source and args.commit and args.dirs):
+            parser.error("--source, --commit and --dirs are required unless --check or --files is used")
         vendor(Path(args.source), args.commit, [d.strip() for d in args.dirs.split(",") if d.strip()], root)
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
