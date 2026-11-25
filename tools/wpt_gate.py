@@ -96,7 +96,7 @@ def load_baseline(path: Path) -> dict:
     if not isinstance(allowlist, list):
         raise ValueError(f"{path}: baseline allowlist must be an array")
     passed, total = payload.get("passed"), payload.get("total")
-    if not isinstance(passed, int) or not isinstance(total, int):
+    if type(passed) is not int or type(total) is not int:
         raise ValueError(f"{path}: baseline passed/total must be integers")
     for index, entry in enumerate(allowlist):
         if not isinstance(entry, dict) or not isinstance(entry.get("key"), str):
