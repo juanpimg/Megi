@@ -2,7 +2,7 @@
 //! `megi` — Megi browser shell CLI.
 //!
 //! ```text
-//! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
+//! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--print-to-pdf PATH] [--title T]
 //!      [--cookies] [--origin URL] [--zoom FACTOR] [--refresh-ms [MS]] [--find QUERY] [--chrome] [--tabs URL]...
 //! ```
 //!
@@ -247,6 +247,32 @@ fn run() -> Result<(), ShellError> {
                     reason: format!("{violations} parser/layout limit violation(s) during render"),
                 });
             }
+            Ok(())
+        }
+        LaunchMode::PrintPdf(path) => {
+            // Same CSS-viewport rule as --screenshot: --zoom 2 yields a PDF page
+            // half the requested physical size (the window would upscale it).
+            let (css_width, css_height) =
+                zoom::zoomed_viewport(args.width, args.height, 1.0, args.zoom);
+            let active_url = view
+                .tabs
+                .get(args.active_tab)
+                .cloned()
+                .unwrap_or_else(|| args.input.clone());
+            let info = megi_browser::pdf::print_pdf_with_options(
+                &active_url,
+                css_width,
+                css_height,
+                &path,
+                &options,
+            )?;
+            println!(
+                "wrote {} ({}x{}, {} bytes)",
+                info.path.display(),
+                info.width,
+                info.height,
+                info.pdf_bytes
+            );
             Ok(())
         }
         LaunchMode::Window => megi_browser::run_window_with_view_options(

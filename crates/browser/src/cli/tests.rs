@@ -292,6 +292,46 @@ fn ipc_render_flag_is_parsed() {
 }
 
 #[test]
+fn print_to_pdf_flag_selects_headless_pdf_mode() {
+    let cli = parse_cli(args(&[
+        "data:text/html,<p>hi</p>",
+        "--print-to-pdf",
+        "/tmp/out.pdf",
+    ]))
+    .expect("parse");
+    assert_eq!(
+        cli.mode,
+        LaunchMode::PrintPdf(PathBuf::from("/tmp/out.pdf"))
+    );
+    assert_eq!(
+        cli.print_to_pdf.as_deref(),
+        Some(std::path::Path::new("/tmp/out.pdf"))
+    );
+    assert!(USAGE.contains("--print-to-pdf"));
+    assert!(parse_cli(args(&["data:,x", "--print-to-pdf"])).is_err());
+    assert!(
+        parse_cli(args(&[
+            "data:,x",
+            "--screenshot",
+            "/tmp/out.png",
+            "--print-to-pdf",
+            "/tmp/out.pdf",
+        ]))
+        .is_err(),
+        "one headless output at a time"
+    );
+    assert!(
+        parse_cli(args(&[
+            "data:,x",
+            "--print-to-pdf",
+            "/tmp/o.pdf",
+            "--chrome"
+        ]))
+        .is_err()
+    );
+}
+
+#[test]
 fn window_flag_selects_window_mode_and_conflicts_with_screenshot() {
     let cli = parse_cli(args(&["data:text/html,<p>hi</p>", "--window"])).expect("parse --window");
     assert_eq!(cli.mode, LaunchMode::Window);

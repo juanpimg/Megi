@@ -16,6 +16,10 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
                 let value = next_value(&arguments, &mut index, "--screenshot")?;
                 raw.screenshot = Some(PathBuf::from(value));
             }
+            "--print-to-pdf" => {
+                let value = next_value(&arguments, &mut index, "--print-to-pdf")?;
+                raw.print_to_pdf = Some(PathBuf::from(value));
+            }
             "--title" => {
                 raw.title = Some(next_value(&arguments, &mut index, "--title")?);
             }

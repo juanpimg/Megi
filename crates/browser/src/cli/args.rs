@@ -23,6 +23,8 @@ options:
                       start the DevTools HTTP/WebSocket endpoint on 127.0.0.1:PORT
                       (JSON-RPC Runtime.evaluate; requires the `full` feature)
   --screenshot PATH   headless mode: render once and write a PNG (no window/display)
+  --print-to-pdf PATH headless mode: render once and write a one-page PDF 1.4 with
+                      the page embedded as an image (no window/display)
   --title T           initial window title (default \"Megi\"; replaced by page title)
   --cookies           enable the session cookie jar (Set-Cookie shared between the
                       document, subresources, redirects and navigations)
@@ -79,6 +81,8 @@ pub enum LaunchMode {
     Window,
     /// Headless: render once and write the PNG at this path.
     Screenshot(PathBuf),
+    /// Headless: render once and write a one-page PDF at this path.
+    PrintPdf(PathBuf),
 }
 
 /// Fully validated CLI configuration.
@@ -92,8 +96,10 @@ pub struct CliArgs {
     pub width: u32,
     /// Requested height in pixels.
     pub height: u32,
-    /// Window or headless screenshot mode.
+    /// Window, headless screenshot or headless PDF mode.
     pub mode: LaunchMode,
+    /// Headless: write the rendered page as a one-page PDF (`--print-to-pdf`).
+    pub print_to_pdf: Option<PathBuf>,
     /// Enable the session cookie jar (`--cookies`).
     pub cookies: bool,
     /// Explicit CORS `Origin` override for subresource fetches (`--origin`).
@@ -143,6 +149,8 @@ pub struct RawArgs {
     pub height: Option<u32>,
     /// `--screenshot` path, if provided.
     pub screenshot: Option<PathBuf>,
+    /// `--print-to-pdf` path, if provided.
+    pub print_to_pdf: Option<PathBuf>,
     /// `--title` value, if provided.
     pub title: Option<String>,
     /// `--cookies` was passed.

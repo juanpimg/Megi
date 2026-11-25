@@ -86,9 +86,31 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             "--window cannot be combined with --screenshot".to_string(),
         ));
     }
-    let mode = match raw.screenshot {
-        Some(path) => LaunchMode::Screenshot(path),
-        None => LaunchMode::Window,
+    if raw.window && raw.print_to_pdf.is_some() {
+        return Err(ShellError::Usage(
+            "--window cannot be combined with --print-to-pdf".to_string(),
+        ));
+    }
+    if raw.screenshot.is_some() && raw.print_to_pdf.is_some() {
+        return Err(ShellError::Usage(
+            "--screenshot cannot be combined with --print-to-pdf".to_string(),
+        ));
+    }
+    if raw.print_to_pdf.is_some()
+        && (raw.chrome || raw.chrome_menu || raw.find.is_some() || raw.ipc_render || raw.reader)
+    {
+        return Err(ShellError::Usage(
+            "--print-to-pdf cannot be combined with --chrome, --chrome-menu, --find, \
+             --ipc-render or --reader"
+                .to_string(),
+        ));
+    }
+    let mode = if let Some(path) = &raw.screenshot {
+        LaunchMode::Screenshot(path.clone())
+    } else if let Some(path) = &raw.print_to_pdf {
+        LaunchMode::PrintPdf(path.clone())
+    } else {
+        LaunchMode::Window
     };
     if raw.chrome_menu && !raw.chrome {
         return Err(ShellError::Usage(
@@ -122,6 +144,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
             width,
             height,
             mode,
+            print_to_pdf: raw.print_to_pdf.clone(),
             cookies: raw.cookies,
             origin: raw.origin,
             zoom,
@@ -148,6 +171,7 @@ pub fn finish_args(raw: RawArgs) -> Result<CliArgs, ShellError> {
         width,
         height,
         mode,
+        print_to_pdf: raw.print_to_pdf.clone(),
         cookies: raw.cookies,
         origin: raw.origin,
         zoom,

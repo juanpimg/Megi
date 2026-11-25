@@ -214,6 +214,7 @@ pub mod ipc;
 pub mod links;
 pub mod navigation;
 pub mod pages;
+pub mod pdf;
 pub mod present;
 pub mod reader;
 pub mod refresh;
@@ -274,6 +275,7 @@ pub use pages::{
     about_kv_row, about_page_html, about_page_html_with_locale, about_shell,
     about_shell_with_locale, is_about_page_url,
 };
+pub use pdf::{PdfInfo, build_pdf, print_pdf, print_pdf_with_options, write_pdf};
 pub use present::{present_region, viewport_slice};
 pub use reader::{Article, is_reader_url, reader_page};
 pub use refresh::{DEFAULT_REFRESH_MS, MIN_REFRESH_MS, RefreshPolicy, RefreshTimer};
