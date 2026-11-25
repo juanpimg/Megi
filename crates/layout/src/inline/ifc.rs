@@ -57,6 +57,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     let mut text_pool = String::with_capacity(estimated_text + estimated_text / 4);
     let mut styles: Vec<Arc<ComputedStyle>> = Vec::new();
     let mut inline_children = std::mem::take(&mut layout_box.children);
+    let mut out_of_flow = Vec::new();
     collect_inline_tokens(
         &mut inline_children,
         measurer,
@@ -66,10 +67,40 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
         container_width,
         definite_height,
         pos,
+        &mut out_of_flow,
     );
+
+    // CSS 2.2 §9.6/§10.3.7: out-of-flow descendants are positioned after their
+    // containing block's geometry is known, against the nearest positioned
+    // ancestor (tracked by `pos`). The IFC container origin supplies the static
+    // position when the box's offsets leave it unspecified.
+    let place_out_of_flow = |layout_box: &mut LayoutBox, out_of_flow: Vec<LayoutBox>| {
+        for mut child in out_of_flow {
+            let fixed = child
+                .style
+                .as_ref()
+                .is_some_and(|style| style.position == megi_css::Position::Fixed);
+            let (cb, cb_height) = if fixed {
+                (pos.viewport, Some(pos.viewport.height))
+            } else {
+                (pos.abs_cb, pos.abs_cb_height)
+            };
+            crate::block::layout_absolutely_positioned(
+                &mut child,
+                cb,
+                cb_height,
+                container_x,
+                container_y,
+                pos,
+                measurer,
+            );
+            layout_box.children.push(child);
+        }
+    };
 
     if tokens.is_empty() {
         layout_box.children.clear();
+        place_out_of_flow(layout_box, out_of_flow);
         layout_box.style = Some(container_style);
         return;
     }
@@ -88,6 +119,7 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
 
     if lines.is_empty() {
         layout_box.children.clear();
+        place_out_of_flow(layout_box, out_of_flow);
         layout_box.style = Some(container_style);
         return;
     }
@@ -143,5 +175,6 @@ pub(crate) fn layout_inline_formatting_context_with_measurer_and_pos(
     }
 
     layout_box.children = line_boxes;
+    place_out_of_flow(layout_box, out_of_flow);
     layout_box.style = Some(container_style);
 }

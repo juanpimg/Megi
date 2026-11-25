@@ -7,7 +7,8 @@
 //! The engine is split into cohesive submodules that are declared here (the
 //! crate root only re-exports the public API):
 //! - `text`: font metrics, text measurement and `text-transform`.
-//! - `tokens`: the linearized inline token stream and text-node tokenization.
+//! - `token`: the shared inline token type (leaf module, no IFC dependencies).
+//! - `tokens` / `tokenize_text`: the linearized token stream and text tokenization.
 //! - `line_breaking`: greedy wrapping at soft wrap opportunities.
 //! - `baseline`: strut, half-leading and `vertical-align` extent math.
 //! - `inline_boxes` / `format_line`: line box and fragment assembly.
@@ -30,6 +31,8 @@ mod ifc;
 mod inline_boxes;
 mod line_breaking;
 mod text;
+mod token;
+mod tokenize_text;
 mod tokens;
 
 // Public API (also re-exported from the crate root).
@@ -47,4 +50,5 @@ pub(crate) use inline_boxes::{
 };
 pub(crate) use line_breaking::{break_into_lines, token_advance};
 pub(crate) use text::{measure_text_width, metrics_styled, shaped_width, transform_text};
-pub(crate) use tokens::{InlineToken, collect_inline_tokens, resolve_length};
+pub(crate) use token::InlineToken;
+pub(crate) use tokens::{collect_inline_tokens, resolve_length};

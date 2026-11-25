@@ -86,3 +86,46 @@ fn multi_layer_background_order_origin_and_clip() {
         "two multi-layer renders must be identical"
     );
 }
+
+#[test]
+fn mask_image_does_not_paint_its_background_as_a_solid_square() {
+    // CSS Masking L1 §3.1: a mask limits the painted area of a box. Wikipedia's
+    // Vector icons set `mask-image` plus `background-color:#202122`; without mask
+    // support the unmasked colour paints a solid dark square instead of a glyph.
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><g fill="#000"><path d="M1 3h18v2H1z"/></g></svg>"##;
+    let mask = format!(
+        "data:image/svg+xml;base64,{}",
+        megi_net::base64_encode(svg.as_bytes())
+    );
+    let html = format!(
+        r#"<!doctype html><html><body style="margin:0;background:white">\
+           <span style="display:inline-block;width:20px;height:20px;\
+           background-color:rgb(32,33,34);mask-image:url({mask})"></span></body></html>"#
+    );
+    let url = format!(
+        "data:text/html;base64,{}",
+        megi_net::base64_encode(html.as_bytes())
+    );
+    let output = render_url(
+        &url,
+        &RenderOptions {
+            viewport: Viewport::new(80, 60).expect("viewport"),
+            ..RenderOptions::default()
+        },
+    )
+    .expect("render masked icon");
+
+    let square = megi_css::Color::new(32, 33, 34, 255);
+    let solid = output
+        .pixmap
+        .pixels
+        .iter()
+        .filter(|pixel| **pixel == square)
+        .count();
+    assert_eq!(solid, 0, "unmasked icon background painted {solid} px");
+    assert!(
+        output.stats.background_images_loaded >= 1,
+        "the mask resource must be used as the icon image: {:?}",
+        output.stats.warnings
+    );
+}
