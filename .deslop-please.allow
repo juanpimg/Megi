@@ -162,7 +162,6 @@ field-leak megi_js::host::state::Host::iframe_frames
 field-leak megi_js::host::state::Host::inline_handlers
 field-leak megi_js::runtime::JsRuntime::allow_eval
 field-leak megi_layout::text::FontTextMeasurer::database
-field-leak megi_net::h2::client::ActiveBody::total_sent
 field-leak megi_net::h2::client::Session::pushed_results
 field-leak megi_net::h2::client::Session::results
 field-leak megi_net::h2::hpack::codec::Decoder::max_header_list_size

@@ -140,6 +140,17 @@ impl ActiveBody {
         self.done && self.buffer_offset == self.buffer.len()
     }
 
+    /// Accounts a chunk against `cap`, rejecting it without touching the running
+    /// total when it would exceed the configured request-body limit (RFC 9113 §8.1).
+    fn account_sent(&mut self, len: usize, cap: usize) -> bool {
+        let total = self.total_sent.saturating_add(len);
+        if total > cap {
+            return false;
+        }
+        self.total_sent = total;
+        true
+    }
+
     /// Pulls the next chunk of at most `max` bytes (`None` = end of body).
     fn next_chunk(&mut self, max: usize) -> Result<Option<Vec<u8>>, FetchError> {
         if max == 0 {
@@ -274,3 +285,26 @@ pub use api::{
 pub use types::{
     DataCallback, H2PushedResponse, H2Request, H2Response, Limits, Priority, PushPriority,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn account_sent_enforces_cap_without_counting_rejected_chunk() {
+        let mut body = ActiveBody::new(RequestBody::bytes(Vec::new()));
+        assert!(body.account_sent(4, 8));
+        assert!(body.account_sent(4, 8));
+        assert_eq!(body.total_sent, 8);
+        assert!(!body.account_sent(1, 8));
+        assert_eq!(body.total_sent, 8);
+    }
+
+    #[test]
+    fn account_sent_saturates_at_usize_max() {
+        let mut body = ActiveBody::new(RequestBody::bytes(Vec::new()));
+        assert!(body.account_sent(usize::MAX, usize::MAX));
+        assert!(!body.account_sent(1, 8));
+        assert_eq!(body.total_sent, usize::MAX);
+    }
+}

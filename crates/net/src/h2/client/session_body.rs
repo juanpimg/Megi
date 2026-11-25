@@ -50,13 +50,10 @@ impl<'a, S: Read + Write> Session<'a, S> {
                             break;
                         }
                         Ok(Some(chunk)) => {
-                            if active.total_sent.saturating_add(chunk.len())
-                                > self.limits.max_request_body
-                            {
+                            if !active.account_sent(chunk.len(), self.limits.max_request_body) {
                                 cap_error = true;
                                 break;
                             }
-                            active.total_sent += chunk.len();
                             stream.send_window -= chunk.len() as i64;
                             self.connection_send_window -= chunk.len() as i64;
                             let end = active.at_end();
