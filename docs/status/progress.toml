@@ -38,7 +38,7 @@ tests = 3424
 tests_commit = "fb9feb44"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 250900
+rust_lines = 251123
 unsafe_forbidden_crates = 18
 
 [gate]
@@ -52,13 +52,13 @@ css_syntax = "100 / 100"
 # --- M0 — Verdad y cimiento -------------------------------------------------------------
 [wpt]
 revision = "ab2ef95d3a7c512a6e7321688c80e428086af426"
-manifest_sha256 = "e1af9d73e10545e3e811f0cc18f4a8587b4c6e729e4e5aaaada8837c25e1578d"
-passed = 487
-total = 487
-dirs = 3
+manifest_sha256 = "2370664a899c5fb55aab4fdaf6328c8307c738dd5fda522ef08ca65418d15fbc"
+passed = 495
+total = 495
+dirs = 4
 allowlist = 0
-distribution = "PASS=487; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
-headline = "WPT ab2ef95 — 487/487 subtests pasados (dirs: 3)"
+distribution = "PASS=495; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
+headline = "WPT ab2ef95 — 495/495 subtests pasados (dirs: 4)"
 status = "PASS"
 
 [[phase]]

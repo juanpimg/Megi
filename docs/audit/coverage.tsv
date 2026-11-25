@@ -20,7 +20,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	267	ci	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	verify job + keyless cosign signing reviewed
 .github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-.gitignore	64	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
+.gitignore	65	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	34	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	127	docs	F3	jp	2026-11-19	covered	#1759	
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
@@ -643,8 +643,8 @@ crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/impl_host.rs	318	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/state.rs	165	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host/impl_host.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host/state.rs	169	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/timer_queue.rs	206	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/js/src/host/types.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/import_map.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -660,7 +660,7 @@ crates/js/src/runtime/buffer_source.rs	78	src	F2	textcap-merge	2026-11-23	covere
 crates/js/src/runtime/cssom.rs	466	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/document.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/document/parse.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/document/query.rs	315	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/document/query.rs	345	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/dom_utils.rs	475	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames.rs	11	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -671,17 +671,18 @@ crates/js/src/runtime/gap_apis.rs	33	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/js/src/runtime/gap_apis/canvas.rs	397	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/canvas_paths.rs	372	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/canvas_support.rs	51	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+crates/js/src/runtime/gap_apis/ce_registry.js	80	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	implemented and read while extending shadow-dom/custom-elements WPT support
 crates/js/src/runtime/gap_apis/frames.rs	232	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/nodes.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/prelude_b.js	841	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
-crates/js/src/runtime/gap_apis/slots.rs	251	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/prelude_b.js	881	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
+crates/js/src/runtime/gap_apis/slots.rs	292	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/globals/features.rs	685	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/src/runtime/globals/install.rs	181	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+crates/js/src/runtime/globals/features.rs	729	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
+crates/js/src/runtime/globals/install.rs	188	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/location_storage.rs	382	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -697,7 +698,7 @@ crates/js/src/runtime/node_methods/mutations.rs	156	src	F2	wave-max-mod	2026-11-
 crates/js/src/runtime/node_methods/properties.rs	377	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/tables.rs	261	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/src/runtime/node_methods/validation.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/node_wrappers.rs	459	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
+crates/js/src/runtime/node_wrappers.rs	475	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/observers.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/delivery.rs	105	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/registration.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1320,9 +1321,9 @@ crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tokenizer_harness.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/wpt/manifest.rs	135	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/manifest.rs	146	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/mod.rs	15	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
-crates/test_harness/src/wpt/runner.rs	208	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
+crates/test_harness/src/wpt/runner.rs	256	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/shim.rs	33	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/summary.rs	49	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
 crates/test_harness/src/wpt/testharness_shim.js	208	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
@@ -2103,8 +2104,8 @@ tests/html5lib-tests/tree-construction/tricky01.dat	0	vendored	-			exempt		not r
 tests/html5lib-tests/tree-construction/void-in-phrasing.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit01.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not read line by line: vendored
-tests/wpt/MANIFEST.json	1012	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
-tests/wpt/NOTICE.md	109	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/MANIFEST.json	1292	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/NOTICE.md	137	docs	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/WPT-REVISION.json	6	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/allowlist.toml	2	manifest	F3	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/baseline.json	9	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	pinned manifest, notice, revision, baseline and zero allowlist reviewed
@@ -2114,6 +2115,17 @@ tests/wpt/css/css-syntax/anb-parsing.html	125	fixture	F1	recon-wpt	2026-11-24	co
 tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
+tests/wpt/custom-elements/CustomElementRegistry.html	580	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/Document-createElement.html	419	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/Document-createElementNS.html	76	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/HTMLElement-constructor.html	249	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/historical.html	35	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/pseudo-class-defined.html	93	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/resources/custom-elements-helpers.js	262	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/resources/empty-html-document.html	5	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/resources/my-custom-element-html-document.html	6	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/resources/navigation-destination.html	9	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
+tests/wpt/custom-elements/upgrading.html	190	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending custom-elements WPT support
 tests/wpt/dom/events/AddEventListenerOptions-once.html	81	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
 tests/wpt/dom/events/AddEventListenerOptions-passive.html	139	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
 tests/wpt/dom/events/CustomEvent.html	35	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
@@ -2188,11 +2200,28 @@ tests/wpt/dom/nodes/Node-replaceChild.html	349	fixture	F1	wpt-components-scope	2
 tests/wpt/dom/nodes/Node-textContent.html	265	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
 tests/wpt/fetch/data-urls/resources/base64.json	80	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
 tests/wpt/html/webappapis/atob/base64.html	173	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	read and probed while implementing the offline WPT component runner
-tests/wpt/shadow-dom/Element-interface-attachShadow.html	95	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
-tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html	45	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
-tests/wpt/shadow-dom/META.yml	6	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
-tests/wpt/shadow-dom/ShadowRoot-interface.html	113	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
-tests/wpt/shadow-dom/resources/shadow-dom-utils.js	156	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
+tests/wpt/shadow-dom/Document-prototype-adoptNode.html	31	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Element-interface-attachShadow-custom-element.html	29	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Element-interface-attachShadow.html	95	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html	45	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Extensions-to-Event-Interface.html	224	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/HTMLSlotElement-interface.html	269	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/META.yml	6	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Node-prototype-cloneNode.html	57	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/ShadowRoot-interface.html	113	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/Slotable-interface.html	94	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/event-composed-path.html	281	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/event-inside-shadow-tree.html	148	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/event-inside-slotted-node.html	258	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/getElementById-dynamic-001.html	23	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/historical.html	25	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/resources/Document-prototype-currentScript-helper.js	1	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/resources/event-path-test-helpers.js	92	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/resources/shadow-dom-utils.js	156	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/resources/shadow-dom.js	161	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/slotchange.html	270	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/slots-fallback.html	253	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
+tests/wpt/shadow-dom/slots.html	526	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored and probed while extending shadow-dom WPT support
 tests/wpt/url/historical.any.js	29	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
 tests/wpt/url/idlharness.any.js	13	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
 tests/wpt/url/toascii.window.js	54	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	vendored/probed while implementing shadow-dom WPT support
@@ -2260,7 +2289,7 @@ tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regr
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	343	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
+tools/vendor_wpt.py	372	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix

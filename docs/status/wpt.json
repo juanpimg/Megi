@@ -2,26 +2,27 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "e1af9d73e10545e3e811f0cc18f4a8587b4c6e729e4e5aaaada8837c25e1578d"
+    "manifest_sha256": "2370664a899c5fb55aab4fdaf6328c8307c738dd5fda522ef08ca65418d15fbc"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "7 vendored WPT fixtures (487 executed subtests, 3 dirs); NOT full WPT conformance",
-    "adopted_subtests": 487,
+    "scope": "9 vendored WPT fixtures (495 executed subtests, 4 dirs); NOT full WPT conformance",
+    "adopted_subtests": 495,
     "dirs": [
       "tests/wpt/css/css-syntax",
+      "tests/wpt/custom-elements",
       "tests/wpt/html/webappapis/atob",
       "tests/wpt/shadow-dom"
     ]
   },
   "counts": {
-    "pass": 487,
+    "pass": 495,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 487,
+  "total": 495,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -621,6 +622,24 @@
       "key": "3911c6da0b726b8c6662b69e3e6e2139a9ca3d8c4c7d6247819e578fa9a79fca",
       "test": "tests/wpt/css/css-syntax/anb-serialization.html",
       "subtest": "anb-serialization.html: -2n - 2",
+      "status": "PASS"
+    },
+    {
+      "key": "7ac6375756332640cdd4a207f750eb66344719698fc3ce4c66952d03ac221758",
+      "test": "tests/wpt/custom-elements/historical.html",
+      "subtest": "custom-elements/historical.html::document.registerElement should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "b69bc484b417f4ee7962d64835a751b22b859c2eb4af279474f95637eb2d616f",
+      "test": "tests/wpt/custom-elements/historical.html",
+      "subtest": "custom-elements/historical.html::document.createElement(localName, \"string\") should not work",
+      "status": "PASS"
+    },
+    {
+      "key": "f931abb9c776262c02b71830b5996823549a7b03d706e30cc949da267629783e",
+      "test": "tests/wpt/custom-elements/historical.html",
+      "subtest": "custom-elements/historical.html::document.createElementNS(namespace, qualifiedName, \"string\") should not work",
       "status": "PASS"
     },
     {
@@ -2943,6 +2962,36 @@
       "key": "3d498640499541b5647254c74f48caa0edf81af2820d7b701db2da1cdaafccec",
       "test": "tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html",
       "subtest": "shadow-dom/Element-interface-shadowRoot-attribute.html::shadowRoot attribute must return null if the shadow root attached to the element is closed",
+      "status": "PASS"
+    },
+    {
+      "key": "36b88dc2ca0c76383f3d28e37d1288397673e1b838930ede035847a49aff5f4a",
+      "test": "tests/wpt/shadow-dom/historical.html",
+      "subtest": "shadow-dom/historical.html::element.createShadowRoot should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "13130dde371bf8a7b3c336144ff4978b6d4f5c3e5b0b14e215718d736a00b25f",
+      "test": "tests/wpt/shadow-dom/historical.html",
+      "subtest": "shadow-dom/historical.html::element.getDestinationInsertionPoints should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "d232e88bd19be06ed488615f5cc027927c427bf4f66ad4c61d80080785c942b7",
+      "test": "tests/wpt/shadow-dom/historical.html",
+      "subtest": "shadow-dom/historical.html::text.getDestinationInsertionPoints should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "90ef98a0f02ac59b5d35aaef5fcea21dbf256ef5bf4de915c49f910b5a74744d",
+      "test": "tests/wpt/shadow-dom/historical.html",
+      "subtest": "shadow-dom/historical.html::event.path should not exist",
+      "status": "PASS"
+    },
+    {
+      "key": "7a29937773763ec421f6ab33d4b19785d0bb981b66e61a04e4689e69af728c51",
+      "test": "tests/wpt/shadow-dom/historical.html",
+      "subtest": "shadow-dom/historical.html::HTMLContentElement should not exist",
       "status": "PASS"
     }
   ]
