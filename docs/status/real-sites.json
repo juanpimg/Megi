@@ -1,6 +1,6 @@
 {
   "mode": "live",
-  "generated_at": "2026-11-24",
+  "generated_at": "2026-11-25",
   "results": [
     {
       "id": "example",
@@ -10,11 +10,13 @@
       "mode": "live",
       "result": "PASS",
       "display_items": 17,
+      "element_count": 11,
+      "body_text": "This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.Learn moreEste dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.Данный домен предназнач",
       "status": 200,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 2055.0,
+      "time_ms": 1125.6,
       "issue": 0,
       "error": "",
       "png": "real-sites/example.png",
@@ -28,13 +30,16 @@
       "mode": "live",
       "result": "DEGRADADO",
       "display_items": 427,
+      "element_count": 197,
+      "body_text": "\n    \n      \n        \n          \n        \n      \n    \n      \n        Install\n        Learn\n        Playground\n        Tools\n        Governance\n        Funding\n        Community\n        Blog\n      \n    \n      \n        \n          Language\n          \n            English (en-US)\n            Español (es)\n            Français (fr)\n            Italiano (it)\n            日本語 (ja)\n            Português (pt-BR)\n            Русский (ru)\n            Türkçe (tr)\n            简体中文 (zh-CN)\n            正體中文 (zh-TW)\n         ",
       "status": 200,
       "warnings": [
-        "performance budget: total 8036 > 3s"
+        "performance budget: total 9581 > 3s",
+        "performance budget: styles_pre_script 372 ms > 200ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 8209.7,
+      "time_ms": 9591.7,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
@@ -48,14 +53,16 @@
       "mode": "live",
       "result": "DEGRADADO",
       "display_items": 421,
+      "element_count": 521,
+      "body_text": "\nIr al contenido\n\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\n\t\n\t\n\nMenú principal\n\t\n\t\n\n\n\t\t\t\t\n\t\t\n\n\t\n\tMenú principal\n\tmover a la barra lateral\n\tocultar\n\n\n\t\n\n\t\n\t\tNavegación\n\t\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\tPortadaPortal de la comunidadActualidadCambios recientesPáginas nuevasPágina aleatoriaAyudaNotificar un errorPáginas especiales\n\t\t\n\t\t\n\t\n\n\n\t\n\n\n\t\t\t\t\n\n\t\n\n\n\t\t\n\t\t\t\n\n\t\n\t\n\t\t\n\t\t\n\t\n\n\n\t\t\n\t\t\n\t\t\t\n\n\t\n\nBuscar\n\t\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\n\t\t\t\tBuscar\n\t\t\t\n\t\t\n\t\n\n\n\t\t\t\n\t\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\t\t\n\n\t\n\t\n\nAparienci",
       "status": 200,
       "warnings": [
-        "performance budget: styles_pre_script 407 ms > 200ms",
-        "performance budget: images 589 ms > 500ms"
+        "performance budget: styles_pre_script 304 ms > 200ms",
+        "performance budget: images 537 ms > 500ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1926.7,
+      "time_ms": 1170.3,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
@@ -68,19 +75,21 @@
       "source": "https://news.ycombinator.com",
       "mode": "live",
       "result": "DEGRADADO",
-      "display_items": 2807,
+      "display_items": 2758,
+      "element_count": 798,
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)129 points by E-Reverance 1 hour ago  | hide | 32 comments2.Ternary Bonsai 2.5 27B (prismml.com)355 points by b0m 6 hours ago  | hide | 121 comments3.PenGPT: A Generative Transformer for Handwriting and Sketches (greydanus.github.io)62 points by smusamashah 1 hour ago  | hide | 7 comments4.GPT-6 models demonstrate intrinsic protein-design capabilities (openai.com)181 points by acos",
       "status": 200,
       "warnings": [
-        "performance budget: styles_pre_script 766 ms > 200ms",
-        "performance budget: images 768 ms > 500ms"
+        "performance budget: styles_pre_script 742 ms > 200ms",
+        "performance budget: images 728 ms > 500ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 3181.2,
+      "time_ms": 2725.0,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "15712139d9f24bfc56349e2d1bbe2a7e"
+      "png_md5": "840fb575b4dd180164901c2a92d02573"
     }
   ]
 }
