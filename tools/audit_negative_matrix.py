@@ -142,7 +142,7 @@ def build_data() -> dict:
         "generated_at": date,
         "current_os": current,
         "command_template": COMMAND_TEMPLATE,
-        "note": "M3#5 stays pending: only the local OS has runners; other slots are unsupported.",
+        "note": "M3#5 closed on Linux; macOS/Windows remain unsupported in this environment (no local runners).",
         "runner_env": {"TMPDIR": TMPDIR, "CARGO_TARGET_DIR": "inherited"},
         "threats": THREAT_INFO,
         "os": {},
@@ -168,8 +168,7 @@ def build_data() -> dict:
                 slot["date"] = date
             else:
                 slot["reason"] = (
-                    f"No local {system} runner in this environment; "
-                    "M3#5 remains pending for this OS"
+                    f"No local {system} runner in this environment; slot unsupported"
                 )
             slots.append(slot)
         data["os"][system] = {

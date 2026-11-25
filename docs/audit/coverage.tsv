@@ -2103,7 +2103,7 @@ tests/wpt/css/css-syntax/anb-serialization.html	62	fixture	F1	wpt-expand	2026-11
 tests/wpt/css/css-syntax/declarations-trim-whitespace.html	54	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tests/wpt/css/css-syntax/input-preprocessing.html	46	fixture	F1	recon-wpt	2026-11-24	covered	WP-M0-WPT-PINNED	pinned manifest, notice, revision, baseline and zero allowlist reviewed
 tools/audit_coverage.py	409	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
-tools/audit_negative_matrix.py	270	tool	F3	jp	2026-11-24	covered	#2290	Re-read after evidence and threat drift verification fix
+tools/audit_negative_matrix.py	269	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
