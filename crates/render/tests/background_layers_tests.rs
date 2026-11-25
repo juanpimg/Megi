@@ -122,10 +122,15 @@ fn mask_image_does_not_paint_its_background_as_a_solid_square() {
         .iter()
         .filter(|pixel| **pixel == square)
         .count();
-    assert_eq!(solid, 0, "unmasked icon background painted {solid} px");
-    assert!(
-        output.stats.background_images_loaded >= 1,
-        "the mask resource must be used as the icon image: {:?}",
-        output.stats.warnings
+    // CSS Masking 1 §6.1: the background colour survives only through the
+    // mask's alpha channel. The fallback used before mask rasterisation made
+    // the colour transparent and painted the mask as an image instead; now
+    // the real mask clips the 20x20 box to a 2px bar (~36 px), never 400 px.
+    assert!(solid > 0, "the mask shape must keep its background colour");
+    assert!(solid < 100, "unmasked icon background painted {solid} px");
+    assert_eq!(
+        output.pixmap.pixel(0, 0),
+        megi_css::Color::new(255, 255, 255, 255),
+        "the corner outside the mask must stay transparent"
     );
 }

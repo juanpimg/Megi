@@ -4,21 +4,6 @@
 use super::*;
 
 impl ComputedStyle {
-    /// CSS Masking L1 §3.1: `mask-image` confines the painted area of a box to the
-    /// mask's alpha channel. Megi does not rasterise masks yet; the mask resource is
-    /// used as a plain background image instead, while the background colour stays
-    /// transparent so a masked icon paints its glyph and not a solid colour square
-    /// (Wikipedia Vector 2022 / Codex icons declare both properties together).
-    pub(crate) fn mask_image_url(entries: &[(&str, &Declaration)]) -> Option<String> {
-        let declaration = find_declaration(entries, "mask-image")
-            .or_else(|| find_declaration(entries, "-webkit-mask-image"))?;
-        let value = declaration.raw_value.trim();
-        if value.is_empty() || value.eq_ignore_ascii_case("none") {
-            return None;
-        }
-        parse_url_component(value)
-    }
-
     /// Computes the `background-image` layers (CSS Backgrounds 3 §3).
     ///
     /// Returns the layers **top-first** and whether any background geometry was
@@ -62,14 +47,6 @@ impl ComputedStyle {
                     .collect()
             })
             .unwrap_or_default();
-        // Fallback for unsupported masking: paint the mask resource itself when no
-        // author background image exists, so mask-only icons remain visible.
-        let mut image_values = image_values;
-        if image_values.is_empty()
-            && let Some(url) = Self::mask_image_url(entries)
-        {
-            image_values.push((Some(url), None));
-        }
         const MAX_BACKGROUND_LAYERS: usize = 32;
         let image_values: Vec<_> = image_values
             .into_iter()
@@ -177,12 +154,6 @@ impl ComputedStyle {
         entries: &[(&str, &Declaration)],
         current_color: Color,
     ) -> Color {
-        // CSS Masking L1 §3.1: the colour is only visible through the mask. Without
-        // mask rasterisation, painting it unmasked fills the whole icon box with a
-        // solid square (Wikipedia Vector/CDX icons declare mask + colour together).
-        if Self::mask_image_url(entries).is_some() {
-            return Color::TRANSPARENT;
-        }
         if let Some(decl) = find_declaration(entries, "background-color")
             && let Some(color) = parse_color_component(&decl.raw_value, current_color)
         {
