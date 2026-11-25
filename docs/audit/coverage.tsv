@@ -1144,7 +1144,7 @@ crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/images/tests.rs	110	src	F2	perf-image-stage	2026-11-25	covered	#M9-IMAGE	re-read after content-addressed decode dedup
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	273	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/lib.rs	291	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: devtools module and computed-style re-exports
+crates/render/src/lib.rs	292	src	F2	lead	2026-11-25	covered	M7-dom-css-js-feature	re-read after gating computed-style re-export behind js feature
 crates/render/src/main.rs	479	src	F2	opencode-agent	2026-11-24	covered	#2269	re-read after dom_summary extraction
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
