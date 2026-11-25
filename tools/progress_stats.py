@@ -131,8 +131,9 @@ def count_tests(
     if count == 0:
         print("warning: `cargo test --workspace -- --list` returned no tests; using manifest value", file=sys.stderr)
         return manifest_tests, False
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({"head": head, "tests": count}, indent=2) + "\n", encoding="utf-8")
+    if not tree_dirty:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps({"head": head, "tests": count}, indent=2) + "\n", encoding="utf-8")
     return count, True
 
 

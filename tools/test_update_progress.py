@@ -5,11 +5,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from tools import update_progress, wpt_report
+from tools import progress_stats, update_progress, wpt_report
 
 
 def report(counts: dict, total: int, dirs: list[str]) -> dict:
@@ -133,6 +135,50 @@ class UpdateProgressWptTest(unittest.TestCase):
             f"error: WPT report: {status / 'wpt.json'}: report needs epoch (a dict)",
         )
         self.assertNotIn("Traceback", stderr.getvalue())
+
+
+class FakeCache:
+    """In-memory stand-in for the on-disk test-count cache."""
+
+    def __init__(self) -> None:
+        self.content: dict | None = None
+        self.parent = mock.MagicMock()
+
+    def is_file(self) -> bool:
+        return False
+
+    def write_text(self, data: str, encoding: str = "utf-8") -> None:
+        self.content = json.loads(data)
+
+
+class CountTestsCacheTest(unittest.TestCase):
+    """The count cache must only be stamped on a clean tree at HEAD (#1394)."""
+
+    def _count(self, status_output: str) -> tuple[tuple[int, bool], FakeCache]:
+        cache = FakeCache()
+
+        def fake_run(root: Path, args: list[str], timeout: int = 600) -> subprocess.CompletedProcess[str]:
+            if args[:2] == ["git", "status"]:
+                return subprocess.CompletedProcess(args, 0, status_output, "")
+            if args[0] == "cargo":
+                return subprocess.CompletedProcess(args, 0, "a: test\nb: test\n", "")
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        with mock.patch.object(progress_stats, "run", side_effect=fake_run):
+            result = progress_stats.count_tests(
+                Path("/repo"), cache, head="abc1234", manifest_tests=99, no_count=False
+            )
+        return result, cache
+
+    def test_dirty_tree_does_not_write_cache(self) -> None:
+        (count, measured), cache = self._count(" M crates/x/tests/x.rs\n")
+        self.assertEqual((count, measured), (2, True))
+        self.assertIsNone(cache.content)
+
+    def test_clean_tree_writes_cache(self) -> None:
+        (count, measured), cache = self._count("")
+        self.assertEqual((count, measured), (2, True))
+        self.assertEqual(cache.content, {"head": "abc1234", "tests": 2})
 
 
 if __name__ == "__main__":
