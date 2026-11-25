@@ -156,11 +156,16 @@ impl Tab {
     pub fn display_title(&self) -> String {
         match self.title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),
-            _ => match self.navigation.current() {
-                Some(url) => url.as_str().to_string(),
-                None => blank_tab_title().to_string(),
-            },
+            _ => title_fallback(self),
         }
+    }
+}
+
+/// Fallback title of a tab that has no document title yet.
+fn title_fallback(tab: &Tab) -> String {
+    match tab.navigation.current() {
+        Some(url) => url.as_str().to_string(),
+        None => blank_tab_title().to_string(),
     }
 }
 
@@ -173,6 +178,47 @@ pub struct TabSnapshot {
     pub zoom: f64,
     pub scroll: u32,
     pub workspace: u8,
+}
+
+/// Parses the URL list into tabs, dropping bad URLs and capping the count.
+fn tabs_from_urls(urls: &[String]) -> Vec<Tab> {
+    let mut tabs: Vec<Tab> = urls
+        .iter()
+        .filter_map(|url| Tab::new(url.clone()))
+        .collect();
+    tabs.truncate(MAX_TABS);
+    tabs
+}
+
+/// Deduplicated isolation-site keys of a tab list, in tab order.
+fn distinct_site_keys(tabs: &[Tab]) -> Vec<crate::site::SiteKey> {
+    let mut keys: Vec<crate::site::SiteKey> = Vec::new();
+    for tab in tabs {
+        let key = crate::site::site_key(&tab.url);
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys
+}
+
+/// Display titles of the tabs, in stored order.
+fn display_titles(tabs: &[Tab]) -> Vec<String> {
+    tabs.iter().map(Tab::display_title).collect()
+}
+
+/// Workspace ids of the tabs, in stored order.
+fn workspace_ids(tabs: &[Tab]) -> Vec<u8> {
+    tabs.iter().map(|tab| tab.workspace).collect()
+}
+
+/// Clamps restored workspace ids so every tab stays in a valid group.
+fn clamp_workspace_ids(tabs: &mut [Tab]) {
+    for tab in tabs {
+        if usize::from(tab.workspace) >= usize::from(MAX_WORKSPACES) {
+            tab.workspace = MAX_WORKSPACES - 1;
+        }
+    }
 }
 
 /// Bounded, ordered collection of tabs plus the active index.
@@ -198,14 +244,10 @@ impl TabsState {
 
     /// Creates the state for an initial tab list (empty falls back to a blank tab).
     pub fn from_urls(urls: Vec<String>) -> Self {
-        let mut tabs: Vec<Tab> = urls
-            .iter()
-            .filter_map(|url| Tab::new(url.clone()))
-            .collect();
+        let mut tabs = tabs_from_urls(&urls);
         if tabs.is_empty() {
             tabs.push(Tab::blank());
         }
-        tabs.truncate(MAX_TABS);
         Self {
             tabs,
             active: 0,
@@ -218,14 +260,7 @@ impl TabsState {
     ///
     /// Tabs on the same site may share a renderer; tabs on different sites must not.
     fn distinct_sites(&self) -> usize {
-        let mut keys: Vec<crate::site::SiteKey> = Vec::new();
-        for tab in &self.tabs {
-            let key = crate::site::site_key(&tab.url);
-            if !keys.contains(&key) {
-                keys.push(key);
-            }
-        }
-        keys.len()
+        distinct_site_keys(&self.tabs).len()
     }
 
     /// True when the window holds tabs from more than one isolation site (ADR-004).
@@ -241,11 +276,7 @@ impl TabsState {
         tabs.truncate(MAX_TABS);
         // Restored tabs have no persisted workspace id yet (deferred to phase 5):
         // clamp any out-of-range id so the workspace invariants always hold.
-        for tab in &mut tabs {
-            if usize::from(tab.workspace) >= usize::from(MAX_WORKSPACES) {
-                tab.workspace = MAX_WORKSPACES - 1;
-            }
-        }
+        clamp_workspace_ids(&mut tabs);
         let active = active.min(tabs.len() - 1);
         let workspace_active = workspaces::rebuild_slots(&tabs, active);
         let workspace = tabs[active].workspace;
@@ -263,6 +294,9 @@ impl TabsState {
     }
 
     /// Whether there are no tabs. Never true for a live state (last-tab policy resets).
+    pub fn is_empty(&self) -> bool {
+        self.tabs.is_empty()
+    }
 
     /// Index of the active tab.
     pub const fn active_index(&self) -> usize {
@@ -286,10 +320,24 @@ impl TabsState {
 
     /// Display titles and workspace indexes, in tab order, for chrome painting.
     pub fn rail_labels(&self) -> (Vec<String>, Vec<u8>) {
-        (
-            self.tabs.iter().map(Tab::display_title).collect(),
-            self.tabs.iter().map(|tab| tab.workspace).collect(),
-        )
+        (display_titles(&self.tabs), workspace_ids(&self.tabs))
+    }
+
+    /// Owned copy of one tab's persistence fields.
+    fn snapshot_of(tab: &Tab) -> TabSnapshot {
+        TabSnapshot {
+            url: tab.url.clone(),
+            history: tab
+                .navigation
+                .history()
+                .iter()
+                .map(|url| url.as_str().to_owned())
+                .collect(),
+            index: tab.navigation.index(),
+            zoom: tab.zoom,
+            scroll: tab.scroll.offset(),
+            workspace: tab.workspace,
+        }
     }
 
     /// Owned snapshots of up to `limit` leading tabs, for session persistence.
@@ -297,19 +345,7 @@ impl TabsState {
         self.tabs
             .iter()
             .take(limit)
-            .map(|tab| TabSnapshot {
-                url: tab.url.clone(),
-                history: tab
-                    .navigation
-                    .history()
-                    .iter()
-                    .map(|url| url.as_str().to_owned())
-                    .collect(),
-                index: tab.navigation.index(),
-                zoom: tab.zoom,
-                scroll: tab.scroll.offset(),
-                workspace: tab.workspace,
-            })
+            .map(Self::snapshot_of)
             .collect()
     }
 

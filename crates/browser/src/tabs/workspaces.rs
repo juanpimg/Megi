@@ -66,6 +66,52 @@ pub(super) fn rebuild_slots(tabs: &[Tab], active: usize) -> [Option<usize>; SLOT
     slots
 }
 
+/// Which workspace ids currently hold at least one tab.
+fn used_workspaces(tabs: &[Tab]) -> Vec<bool> {
+    (0..SLOTS)
+        .map(|workspace| {
+            tabs.iter()
+                .any(|tab| usize::from(tab.workspace) == workspace)
+        })
+        .collect()
+}
+
+/// Global indices of the tabs visible in `workspace`, in stored order.
+fn visible_positions(tabs: &[Tab], workspace: u8) -> Vec<usize> {
+    tabs.iter()
+        .enumerate()
+        .filter(|(_, tab)| tab.workspace == workspace)
+        .map(|(index, _)| index)
+        .collect()
+}
+
+/// Indices of the other tabs of `workspace`, used to pick a neighbour on close/move.
+fn peer_indices(tabs: &[Tab], index: usize, workspace: u8) -> Vec<usize> {
+    tabs.iter()
+        .enumerate()
+        .filter(|&(peer, tab)| peer != index && tab.workspace == workspace)
+        .map(|(peer, _)| peer)
+        .collect()
+}
+
+/// Neighbour to activate when a tab leaves `index`: next one shifted left, else previous.
+fn neighbour_of(peers: &[usize], index: usize) -> usize {
+    peers
+        .iter()
+        .copied()
+        .find(|&peer| peer > index)
+        .map(|peer| peer - 1)
+        .or_else(|| peers.iter().copied().rfind(|&peer| peer < index))
+        .unwrap_or(index)
+}
+
+/// Adjusts remembered active indices after a tab is removed from `index`.
+fn shift_slots(slots: &mut [Option<usize>; SLOTS], index: usize) {
+    for slot in slots {
+        *slot = slot.map(|old| if old > index { old - 1 } else { old });
+    }
+}
+
 impl TabsState {
     /// Id of the currently visible workspace.
     pub fn workspace(&self) -> u8 {
@@ -82,12 +128,9 @@ impl TabsState {
     /// The single-workspace case is byte-for-byte identical to the legacy shell:
     /// no label is painted and no accessibility string is decorated.
     pub fn has_multiple_workspaces(&self) -> bool {
-        (0..SLOTS)
-            .filter(|workspace| {
-                self.tabs
-                    .iter()
-                    .any(|tab| usize::from(tab.workspace) == *workspace)
-            })
+        used_workspaces(&self.tabs)
+            .into_iter()
+            .filter(|used| *used)
             .count()
             > 1
     }
@@ -138,13 +181,7 @@ impl TabsState {
 
     /// Steps within the active workspace only; used by `next_tab`/`previous_tab`.
     pub(super) fn step_tab(&mut self, forward: bool) -> usize {
-        let positions: Vec<usize> = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|(_, tab)| tab.workspace == self.workspace)
-            .map(|(index, _)| index)
-            .collect();
+        let positions = visible_positions(&self.tabs, self.workspace);
         if positions.is_empty() {
             return self.active;
         }
@@ -169,13 +206,7 @@ impl TabsState {
         }
         let workspace_id = self.tabs[index].workspace;
         let workspace = usize::from(workspace_id);
-        let peers: Vec<usize> = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|&(peer, tab)| peer != index && tab.workspace == workspace_id)
-            .map(|(peer, _)| peer)
-            .collect();
+        let peers = peer_indices(&self.tabs, index, workspace_id);
         if peers.is_empty() {
             // The workspace's last tab becomes a blank tab instead of vanishing.
             let mut blank = Tab::blank();
@@ -184,17 +215,9 @@ impl TabsState {
             self.workspace_active[workspace] = Some(index);
             return CloseOutcome::ResetLast;
         }
-        let neighbour = peers
-            .iter()
-            .copied()
-            .find(|&peer| peer > index)
-            .map(|peer| peer - 1)
-            .or_else(|| peers.iter().copied().rfind(|&peer| peer < index))
-            .unwrap_or(index);
+        let neighbour = neighbour_of(&peers, index);
         self.tabs.remove(index);
-        for slot in &mut self.workspace_active {
-            *slot = slot.map(|old| if old > index { old - 1 } else { old });
-        }
+        shift_slots(&mut self.workspace_active, index);
         self.workspace_active[workspace] = Some(neighbour);
         if index < self.active {
             self.active -= 1;
@@ -204,20 +227,30 @@ impl TabsState {
         CloseOutcome::Closed
     }
 
+    /// Remembers a slot only while it still names a tab of that workspace.
+    fn valid_slot(&self, workspace: usize) -> Option<usize> {
+        self.workspace_active[workspace].filter(|&index| {
+            index < self.tabs.len() && usize::from(self.tabs[index].workspace) == workspace
+        })
+    }
+
+    /// First global index of a tab in `workspace`, if that group is non-empty.
+    fn first_in_workspace(&self, workspace: usize) -> Option<usize> {
+        self.tabs
+            .iter()
+            .enumerate()
+            .find_map(|(index, tab)| (usize::from(tab.workspace) == workspace).then_some(index))
+    }
+
     /// Activates `workspace`, creating a blank tab there when it is still empty.
     pub(super) fn activate_workspace(&mut self, workspace: usize) -> u8 {
         if workspace >= SLOTS {
             return self.workspace;
         }
         let id = u8::try_from(workspace).unwrap_or(MAX_WORKSPACES - 1);
-        let remembered = self.workspace_active[workspace].filter(|&index| {
-            index < self.tabs.len() && usize::from(self.tabs[index].workspace) == workspace
-        });
+        let remembered = self.valid_slot(workspace);
         if remembered.is_none() {
-            let first = self
-                .tabs
-                .iter()
-                .position(|tab| usize::from(tab.workspace) == workspace);
+            let first = self.first_in_workspace(workspace);
             if let Some(index) = first {
                 self.workspace_active[workspace] = Some(index);
             } else if !self.is_full() {
@@ -244,20 +277,45 @@ impl TabsState {
         self.activate_workspace(next)
     }
 
+    /// First free workspace after `current`, if any group is unused.
+    fn empty_workspace_after(&self, current: usize) -> Option<usize> {
+        let used = used_workspaces(&self.tabs);
+        (1..SLOTS)
+            .map(|offset| (current + offset) % SLOTS)
+            .find(|&target| !used[target])
+    }
+
     /// Switches to the first empty workspace, or cycles when all three are in use.
     pub fn new_workspace(&mut self) -> u8 {
         let current = usize::from(self.workspace);
-        for offset in 1..SLOTS {
-            let target = (current + offset) % SLOTS;
-            let empty = !self
-                .tabs
-                .iter()
-                .any(|tab| usize::from(tab.workspace) == target);
-            if empty {
-                return self.activate_workspace(target);
-            }
+        if let Some(target) = self.empty_workspace_after(current) {
+            return self.activate_workspace(target);
         }
         self.cycle_workspace()
+    }
+
+    /// Rebuilds the remembered active slots after closing a whole workspace.
+    fn remap_slots(
+        &self,
+        kept_indices: &[usize],
+        kept: &[Tab],
+        current: usize,
+    ) -> [Option<usize>; SLOTS] {
+        let mut slots = [None; SLOTS];
+        for (workspace, slot) in slots
+            .iter_mut()
+            .enumerate()
+            .filter(|&(index, _)| index != current)
+        {
+            *slot = self.workspace_active[workspace]
+                .and_then(|old| kept_indices.iter().position(|&kept| kept == old))
+                .or_else(|| {
+                    kept_indices
+                        .iter()
+                        .position(|&old| usize::from(kept[old].workspace) == workspace)
+                });
+        }
+        slots
     }
 
     /// Closes the active workspace and switches to the next non-empty one.
@@ -266,13 +324,7 @@ impl TabsState {
     /// active tab is reset to blank instead (the window always keeps a tab).
     pub fn close_workspace(&mut self) -> bool {
         let current = usize::from(self.workspace);
-        let used: Vec<bool> = (0..SLOTS)
-            .map(|workspace| {
-                self.tabs
-                    .iter()
-                    .any(|tab| usize::from(tab.workspace) == workspace)
-            })
-            .collect();
+        let used = used_workspaces(&self.tabs);
         let target = (1..SLOTS)
             .map(|offset| (current + offset) % SLOTS)
             .find(|&workspace| used[workspace]);
@@ -292,20 +344,7 @@ impl TabsState {
                 kept.push(tab);
             }
         }
-        let mut slots = [None; SLOTS];
-        for (workspace, slot) in slots
-            .iter_mut()
-            .enumerate()
-            .filter(|&(index, _)| index != current)
-        {
-            *slot = self.workspace_active[workspace]
-                .and_then(|old| kept_indices.iter().position(|&kept| kept == old))
-                .or_else(|| {
-                    kept_indices
-                        .iter()
-                        .position(|&old| usize::from(kept[old].workspace) == workspace)
-                });
-        }
+        let slots = self.remap_slots(&kept_indices, &kept, current);
         self.tabs = kept;
         self.workspace_active = slots;
         self.workspace = u8::try_from(target).unwrap_or(0);
@@ -321,13 +360,7 @@ impl TabsState {
         }
         let source = usize::from(self.workspace);
         let index = self.active;
-        let peers: Vec<usize> = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|&(peer, tab)| peer != index && tab.workspace == self.workspace)
-            .map(|(peer, _)| peer)
-            .collect();
+        let peers = peer_indices(&self.tabs, index, self.workspace);
         if peers.is_empty() && self.is_full() {
             return false;
         }
@@ -339,17 +372,9 @@ impl TabsState {
             self.tabs[index] = blank;
             self.workspace_active[source] = Some(index);
         } else {
-            let neighbour = peers
-                .iter()
-                .copied()
-                .find(|&peer| peer > index)
-                .map(|peer| peer - 1)
-                .or_else(|| peers.iter().copied().rfind(|&peer| peer < index))
-                .unwrap_or(index);
+            let neighbour = neighbour_of(&peers, index);
             self.tabs.remove(index);
-            for slot in &mut self.workspace_active {
-                *slot = slot.map(|old| if old > index { old - 1 } else { old });
-            }
+            shift_slots(&mut self.workspace_active, index);
             self.workspace_active[source] = Some(neighbour);
         }
         let moved_index = self.tabs.len();
