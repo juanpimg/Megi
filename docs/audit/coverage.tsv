@@ -622,11 +622,11 @@ crates/image/tests/webp_tests/lossless.rs	87	test	F1	wave-max-mod	2026-11-19	cov
 crates/image/tests/webp_tests/lossy.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/image/tests/webp_tests/main.rs	173	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/Cargo.toml	23	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/canvas.rs	417	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
+crates/js/src/canvas.rs	454	src	F2	juanpimg	2026-11-20	covered	#1848	putImageData replaces pixels
 crates/js/src/canvas/color.rs	18	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/state.rs	393	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
-crates/js/src/canvas/tests.rs	143	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
+crates/js/src/canvas/tests.rs	172	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/computed_style.rs	185	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -664,9 +664,10 @@ crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	cov
 crates/js/src/runtime/frames/bridge.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/state.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas.rs	474	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/canvas_paths.rs	445	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
+crates/js/src/runtime/gap_apis.rs	33	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas.rs	446	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/canvas_paths.rs	433	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
+crates/js/src/runtime/gap_apis/canvas_support.rs	37	src	F2	integration	2026-11-25	covered	#2295	read after rebase
 crates/js/src/runtime/gap_apis/frames.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/install.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
