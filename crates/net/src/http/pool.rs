@@ -100,9 +100,15 @@ impl H1Pool {
     pub fn idle_connections(&self) -> usize {
         self.entries.values().map(Vec::len).sum()
     }
+
+    /// Idle connections available for `url`'s origin, so a batch can spend exactly the
+    /// connections a previous navigation earned without serialising extra requests on them.
+    pub(crate) fn idle_for_url(&self, url: &Url) -> usize {
+        self.entries.get(&origin_key(url)).map_or(0, Vec::len)
+    }
 }
 
-fn origin_key(url: &Url) -> String {
+pub(crate) fn origin_key(url: &Url) -> String {
     format!(
         "{}://{}:{}",
         url.scheme().as_str(),

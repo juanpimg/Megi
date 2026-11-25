@@ -355,6 +355,7 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use pool::origin_key;
 pub use pool::{H1Pool, fetch_pooled, fetch_pooled_following_redirects};
 pub use preflight::preflight;
 pub use request::{

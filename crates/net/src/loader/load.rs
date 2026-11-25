@@ -128,6 +128,11 @@ impl ResourceLoader {
         let mut results: Vec<Option<Result<Arc<Resource>, LoadError>>> =
             (0..requests.len()).map(|_| None).collect();
         let mut pending_indices: HashMap<String, (Url, bool, Vec<usize>)> = HashMap::new();
+        // RFC 9110 §9.4: a connection kept alive by the navigation is already paid for.
+        // Spend one idle connection per request on the calling thread (the pooled fast path
+        // in `load`), leaving the rest to the parallel workers. Extra requests therefore
+        // keep their existing concurrency instead of queueing on a single connection.
+        let mut warm_budget: HashMap<String, usize> = HashMap::new();
 
         for (idx, &(url, use_cors)) in requests.iter().enumerate() {
             if !matches!(url.scheme(), Scheme::Http | Scheme::Https) {
@@ -142,6 +147,19 @@ impl ResourceLoader {
             if self.push_cache.contains_key(&key)
                 || self.cache.as_ref().is_some_and(|c| c.contains_key(&key))
             {
+                results[idx] = Some(if use_cors {
+                    self.load(url)
+                } else {
+                    self.load_no_cors(url)
+                });
+                continue;
+            }
+            let origin = crate::http::origin_key(url);
+            let budget = warm_budget
+                .entry(origin)
+                .or_insert_with(|| self.h1_pool.idle_for_url(url));
+            if *budget > 0 {
+                *budget -= 1;
                 results[idx] = Some(if use_cors {
                     self.load(url)
                 } else {

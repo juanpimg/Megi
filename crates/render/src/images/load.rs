@@ -112,10 +112,32 @@ pub fn load_images_with_context(
                 .push(format!("skipping image {url} (--no-network is set)"));
             continue;
         }
-        let use_cors = document
-            .node(node_id)
-            .as_element()
-            .is_some_and(|element| element.get_attribute("crossorigin").is_some());
+        let element = document.node(node_id).as_element();
+        // WHATWG HTML §4.8.4.3 presentational hints: a zero-area `<img>` without `alt`
+        // can paint no pixels and exposes no text. Skip it instead of paying a fresh
+        // same-origin connection for an invisible spacer (HN's `width=0` `s.gif`).
+        // Synthetic inline-SVG images are exempt: their data URL costs no connection and
+        // skipping them would hide a corrupt-SVG decode failure (WP-5.11).
+        let zero_area_spacer = element.is_some_and(|el| {
+            el.get_attribute(crate::inline_svg::INLINE_SVG_MARKER)
+                .is_none()
+                && {
+                    let zero_hint = |name: &str| {
+                        el.get_attribute(name)
+                            .and_then(|value| value.trim().parse::<f32>().ok())
+                            .is_some_and(|value| value == 0.0)
+                    };
+                    (zero_hint("width") || zero_hint("height"))
+                        && el
+                            .get_attribute("alt")
+                            .is_none_or(|alt| alt.trim().is_empty())
+                }
+        });
+        if zero_area_spacer {
+            continue;
+        }
+        let use_cors =
+            element.is_some_and(|element| element.get_attribute("crossorigin").is_some());
         resolved.push((node_id, url, use_cors, density));
     }
 

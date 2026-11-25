@@ -72,6 +72,41 @@ mod dedup_tests {
     }
 
     #[test]
+    fn zero_area_spacer_is_not_fetched() {
+        // A zero-width `<img>` without `alt` can neither paint pixels nor expose text.
+        // HN's indentation spacer (`<img src="s.gif" width="0" height="10">`) made the
+        // image stage open an extra same-origin connection (~700 ms handshake, HN).
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/render/layout_aspect_ratio.png");
+        let fixture = fixture.canonicalize().expect("fixture");
+        let bytes = std::fs::read(&fixture).expect("read");
+        let encoded = megi_net::base64_encode(&bytes);
+        let source = format!(
+            "<body><img src='data:image/png;base64,{encoded}' width='0' height='10'><img src='data:image/png;base64,{encoded}'></body>"
+        );
+        let document = megi_html::parse_document(&source, false);
+        let base = megi_net::Url::parse("file:///tmp/page.html").expect("base URL");
+        let mut loader = ResourceLoader::with_options(FetchOptions::default());
+        let loaded = load_images(
+            &document,
+            &base,
+            &mut loader,
+            false,
+            ImageLimits::default(),
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            loaded.loaded, 1,
+            "the zero-width spacer must not be fetched; only the visible image loads"
+        );
+        assert_eq!(
+            loaded.downloaded_bytes,
+            bytes.len(),
+            "only one image body is downloaded"
+        );
+    }
+
+    #[test]
     fn identical_image_urls_share_one_decode() {
         let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/render/layout_aspect_ratio.png");

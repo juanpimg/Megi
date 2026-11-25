@@ -64,6 +64,97 @@ fn navigation_pool_is_reused_by_subresources_after_redirect() {
 }
 
 #[test]
+fn load_many_reuses_warm_pool_connections() {
+    // RFC 9110 §9.3/§9.4: a keep-alive connection earned by the navigation must serve the
+    // image batch too. `load_many` used to send every uncached image through a brand-new
+    // `fetch`, discarding the transferred pool and paying a fresh TCP/TLS handshake per
+    // image (measured: HN images 757 ms, two new connections, warm pool idle).
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let port = listener.local_addr().expect("addr").port();
+    let accepts = Arc::new(AtomicUsize::new(0));
+    let server_accepts = Arc::clone(&accepts);
+    let server = std::thread::spawn(move || {
+        // Serve every connection the client opens (the pre-fix path opens two extra ones).
+        let deadline = std::time::Instant::now() + Duration::from_secs(4);
+        let mut last_accept = std::time::Instant::now();
+        while std::time::Instant::now() < deadline && server_accepts.load(Ordering::SeqCst) < 4 {
+            let (mut stream, _) = match listener.accept() {
+                Ok(pair) => pair,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now().duration_since(last_accept)
+                        > Duration::from_millis(250)
+                    {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                }
+                Err(error) => panic!("accept: {error}"),
+            };
+            last_accept = std::time::Instant::now();
+            server_accepts.fetch_add(1, Ordering::SeqCst);
+            std::thread::spawn(move || {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .expect("timeout");
+                for body in [
+                    "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello",
+                    "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\npng",
+                ] {
+                    let mut head = Vec::new();
+                    let mut byte = [0u8; 1];
+                    while !head.ends_with(b"\r\n\r\n") {
+                        if stream.read(&mut byte).unwrap_or(0) != 1 {
+                            return;
+                        }
+                        head.push(byte[0]);
+                    }
+                    if stream.write_all(body.as_bytes()).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+
+    let options = FetchOptions::default();
+    let mut navigation = ResourceLoader::with_options(options.clone());
+    // Two distinct origins so the pool actually holds two idle connections (a second
+    // sequential fetch to the same origin would reuse the first one).
+    for host in ["127.0.0.1", "localhost"] {
+        let url = Url::parse(&format!("http://{host}:{port}/nav")).expect("url");
+        navigation
+            .fetch_navigation_pooled(&url)
+            .expect("navigation");
+    }
+    let mut loader = ResourceLoader::with_options(options);
+    loader.absorb_pool_from(&mut navigation);
+    assert_eq!(
+        loader.idle_connections(),
+        2,
+        "two warm connections transferred"
+    );
+
+    let one = Url::parse(&format!("http://127.0.0.1:{port}/img1")).expect("url");
+    let two = Url::parse(&format!("http://localhost:{port}/img2")).expect("url");
+    let results = loader.load_many(&[(&one, false), (&two, false)]);
+    assert!(results.iter().all(|r| r.is_ok()), "{results:?}");
+    server.join().expect("server thread");
+    assert_eq!(
+        accepts.load(Ordering::SeqCst),
+        2,
+        "the image batch must reuse both warm connections instead of opening new ones"
+    );
+}
+
+#[test]
 fn consumed_push_releases_its_bytes() {
     // #640: `store_pushed` adds `bytes` to `pushed_bytes`, but `load()` used to leave the
     // total accounting untouched on consume, so it grew monotonically and eventually every

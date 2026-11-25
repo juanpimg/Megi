@@ -49,6 +49,9 @@ pub const MAX_INLINE_SVG_DEPTH: usize = 256;
 /// Maximum number of DOM nodes in one inline SVG subtree (breadth bomb guard: the byte cap
 /// alone is checked after serialization, which would allocate the whole string first).
 pub const MAX_INLINE_SVG_NODES: usize = 4096;
+/// Marker on synthetic `<img>` elements so the image stage can distinguish them from page
+/// spacers: their `data:` URL costs no connection and decode failures must still warn.
+pub(crate) const INLINE_SVG_MARKER: &str = "data-megi-inline-svg";
 
 /// Outcome of the inline-SVG pre-processing pass.
 #[derive(Default)]
@@ -269,5 +272,6 @@ fn synthetic_img_attributes(document: &Document, svg_id: NodeId, data_url: &str)
         }
     }
     attributes.push(Attribute::new("src", data_url.to_owned()));
+    attributes.push(Attribute::new(INLINE_SVG_MARKER.to_owned(), "1".to_owned()));
     attributes
 }

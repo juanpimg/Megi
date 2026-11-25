@@ -16,7 +16,7 @@
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 227.3,
+      "time_ms": 233.7,
       "issue": 0,
       "error": "",
       "png": "real-sites/example.png",
@@ -36,7 +36,7 @@
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1652.6,
+      "time_ms": 1630.2,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
@@ -56,7 +56,7 @@
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 778.6,
+      "time_ms": 918.7,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
@@ -68,21 +68,19 @@
       "note": "Históricamente colapsa a página en blanco (<center>/<table>)",
       "source": "https://news.ycombinator.com",
       "mode": "live",
-      "result": "DEGRADADO",
-      "display_items": 2790,
+      "result": "PASS",
+      "display_items": 2774,
       "element_count": 795,
-      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Windows Loudness Equalization, reverse-engineered and ported to PipeWire (github.com/xoxorwr)47 points by ThrowNotAway 56 minutes ago  | hide | 8 comments2.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)727 points by E-Reverance 11 hours ago  | hide | 405 comments3.Button Sounds – collection of professionally-recorded button clicks and presses (joshwcomeau.com)483 points by gaurang_tandon 9 hours ago  | hide | 72 comments4.Mode",
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Windows Loudness Equalization, reverse-engineered and ported to PipeWire (github.com/xoxorwr)99 points by ThrowNotAway 1 hour ago  | hide | 45 comments2.Button Sounds – collection of professionally-recorded button clicks and presses (joshwcomeau.com)519 points by gaurang_tandon 10 hours ago  | hide | 80 comments3.Matrix Multiplication is Θ(n^2.25) [pdf] (github.com/openai)759 points by E-Reverance 12 hours ago  | hide | 426 comments4.The sh",
       "status": 200,
-      "warnings": [
-        "performance budget: images 757 ms > 500ms"
-      ],
+      "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 2062.9,
+      "time_ms": 1718.1,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "818d994541e948bc374f3035c3a7075a"
+      "png_md5": "5b79512eb6d277d0ea004b351d3a5ffe"
     }
   ]
 }
