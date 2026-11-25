@@ -182,4 +182,8 @@ pub(crate) struct Host {
     pub sw_script_url: String,
     /// Response handed to `FetchEvent.respondWith` in this (worker) realm (SW §5.2).
     pub sw_captured: Option<crate::runtime::service_worker::CachedResponse>,
+    /// Running UTF-8 byte total of `console` (kept in sync by `push_console`/`take_console`).
+    pub(crate) console_bytes: usize,
+    /// Hard cap on live WebSocket transports for this realm (#2311).
+    pub max_websockets: usize,
 }

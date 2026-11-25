@@ -65,6 +65,15 @@ impl JsRuntime {
             .websocket_provider = Some(provider);
     }
 
+    /// Sets the per-document WebSocket connection cap (#2311). Values above the
+    /// hard ceiling are clamped: an embedder may tighten the budget but never
+    /// raise it past [`crate::host::MAX_WEBSOCKETS`].
+    pub fn set_max_websockets(&mut self, limit: usize) {
+        host_cell(&mut self.context)
+            .expect("JavaScript host installed in context")
+            .max_websockets = limit.min(crate::host::MAX_WEBSOCKETS);
+    }
+
     /// Installs the `fetch()` provider (the host owns all network/filesystem I/O).
     /// Without a provider `fetch()` rejects with a typed error (documented).
     pub fn set_fetch_provider(&mut self, provider: crate::host::FetchProvider) {

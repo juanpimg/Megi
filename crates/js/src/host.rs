@@ -115,6 +115,41 @@ mod storage_and_console_tests {
         assert_eq!(host.console.front().expect("oldest").message, "3");
         assert_eq!(host.console.back().expect("newest").message, "4098");
     }
+
+    #[test]
+    fn console_message_caps_bytes_without_splitting_utf8() {
+        let mut host = Host::new(Document::new(), "about:blank".into());
+        host.push_console(ConsoleEntry {
+            level: "log".into(),
+            message: "€".repeat(10_000),
+        });
+        let entry = host.take_console().pop().expect("entry");
+        // 8 KiB is not a multiple of the 3 bytes of `€`, so the last code point
+        // must be dropped rather than cut in half (#2310).
+        assert_eq!(entry.message.len(), 8190);
+        assert!(entry.message.chars().all(|character| character == '€'));
+    }
+
+    #[test]
+    fn console_aggregate_byte_cap_keeps_every_entry() {
+        let mut host = Host::new(Document::new(), "about:blank".into());
+        for i in 0..MAX_CONSOLE_ENTRIES + 8 {
+            host.push_console(ConsoleEntry {
+                level: "warn".into(),
+                message: format!("{i:04}").repeat(MAX_CONSOLE_MESSAGE_BYTES / 4),
+            });
+        }
+        let total: usize = host
+            .console
+            .iter()
+            .map(|entry| entry.level.len() + entry.message.len())
+            .sum();
+        assert_eq!(host.console.len(), MAX_CONSOLE_ENTRIES);
+        assert!(total <= MAX_CONSOLE_BYTES, "{total} bytes");
+        assert_eq!(host.console_bytes, total);
+        assert!(host.take_console().len() == MAX_CONSOLE_ENTRIES);
+        assert_eq!(host.console_bytes, 0);
+    }
 }
 
 #[cfg(test)]

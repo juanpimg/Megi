@@ -130,6 +130,52 @@ mod unit_tests {
 
     #[cfg(feature = "js")]
     #[test]
+    fn huge_console_messages_are_bounded_in_entries_and_warnings() {
+        // #2310: a single page-controlled message is copied into `console`,
+        // `warnings` and finally the serialized render stats. Cap it at the source.
+        let script_text = "console.warn('€'.repeat(10000));";
+        let document = document_with(&format!(
+            "<!DOCTYPE html><body><script>{script_text}</script></body>"
+        ));
+        let scripts = vec![LoadedScript {
+            element: document.root(),
+            text: script_text.to_owned(),
+            source_name: "inline-script-0".to_owned(),
+            bytes: script_text.len(),
+            is_module: false,
+            module_url: None,
+        }];
+        let host = ScriptingHostContext::new(
+            None,
+            megi_css::MediaContext::with_viewport(320.0, 200.0),
+            (320, 200),
+        );
+        let mut warnings = Vec::new();
+        let execution = execute_scripts(
+            document,
+            &Url::parse("https://example.test/").expect("url"),
+            scripts,
+            ScriptingLimits::default(),
+            &host,
+            &mut warnings,
+        );
+        const CAP: usize = 8 * 1024;
+        assert_eq!(execution.console.len(), 1, "{:?}", execution.console);
+        let message = &execution.console[0].message;
+        assert!(message.len() <= CAP, "{} bytes", message.len());
+        assert!(message.chars().all(|character| character == '€'));
+        let warning = warnings
+            .iter()
+            .find(|warning| warning.starts_with("console.warn:"))
+            .expect("warning mirrored");
+        let payload = &warning["console.warn: ".len()..];
+        assert!(payload.len() <= CAP, "warning is {} bytes", payload.len());
+        assert!(payload.len() >= CAP - 2, "warning truncated too early");
+        assert!(payload.chars().all(|character| character == '€'));
+    }
+
+    #[cfg(feature = "js")]
+    #[test]
     fn worker_loader_enforces_the_file_policy() {
         let path = std::env::temp_dir().join(format!("megi-worker-{}.js", std::process::id()));
         std::fs::write(&path, "self.onmessage = function () {};").expect("write worker");

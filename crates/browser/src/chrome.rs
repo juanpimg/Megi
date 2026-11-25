@@ -41,6 +41,7 @@ mod native_widgets;
 mod navigation;
 mod status_bar;
 mod tab_strip;
+pub mod tokens;
 
 #[cfg(test)]
 mod tests;
@@ -77,19 +78,26 @@ pub use tab_strip::{
     OverflowHit, OverflowLayout, OverflowMenu, TabHit, TabRect, TabStripLayout, layout_tabs,
     overflow_menu_hit, overflow_menu_layout, tab_strip_hit, truncate_title,
 };
+pub use tokens::{HEIGHT_COMPACT, Palette, Radius, Spacing};
+
+// The historical constants become aliases of the tokens. Every painted pixel is
+// produced from these names, so their values must stay byte-identical.
+const TOKEN_PALETTE: Palette = Palette::DEFAULT;
+const TOKEN_RADIUS: Radius = Radius::DEFAULT;
+const TOKEN_SPACING: Spacing = Spacing::DEFAULT;
 
 /// Height of the tab strip, in CSS pixels.
-pub const TAB_STRIP_HEIGHT: f32 = 30.0;
+pub const TAB_STRIP_HEIGHT: f32 = TOKEN_SPACING.tab_strip_height;
 /// Height of the address bar, in CSS pixels.
-pub const ADDRESS_BAR_HEIGHT: f32 = 28.0;
+pub const ADDRESS_BAR_HEIGHT: f32 = TOKEN_SPACING.address_bar_height;
 /// Total chrome height, in CSS pixels (tab strip + address bar).
 pub const CHROME_HEIGHT: f32 = TAB_STRIP_HEIGHT + ADDRESS_BAR_HEIGHT;
 /// Corner radius of a tab (top corners only, tabs meet the address strip below).
-const TAB_RADIUS: f32 = 6.0;
+const TAB_RADIUS: f32 = TOKEN_RADIUS.tab;
 /// Corner radius of the address pill.
-const PILL_RADIUS: f32 = 7.0;
+const PILL_RADIUS: f32 = TOKEN_RADIUS.pill;
 /// Corner radius of floating menus and dropdowns.
-const MENU_RADIUS: f32 = 6.0;
+const MENU_RADIUS: f32 = TOKEN_RADIUS.menu;
 /// Address bar font size, shared by text, URL hierarchy and the caret measurement.
 const ADDRESS_TEXT_SIZE: f32 = 13.0;
 /// Height of one dropdown option row, in CSS pixels.
@@ -109,45 +117,45 @@ pub const TAB_OVERFLOW_WIDTH: f32 = 34.0;
 
 /// Single accent used for focus, the active tab, the caret and loading feedback.
 /// Keeping one accent is what makes the chrome read as a coherent design.
-pub const ACCENT: Color = Color::new(0x7C, 0x9C, 0xFF, 0xFF);
+pub const ACCENT: Color = TOKEN_PALETTE.accent;
 /// Tab strip background (the darkest chrome surface).
-pub const COLOR_TAB_STRIP: Color = Color::new(0x15, 0x17, 0x1B, 0xFF);
+pub const COLOR_TAB_STRIP: Color = TOKEN_PALETTE.tab_strip;
 /// Inactive tab background.
-pub const COLOR_TAB: Color = Color::new(0x1E, 0x21, 0x26, 0xFF);
+pub const COLOR_TAB: Color = TOKEN_PALETTE.tab;
 /// Active tab background.
-pub const COLOR_TAB_ACTIVE: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+pub const COLOR_TAB_ACTIVE: Color = TOKEN_PALETTE.tab_active;
 /// Divider between tabs.
-pub const COLOR_TAB_SEPARATOR: Color = Color::new(0x0D, 0x0F, 0x12, 0xFF);
+pub const COLOR_TAB_SEPARATOR: Color = TOKEN_PALETTE.tab_separator;
 /// Chrome text (tabs, menus, secondary UI).
-pub const COLOR_TEXT: Color = Color::new(0xE7, 0xEA, 0xF0, 0xFF);
+pub const COLOR_TEXT: Color = TOKEN_PALETTE.text;
 /// Secondary text (hints, host suffix, disabled labels).
-pub const COLOR_TEXT_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+pub const COLOR_TEXT_MUTED: Color = TOKEN_PALETTE.text_muted;
 /// Address strip behind the address pill.
-pub const COLOR_ADDRESS_STRIP: Color = Color::new(0x11, 0x13, 0x17, 0xFF);
+pub const COLOR_ADDRESS_STRIP: Color = TOKEN_PALETTE.address_strip;
 /// Address pill surface (matches an active tab so the chrome is one surface).
-pub const COLOR_ADDRESS_BG: Color = Color::new(0x2B, 0x2F, 0x36, 0xFF);
+pub const COLOR_ADDRESS_BG: Color = TOKEN_PALETTE.address_bg;
 /// Address pill text.
-pub const COLOR_ADDRESS_TEXT: Color = Color::new(0xF0, 0xF2, 0xF6, 0xFF);
+pub const COLOR_ADDRESS_TEXT: Color = TOKEN_PALETTE.address_text;
 /// Muted part of the URL (scheme and path) in the address pill.
-pub const COLOR_ADDRESS_MUTED: Color = Color::new(0x9A, 0xA2, 0xB0, 0xFF);
+pub const COLOR_ADDRESS_MUTED: Color = TOKEN_PALETTE.address_muted;
 /// Address bar caret (accent).
 pub const COLOR_CARET: Color = ACCENT;
 /// Dropdown background.
-pub const COLOR_DROPDOWN_BG: Color = Color::new(0x24, 0x27, 0x2D, 0xFF);
+pub const COLOR_DROPDOWN_BG: Color = TOKEN_PALETTE.dropdown_bg;
 /// Dropdown selected row background.
-pub const COLOR_DROPDOWN_SELECTED: Color = Color::new(0x2C, 0x3A, 0x5E, 0xFF);
+pub const COLOR_DROPDOWN_SELECTED: Color = TOKEN_PALETTE.dropdown_selected;
 /// Dropdown hovered/active row background.
-pub const COLOR_DROPDOWN_ACTIVE: Color = Color::new(0x35, 0x43, 0x6B, 0xFF);
+pub const COLOR_DROPDOWN_ACTIVE: Color = TOKEN_PALETTE.dropdown_active;
 /// Dropdown group header background.
-pub const COLOR_GROUP_HEADER: Color = Color::new(0x1A, 0x1D, 0x21, 0xFF);
+pub const COLOR_GROUP_HEADER: Color = TOKEN_PALETTE.group_header;
 /// Borders and separators.
-pub const COLOR_BORDER: Color = Color::new(0x3B, 0x40, 0x48, 0xFF);
+pub const COLOR_BORDER: Color = TOKEN_PALETTE.border;
 /// Scrollbar track.
-pub const COLOR_SCROLL_TRACK: Color = Color::new(0x17, 0x1A, 0x1E, 0xFF);
+pub const COLOR_SCROLL_TRACK: Color = TOKEN_PALETTE.scroll_track;
 /// Scrollbar thumb / inactive indicators.
-pub const COLOR_SCROLL: Color = Color::new(0x7B, 0x82, 0x90, 0xFF);
+pub const COLOR_SCROLL: Color = TOKEN_PALETTE.scroll;
 /// Disabled navigation affordance.
-pub const COLOR_DISABLED: Color = Color::new(0x63, 0x69, 0x75, 0xFF);
+pub const COLOR_DISABLED: Color = TOKEN_PALETTE.disabled;
 /// Per-tab loading indicator (deterministic dot while the render worker runs).
 pub const COLOR_LOADING: Color = ACCENT;
 /// Height of one overflow-menu row, in CSS pixels.
@@ -155,25 +163,34 @@ pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
 /// Maximum open-tab rows in the overflow menu before it scrolls.
 pub const OVERFLOW_MENU_MAX_VISIBLE: usize = 8;
 /// Height of the link-hover status bar at the bottom of the window, in CSS pixels.
-pub const STATUS_BAR_HEIGHT: f32 = 20.0;
+pub const STATUS_BAR_HEIGHT: f32 = TOKEN_SPACING.status_bar_height;
 /// Width of the context menu, in CSS pixels.
-pub const CONTEXT_MENU_WIDTH: f32 = 220.0;
+pub const CONTEXT_MENU_WIDTH: f32 = TOKEN_SPACING.context_menu_width;
 /// Height of one context-menu row, in CSS pixels.
 pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 20.0;
 /// Link-hover status bar background.
 pub const COLOR_STATUS_BAR: Color = COLOR_TAB_STRIP;
 /// Link-hover status text.
-pub const COLOR_STATUS_TEXT: Color = Color::new(0xAE, 0xB5, 0xC2, 0xFF);
+pub const COLOR_STATUS_TEXT: Color = TOKEN_PALETTE.status_text;
 /// Context menu background.
-pub const COLOR_MENU_BG: Color = COLOR_DROPDOWN_BG;
+pub const COLOR_MENU_BG: Color = TOKEN_PALETTE.menu_bg;
 /// Context menu selected row.
-pub const COLOR_MENU_SELECTED: Color = COLOR_DROPDOWN_ACTIVE;
+pub const COLOR_MENU_SELECTED: Color = TOKEN_PALETTE.menu_selected;
 /// Deterministic drop shadow behind floating chrome panels.
-pub const COLOR_SHADOW: Color = Color::new(0x00, 0x00, 0x00, 0x66);
+pub const COLOR_SHADOW: Color = TOKEN_PALETTE.shadow;
 /// Size of one navigation button, in CSS pixels.
-pub const NAV_BUTTON_SIZE: f32 = 22.0;
+pub const NAV_BUTTON_SIZE: f32 = TOKEN_SPACING.nav_button_size;
 /// Gap between navigation buttons, in CSS pixels.
-pub const NAV_BUTTON_GAP: f32 = 2.0;
+pub const NAV_BUTTON_GAP: f32 = TOKEN_SPACING.nav_button_gap;
+
+/// Width of the collapsed vertical tab rail, in CSS pixels (not yet used to paint).
+pub const RAIL_COLLAPSED_WIDTH: f32 = 12.0;
+/// Width of the expanded vertical tab rail, in CSS pixels (not yet used to paint).
+pub const RAIL_EXPANDED_WIDTH: f32 = 168.0;
+/// Width of the hover-peek vertical tab rail, in CSS pixels (not yet used to paint).
+pub const RAIL_PEEK_WIDTH: f32 = 220.0;
+/// Height of the compact top chrome band, in CSS pixels (not yet used to paint).
+pub const COMPACT_CHROME_HEIGHT: f32 = HEIGHT_COMPACT;
 
 /// Whether a chrome CSS point is inside the chrome band.
 pub fn in_chrome(x: f32, y: f32, width: f32) -> bool {

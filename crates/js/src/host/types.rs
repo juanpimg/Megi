@@ -159,6 +159,11 @@ pub enum WebSocketEvent {
     Error(String),
 }
 
+/// Hard per-document cap on live WebSocket transports (#2311). Every open owns a
+/// socket (and, in the real host, a receive thread), so scripts must not be able
+/// to grow either without bound by calling `new WebSocket()` in a loop.
+pub const MAX_WEBSOCKETS: usize = 16;
+
 /// Host-owned WebSocket transport: the JS side sends text and polls for incoming events.
 /// The real implementation (in the shell) drives `megi_net::websocket::WebSocketClient`.
 pub trait WebSocketTransport: Send {
@@ -417,3 +422,24 @@ impl FromIterator<(String, String)> for StorageMap {
 
 /// Shared, mutable host state.
 pub const MAX_CONSOLE_ENTRIES: usize = 4096;
+
+/// Maximum UTF-8 bytes kept for a single captured console message (#2310).
+pub const MAX_CONSOLE_MESSAGE_BYTES: usize = 8 * 1024;
+
+/// Maximum UTF-8 bytes kept across the whole captured console buffer (#2310).
+pub const MAX_CONSOLE_BYTES: usize = 1024 * 1024;
+
+/// Cuts `text` to at most `limit` bytes without splitting a UTF-8 code point.
+/// Returns the number of bytes removed.
+pub(crate) fn truncate_utf8(text: &mut String, limit: usize) -> usize {
+    if text.len() <= limit {
+        return 0;
+    }
+    let mut end = limit;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let removed = text.len() - end;
+    text.truncate(end);
+    removed
+}
