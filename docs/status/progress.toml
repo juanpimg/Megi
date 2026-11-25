@@ -110,10 +110,9 @@ items = [
   "Cookies SameSite con PSL vendored — `crates/net/src/`",
   "F1: sobre IPC versionado (`MEGI` v1) y validación semántica `Validated<IpcRenderResponse>` — `cargo test -p megi-browser --test ipc_validation_tests --test process_e2e_tests`",
   "Sandbox enforced con selector por SO — `cargo test -p megi-browser --test sandbox_e2e_tests` (13/13: 12 negativas + 1 humo; 14/14 con el probe inerte); `render_security_matrix()` = `linux: enforced; macos: unsupported; windows: unsupported`; `python3 tools/check_milestone.py M3 4` PASS",
+  "0 fugas cross-site y 12 pruebas negativas por SO — `docs/audit/negative-matrix.toml`: linux 12/12 pass, macos/windows 12/12 unsupported; `python3 tools/audit_negative_matrix.py --check` PASS",
 ]
-pending = [
-  "0 fugas cross-site y 12 pruebas negativas por SO — sin campaña publicada",
-]
+pending = []
 
 # --- M4 — Componentes y persistencia ----------------------------------------------------
 [[phase]]
