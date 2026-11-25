@@ -83,6 +83,61 @@ class MissingRowsTests(unittest.TestCase):
         self.assertIn("error:", err)
 
 
+class InvalidFlagsTests(unittest.TestCase):
+    """Non-finite or negative comparison flags must fail the gate (#2290 triage).
+
+    With 10 ms -> 20 ms, ``delta > nan`` is False, so a CI gate silently
+    passes a real regression when a flag parsed from a bad config is nan/inf.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self._dir = Path(self._tmp.name)
+        self._baseline = self._dir / "baseline.json"
+        self._actual = self._dir / "actual.json"
+        self._baseline.write_text(json.dumps(baseline_doc({"row": 10.0})), encoding="utf-8")
+        self._actual.write_text(json.dumps(bench_doc({"row": 20.0})), encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *extra: str) -> tuple[int, str]:
+        argv = ["bench_compare.py", str(self._actual), "--baseline", str(self._baseline), *extra]
+        old = sys.argv
+        sys.argv = argv
+        stderr = StringIO()
+        try:
+            with redirect_stdout(StringIO()), redirect_stderr(stderr):
+                try:
+                    rc = bench_compare.main()
+                except SystemExit as exc:
+                    rc = int(exc.code)
+            return rc, stderr.getvalue()
+        finally:
+            sys.argv = old
+
+    def test_non_finite_flags_exit_with_code_2(self) -> None:
+        for flag, value in (
+            ("--min-ms", "nan"),
+            ("--threshold", "nan"),
+            ("--min-ms", "inf"),
+            ("--threshold", "inf"),
+            ("--min-ms", "1e309"),
+            ("--threshold", "1e309"),
+        ):
+            with self.subTest(flag=flag, value=value):
+                rc, err = self._run(flag, value)
+                self.assertEqual(rc, 2)
+                self.assertIn("error:", err)
+
+    def test_negative_flags_exit_with_code_2(self) -> None:
+        for flag in ("--min-ms", "--threshold"):
+            with self.subTest(flag=flag):
+                rc, err = self._run(flag, "-1")
+                self.assertEqual(rc, 2)
+                self.assertIn("error:", err)
+
+
 class JsonStdoutTests(unittest.TestCase):
     """`--json` must keep stdout machine-readable (#2290 triage).
 

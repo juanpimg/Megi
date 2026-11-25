@@ -114,6 +114,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # A non-finite flag makes every `delta > args.min_ms` / `pct > args.threshold`
+    # comparison False, so a real regression would pass the CI gate silently.
+    for flag in ("threshold", "min_ms"):
+        value = getattr(args, flag)
+        if not math.isfinite(value) or value < 0:
+            print(
+                f"error: --{flag.replace('_', '-')} must be a finite non-negative number",
+                file=sys.stderr,
+            )
+            return 2
+
     try:
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
