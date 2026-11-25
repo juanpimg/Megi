@@ -14,6 +14,11 @@ pub fn print_component_suites(root: &Path) -> Vec<String> {
     print_component_suites_at(root)
 }
 
+/// Failures from the real workspace's adopted WPT component suites.
+pub fn component_failures_for_workspace() -> Vec<String> {
+    print_component_suites(&crate::workspace_root())
+}
+
 /// Same gate reporting for an explicit workspace root (used by integration tests).
 pub fn print_component_suites_at(root: &Path) -> Vec<String> {
     // css/css-syntax is replayed by the specialized extractor; printing it here would
