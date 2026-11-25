@@ -2,7 +2,7 @@
 - Upstream: web-platform-tests/wpt
 - Pinned commit: `ab2ef95d3a7c512a6e7321688c80e428086af426` (never `master`)
 - License: BSD-3-Clause (allowlisted)
-- Imported dirs: css/css-syntax, dom/nodes, dom/events, url, html/webappapis/atob, fetch/data-urls/resources, shadow-dom, shadow-dom/resources
+- Imported dirs: css/css-syntax, dom/nodes, dom/events, url, html/webappapis/atob, fetch/data-urls/resources, shadow-dom, shadow-dom/resources, custom-elements, custom-elements/resources
 
 | Fixture | Bytes | SHA-256 | Kind |
 |---|---:|---|---|
@@ -12,6 +12,17 @@
 | `css/css-syntax/anb-serialization.html` | 1397 | `9016b296ae079a56c21233513ac8f0fd5223837c934c37e6541715fd47a09500` | testharness |
 | `css/css-syntax/declarations-trim-whitespace.html` | 1975 | `af6e5414e18c8ce42c3d0f8614837493e7495b5a7f8f84f8bddb9d2654d4c62d` | testharness |
 | `css/css-syntax/input-preprocessing.html` | 1311 | `8792806053c83b90517e2c4b64fec98ba8b6146e15f19e1fa1078694aace6aa0` | testharness |
+| `custom-elements/CustomElementRegistry.html` | 31351 | `c7efe5df4343f8c52f6335ab91db36310ae16f88de4e5081521962b411c795cc` | skip |
+| `custom-elements/Document-createElement.html` | 18427 | `035a0e5fb6119ce7c96a9dae093b5c374702a61209f7abe5cdec800c068ff30b` | skip |
+| `custom-elements/Document-createElementNS.html` | 3592 | `41964319e2a7cd93250527d729dfedb7f292c93e4f8cbaf575c394c30ede281f` | skip |
+| `custom-elements/HTMLElement-constructor.html` | 11254 | `c0c763858ca1a3b7fadbea05151821375366230c344eed0093145ea0b8fd6884` | skip |
+| `custom-elements/historical.html` | 1377 | `0ddbca60382c9aca2df1c07961655eb4d9157e99c0c12bddcfba2d615a012fb1` | testharness |
+| `custom-elements/pseudo-class-defined.html` | 4242 | `75ac265d738774028eab60614c8f2dc5dd8947a9472435ca67807467dccfdf43` | testharness |
+| `custom-elements/resources/custom-elements-helpers.js` | 9209 | `35d8c06be136e25c4cf1a334c63317e43a3d486eb4619be1150c7dc5ecfcd6f4` | support |
+| `custom-elements/resources/empty-html-document.html` | 46 | `36778da69a331a20013ee6aaa498c872dabe9f75ddba4af0bcb15663e8f9eaba` | support |
+| `custom-elements/resources/my-custom-element-html-document.html` | 86 | `3782089e4a610deeb7dd175f90bb3ee0eacd675d07b398ffe149aae73b1163d3` | support |
+| `custom-elements/resources/navigation-destination.html` | 131 | `e0d8f03291bf0c16e82bc05c59139f93f78e1d8cbb83e1b28dececb20844ad65` | support |
+| `custom-elements/upgrading.html` | 10580 | `e5ea0be9d902c7b016f95033eedb9ace156219e75ff04b4e2ff82e8ad44ef2a6` | skip |
 | `dom/events/AddEventListenerOptions-once.html` | 2916 | `7eb04358565fd82c3efe34efc12f929c0a45a2c3228188ea094e5d1adad6abb8` | skip |
 | `dom/events/AddEventListenerOptions-passive.html` | 5616 | `859b3b4bafc0f6c41f128e92372584db1570055083f6e32935efef3ae1d09ffa` | skip |
 | `dom/events/CustomEvent.html` | 1084 | `ce69ced25e7e067c575b5adadd5faa63a2d67ae3c527e1f5f6806814bf24191f` | skip |
@@ -86,11 +97,28 @@
 | `dom/nodes/Node-textContent.html` | 9526 | `7c1c6ed8d44f08026fdbf8d851147fa09ff0bec5ff0f730979fade639bd75cbe` | skip |
 | `fetch/data-urls/resources/base64.json` | 1683 | `d630751663c6fe3c3eb42a1561fd6f0fccbbc46c8cdb744bb7a9c06e7c905c76` | support |
 | `html/webappapis/atob/base64.html` | 5525 | `7d817d8be9136e628c02f29f2568b3b158c9594312f9446ffef997da80efe0e4` | testharness |
+| `shadow-dom/Document-prototype-adoptNode.html` | 1075 | `c7cecfdcd2ac15e030ea3fd8d34ea0bf6e943adb1d3200fb2ea6cbd4042c08bf` | skip |
+| `shadow-dom/Element-interface-attachShadow-custom-element.html` | 1114 | `8b125f745a8c8adf4b089feb032e9777a0599b49a657daa22a44dd6c26582ff5` | skip |
 | `shadow-dom/Element-interface-attachShadow.html` | 5352 | `7d0216d62d5ca5b18f502cd12b6b5d086475fad1c5830a5042642e22ace264f3` | testharness |
 | `shadow-dom/Element-interface-shadowRoot-attribute.html` | 2658 | `d4e740808bfd51ae76593b05159943595baa127f7fa205054736c2e8aeef151a` | testharness |
+| `shadow-dom/Extensions-to-Event-Interface.html` | 11195 | `87323a8d4af655775f3d53cbd0f17f0d2327fc970d617948be3e9a98841f8b5c` | skip |
+| `shadow-dom/HTMLSlotElement-interface.html` | 16472 | `fd4723960124743f4cab0027f70b6bc683a472ad585494fdd50949f4144ceb7c` | skip |
 | `shadow-dom/META.yml` | 125 | `e9a035c797ece68c64df32df16910ba9299f015040e8e24bc5f0d43d7a1698d4` | skip |
+| `shadow-dom/Node-prototype-cloneNode.html` | 2513 | `f46a431eac6975e6019661ea7297e51f771b7bd09b9b1f66094b0861ff02deb9` | skip |
 | `shadow-dom/ShadowRoot-interface.html` | 6154 | `f456f93f65a824ad27f6c9276e62c590fbb7f76871923435257be2f6541789be` | skip |
+| `shadow-dom/Slotable-interface.html` | 4619 | `7b55ec820fe47f3209c2f3974716105ba117d2836f12f9bf7206119d17bed75f` | skip |
+| `shadow-dom/event-composed-path.html` | 10180 | `cd52e834004f0902093eb33849bc7ce753cb05ceaecaeefeb646b60f013f6e8e` | skip |
+| `shadow-dom/event-inside-shadow-tree.html` | 7601 | `aa646f3616fc2cf1860cb67626a7936f01c585b7c2fd83a6fe63ba9253b71afc` | skip |
+| `shadow-dom/event-inside-slotted-node.html` | 14765 | `ba95d997bb2da4be3d3d8379de6a5b5bd5ff41855c73a33789097a78d6d81549` | skip |
+| `shadow-dom/getElementById-dynamic-001.html` | 973 | `ca95c391a1633190401b838524bb44153b8c22770da010dfef565a6a621d9417` | skip |
+| `shadow-dom/historical.html` | 767 | `b0634cc07c8f5210083e21e8b8122cc9ecfa30cdc98eb9062260fa706ee6c297` | testharness |
+| `shadow-dom/resources/Document-prototype-currentScript-helper.js` | 25 | `27ba0ecd9b9f9b28f8c8fca18f81f2f8a0b5b105c85cc47ea10d0855aa5863b0` | support |
+| `shadow-dom/resources/event-path-test-helpers.js` | 2969 | `b48deb54b7ff102f17e4cbbc03a953c4ca71932734160a43c44a625396e54ca7` | support |
 | `shadow-dom/resources/shadow-dom-utils.js` | 4965 | `44ffe47d4d606a1140441f6ca59cd8c27551c275c091148ef1a2a714e8cceebf` | support |
+| `shadow-dom/resources/shadow-dom.js` | 5240 | `5b4dee64fba8f18407a8cb4e0461a2612066c2d4abf5125100d946bffff2ba59` | support |
+| `shadow-dom/slotchange.html` | 6458 | `cce62017454e5b14164680e19a39acca41fb299dd5a8cc84953fe627ddfcd55a` | testharness |
+| `shadow-dom/slots-fallback.html` | 8228 | `a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e` | skip |
+| `shadow-dom/slots.html` | 15806 | `62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d` | skip |
 | `url/historical.any.js` | 909 | `0cce2e984b3296d3aab14949c710bcd369b12d29f4f8622bbcdf5e5c033c63d0` | skip |
 | `url/idlharness.any.js` | 290 | `fbd89f9a801742d4177a90417d14cff7916eb44fd1389ad9206c07687b981dd1` | skip |
 | `url/toascii.window.js` | 1847 | `0d728a1bb3aa3aa7e5222c39565971e6300252223e8dcb484424f524059fdd76` | skip |

@@ -60,6 +60,116 @@
     "subtest_count_expected": 13
   },
   {
+    "path": "custom-elements/CustomElementRegistry.html",
+    "sha256": "c7efe5df4343f8c52f6335ab91db36310ae16f88de4e5081521962b411c795cc",
+    "bytes": 31351,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: define() validation order differs for a non-constructor interface",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/Document-createElement.html",
+    "sha256": "035a0e5fb6119ce7c96a9dae093b5c374702a61209f7abe5cdec800c068ff30b",
+    "bytes": 18427,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: 'is'-based autonomous custom elements are not upgraded",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/Document-createElementNS.html",
+    "sha256": "41964319e2a7cd93250527d729dfedb7f292c93e4f8cbaf575c394c30ede281f",
+    "bytes": 3592,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: prefixed custom element names are not upgraded",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/HTMLElement-constructor.html",
+    "sha256": "c0c763858ca1a3b7fadbea05151821375366230c344eed0093145ea0b8fd6884",
+    "bytes": 11254,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: HTMLElement constructor does not validate the subclass interface",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/historical.html",
+    "sha256": "0ddbca60382c9aca2df1c07961655eb4d9157e99c0c12bddcfba2d615a012fb1",
+    "bytes": 1377,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "custom-elements",
+    "subtest_count_expected": 3
+  },
+  {
+    "path": "custom-elements/pseudo-class-defined.html",
+    "sha256": "75ac265d738774028eab60614c8f2dc5dd8947a9472435ca67807467dccfdf43",
+    "bytes": 4242,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/resources/custom-elements-helpers.js",
+    "sha256": "35d8c06be136e25c4cf1a334c63317e43a3d486eb4619be1150c7dc5ecfcd6f4",
+    "bytes": 9209,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support script for custom-elements fixtures",
+    "dir": "custom-elements/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/resources/empty-html-document.html",
+    "sha256": "36778da69a331a20013ee6aaa498c872dabe9f75ddba4af0bcb15663e8f9eaba",
+    "bytes": 46,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support document for custom-elements fixtures",
+    "dir": "custom-elements/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/resources/my-custom-element-html-document.html",
+    "sha256": "3782089e4a610deeb7dd175f90bb3ee0eacd675d07b398ffe149aae73b1163d3",
+    "bytes": 86,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support document for custom-elements fixtures",
+    "dir": "custom-elements/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/resources/navigation-destination.html",
+    "sha256": "e0d8f03291bf0c16e82bc05c59139f93f78e1d8cbb83e1b28dececb20844ad65",
+    "bytes": 131,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support document for custom-elements fixtures",
+    "dir": "custom-elements/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "custom-elements/upgrading.html",
+    "sha256": "e5ea0be9d902c7b016f95033eedb9ace156219e75ff04b4e2ff82e8ad44ef2a6",
+    "bytes": 10580,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: document.implementation.createHTMLDocument is not callable",
+    "dir": "custom-elements",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "dom/events/AddEventListenerOptions-once.html",
     "sha256": "7eb04358565fd82c3efe34efc12f929c0a45a2c3228188ea094e5d1adad6abb8",
     "bytes": 2916,
@@ -800,6 +910,26 @@
     "subtest_count_expected": 378
   },
   {
+    "path": "shadow-dom/Document-prototype-adoptNode.html",
+    "sha256": "c7cecfdcd2ac15e030ea3fd8d34ea0bf6e943adb1d3200fb2ea6cbd4042c08bf",
+    "bytes": 1075,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: adoptNode on a shadow root throws TypeError: not a callable function",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/Element-interface-attachShadow-custom-element.html",
+    "sha256": "8b125f745a8c8adf4b089feb032e9777a0599b49a657daa22a44dd6c26582ff5",
+    "bytes": 1114,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: customized built-in attachShadow does not throw NotSupportedError",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "shadow-dom/Element-interface-attachShadow.html",
     "sha256": "7d0216d62d5ca5b18f502cd12b6b5d086475fad1c5830a5042642e22ace264f3",
     "bytes": 5352,
@@ -820,6 +950,26 @@
     "subtest_count_expected": 3
   },
   {
+    "path": "shadow-dom/Extensions-to-Event-Interface.html",
+    "sha256": "87323a8d4af655775f3d53cbd0f17f0d2327fc970d617948be3e9a98841f8b5c",
+    "bytes": 11195,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: Event.composedPath is not callable and shadow event paths are incomplete",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/HTMLSlotElement-interface.html",
+    "sha256": "fd4723960124743f4cab0027f70b6bc683a472ad585494fdd50949f4144ceb7c",
+    "bytes": 16472,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: dynamic slot renaming gives assignedNodes length 0 instead of 1",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "shadow-dom/META.yml",
     "sha256": "e9a035c797ece68c64df32df16910ba9299f015040e8e24bc5f0d43d7a1698d4",
     "bytes": 125,
@@ -830,13 +980,103 @@
     "subtest_count_expected": 0
   },
   {
+    "path": "shadow-dom/Node-prototype-cloneNode.html",
+    "sha256": "f46a431eac6975e6019661ea7297e51f771b7bd09b9b1f66094b0861ff02deb9",
+    "bytes": 2513,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: cloneNode on a shadow root does not throw NotSupportedError",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
     "path": "shadow-dom/ShadowRoot-interface.html",
     "sha256": "f456f93f65a824ad27f6c9276e62c590fbb7f76871923435257be2f6541789be",
     "bytes": 6154,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: needs ShadowRoot.activeElement and innerHTML fragment parsing",
+    "skip_reason": "not adopted: activeElement returns null for a focused descendant and innerHTML fragment parsing fails",
     "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/Slotable-interface.html",
+    "sha256": "7b55ec820fe47f3209c2f3974716105ba117d2836f12f9bf7206119d17bed75f",
+    "bytes": 4619,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: assignedSlot is not defined on Text.prototype",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/event-composed-path.html",
+    "sha256": "cd52e834004f0902093eb33849bc7ce753cb05ceaecaeefeb646b60f013f6e8e",
+    "bytes": 10180,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: composedPath() returns an empty path (expected 3 nodes)",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/event-inside-shadow-tree.html",
+    "sha256": "aa646f3616fc2cf1860cb67626a7936f01c585b7c2fd83a6fe63ba9253b71afc",
+    "bytes": 7601,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: EventPath omits the shadow root and host",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/event-inside-slotted-node.html",
+    "sha256": "ba95d997bb2da4be3d3d8379de6a5b5bd5ff41855c73a33789097a78d6d81549",
+    "bytes": 14765,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: EventPath omits slot, shadow root and host",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/getElementById-dynamic-001.html",
+    "sha256": "ca95c391a1633190401b838524bb44153b8c22770da010dfef565a6a621d9417",
+    "bytes": 973,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: shadow root getElementById hits a non-element NodeId after host removal",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/historical.html",
+    "sha256": "b0634cc07c8f5210083e21e8b8122cc9ecfa30cdc98eb9062260fa706ee6c297",
+    "bytes": 767,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 5
+  },
+  {
+    "path": "shadow-dom/resources/Document-prototype-currentScript-helper.js",
+    "sha256": "27ba0ecd9b9f9b28f8c8fca18f81f2f8a0b5b105c85cc47ea10d0855aa5863b0",
+    "bytes": 25,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support script for currentScript fixture",
+    "dir": "shadow-dom/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/resources/event-path-test-helpers.js",
+    "sha256": "b48deb54b7ff102f17e4cbbc03a953c4ca71932734160a43c44a625396e54ca7",
+    "bytes": 2969,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support script for event path fixtures",
+    "dir": "shadow-dom/resources",
     "subtest_count_expected": 0
   },
   {
@@ -847,6 +1087,46 @@
     "kind": "support",
     "skip_reason": "support script for the shadow-dom fixtures",
     "dir": "shadow-dom/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/resources/shadow-dom.js",
+    "sha256": "5b4dee64fba8f18407a8cb4e0461a2612066c2d4abf5125100d946bffff2ba59",
+    "bytes": 5240,
+    "license": "BSD-3-Clause",
+    "kind": "support",
+    "skip_reason": "support script for shadow-dom fixtures",
+    "dir": "shadow-dom/resources",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/slotchange.html",
+    "sha256": "cce62017454e5b14164680e19a39acca41fb299dd5a8cc84953fe627ddfcd55a",
+    "bytes": 6458,
+    "license": "BSD-3-Clause",
+    "kind": "testharness",
+    "skip_reason": "",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/slots-fallback.html",
+    "sha256": "a9bb7c4518f32dadc5f0401cd92aaaf5b720a9eecc716bbfb9ff7a37b3f9277e",
+    "bytes": 8228,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: fallback content is not assigned to the default slot",
+    "dir": "shadow-dom",
+    "subtest_count_expected": 0
+  },
+  {
+    "path": "shadow-dom/slots.html",
+    "sha256": "62cc89c52102205e8da3bdd1583a4be353847629833a4dbb77301c4b8664b39d",
+    "bytes": 15806,
+    "license": "BSD-3-Clause",
+    "kind": "skip",
+    "skip_reason": "not adopted: slot assignment returns null for assigned nodes",
+    "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
   {

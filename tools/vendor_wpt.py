@@ -46,6 +46,8 @@ SEED_COUNTS = {
     "html/webappapis/atob/base64.html": 378,
     "shadow-dom/Element-interface-attachShadow.html": 6,
     "shadow-dom/Element-interface-shadowRoot-attribute.html": 3,
+    "shadow-dom/historical.html": 5,
+    "custom-elements/historical.html": 3,
 }
 # Upstream files deliberately not imported: the first two need getComputedStyle, which the engine
 # does not expose yet; the third requires @charset removal, which the stylesheet parser has not
@@ -57,15 +59,42 @@ EXCLUDED_PATHS = {
     "css/css-syntax/charset-is-not-a-rule.html",
 }
 SKIP_PATHS = {
+    # Each entry below was probed with the offline JS runner and left out with its
+    # exact remaining failure; no failing subtest is counted as a PASS or allowlisted.
+    "shadow-dom/Document-prototype-adoptNode.html": "not adopted: adoptNode on a shadow root throws TypeError: not a callable function",
+    "shadow-dom/Element-interface-attachShadow-custom-element.html": "not adopted: customized built-in attachShadow does not throw NotSupportedError",
+    "shadow-dom/Extensions-to-Event-Interface.html": "not adopted: Event.composedPath is not callable and shadow event paths are incomplete",
+    "shadow-dom/HTMLSlotElement-interface.html": "not adopted: dynamic slot renaming gives assignedNodes length 0 instead of 1",
+    "shadow-dom/Node-prototype-cloneNode.html": "not adopted: cloneNode on a shadow root does not throw NotSupportedError",
+    "shadow-dom/ShadowRoot-interface.html": "not adopted: activeElement returns null for a focused descendant and innerHTML fragment parsing fails",
+    "shadow-dom/Slotable-interface.html": "not adopted: assignedSlot is not defined on Text.prototype",
+    "shadow-dom/event-composed-path.html": "not adopted: composedPath() returns an empty path (expected 3 nodes)",
+    "shadow-dom/event-inside-shadow-tree.html": "not adopted: EventPath omits the shadow root and host",
+    "shadow-dom/event-inside-slotted-node.html": "not adopted: EventPath omits slot, shadow root and host",
+    "shadow-dom/getElementById-dynamic-001.html": "not adopted: shadow root getElementById hits a non-element NodeId after host removal",
+    "shadow-dom/slots-fallback.html": "not adopted: fallback content is not assigned to the default slot",
+    "shadow-dom/slots.html": "not adopted: slot assignment returns null for assigned nodes",
+    "custom-elements/CustomElementRegistry.html": "not adopted: define() validation order differs for a non-constructor interface",
+    "custom-elements/Document-createElement.html": "not adopted: 'is'-based autonomous custom elements are not upgraded",
+    "custom-elements/Document-createElementNS.html": "not adopted: prefixed custom element names are not upgraded",
+    "custom-elements/HTMLElement-constructor.html": "not adopted: HTMLElement constructor does not validate the subclass interface",
+    "custom-elements/upgrading.html": "not adopted: document.implementation.createHTMLDocument is not callable",
     "css/css-syntax/META.yml": "upstream metadata (not a test fixture)",
     "shadow-dom/META.yml": "upstream metadata (not a test fixture)",
-    "shadow-dom/ShadowRoot-interface.html": "not adopted: needs ShadowRoot.activeElement and innerHTML fragment parsing",
 }
 # Support data is vendored byte-for-byte but is not an executed test: the offline
 # component runner hands it to the local `fetch` shim instead of opening a socket.
 SUPPORT_PATHS = {
     "fetch/data-urls/resources/base64.json": "support data for the atob/base64 fixture",
     "shadow-dom/resources/shadow-dom-utils.js": "support script for the shadow-dom fixtures",
+    "shadow-dom/resources/shadow-dom.js": "support script for shadow-dom fixtures",
+    "shadow-dom/resources/Document-prototype-currentScript-helper.js": "support script for currentScript fixture",
+    "shadow-dom/resources/event-path-test-helpers.js": "support script for event path fixtures",
+    "shadow-dom/resources/directionality-001-ref.html": "reference page (not a testharness fixture)",
+    "custom-elements/resources/custom-elements-helpers.js": "support script for custom-elements fixtures",
+    "custom-elements/resources/empty-html-document.html": "support document for custom-elements fixtures",
+    "custom-elements/resources/my-custom-element-html-document.html": "support document for custom-elements fixtures",
+    "custom-elements/resources/navigation-destination.html": "support document for custom-elements fixtures",
 }
 # Directories probed while scoping the runner but not adopted: their engine APIs are
 # incomplete, so reporting their real failures would break the allowlist-free gate.

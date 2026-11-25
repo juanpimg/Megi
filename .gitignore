@@ -21,6 +21,7 @@
 !/tests/wpt/css/
 /tests/wpt/css/*
 !/tests/wpt/css/css-syntax/
+!/tests/wpt/custom-elements/
 !/tests/wpt/dom/
 !/tests/wpt/fetch/
 !/tests/wpt/html/
