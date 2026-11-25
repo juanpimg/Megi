@@ -405,11 +405,11 @@ crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by li
 crates/fonts/assets/DejaVuSans.ttf	0	binary	-			exempt		not read line by line: binary
 crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db.rs	349	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: SYSTEM_UI_FALLBACKS added; sans-serif list untouched
+crates/fonts/src/db.rs	351	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: SANS_FALLBACKS now starts with system default Noto Sans; DejaVu kept as fallback
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/query.rs	321	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: system-ui expansion + system_db face resolution; literal kept last
-crates/fonts/src/db/shape.rs	403	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: font() consults system DB for system-ui after @font-face aliases
-crates/fonts/src/db/tests.rs	161	src	F2	systemfont-parity	2026-11-25	covered	#parity	Re-read: red/green tests for system-ui vs sans-serif and quoted literal
+crates/fonts/src/db/query.rs	321	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: sans-serif expansion keeps Family::SansSerif; comment reflects bundled-only DB
+crates/fonts/src/db/shape.rs	403	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: font() system-ui path unchanged; stale golden comment removed
+crates/fonts/src/db/tests.rs	181	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: red/green test that sans-serif resolves to Noto Sans; bundled/quoted paths unchanged
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

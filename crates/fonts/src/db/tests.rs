@@ -60,11 +60,10 @@ mod quoted_family_tests {
 mod system_ui_tests {
     use super::*;
 
-    /// CSS Fonts 4 §3.1: `system-ui` is the UA's default UI font, which on Linux
-    /// fontconfig maps to Noto Sans. The `sans-serif` generic keeps the bundled
-    /// DejaVu face so deterministic goldens stay byte-identical (#parity).
+    /// CSS Fonts 4 §3.1: both `system-ui` and `sans-serif` name the platform's
+    /// default font on Linux fontconfig, i.e. Noto Sans (#parity).
     #[test]
-    fn system_ui_uses_system_default_without_changing_sans_serif() {
+    fn system_ui_and_sans_serif_use_the_system_default() {
         let db = FontDatabase::from_system();
         if db.is_empty() {
             return; // fontless CI container: constructor must simply not panic
@@ -86,9 +85,30 @@ mod system_ui_tests {
         let sans = db.build_font(sans_id).expect("sans-serif face must build");
         assert_eq!(
             sans.family_name(),
-            "DejaVu Sans",
-            "sans-serif must keep its existing fallbacks, got {}",
+            "Noto Sans",
+            "sans-serif must use the system default face, got {}",
             sans.family_name()
+        );
+    }
+
+    /// CSS Fonts 4 §3.1 / fontconfig: on Linux `sans-serif` is aliased to the
+    /// platform default (Noto Sans here), just like Chrome. A system-backed DB
+    /// must therefore resolve the generic to Noto Sans rather than DejaVu.
+    #[test]
+    fn sans_serif_uses_system_default_noto_sans() {
+        let db = FontDatabase::from_system();
+        if db.is_empty() {
+            return; // fontless CI container: constructor must simply not panic
+        }
+        let sans = db
+            .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("sans-serif must resolve against the system font DB");
+        let face = db.build_font(sans).expect("sans-serif face must build");
+        assert_eq!(
+            face.family_name(),
+            "Noto Sans",
+            "sans-serif must use the system default face (fontconfig alias), got {}",
+            face.family_name()
         );
     }
 
