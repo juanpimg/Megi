@@ -262,6 +262,7 @@ mod svg;
 mod url;
 
 /// CSSOM §6 computed-style serialization shared by scripts and DevTools.
+#[cfg(feature = "js")]
 pub use browser_host::computed_style_pairs;
 pub use cache::{RenderCache, RenderCacheStats};
 /// Isolated `Runtime.evaluate` bridge used by the DevTools endpoint (no page attached).
