@@ -40,7 +40,7 @@ Se adopta la **rama (a)**: **contribuir/actualizar Boa mientras sirva**, y se pr
 
 ## Coste y consecuencias de la decisión
 
-- **Coste inmediato**: tres filas de bench, un publicador de addenda reproducible (`tools/update_bench_baseline.py`), este ADR y la documentación de la medición; ninguna dependencia nueva externa, ningún `unsafe`, ningún cambio de DAG.
+- **Coste inmediato**: tres filas de bench, un publicador de addenda reproducible (`tools/update_bench_baseline.py`), este ADR y la documentación de la medición; ninguna dependencia nueva externa, ningún `unsafe`. El único cambio de DAG es `bench → js` (herramienta → motor, sin ciclo), registrado en `docs/architecture-deps.toml` y `docs/ARCHITECTURE.md`.
 - **Coste continuo**: seguir el upstream de Boa y contribuir cuando el MSRV lo permita; el siguiente WP de rendimiento JS debe atacar el bridge y repetir el par con A/B, en vez de repetir la medición confundida.
 - **Beneficio**: se evita una migración con toolchain C y `unsafe` sin evidencia local, y se deja una primera línea base JS auditable que futuras decisiones pueden reutilizar.
 
