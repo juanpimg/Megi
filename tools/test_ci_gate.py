@@ -76,6 +76,34 @@ class ToolsTestListTests(unittest.TestCase):
         # local discover run (#1402, M8#1 addendum).
         self.assertIn("tools.test_update_bench_baseline", CI.read_text(encoding="utf-8"))
 
+    def test_every_tools_test_module_is_registered_in_ci(self):
+        # Every `tools/test_*.py` module that is a real test (i.e. not the
+        # `test_inspector` CLI, excluded in the workflow comment at ci.yml:107)
+        # must appear in the explicit `python3 -m unittest` list of the docs
+        # job (#1402). A module left out passes locally but never protects a
+        # merge. Comparing the whole set makes any future module that is added
+        # without registering it fail here.
+        discovered = sorted(
+            f"tools.{path.stem}"
+            for path in (ROOT / "tools").glob("test_*.py")
+            if path.stem != "test_inspector"
+        )
+        self.assertNotEqual(discovered, [], "no tools test modules discovered")
+
+        registered: list[str] = []
+        collecting = False
+        for raw in CI.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line == "python3 -m unittest":
+                collecting = True
+                continue
+            if not collecting:
+                continue
+            if not line.startswith("tools.test_"):
+                break
+            registered.append(line)
+        self.assertEqual(sorted(registered), discovered)
+
 
 if __name__ == "__main__":
     unittest.main()
