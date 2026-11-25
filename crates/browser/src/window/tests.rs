@@ -1,5 +1,6 @@
 //! Unit tests for the pure helpers of the window shell.
 
+use super::shortcuts::{Modifiers, ShellAction, binding_for, check_conflicts, resolve_shortcut};
 use super::*;
 
 #[cfg(test)]
@@ -205,6 +206,150 @@ mod form_patch_send_tests {
             panic!("a successful send must not report an error");
         }
         assert!(send_ok.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod shortcut_registry_tests {
+    use super::*;
+    use winit::keyboard::{Key, NamedKey};
+
+    fn char_key(text: &str) -> Key {
+        Key::Character(text.into())
+    }
+
+    #[test]
+    fn existing_shell_shortcuts_resolve_to_the_same_actions() {
+        let none = Modifiers::NONE;
+        let ctrl = Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        };
+        let ctrl_shift = Modifiers {
+            ctrl: true,
+            shift: true,
+            ..Modifiers::NONE
+        };
+        let alt = Modifiers {
+            alt: true,
+            ..Modifiers::NONE
+        };
+        let cases = [
+            (ctrl_shift, char_key("R"), ShellAction::ToggleReader),
+            (ctrl, char_key("H"), ShellAction::ToggleHistory),
+            (ctrl, char_key("S"), ShellAction::SaveFrame),
+            (ctrl_shift, char_key("S"), ShellAction::SaveAs),
+            (ctrl, char_key("L"), ShellAction::FocusAddressBar),
+            (ctrl, char_key("F"), ShellAction::OpenFind),
+            (ctrl, char_key("D"), ShellAction::PrintDocumentInfo),
+            (ctrl, char_key("T"), ShellAction::NewTab),
+            (ctrl, char_key("W"), ShellAction::CloseTab),
+            (
+                ctrl,
+                Key::Named(NamedKey::Tab),
+                ShellAction::CycleTab { next: true },
+            ),
+            (
+                Modifiers {
+                    ctrl: true,
+                    shift: true,
+                    ..Modifiers::NONE
+                },
+                Key::Named(NamedKey::Tab),
+                ShellAction::CycleTab { next: false },
+            ),
+            (alt, char_key("1"), ShellAction::ActivateTab(0)),
+            (alt, char_key("9"), ShellAction::ActivateTab(8)),
+            (ctrl, char_key("="), ShellAction::ZoomIn),
+            (ctrl, char_key("+"), ShellAction::ZoomIn),
+            (ctrl, char_key("-"), ShellAction::ZoomOut),
+            (ctrl, char_key("_"), ShellAction::ZoomOut),
+            (ctrl, char_key("0"), ShellAction::ZoomReset),
+            (alt, Key::Named(NamedKey::Home), ShellAction::NavigateHome),
+            (none, char_key("Q"), ShellAction::Quit),
+            (none, char_key("R"), ShellAction::Reload),
+            (none, char_key("G"), ShellAction::Reload),
+            (none, char_key("B"), ShellAction::GoBack),
+            (none, char_key("N"), ShellAction::GoForward),
+            (none, char_key("q"), ShellAction::Quit),
+            (none, Key::Named(NamedKey::Escape), ShellAction::Quit),
+            (none, Key::Named(NamedKey::F5), ShellAction::Reload),
+            (alt, Key::Named(NamedKey::ArrowLeft), ShellAction::GoBack),
+            (
+                alt,
+                Key::Named(NamedKey::ArrowRight),
+                ShellAction::GoForward,
+            ),
+            (none, Key::Named(NamedKey::Backspace), ShellAction::GoBack),
+        ];
+        for (mods, key, expected) in cases {
+            assert_eq!(
+                resolve_shortcut(mods, &key),
+                Some(expected),
+                "mods {mods:?} key {key:?} changed its shell action"
+            );
+        }
+    }
+
+    #[test]
+    fn new_shell_shortcuts_resolve_without_collisions() {
+        let ctrl = Modifiers {
+            ctrl: true,
+            ..Modifiers::NONE
+        };
+        let ctrl_shift = Modifiers {
+            ctrl: true,
+            shift: true,
+            ..Modifiers::NONE
+        };
+        let ctrl_alt = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..Modifiers::NONE
+        };
+        assert_eq!(
+            resolve_shortcut(ctrl, &char_key("B")),
+            Some(ShellAction::ToggleRail)
+        );
+        assert_eq!(
+            resolve_shortcut(ctrl_shift, &char_key("B")),
+            Some(ShellAction::ToggleCompact)
+        );
+        assert_eq!(
+            resolve_shortcut(ctrl_alt, &char_key("W")),
+            Some(ShellAction::CycleWorkspace)
+        );
+        assert!(
+            check_conflicts().is_ok(),
+            "{}",
+            check_conflicts().unwrap_err()
+        );
+    }
+
+    #[test]
+    fn binding_for_round_trips_the_registry_entries() {
+        for action in [
+            ShellAction::ToggleRail,
+            ShellAction::ToggleCompact,
+            ShellAction::CycleWorkspace,
+            ShellAction::ToggleHistory,
+            ShellAction::FocusAddressBar,
+            ShellAction::OpenFind,
+            ShellAction::NewTab,
+            ShellAction::CloseTab,
+            ShellAction::ActivateTab(4),
+            ShellAction::ZoomIn,
+            ShellAction::ZoomOut,
+            ShellAction::ZoomReset,
+            ShellAction::Quit,
+        ] {
+            let binding = binding_for(action).expect("registered action");
+            assert_eq!(
+                resolve_shortcut(binding.mods, &binding.key),
+                Some(action),
+                "binding for {action:?} must resolve back to itself"
+            );
+        }
     }
 }
 

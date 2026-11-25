@@ -34,6 +34,8 @@ mod keyboard;
 mod presentation;
 #[cfg(feature = "window")]
 mod save_as;
+#[cfg(feature = "window")]
+mod shortcuts;
 #[cfg(all(test, feature = "window"))]
 mod tests;
 #[cfg(feature = "window")]
