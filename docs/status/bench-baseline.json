@@ -413,5 +413,55 @@
       "group": "shell",
       "median_ms": 0.003
     }
-  ]
+  ],
+  "addenda": {
+    "js-r37": {
+      "id": "js-r37",
+      "scope": "partial: measured rows only; the top-level rows stay the full-suite baseline",
+      "commit": "76d3be52",
+      "date": "2026-11-25",
+      "method": "7 consecutive passes of cargo run --release -p megi-bench -- --filter js --iterations 5 --warmup 1 --json; per-row median of the 7 pass medians",
+      "machine": "12th Gen Intel(R) Core(TM) i7-12700H, 20 threads, rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+      "load_note": "load average 2.33-5.64 (1 min) and 22.72-22.95 (15 min) during the window: shared machine, nice -n 19 used",
+      "artifacts": "target/bench-r37-js-fixed-run1..7.json (not committed; see docs/PERFORMANCE.md §15)",
+      "iterations": 5,
+      "warmup": 1,
+      "passes": 7,
+      "rows": [
+        {
+          "name": "js/hot-bindings",
+          "group": "js",
+          "median_ms": 9.458,
+          "median_range_ms": [
+            8.336,
+            10.007
+          ],
+          "p95_samples_ms": 10.663,
+          "detail": "200 DOM nodes × 100 getAttribute calls"
+        },
+        {
+          "name": "js/hot-corpus-wikipedia-null",
+          "group": "js",
+          "median_ms": 0.136,
+          "median_range_ms": [
+            0.113,
+            0.184
+          ],
+          "p95_samples_ms": 0.188,
+          "detail": "real inline script from tests/fixtures/js_corpus/wikipedia_null.html"
+        },
+        {
+          "name": "js/hot-engine",
+          "group": "js",
+          "median_ms": 5.229,
+          "median_range_ms": [
+            4.799,
+            5.754
+          ],
+          "p95_samples_ms": 6.145,
+          "detail": "200 shims × 100 getAttribute calls, no Rust bridge"
+        }
+      ]
+    }
+  }
 }
