@@ -34,16 +34,16 @@ next_up = [
 # GENERATED STATS (rewritten by tools/update_progress.py --write; safe to inspect)
 # ---------------------------------------------------------------------------------------
 [stats]
-tests = 3581
-tests_commit = "ad46f25e"
+tests = 3584
+tests_commit = "e04cddbf"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 264375
+rust_lines = 264552
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "ad46f25e"
+verified_commit = "e04cddbf"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"
@@ -166,11 +166,11 @@ title = "Herramientas de desarrollador"
 items = [
   "Consola JS y diagnóstico básico — `crates/js/src/host.rs`, `crates/browser/src/find/`",
   "Páginas `about:` de diagnóstico — `crates/browser/src/pages/about.rs`; seis URLs (`about:megi`, `about:history`, `about:config`, `about:memory`, `about:performance`, `about:crashes`) renderizadas por el motor; `cargo test -p megi-browser --lib about` (10 passed) y `cargo test -p megi-browser --test shell_tests about` (3 passed); `python3 tools/check_milestone.py M7 --match 'Páginas `about:` de diagnóstico'` PASS",
-  "DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 3 passed; límites: un único target, sin WebDriver BiDi ni perfilador",
+  "DevTools vía protocolo Firefox — `crates/browser/src/devtools/network.rs` emite `Network.requestWillBeSent`/`Network.responseReceived`/`Network.loadingFinished` desde los `NetworkEvent` reales registrados por `megi_net::ResourceLoader` (`RenderStats.network` → `DevToolsPage.network`), sin eventos sintéticos; `crates/browser/tests/devtools_protocol.rs::devtools_network_domain_reports_a_real_document_request` verifica la URL real y la cadena de eventos; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target y sin WebDriver BiDi (el perfilador se cerró por separado)",
+  "Perfilador usable — `crates/browser/src/devtools/performance.rs` exporta `Performance.getMetrics` (13 fases en µs) y `Performance.getTrace` (eventos `ph=\"X\"` apilables como flamegraph) desde los `RenderTimings` reales del render adjunto (`RenderStats.timings` → `DevToolsPage.timings`); `crates/browser/tests/devtools_protocol.rs::devtools_performance_exports_real_render_timings` compara el total exportado con `output.stats.timings.total.as_micros()` y exige el evento `Layout` con `dur`; `cargo test -p megi-browser --test devtools_protocol` 4 passed; límites: un único target, sin grabación interactiva ni símbolos JS",
 ]
 pending = [
   "WebDriver BiDi",
-  "Perfilador usable",
 ]
 
 # --- M8 — Motor ofensivo ----------------------------------------------------------------

@@ -179,21 +179,22 @@ crates/browser/src/tabs.rs	421	src	F2	subagent	2026-11-25	covered	#2290	Deepen t
 crates/browser/src/tabs/tests.rs	302	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/tabs/workspaces.rs	387	src	F2	subagent	2026-11-25	covered	#2290	Extract workspace operations into internal helpers; behavior unchanged
 crates/browser/src/title.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window.rs	178	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
+crates/browser/src/window.rs	177	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
 crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
 crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	428	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
-crates/browser/src/window/form_controls.rs	437	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
-crates/browser/src/window/frontend.rs	412	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
+crates/browser/src/window/form_controls.rs	443	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
+crates/browser/src/window/frontend.rs	257	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
 crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/window/presentation.rs	482	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
-crates/browser/src/window/rail_state.rs	117	src	F2	round35-fast-criterion	2026-11-25	covered	#M7#2-inventory	
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/shell_settings.rs	34	src	F2	round35-fast-criterion	2026-11-25	covered	#M7#2-inventory	
+crates/browser/src/window/settings/chrome_mode.rs	152	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
+crates/browser/src/window/settings/mod.rs	46	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
+crates/browser/src/window/settings/rail_state.rs	117	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
 crates/browser/src/window/shortcuts.rs	250	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
-crates/browser/src/window/tests/chrome_mode.rs	88	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
+crates/browser/src/window/tests/chrome_mode.rs	95	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
 crates/browser/src/window/tests/mod.rs	486	src	F2	integration	2026-11-25	covered	#2295	read after rebase
 crates/browser/src/window/tests/rail.rs	123	src	F2	integration	2026-11-25	covered	#2290	read after rebase
 crates/browser/src/window/ui.rs	456	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
