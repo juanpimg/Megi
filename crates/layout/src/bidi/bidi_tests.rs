@@ -55,6 +55,16 @@ mod tests {
     }
 
     #[test]
+    fn trailing_neutral_follows_paragraph_base_not_word_level() {
+        // UAX #9 N2 + L2: a trailing neutral resolves against the paragraph
+        // embedding level, not the word's own odd level. In an LTR paragraph it
+        // stays at the visual end of the RTL word; in an RTL paragraph it joins
+        // the reversed run. Guards the regression that produced "!םולש".
+        assert_eq!(word_to_visual_with_base("שלום!", 1, 0, None), "םולש!");
+        assert_eq!(word_to_visual_with_base("שלום!", 1, 1, None), "!םולש");
+    }
+
+    #[test]
     fn resolves_rtl_paragraph_with_embedded_ltr() {
         // RTL paragraph: "שלום hello עולם"
         let classes = [

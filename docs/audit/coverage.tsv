@@ -769,7 +769,7 @@ crates/js/tests/wpt_like_r167.rs	321	test	F1	wave-max-mod	2026-11-19	covered	#ma
 crates/js/tests/xhr_tests.rs	448	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/Cargo.toml	20	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/bidi.rs	428	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Re-read LTR-inside-RTL fix
-crates/layout/src/bidi/bidi_tests.rs	116	src	F2	autonomous-round11	2026-11-19	covered	#1984 baseline	Tests split from bidi.rs to meet 500-line cap
+crates/layout/src/bidi/bidi_tests.rs	126	src	F2	bidi-fix	2026-11-25	covered	CI-BIDI-TRAILING-PUNCT	UAX #9 N2/L2 guard for trailing neutral after paragraph base
 crates/layout/src/block.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/absolute.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/core.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
