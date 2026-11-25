@@ -1,5 +1,37 @@
 use super::*;
 
+#[cfg(unix)]
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+
+/// Creates parent directories private to the user (0700 on Unix, #2307).
+fn create_private_dirs(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut builder = fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700);
+        builder.create(path)?;
+        // `mkdir` still applies the process umask, so restore the exact mode.
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir_all(path)
+    }
+}
+
+/// Makes a newly created temporary file private to the user (0600 on Unix, #2307).
+fn restrict_temporary(file: &fs::File) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = file;
+        Ok(())
+    }
+}
+
 /// Maximum size of a session file accepted from disk (bytes).
 ///
 /// `fs::read_to_string` on an unbounded path (`/dev/zero`, a huge file or a FIFO) would
@@ -67,7 +99,7 @@ pub fn save(path: &Path, session: &Session) -> io::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
-        fs::create_dir_all(parent)?;
+        create_private_dirs(parent)?;
     }
     let json = session.to_json();
     if json.len() as u64 > MAX_SESSION_BYTES {
@@ -121,15 +153,20 @@ impl Drop for TemporaryFileGuard {
 pub(crate) fn write_temporary(path: &Path, contents: &[u8]) -> io::Result<PathBuf> {
     for _ in 0..16 {
         let candidate = unique_temporary_path(path);
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&candidate)
-        {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        match options.open(&candidate) {
             Ok(mut file) => {
                 // A short write (disk full/quota) must not leave the temporary file
                 // behind; the guard removes it on every early return (#1462).
                 let guard = TemporaryFileGuard::new(candidate.clone());
+                // The umask applies to `create_new` too, so set the exact mode; the file
+                // is already owner-only when created and never becomes more permissive.
+                if let Err(error) = restrict_temporary(&file) {
+                    return Err(error);
+                }
                 if let Err(error) = file.write_all(contents) {
                     drop(file);
                     return Err(error); // dropping the guard removes the partial file

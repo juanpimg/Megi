@@ -239,3 +239,45 @@ fn normalize_and_restore_preserve_valid_tabs_across_corrupt_entries() {
     assert_eq!(restored.len(), 3);
     assert_eq!(restored.tabs()[2].url, "https://example.org/");
 }
+
+#[cfg(unix)]
+#[test]
+fn save_creates_private_directories_and_session_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let base =
+        std::env::temp_dir().join(format!("megi-session-mode-{}-{unique}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).expect("base dir");
+    let parent = base.join("private").join("nested");
+    let path = parent.join("session.json");
+    save(&path, &sample()).expect("save");
+
+    for dir in [base.join("private"), parent.clone()] {
+        let mode = std::fs::metadata(&dir)
+            .expect("dir metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(
+            mode,
+            0o700,
+            "session directories must be private: {}",
+            dir.display()
+        );
+    }
+    let mode = std::fs::metadata(&path)
+        .expect("file metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "the session file must not be readable by others"
+    );
+    let _ = std::fs::remove_dir_all(&base);
+}
