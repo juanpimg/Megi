@@ -132,7 +132,7 @@ impl FontDatabase {
     /// holds bundled/web faces (CSS Fonts 4 §3.1). A bundled-only database cannot
     /// see Noto Sans, so ask the shared system DB and return an owned [`Font`];
     /// fontdb IDs are never passed between databases. `sans-serif` callers do
-    /// not use this path, so deterministic goldens keep their DejaVu face.
+    /// not use this path; a bundled-only DB resolves its own bundled face.
     pub(crate) fn system_ui_font(
         &self,
         families: &[&str],

@@ -44,7 +44,7 @@ impl FontDatabase {
         let weight = weight.clamp(1, 1000);
         // CSS Fonts 4 §3.1: `system-ui` names the platform UI font. An `@font-face`
         // alias still wins; otherwise consult the system DB before the bundled
-        // `sans-serif` fallbacks, which must stay untouched for goldens.
+        // `sans-serif` fallbacks.
         if self.alias_face(families, weight, style, stretch).is_none()
             && let Some(font) = self.system_ui_font(families, weight, style, stretch)
         {
