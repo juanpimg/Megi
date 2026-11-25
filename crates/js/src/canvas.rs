@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use megi_core::NodeId;
 
 mod color;
+pub(crate) mod ops;
 pub use color::rgba_to_css;
 mod path;
 mod state;
