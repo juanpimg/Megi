@@ -85,6 +85,17 @@ pub fn support_scripts(root: &Path) -> Result<Vec<(String, String)>, String> {
     Ok(scripts)
 }
 
+/// Support scripts actually referenced by one fixture's HTML source.
+pub fn support_scripts_for(root: &Path, html: &str) -> Result<Vec<(String, String)>, String> {
+    Ok(support_scripts(root)?
+        .into_iter()
+        .filter(|(path, _)| {
+            let name = path.rsplit('/').next().unwrap_or(path);
+            html.contains(name)
+        })
+        .collect())
+}
+
 /// All directories with adopted fixtures, sorted for deterministic report ordering.
 pub fn adopted_dirs(root: &Path) -> Result<Vec<String>, String> {
     let mut dirs: Vec<String> = entries(root)?

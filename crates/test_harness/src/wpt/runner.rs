@@ -70,15 +70,32 @@ fn run_fixture(
             .eval(&code, "<wpt-support-resource>")
             .map_err(|error| format!("{fixture}: support resource {name} failed: {error}"))?;
     }
-    for (path, script) in manifest::support_scripts(root)? {
+    for (path, script) in manifest::support_scripts_for(root, html)? {
         // WPT support scripts start with `"use strict";`. In direct eval that turns
         // top-level `var` into a local binding, so the fixture cannot see the helpers.
         // The vendored bytes stay untouched; only the injected copy drops that directive.
         let script = script.strip_prefix("\"use strict\";").unwrap_or(&script);
-        runtime
-            .eval(script, &format!("<wpt-support-script {path}>"))
-            .map_err(|error| format!("{fixture}: support script {path} failed: {error}"))?;
+        if let Err(error) = runtime.eval(script, &format!("<wpt-support-script {path}>")) {
+            // Some upstream helper scripts call a function defined by the fixture that
+            // loads them. That is not a runner failure: record it on this fixture only.
+            return Ok(vec![WptResult {
+                fixture: fixture.to_owned(),
+                name: format!("<support-script {path}>"),
+                status: "harness_error".to_owned(),
+                message: error.to_string(),
+            }]);
+        }
     }
+    // WHATWG HTML §7.3: root elements with an `id` are exposed as named properties
+    // on the Window. WPT fixtures use that shorthand (`test1`, `host`, ...); the
+    // offline runner has to install those bindings before the fixture's scripts run.
+    for id in element_ids(html) {
+        let code = format!(
+            "if (!({id:?} in globalThis)) globalThis[{id:?}] = document.getElementById({id:?});"
+        );
+        let _ = runtime.eval(&code, "<wpt-named-element>");
+    }
+
     let mut results = Vec::new();
     // `.any.js` fixtures are scripts with a `// META:` header, not HTML documents.
     let scripts = if fixture.ends_with(".js") {
@@ -187,6 +204,37 @@ fn inline_scripts(html: &str) -> Vec<String> {
         scripts.push(html[tag_end + 1..body_end].to_owned());
     }
     scripts
+}
+
+/// Collect literal `id="..."` / `id='...'` values from a fixture's markup.
+fn element_ids(html: &str) -> Vec<String> {
+    let lower = html.to_ascii_lowercase();
+    let mut ids = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(offset) = lower[cursor..].find("id=") {
+        let mut at = cursor + offset + 3;
+        let bytes = lower.as_bytes();
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let Some(quote) = bytes.get(at).copied() else {
+            break;
+        };
+        if quote != b'"' && quote != b'\'' {
+            cursor = at;
+            continue;
+        }
+        let start = at + 1;
+        let Some(rel_end) = lower[start..].find(quote as char) else {
+            break;
+        };
+        let end = start + rel_end;
+        ids.push(html[start..end].to_owned());
+        cursor = end + 1;
+    }
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 #[cfg(test)]
