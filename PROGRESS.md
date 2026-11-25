@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `a1c762fa` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **41/64** (**64%**) · **3,493** tests · conformance **PASS** · **18** crates · **257,379** lines of Rust
+**Snapshot** — commit `4b14eba4` (2026-11-25) · hitos cerrados **4/13** · criterios verificados **42/64** (**65%**) · **3,493** tests · conformance **PASS** · **18** crates · **257,743** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -22,14 +22,14 @@
 | **M3** | Frontera de seguridad | `████████████████████` 5/5 | 100% |
 | **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
-| **M6** | Gráficos y media | `██████████░░░░░░░░░░` 3/6 | 50% |
+| **M6** | Gráficos y media | `█████████████░░░░░░░` 4/6 | 66% |
 | **M7** | Herramientas de desarrollador | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M8** | Motor ofensivo | `████████████░░░░░░░░` 3/5 | 60% |
 | **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `████████████░░░░░░░░` 41/64 | **64%** |
+| | **Roadmap** | `█████████████░░░░░░░` 42/64 | **65%** |
 
 ## Detalle de criterios por hito
 
@@ -105,17 +105,17 @@
 - Diálogos y portapapeles nativos — sin implementación
 - Sandbox enforced en Linux, macOS y Windows
 
-### M6 — Gráficos y media (50%)
+### M6 — Gráficos y media (66%)
 
 **Verificado**
 
 - PNG/JPEG/GIF/WebP propios y deterministas — `crates/image/src/`
 - SVG con shapes, paths, texto y filtros — `crates/svg/src/`
 - Canvas 2D completo — subset WPT 2dcontext/drawing-rectangles-to-the-canvas 3/3 PASS sin allowlist (WPT total 595/595, manifest sha256 5f4c6b43e7fec3a49fa3635f6bc5c8fd6756eb55aa7c0caab4ffbe9c6d218a20); golden tests/fixtures/render/canvas_full/golden.png md5 d3a429aa406b715bf6b6cf879408cab7 byte-idéntico en dos ejecuciones de tools/render_fixture.sh; crates/js/tests/canvas_tests.rs 13 passed y crates/js/tests/canvas_paths_tests.rs 6 passed
+- WebGL 1 por software — ADR docs/adr/2026-11-24-webgl-strategy.md: decisión (a) rasterizador software en Rust puro sin dependencias nuevas ni unsafe; subset WPT webgl/bufferSubData.html 1/1 PASS sin allowlist (WPT total 596/596, manifest sha256 af4cb74f24c232438b3529654e803534e87039c2f518c43ee6e5a37c04c81100, rebaseline con 0 FAIL); golden tests/fixtures/render/webgl_triangle/golden.png md5 3d079f295aa37f644196272a7bdf12f8 byte-idéntico en dos ejecuciones de tools/render_fixture.sh; crates/js/tests/webgl_tests.rs 5 passed; harness `Conformance gate: PASS`; límites: triángulos y buffer objects, sin shaders/texturas/depth, subset WPT de un caso real no conformance completa
 
 **Pendiente**
 
-- WebGL 1 por software — sin implementación
 - AVIF/JPEG XL — sin decodificadores
 - Audio y vídeo con códecs libres — sin implementación
 
@@ -193,9 +193,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `a1c762fa` (2026-11-25) |
+| Commit | `4b14eba4` (2026-11-25) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 257379 |
+| Lines of Rust (tracked `.rs`) | 257743 |
 | Tests (`cargo test --workspace -- --list`) | 3493 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
@@ -215,9 +215,9 @@ Gate status: **PASS** (known failures allowlisted; see `tests/README` and `crate
 
 | Metric | Value |
 |---|---|
-| Headline | WPT ab2ef95 — 595/595 subtests pasados (dirs: 5) |
+| Headline | WPT ab2ef95 — 596/596 subtests pasados (dirs: 6) |
 | WPT commit (SHA pin) | `ab2ef95d3a7c512a6e7321688c80e428086af426` |
-| Manifest SHA-256 | `5f4c6b43e7fec3a49fa3635f6bc5c8fd6756eb55aa7c0caab4ffbe9c6d218a20` |
+| Manifest SHA-256 | `af4cb74f24c232438b3529654e803534e87039c2f518c43ee6e5a37c04c81100` |
 | Allowlist | 0 |
 | Status | **PASS** (vendored CSS Syntax seed, not full WPT conformance) |
 
