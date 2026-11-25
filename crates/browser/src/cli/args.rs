@@ -23,8 +23,8 @@ options:
                       start the DevTools HTTP/WebSocket endpoint on 127.0.0.1:PORT
                       (JSON-RPC Runtime.evaluate; requires the `full` feature)
   --screenshot PATH   headless mode: render once and write a PNG (no window/display)
-  --print-to-pdf PATH headless mode: render once and write a one-page PDF 1.4 with
-                      the page embedded as an image (no window/display)
+  --print-to-pdf PATH headless mode: render once and write PDF 1.4 with the page
+                      as an image plus a selectable text layer (no window/display)
   --title T           initial window title (default \"Megi\"; replaced by page title)
   --cookies           enable the session cookie jar (Set-Cookie shared between the
                       document, subresources, redirects and navigations)
