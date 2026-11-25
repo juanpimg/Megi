@@ -1229,7 +1229,7 @@ crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	c
 crates/render/tests/worker_tests.rs	50	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/sandbox/Cargo.toml	16	manifest	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 crates/sandbox/src/lib.rs	139	src	F2	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
-crates/sandbox/src/linux.rs	193	src	F2	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
+crates/sandbox/src/linux.rs	201	src	F2	lead	2026-11-25	covered	CI-UNIX-RESOLVE-ABI9	Use AccessFs::ResolveUnix and ABI V9 for AF_UNIX connect probe
 crates/sandbox/src/unsupported.rs	10	src	F2	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 crates/svg/Cargo.toml	16	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/svg/examples/svg_to_png.rs	114	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

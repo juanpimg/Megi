@@ -222,10 +222,10 @@ fn negative_08_make_unix_socket_outside_denied() {
 #[cfg(target_os = "linux")]
 #[test]
 fn negative_09_connect_unix_socket_outside_denied() {
-    // AF_UNIX path referral is only restrictable with Landlock's AccessFs::Refer (ABI >= V8).
-    // Older kernels cannot express this restriction; report that honestly instead of failing.
+    // AF_UNIX path connect is only restrictable with Landlock's AccessFs::ResolveUnix
+    // (ABI >= V9). Older kernels cannot express this restriction; report that honestly.
     if !megi_sandbox::unix_socket_connect_restriction_supported() {
-        eprintln!("skipped: kernel lacks Landlock AccessFs::Refer (ABI < V8)");
+        eprintln!("skipped: kernel lacks Landlock AccessFs::ResolveUnix (ABI < V9)");
         return;
     }
     assert_denied("outside_unix_connect");

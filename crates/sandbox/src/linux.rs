@@ -86,13 +86,13 @@ fn build_ruleset(
     Ok(created)
 }
 
-/// Landlock ABI V8 added `AccessFs::Refer`, which is what denies `connect(2)` to an
-/// existing AF_UNIX socket path. Older kernels cannot express that restriction; callers
+/// Landlock ABI V9 added `AccessFs::ResolveUnix`, the right that denies `connect(2)` to
+/// an existing AF_UNIX socket path. Older kernels cannot express that restriction; callers
 /// must report the probe as unsupported instead of claiming a sandbox failure.
-pub(super) fn refer_right_supported() -> bool {
+pub(super) fn resolve_unix_right_supported() -> bool {
     match Ruleset::default()
         .set_compatibility(CompatLevel::HardRequirement)
-        .handle_access(AccessFs::from_all(ABI::V8))
+        .handle_access(AccessFs::ResolveUnix)
     {
         Ok(ruleset) => ruleset.create().is_ok(),
         Err(_) => false,
@@ -174,6 +174,14 @@ mod tests {
         assert_eq!(ABIS[0], ABI::V10);
         assert!(!AccessFs::from_all(ABI::V10).is_empty());
         assert!(!AccessNet::from_all(ABI::V10).is_empty());
+    }
+
+    #[test]
+    fn unix_connect_probe_uses_resolve_unix_right() {
+        // Landlock ABI V9 introduced AccessFs::ResolveUnix for connect(2) to AF_UNIX paths.
+        assert!(AccessFs::from_all(ABI::V9).contains(AccessFs::ResolveUnix));
+        assert!(!AccessFs::from_all(ABI::V8).contains(AccessFs::ResolveUnix));
+        let _ = resolve_unix_right_supported();
     }
 
     #[test]
