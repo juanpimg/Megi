@@ -9,13 +9,15 @@
 //! RFC 6455 §4.2.2 defines `Sec-WebSocket-Accept`, §5.1 requires masked client frames,
 //! §5.2 requires unmasked server frames. The endpoint stays loopback-only and opt-in.
 //! Commands are dispatched in the `protocol` module: with a real page attached, DOM/CSS commands
-//! read the live arena (WHATWG DOM §4.2.3 / CSSOM §6); without one, evaluation falls back
-//! to the isolated realm. No Network domain, multiple targets or WebDriver BiDi yet.
+//! read the live arena (WHATWG DOM §4.2.3 / CSSOM §6) and the Network domain replays the
+//! loader's real request/response log; without one, evaluation falls back to the isolated
+//! realm. Multiple targets and WebDriver BiDi are still out of scope.
 
+mod network;
 mod protocol;
 
 pub use protocol::DevToolsPage;
-use protocol::{SharedPage, lock_page, rpc_response};
+use protocol::{SharedPage, lock_page, rpc_messages};
 
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -279,9 +281,10 @@ fn serve_websocket(stream: &mut TcpStream, key: &str, page: &SharedPage) {
                     };
                     match frame.opcode {
                         Opcode::Text => {
-                            let response = rpc_response(&frame.payload, page);
-                            if send_frame(stream, Opcode::Text, response.as_bytes()).is_err() {
-                                return;
+                            for message in rpc_messages(&frame.payload, page) {
+                                if send_frame(stream, Opcode::Text, message.as_bytes()).is_err() {
+                                    return;
+                                }
                             }
                         }
                         Opcode::Ping => {

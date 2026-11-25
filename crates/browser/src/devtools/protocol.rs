@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use megi_webview::core::{Document, NodeId};
 use megi_webview::css::ComputedStyle;
+use megi_webview::net::NetworkEvent;
 use megi_webview::render::{
     RenderOutput, computed_style_pairs, evaluate_expression, evaluate_on_document,
 };
@@ -24,30 +25,62 @@ pub struct DevToolsPage {
     pub(super) document: Document,
     pub(super) styles: HashMap<NodeId, ComputedStyle>,
     pub(super) url: String,
+    pub(super) network: Vec<NetworkEvent>,
 }
 
 impl DevToolsPage {
-    /// Creates a page snapshot from an owned arena and its computed-style snapshot.
-    pub fn new(document: Document, styles: HashMap<NodeId, ComputedStyle>, url: String) -> Self {
+    /// Creates a page snapshot from an owned arena, its style snapshot and the real
+    /// loader observations collected while rendering it.
+    pub fn new(
+        document: Document,
+        styles: HashMap<NodeId, ComputedStyle>,
+        url: String,
+        network: Vec<NetworkEvent>,
+    ) -> Self {
         Self {
             document,
             styles,
             url,
+            network,
         }
     }
 
-    /// Attaches a real render result (DOM + cascade snapshot + final URL).
+    /// Attaches a real render result (DOM + cascade snapshot + URL + request log).
     pub fn from_render(output: &RenderOutput) -> Self {
         Self::new(
             output.document.clone(),
             output.styles.clone(),
             output.document_url.as_str().to_owned(),
+            output.stats.network.clone(),
         )
     }
 }
 
 /// Page state shared between the accept loop and the per-connection RPC threads.
 pub(super) type SharedPage = Arc<Mutex<Option<DevToolsPage>>>;
+
+/// Dispatches one JSON-RPC request into the WebSocket frames to send back.
+///
+/// `Network.enable` emits CDP/Firefox events first (one per real loader observation) and
+/// then its result; other commands keep the single-response shape.
+pub(super) fn rpc_messages(payload: &[u8], page: &SharedPage) -> Vec<String> {
+    let request: Value = match serde_json::from_slice(payload) {
+        Ok(request) => request,
+        Err(_) => return vec![rpc_error(Value::Null, -32700, "Parse error")],
+    };
+    if request.get("method").and_then(Value::as_str) == Some("Network.enable") {
+        let id = request.get("id").cloned().unwrap_or(Value::Null);
+        return match lock_page(page).as_ref() {
+            Some(attached) => super::network::enable(attached, id),
+            None => vec![rpc_error(
+                id,
+                -32000,
+                "no page attached to the DevTools target",
+            )],
+        };
+    }
+    vec![rpc_response(payload, page)]
+}
 
 /// Dispatches one JSON-RPC request; every command is answered with one JSON-RPC response.
 pub(super) fn rpc_response(payload: &[u8], page: &SharedPage) -> String {

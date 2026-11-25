@@ -183,6 +183,36 @@ fn devtools_dom_and_css_commands_read_the_live_document() {
 }
 
 #[test]
+fn devtools_network_domain_reports_a_real_document_request() {
+    // CDP / Firefox Network domain: `Network.enable` must emit a real event before its
+    // result. The page is produced by the actual render pipeline from a `data:` URL, so
+    // the request log comes from the loader, not from a fixture in the DevTools layer.
+    let url = data_url("<html><body>network</body></html>");
+    let output = render_url(&url, &RenderOptions::default()).expect("render fixture");
+    let endpoint = spawn(
+        0,
+        DebugTarget {
+            title: "Network fixture".to_owned(),
+            url: url.to_owned(),
+        },
+    )
+    .expect("start endpoint");
+    endpoint.attach(DevToolsPage::from_render(&output));
+    let mut stream = connect_target(endpoint.addr);
+
+    // `rpc_call` reads the first TEXT frame; for a real Network domain this is the
+    // `Network.requestWillBeSent` event emitted from the loader's own observation.
+    let first = rpc_call(&mut stream, 41, "Network.enable", json!({}));
+    assert_eq!(first["method"], "Network.requestWillBeSent", "{first}");
+    assert!(
+        first["params"]["request"]["url"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("data:text/html,")),
+        "{first}"
+    );
+}
+
+#[test]
 fn devtools_endpoint_serves_discovery_and_evaluates_runtime_expression() {
     let endpoint = spawn(
         0,
