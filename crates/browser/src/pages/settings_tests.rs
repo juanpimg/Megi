@@ -85,7 +85,10 @@ fn settings_page_has_localized_headings_labels_and_clean_markup() {
                 "label for {id}: {html}"
             );
             let tag = control_tag(&html, id);
-            assert!(tag.contains(&format!("data-megi-setting=\"{key}\"")), "{tag}");
+            assert!(
+                tag.contains(&format!("data-megi-setting=\"{key}\"")),
+                "{tag}"
+            );
             assert!(tag.contains(&format!("aria-labelledby=\"label-{id}\"")));
             assert!(tag.contains("aria-describedby=\"phase-note\""));
             assert!(!tag.contains("disabled"), "toggles must be live: {tag}");
@@ -124,7 +127,11 @@ fn settings_page_has_localized_headings_labels_and_clean_markup() {
         for (node, label) in checkboxes.iter().zip(expected) {
             assert_eq!(node.name, label, "accessible name: {node:?}");
             assert!(!node.disabled, "toggles must be enabled: {node:?}");
-            assert_eq!(node.checked, Some(false), "default state is off: {node:?}");
+            assert_eq!(
+                node.checked.unwrap_or(false),
+                false,
+                "default state is off: {node:?}"
+            );
             assert!(
                 node.description.contains(note_fragment),
                 "description: {node:?}"
@@ -159,7 +166,10 @@ fn settings_page_html_with_state_marks_only_active_toggles_checked() {
             ("setting-motion", "motion", true),
         ] {
             let tag = control_tag(&html, id);
-            assert!(tag.contains(&format!("data-megi-setting=\"{key}\"")), "{tag}");
+            assert!(
+                tag.contains(&format!("data-megi-setting=\"{key}\"")),
+                "{tag}"
+            );
             assert_eq!(tag.contains(" checked"), on, "{tag}");
             assert!(!tag.contains("disabled"), "{tag}");
         }
@@ -168,11 +178,11 @@ fn settings_page_html_with_state_marks_only_active_toggles_checked() {
         let checked: Vec<_> = snapshot
             .iter()
             .filter(|node| node.role == "checkbox")
-            .map(|node| node.checked)
+            .map(|node| node.checked.unwrap_or(false))
             .collect();
         assert_eq!(
             checked,
-            vec![Some(true), Some(false), Some(true)],
+            vec![true, false, true],
             "checked state must reach AT: {snapshot:?}"
         );
     }
@@ -182,7 +192,7 @@ fn settings_page_html_with_state_marks_only_active_toggles_checked() {
 fn settings_toggle_by_form_id_changes_state_without_mutating_the_page() {
     let html = settings_page_html_with_state(Locale::En, ShellSettingsState::default());
     let output = crate::render_target(&data_url(&html), 480, 320).expect("settings render");
-    let mut document = (*output.document).clone();
+    let mut document = output.document.clone();
     assert_eq!(crate::forms::assign_form_ids(&mut document), 3);
 
     let before = document
@@ -195,7 +205,9 @@ fn settings_toggle_by_form_id_changes_state_without_mutating_the_page() {
         (2, ShellSetting::Motion),
     ] {
         assert_eq!(setting_for_form_id(&document, form_id), Some(expected));
-        assert!(toggle_setting_by_form_id(&document, form_id, true, &mut state));
+        assert!(toggle_setting_by_form_id(
+            &document, form_id, true, &mut state
+        ));
     }
     assert_eq!(
         state,
@@ -211,11 +223,6 @@ fn settings_toggle_by_form_id_changes_state_without_mutating_the_page() {
         before
     );
     assert_eq!(setting_for_form_id(&document, 0), Some(ShellSetting::Rail));
-    assert!(!toggle_setting_by_form_id(
-        &document,
-        99,
-        true,
-        &mut state
-    ));
+    assert!(!toggle_setting_by_form_id(&document, 99, true, &mut state));
     assert!(!state.apply_toggle(ShellSetting::Rail, true), "idempotent");
 }

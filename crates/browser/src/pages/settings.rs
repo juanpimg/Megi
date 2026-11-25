@@ -16,7 +16,7 @@ use crate::i18n::{Locale, strings};
 
 /// One shell setting exposed by the generated settings page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ShellSetting {
+pub enum ShellSetting {
     Rail,
     Compact,
     Motion,
