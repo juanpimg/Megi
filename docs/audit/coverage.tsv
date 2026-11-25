@@ -648,15 +648,15 @@ crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/impl_host.rs	322	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/state.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host/impl_host.rs	326	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/host/state.rs	185	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/host/timer_queue.rs	206	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/js/src/host/types.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/import_map.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/import_map/parser.rs	246	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/lib.rs	314	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/providers.rs	136	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime.rs	250	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/runtime/a11y.rs	423	src	F2	merge-2001	2026-11-20	covered	#a11y	re-read after upstream merge
 crates/js/src/runtime/api.rs	40	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/api/core.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -687,13 +687,13 @@ crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/features.rs	842	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/src/runtime/globals/install.rs	188	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
+crates/js/src/runtime/globals/install.rs	371	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/location_storage.rs	382	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_parse.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/modules.rs	437	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/network.rs	237	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/network.rs	257	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/runtime/node_accessors.rs	483	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods.rs	18	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/attributes.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -707,6 +707,11 @@ crates/js/src/runtime/node_wrappers.rs	489	src	F2	wpt-components-scope	2026-11-2
 crates/js/src/runtime/observers.rs	384	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/delivery.rs	105	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/observers/registration.rs	153	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/service_worker.rs	185	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/runtime/service_worker/natives.rs	213	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/runtime/service_worker/ops.rs	218	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/runtime/service_worker/prelude.rs	4	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/runtime/service_worker/sw_prelude.js	116	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/runtime/tla.rs	8	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/tla/accessors.rs	478	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/tla/loader.rs	278	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -761,6 +766,7 @@ crates/js/tests/js_tests.rs	335	test	F1	wave-max-mod	2026-11-19	covered	#maximal
 crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/service_worker_tests.rs	88	test	F1	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
