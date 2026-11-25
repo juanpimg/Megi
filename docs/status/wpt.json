@@ -2,13 +2,14 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "d627b90dac8cd4ba6937e282251056a1fad845c9e197861954d68ef4ca0039a3"
+    "manifest_sha256": "5f4c6b43e7fec3a49fa3635f6bc5c8fd6756eb55aa7c0caab4ffbe9c6d218a20"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "14 vendored WPT fixtures (592 executed subtests, 4 dirs); NOT full WPT conformance",
-    "adopted_subtests": 592,
+    "scope": "17 vendored WPT fixtures (595 executed subtests, 5 dirs); NOT full WPT conformance",
+    "adopted_subtests": 595,
     "dirs": [
+      "tests/wpt/2dcontext/drawing-rectangles-to-the-canvas",
       "tests/wpt/css/css-syntax",
       "tests/wpt/custom-elements",
       "tests/wpt/html/webappapis/atob",
@@ -16,13 +17,13 @@
     ]
   },
   "counts": {
-    "pass": 592,
+    "pass": 595,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 592,
+  "total": 595,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -622,6 +623,24 @@
       "key": "3911c6da0b726b8c6662b69e3e6e2139a9ca3d8c4c7d6247819e578fa9a79fca",
       "test": "tests/wpt/css/css-syntax/anb-serialization.html",
       "subtest": "anb-serialization.html: -2n - 2",
+      "status": "PASS"
+    },
+    {
+      "key": "7b80ea5b42830e200a004f72018ae8738d25f8fa98e7360ff748273a53be85c8",
+      "test": "tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html",
+      "subtest": "2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html::clearRect of zero pixels has no effect",
+      "status": "PASS"
+    },
+    {
+      "key": "9949ffd5685ab7f5aaa91a38a908b32af213f06343eaffe3ac20dac21eb786ee",
+      "test": "tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html",
+      "subtest": "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html::fillRect works",
+      "status": "PASS"
+    },
+    {
+      "key": "6afffb845395d54dfc0e1dea28cffa64b9f29748096ff0cd903a2bf9710dd2af",
+      "test": "tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html",
+      "subtest": "2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html::strokeRect works",
       "status": "PASS"
     },
     {
