@@ -12,7 +12,7 @@
 | `css/css-syntax/anb-serialization.html` | 1397 | `9016b296ae079a56c21233513ac8f0fd5223837c934c37e6541715fd47a09500` | testharness |
 | `css/css-syntax/declarations-trim-whitespace.html` | 1975 | `af6e5414e18c8ce42c3d0f8614837493e7495b5a7f8f84f8bddb9d2654d4c62d` | testharness |
 | `css/css-syntax/input-preprocessing.html` | 1311 | `8792806053c83b90517e2c4b64fec98ba8b6146e15f19e1fa1078694aace6aa0` | testharness |
-| `custom-elements/CustomElementRegistry.html` | 31351 | `c7efe5df4343f8c52f6335ab91db36310ae16f88de4e5081521962b411c795cc` | skip |
+| `custom-elements/CustomElementRegistry.html` | 31351 | `c7efe5df4343f8c52f6335ab91db36310ae16f88de4e5081521962b411c795cc` | testharness |
 | `custom-elements/Document-createElement.html` | 18427 | `035a0e5fb6119ce7c96a9dae093b5c374702a61209f7abe5cdec800c068ff30b` | skip |
 | `custom-elements/Document-createElementNS.html` | 3592 | `41964319e2a7cd93250527d729dfedb7f292c93e4f8cbaf575c394c30ede281f` | skip |
 | `custom-elements/HTMLElement-constructor.html` | 11254 | `c0c763858ca1a3b7fadbea05151821375366230c344eed0093145ea0b8fd6884` | skip |

@@ -64,10 +64,10 @@
     "sha256": "c7efe5df4343f8c52f6335ab91db36310ae16f88de4e5081521962b411c795cc",
     "bytes": 31351,
     "license": "BSD-3-Clause",
-    "kind": "skip",
-    "skip_reason": "not adopted: define() validation order differs for a non-constructor interface",
+    "kind": "testharness",
+    "skip_reason": "",
     "dir": "custom-elements",
-    "subtest_count_expected": 0
+    "subtest_count_expected": 36
   },
   {
     "path": "custom-elements/Document-createElement.html",
@@ -85,7 +85,7 @@
     "bytes": 3592,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: prefixed custom element names are not upgraded",
+    "skip_reason": "not adopted: createElementNS does not upgrade prefixed custom elements",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -95,7 +95,7 @@
     "bytes": 11254,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: HTMLElement constructor does not validate the subclass interface",
+    "skip_reason": "not adopted: NewTarget sanity checks and extends validation are incomplete",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -965,7 +965,7 @@
     "bytes": 16472,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: dynamic slot renaming gives assignedNodes length 0 instead of 1",
+    "skip_reason": "not adopted: assignedNodes returns no nodes after slot/name attribute mutations and inserting slots is not callable",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
@@ -1005,7 +1005,7 @@
     "bytes": 4619,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: assignedSlot is not defined on Text.prototype",
+    "skip_reason": "not adopted: assignedSlot is undefined on text nodes (Text.prototype lacks the getter)",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
@@ -1115,7 +1115,7 @@
     "bytes": 8228,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: fallback content is not assigned to the default slot",
+    "skip_reason": "not adopted: flatten fallback contents are empty because importNode does not preserve slot children",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
@@ -1125,7 +1125,7 @@
     "bytes": 15806,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: slot assignment returns null for assigned nodes",
+    "skip_reason": "not adopted: assignedNodes returns 7 nodes instead of 1 in the complex case and 13 instead of 3 after adding a slot",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
