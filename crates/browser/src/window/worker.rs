@@ -88,7 +88,7 @@ impl WindowApp {
             // headless `prepare_input` keeps its deterministic all-off default.
             let html = crate::pages::settings_page_html_with_state(
                 crate::i18n::Locale::current(),
-                self.settings_state(),
+                settings::settings_state(&self.chrome_mode, self.rail_open),
             );
             format!(
                 "data:text/html;base64,{}",

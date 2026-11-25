@@ -363,7 +363,7 @@ impl WindowApp {
         // Phase 4: settings checkboxes travel through the ordinary form-patch path. Their
         // `data-megi-setting` attribute maps the stable form id to live shell state; the
         // pure helper only reads the DOM and never edits it.
-        let mut settings_state = self.settings_state();
+        let mut settings_state = settings::settings_state(&self.chrome_mode, self.rail_open);
         let settings_changed = match (target, checked) {
             (Some(form_id), Some(checked)) => self.document.as_deref().is_some_and(|document| {
                 crate::pages::toggle_setting_by_form_id(
@@ -408,7 +408,13 @@ impl WindowApp {
             }
         }
         if settings_changed {
-            self.apply_settings_state(settings_state);
+            if settings_state.rail {
+                self.rail_expanded = true;
+            }
+            self.rail_open = settings_state.rail;
+            settings::apply_settings(&mut self.chrome_mode, &settings_state);
+            self.request_render();
+            self.request_repaint();
         }
     }
 

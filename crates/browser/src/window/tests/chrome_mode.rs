@@ -68,11 +68,17 @@ fn settings_toggle_setters_drive_live_chrome_state() {
     assert!(!mode.compact());
     assert!(!mode.reduced_motion());
 
-    mode.set_compact(true);
+    let mut switches = crate::pages::ShellSettingsState {
+        rail: false,
+        compact: true,
+        reduced_motion: false,
+    };
+    mode.apply_shell_settings(&switches);
     assert!(mode.compact());
     assert_eq!(mode.state(now).band_css, chrome::COMPACT_CHROME_HEIGHT);
 
-    mode.set_reduced_motion(true);
+    switches.reduced_motion = true;
+    mode.apply_shell_settings(&switches);
     mode.set_peek(true, now);
     assert!(mode.peek_deadline().is_none());
     assert_eq!(mode.state(now).rail_width_css, chrome::RAIL_PEEK_WIDTH);
@@ -81,7 +87,8 @@ fn settings_toggle_setters_drive_live_chrome_state() {
     assert_eq!(mode.state(now).inset_css, chrome::RAIL_EXPANDED_WIDTH);
     assert!(mode.peek_deadline().is_none());
 
-    mode.set_reduced_motion(false);
+    switches.reduced_motion = false;
+    mode.apply_shell_settings(&switches);
     mode.set_rail_open(false);
     mode.set_peek(true, now);
     assert!(mode.peek_deadline().is_some(), "animation restored");
