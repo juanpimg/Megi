@@ -90,6 +90,67 @@ class MilestoneCheckerTests(unittest.TestCase):
         self.assertNotEqual(result, 0)
         self.assertIn("no recorded evidence", output.getvalue())
 
+    def test_match_mode_is_red_then_green(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = ["informe WPT"]\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", None, root=self.root, match="informe WPT")
+        self.assertNotEqual(result, 0)
+        self.assertIn("still pending", output.getvalue())
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", None, root=self.root, match="informe WPT")
+        self.assertEqual(result, 0)
+        self.assertIn("verified", output.getvalue())
+
+    def test_match_mode_is_substring_and_case_insensitive(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["Release con verify + firma — cosign keyless"]\npending = []\n')
+        self.assertEqual(
+            check_milestone.check("M0", None, root=self.root, match="COSIGN"), 0
+        )
+
+    def test_match_mode_unknown_and_empty_text_fail(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
+        for needle, expected in (("no existe", "does not match"), ("   ", "--match")):
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                result = check_milestone.check("M0", None, root=self.root, match=needle)
+            self.assertNotEqual(result, 0)
+            self.assertIn(expected, output.getvalue())
+
+    def test_match_mode_real_release_criterion_is_stable(self) -> None:
+        repo_root = Path(__file__).resolve().parent.parent
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check(
+                "M9", None, root=repo_root, match="Distribución multiplataforma firmada"
+            )
+        self.assertEqual(result, 0)
+        self.assertIn("verified", output.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check(
+                "M9", None, root=repo_root, match="Auditoría externa y bus factor"
+            )
+        self.assertNotEqual(result, 0)
+        self.assertIn("still pending", output.getvalue())
+
+    def test_cli_match_flag_and_positional_mode(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = ["informe WPT"]\npending = []\n')
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(
+                check_milestone.main(
+                    ["M0", "--match", "informe WPT", "--root", str(self.root)]
+                ),
+                0,
+            )
+            self.assertEqual(check_milestone.main(["M0", "1", "--root", str(self.root)]), 0)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                check_milestone.main(["M0", "--root", str(self.root)])
+            self.assertEqual(raised.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

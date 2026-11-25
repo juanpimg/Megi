@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `5435cc56` (2026-11-25) · hitos cerrados **3/13** · criterios verificados **30/64** (**46%**) · **3,402** tests · conformance **PASS** · **18** crates · **249,765** lines of Rust
+**Snapshot** — commit `976e89f1` (2026-11-25) · hitos cerrados **3/13** · criterios verificados **31/64** (**48%**) · **3,402** tests · conformance **PASS** · **18** crates · **249,765** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -25,11 +25,11 @@
 | **M6** | Gráficos y media | `██████░░░░░░░░░░░░░░` 2/6 | 33% |
 | **M7** | Herramientas de desarrollador | `████░░░░░░░░░░░░░░░░` 1/5 | 20% |
 | **M8** | Motor ofensivo | `████████░░░░░░░░░░░░` 2/5 | 40% |
-| **M9** | Producción | `████░░░░░░░░░░░░░░░░` 1/5 | 20% |
+| **M9** | Producción | `████████░░░░░░░░░░░░` 2/5 | 40% |
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `░░░░░░░░░░░░░░░░░░░░` 0/2 | 0% |
-| | **Roadmap** | `█████████░░░░░░░░░░░` 30/64 | **46%** |
+| | **Roadmap** | `█████████░░░░░░░░░░░` 31/64 | **48%** |
 
 ## Detalle de criterios por hito
 
@@ -145,18 +145,18 @@
 - HTTP/3/QUIC — sin implementación
 - Paralelismo real de estilo/layout/paint — sin benchmarks publicados
 
-### M9 — Producción (20%)
+### M9 — Producción (40%)
 
 **Verificado**
 
 - Corpus de 4 sitios con snapshots versionados — `tests/fixtures/real-sites/`
+- Distribución multiplataforma firmada (sólo sha256 en release) — `.github/workflows/release.yml:17-33` matriz ubuntu-24.04/x86_64-unknown-linux-gnu (.tar.gz), macos-latest/aarch64-apple-darwin (.tar.gz), windows-latest/x86_64-pc-windows-msvc (.zip); `:147-190` job `verify` valida sha256 en todas las plataformas y firma con `cosign sign-blob --yes --bundle signatures/$name.bundle --output-signature signatures/$name.sig` (cosign-installer@398d4b0, v3.9.1); `:198-201` `publish.needs=[build, sbom, verify]`, `:220-224` descarga firmas, `:253-262` publica `*.sig`/`*.bundle`; `python3 -m unittest tools.test_release_workflow -v` (Ran 5 OK); `python3 tools/check_milestone.py M9 --match "Distribución multiplataforma firmada"` PASS; commit `104da7f2`
 
 **Pendiente**
 
 - 100/100 sitios PASS sin warnings — `docs/status/real-sites.json`: 1/4 PASS hoy
 - Allowlists WPT/Test262 a 0 — sin informes publicados
 - Auditoría externa y bus factor > 1
-- Distribución multiplataforma firmada (sólo sha256 en release)
 
 ### M10 — Plataforma extendida (0%)
 
@@ -196,7 +196,7 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `5435cc56` (2026-11-25) |
+| Commit | `976e89f1` (2026-11-25) |
 | Crates in the workspace | 18 |
 | Lines of Rust (tracked `.rs`) | 249765 |
 | Tests (`cargo test --workspace -- --list`) | 3402 |
