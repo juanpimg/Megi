@@ -164,9 +164,7 @@ pub(crate) fn write_temporary(path: &Path, contents: &[u8]) -> io::Result<PathBu
                 let guard = TemporaryFileGuard::new(candidate.clone());
                 // The umask applies to `create_new` too, so set the exact mode; the file
                 // is already owner-only when created and never becomes more permissive.
-                if let Err(error) = restrict_temporary(&file) {
-                    return Err(error);
-                }
+                restrict_temporary(&file)?;
                 if let Err(error) = file.write_all(contents) {
                     drop(file);
                     return Err(error); // dropping the guard removes the partial file

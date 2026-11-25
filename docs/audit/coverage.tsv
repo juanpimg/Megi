@@ -155,7 +155,7 @@ crates/browser/src/session.rs	42	src	F2	wave-max-mod	2026-11-19	covered	#maximal
 crates/browser/src/session/json.rs	304	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/lock.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/model.rs	348	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/session/storage.rs	234	src	F2	issue-2307	2026-11-25	covered	#2307	private 0700 dirs and 0600 session file; re-read after fix
+crates/browser/src/session/storage.rs	232	src	F2	issue-2307	2026-11-25	covered	#2307	private 0700 dirs and 0600 session file; re-read after fix
 crates/browser/src/session/tests_a.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/tests_b.rs	283	src	F2	issue-2307	2026-11-25	covered	#2307	added permission regression test; re-read after edit
 crates/browser/src/site.rs	151	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
