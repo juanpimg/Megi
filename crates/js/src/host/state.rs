@@ -174,4 +174,12 @@ pub(crate) struct Host {
     /// Optional `extends` local name for each registered custom element.
     /// WHATWG Custom Elements §4.2: customized built-ins keep their base interface.
     pub custom_element_extends: std::collections::HashMap<String, String>,
+    /// Registered service worker (its realm lives in `workers`; WHATWG SW §4/§5).
+    pub service_worker: Option<crate::runtime::service_worker::SwRegistration>,
+    /// In-memory CacheStorage backing `caches` in this realm (W3C Cache API §5).
+    pub cache_store: crate::runtime::service_worker::CacheStore,
+    /// Script URL of this realm when it is a service worker global scope.
+    pub sw_script_url: String,
+    /// Response handed to `FetchEvent.respondWith` in this (worker) realm (SW §5.2).
+    pub sw_captured: Option<crate::runtime::service_worker::CachedResponse>,
 }

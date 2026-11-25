@@ -144,6 +144,189 @@ pub(crate) fn install_globals(context: &mut Context) -> Result<(), JsError> {
         },
     );
     install_gap_apis(context)?;
+    use crate::runtime::service_worker::{
+        CachedResponse, MAX_CACHE_ENTRIES, SwOps, SwRegistration, SwRequest,
+    };
+
+    let ops = SwOps {
+        document: |context| {
+            host_ref(context)
+                .map(|host| (host.url.clone(), host.opaque_origin))
+                .unwrap_or_default()
+        },
+        resolve_url: |context, url| {
+            host_ref(context)
+                .map(|host| host.resolve_url(url))
+                .unwrap_or_else(|_| url.to_string())
+        },
+        load_script: |context, url| {
+            let loader = ctx_or_mirror(
+                context,
+                |slot| slot.worker_loader.clone(),
+                |host| host.worker_loader.clone(),
+            );
+            match loader {
+                Some(loader) => loader(url).map_err(|error| error.to_string()),
+                None => Err("service worker script loader is not available".to_owned()),
+            }
+        },
+        create_realm: |context| {
+            let id = {
+                let mut host = host_cell(context).map_err(|error| error.to_string())?;
+                let id = host.workers.len() as u32;
+                host.workers.push(None);
+                id
+            };
+            let mut worker = JsRuntime::new_worker(id).map_err(|error| error.to_string())?;
+            if let Some(provider) = ctx_or_mirror(
+                context,
+                |slot| slot.fetch.clone(),
+                |host| host.fetch_provider.clone(),
+            ) {
+                worker.set_fetch_provider(provider);
+            }
+            let _ = with_context_host(&mut worker.context, |host| host.worker_id = Some(id));
+            host_cell(context)
+                .map_err(|error| error.to_string())?
+                .workers[id as usize] = Some(crate::runtime::WorkerState::new(worker));
+            Ok(id)
+        },
+        prepare_realm: |context, id, script_url| {
+            let ops = SwOps::from_context(context).ok_or("missing service worker ops")?;
+            let mut host = host_cell(context).map_err(|error| error.to_string())?;
+            let worker = host
+                .workers
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or("missing service worker realm")?;
+            let realm = &mut worker.runtime.context;
+            let _ = with_context_host(realm, |host| host.sw_script_url = script_url.to_string());
+            // The shared gap-apis prelude assumes a document realm; give the
+            // worker realm minimal `window`/`Element` so its DOM shims skip.
+            realm
+                .eval(Source::from_bytes(
+                    "globalThis.window = globalThis; globalThis.Element = function Element() {};",
+                ))
+                .map_err(|error| error.to_string())?;
+            install_gap_apis(realm).map_err(|error| error.to_string())?;
+            // The prelude calls `__megi_sw_script_url`, so the capability slot
+            // must be live before it is evaluated.
+            SwOps::install(realm, ops);
+            crate::runtime::service_worker::setup_worker_scope(realm)
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        },
+        eval_realm: |context, id, source, source_name| {
+            let mut host = host_cell(context).map_err(|error| error.to_string())?;
+            let worker = host
+                .workers
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or("missing service worker realm")?;
+            worker
+                .runtime
+                .eval(source, source_name)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        },
+        pump_realm: |context, id| {
+            let mut host = host_cell(context).map_err(|error| error.to_string())?;
+            let worker = host
+                .workers
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or("missing service worker realm")?;
+            worker
+                .runtime
+                .run_microtasks()
+                .map_err(|error| error.to_string())
+        },
+        fire_lifecycle: |context, id, event_type| {
+            let mut host = host_cell(context).map_err(|error| error.to_string())?;
+            let worker = host
+                .workers
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or("missing service worker realm")?;
+            crate::runtime::service_worker::fire_event(
+                &mut worker.runtime.context,
+                event_type,
+                None,
+            )
+        },
+        fire_fetch: |context, id, request: &SwRequest| {
+            let mut host = host_cell(context).map_err(|error| error.to_string())?;
+            let worker = host
+                .workers
+                .get_mut(id as usize)
+                .and_then(|slot| slot.as_mut())
+                .ok_or("missing service worker realm")?;
+            crate::runtime::service_worker::fire_event(
+                &mut worker.runtime.context,
+                "fetch",
+                Some(request),
+            )
+        },
+        take_captured: |context, id| {
+            let mut host = host_cell(context).ok()?;
+            let worker = host.workers.get_mut(id as usize)?.as_mut()?;
+            with_context_host(&mut worker.runtime.context, |host| host.sw_captured.take()).flatten()
+        },
+        registration: |context| {
+            host_ref(context)
+                .ok()
+                .and_then(|host| host.service_worker.clone())
+        },
+        take_registration: |context| {
+            with_context_host(context, |host| host.service_worker.take()).flatten()
+        },
+        put_registration: |context, registration: SwRegistration| {
+            let _ = with_context_host(context, |host| host.service_worker = Some(registration));
+        },
+        cache_put: |context, name: &str, key: &str, response: CachedResponse| {
+            with_context_host(context, |host| {
+                let cache = host.cache_store.entry(name.to_owned()).or_default();
+                if let Some(existing) = cache.iter_mut().find(|(stored, _)| stored == key) {
+                    existing.1 = response;
+                } else if cache.len() < MAX_CACHE_ENTRIES {
+                    cache.push((key.to_owned(), response));
+                } else {
+                    return false;
+                }
+                true
+            })
+            .unwrap_or(false)
+        },
+        cache_match: |context, name: &str, key: &str| {
+            let host = host_ref(context).ok()?;
+            let mut names: Vec<&str> = if name.is_empty() {
+                host.cache_store.keys().map(String::as_str).collect()
+            } else {
+                vec![name]
+            };
+            if name.is_empty() {
+                names.sort_unstable();
+            }
+            names.into_iter().find_map(|cache_name| {
+                host.cache_store.get(cache_name).and_then(|entries| {
+                    entries
+                        .iter()
+                        .find(|(stored, _)| stored == key)
+                        .map(|(_, response)| response.clone())
+                })
+            })
+        },
+        realm_url: |context| {
+            host_ref(context)
+                .map(|host| host.sw_script_url.clone())
+                .unwrap_or_default()
+        },
+        set_captured: |context, response: CachedResponse| {
+            let _ = with_context_host(context, |host| host.sw_captured = Some(response));
+        },
+    };
+    SwOps::install(context, ops);
+    crate::runtime::service_worker::install_main(context).map_err(JsError::Internal)?;
     crate::xhr::install_xhr(context)?;
     crate::websocket::install(context).map_err(|error| JsError::Internal(error.to_string()))?;
     let registry = ObjectInitializer::new(context)

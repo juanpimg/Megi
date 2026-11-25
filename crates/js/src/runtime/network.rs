@@ -151,13 +151,33 @@ pub(crate) fn fetch_native(
         body,
         redirect,
     };
-    let provider = ctx_or_mirror(
-        context,
-        |slot| slot.fetch.clone(),
-        |host| host.fetch_provider.clone(),
-    )
-    .ok_or_else(|| js_error("fetch is not available in this host"))?;
-    let result = provider(request).map_err(|error| js_error(error.to_string()))?;
+    // WHATWG Service Workers §5.2: an active worker may answer a same-origin GET
+    // from its own cache via `FetchEvent.respondWith`; the network provider is
+    // only consulted when no worker captured a response.
+    let sw_request = crate::runtime::service_worker::SwRequest {
+        url: request.url.clone(),
+        method: request.method.clone(),
+        headers: request.headers.clone(),
+    };
+    let intercepted = crate::runtime::service_worker::try_fetch(context, &sw_request);
+    let result = match intercepted {
+        Some(cached) => crate::host::FetchResult {
+            status: cached.status,
+            status_text: cached.status_text,
+            url: cached.url,
+            headers: cached.headers,
+            body: cached.body,
+        },
+        None => {
+            let provider = ctx_or_mirror(
+                context,
+                |slot| slot.fetch.clone(),
+                |host| host.fetch_provider.clone(),
+            )
+            .ok_or_else(|| js_error("fetch is not available in this host"))?;
+            provider(request).map_err(|error| js_error(error.to_string()))?
+        }
+    };
     if result.body.len() > MAX_FETCH_BODY {
         return Err(js_error("fetch response body limit exceeded"));
     }

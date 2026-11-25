@@ -89,6 +89,10 @@ impl Host {
             self_messages: VecDeque::new(),
             frames: Vec::new(),
             frame_by_node: HashMap::new(),
+            service_worker: None,
+            cache_store: HashMap::new(),
+            sw_script_url: String::new(),
+            sw_captured: None,
         }
     }
 

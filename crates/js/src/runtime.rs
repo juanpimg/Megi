@@ -222,6 +222,7 @@ mod node_accessors;
 mod node_methods;
 mod node_wrappers;
 mod observers;
+pub(crate) mod service_worker;
 mod tla;
 mod workers;
 
