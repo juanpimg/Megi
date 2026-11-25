@@ -24,6 +24,18 @@ use super::styles::{
 use crate::{RenderError, ScriptingMode};
 use crate::{frames, scripts, stylesheets, webfonts};
 
+/// Evaluates a console-style expression in a fresh, budgeted JS realm (DevTools Protocol
+/// `Runtime.evaluate` foundation). The completion value is returned as text so callers
+/// can map primitive results to JSON. The realm is isolated: no page document, host
+/// providers or navigation state are attached yet.
+#[cfg(feature = "js")]
+pub fn evaluate_expression(source: &str) -> Result<String, String> {
+    let mut runtime = megi_js::JsRuntime::new().map_err(|error| error.to_string())?;
+    runtime
+        .eval(source, "devtools://evaluate")
+        .map_err(|error| error.to_string())
+}
+
 #[allow(unused_variables)] // input fields are threaded unchanged to the next stage
 pub(crate) fn run_script_stage<'a>(
     input: ParsedDocumentInput<'a>,

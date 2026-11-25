@@ -77,6 +77,32 @@ fn run() -> Result<(), ShellError> {
                 .to_owned(),
         ));
     }
+    // M7 foundation: opt-in DevTools endpoint, bound to loopback only. The handle lives
+    // until the process exits so requests are served while the window event loop (or a
+    // headless render) runs. `full` supplies the JS runtime used by `Runtime.evaluate`.
+    #[cfg(feature = "full")]
+    let _devtools = match args.remote_debugging_port {
+        Some(port) => Some(
+            megi_browser::devtools::spawn(
+                port,
+                megi_browser::devtools::DebugTarget {
+                    title: args.title.clone(),
+                    url: args.input.clone(),
+                },
+            )
+            .map_err(|reason| ShellError::Io {
+                path: format!("127.0.0.1:{port}"),
+                reason,
+            })?,
+        ),
+        None => None,
+    };
+    #[cfg(not(feature = "full"))]
+    if args.remote_debugging_port.is_some() {
+        return Err(ShellError::Usage(
+            "--remote-debugging-port requires the `full` feature".to_owned(),
+        ));
+    }
     let options = render_options(&args);
     let view = WindowViewOptions::new(
         args.zoom,

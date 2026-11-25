@@ -257,6 +257,9 @@ mod url;
 
 pub use cache::{RenderCache, RenderCacheStats};
 pub use error::RenderError;
+/// Isolated `Runtime.evaluate` bridge used by the DevTools endpoint (M7 foundation).
+#[cfg(feature = "js")]
+pub use script::evaluate_expression;
 pub use scripts::{ConsoleMessage, RenderStorage, ScriptBudget, ScriptingLimits};
 
 pub use options::{

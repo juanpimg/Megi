@@ -19,6 +19,9 @@ options:
   --width W           window/screenshot width in CSS pixels (default 800, max 8192)
   --height H          window/screenshot height in CSS pixels (default 600, max 8192)
   --window            explicitly request interactive window mode (requires `window` feature)
+  --remote-debugging-port PORT
+                      start the DevTools HTTP/WebSocket endpoint on 127.0.0.1:PORT
+                      (JSON-RPC Runtime.evaluate; requires the `full` feature)
   --screenshot PATH   headless mode: render once and write a PNG (no window/display)
   --title T           initial window title (default \"Megi\"; replaced by page title)
   --cookies           enable the session cookie jar (Set-Cookie shared between the
@@ -125,6 +128,8 @@ pub struct CliArgs {
     pub time_ms: f64,
     /// Render headless screenshots in an isolated OS process (`--ipc-render`, ADR-004).
     pub ipc_render: bool,
+    /// DevTools endpoint port on loopback (`--remote-debugging-port`), if requested.
+    pub remote_debugging_port: Option<u16>,
 }
 
 /// Raw flags before validation/normalization (exposed for tests).
@@ -174,6 +179,8 @@ pub struct RawArgs {
     pub time_ms: Option<f64>,
     /// `--ipc-render` was passed.
     pub ipc_render: bool,
+    /// `--remote-debugging-port` value, if provided.
+    pub remote_debugging_port: Option<u16>,
     /// `--window` was passed.
     pub window: bool,
     /// `-h`/`--help` was passed.

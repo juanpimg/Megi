@@ -43,6 +43,20 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<RawArgs, ShellEr
             "--chrome-menu" => raw.chrome_menu = true,
             "--reader" => raw.reader = true,
             "--ipc-render" => raw.ipc_render = true,
+            "--remote-debugging-port" => {
+                let value = next_value(&arguments, &mut index, "--remote-debugging-port")?;
+                let port = value.parse::<u16>().map_err(|_| {
+                    ShellError::Usage(format!(
+                        "invalid --remote-debugging-port value `{value}` (expected 1..=65535)"
+                    ))
+                })?;
+                if port == 0 {
+                    return Err(ShellError::Usage(
+                        "--remote-debugging-port must be 1..=65535".to_string(),
+                    ));
+                }
+                raw.remote_debugging_port = Some(port);
+            }
             "--window" => raw.window = true,
             "--no-session" => raw.no_session = true,
             "--session-file" => {

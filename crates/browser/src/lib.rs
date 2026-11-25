@@ -197,6 +197,9 @@ mod a11y_live_tests;
 pub mod chrome;
 pub mod cli;
 pub mod convert;
+/// M7 foundation: DevTools protocol endpoint (HTTP discovery + WebSocket JSON-RPC).
+#[cfg(feature = "full")]
+pub mod devtools;
 pub mod download;
 pub mod error;
 /// Tab favicons and deterministic fallback dots.
