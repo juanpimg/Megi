@@ -95,9 +95,9 @@ items = [
   "Animaciones CSS `@keyframes`/`transition` en runtime — `crates/css/src/animation_runtime.rs`",
   "SVG con texto, gradientes y patterns — `crates/svg/src/`",
   "Canvas 2D utilizable (rutas, ángulos `arc`, Bézier, transformaciones, `save`/`restore`, gradientes lineales y `drawImage`) — `crates/js/src/canvas/{path.rs,state.rs}`, `tests/fixtures/render/canvas_paths.html`; `cargo test -p megi-js --test canvas_paths_tests && cargo test -p megi-render --test canvas_tests`",
+  "Bidi y CJK completos — `cargo +1.99.1 test -p megi-layout --test bidi_tests --locked -- --test-threads=1` (7 passed), `cargo +1.99.1 test -p megi-layout --lib bidi --locked -- --test-threads=1` (8 passed), `cargo +1.99.1 test -p megi-fonts --test font_engine shaping --locked -- --test-threads=1` (12 passed); `crates/layout/src/bidi.rs:346-428`, `crates/layout/src/bidi/bidi_tests.rs:8-124`, `crates/layout/tests/bidi_tests.rs:47-145`, `crates/layout/src/inline/tokens.rs:297-392`; commits `188b8e53`, `6f812d65`",
 ]
 pending = [
-  "Bidi y CJK completos — `docs/superpowers/specs/2026-11-24-megi-ambition-design.md` §3 lo lista como pendiente",
   "Fixtures con md5 estable tras completar los solapes conocidos",
 ]
 
