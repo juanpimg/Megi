@@ -102,6 +102,25 @@ else
     exit 1
 fi
 
+echo "==> software WebGL 1 triangle fixture (400x260, deterministic edge raster)"
+for run in 1 2; do
+    cargo run -q -p megi-render -- tests/fixtures/render/webgl_triangle.html \
+        "$outdir/megi-webgl-triangle-$run.png" --width 400 --height 260 --json | check_json
+    python3 tools/png_check.py "$outdir/megi-webgl-triangle-$run.png"
+    md5_file "$outdir/megi-webgl-triangle-$run.png"
+done
+if ! cmp -s "$outdir/megi-webgl-triangle-1.png" "$outdir/megi-webgl-triangle-2.png"; then
+    echo "ERROR: webgl_triangle md5 differs between the two runs" >&2
+    exit 1
+fi
+echo "webgl_triangle PNG is byte-identical across two runs (md5 above)"
+if cmp -s "$outdir/megi-webgl-triangle-1.png" tests/fixtures/render/webgl_triangle/golden.png; then
+    echo "webgl_triangle PNG matches the versioned golden byte-for-byte"
+else
+    echo "ERROR: webgl_triangle PNG does not match tests/fixtures/render/webgl_triangle/golden.png" >&2
+    exit 1
+fi
+
 echo "==> golden comparison"
 if cmp -s "$outdir/megi-showcase.png" tests/fixtures/render/showcase/golden.png; then
     echo "showcase PNG matches the versioned golden byte-for-byte"
