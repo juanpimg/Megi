@@ -158,6 +158,13 @@ pub(crate) fn install_globals(context: &mut Context) -> Result<(), JsError> {
             context,
         )
         .map_err(|error| JsError::Internal(error.to_string()))?;
+    // The JS layer needs the native registry to exist before it can wrap define/get.
+    context
+        .eval(boa_engine::Source::from_bytes(include_str!(
+            "../gap_apis/ce_registry.js"
+        )))
+        .map(|_| ())
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     // #1972: browsers expose native constructors' `prototype` as non-writable and
     // non-configurable; instrumentation scripts branch on that descriptor.
     context

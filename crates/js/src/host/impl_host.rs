@@ -55,6 +55,7 @@ impl Host {
             shadow_roots: std::collections::HashMap::new(),
             shadow_hosts: std::collections::HashMap::new(),
             shadow_modes: std::collections::HashMap::new(),
+            custom_element_construction: None,
             canvas_store: crate::canvas::CanvasStore::new(),
             custom_elements: std::collections::HashMap::new(),
             custom_element_next_handle: 1,

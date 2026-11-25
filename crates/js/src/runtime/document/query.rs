@@ -33,7 +33,37 @@ pub(crate) fn document_create_element(
             .ok()
             .and_then(|value| value.as_callable());
         if let Some(constructor) = constructor {
-            let _ = constructor.call(&wrapper, &[], context);
+            let constructor = constructor.clone();
+            with_context_host(context, |host| {
+                host.custom_element_construction = Some(name.clone());
+            });
+            let upgraded = constructor.construct(&[], Some(&constructor), context);
+            with_context_host(context, |host| {
+                host.custom_element_construction = None;
+            });
+            let mut constructed_node = false;
+            if let Ok(value) = upgraded {
+                constructed_node = value
+                    .get(js_string!("nodeType"), context)
+                    .ok()
+                    .and_then(|node_type| node_type.as_number())
+                    .is_some();
+                if constructed_node {
+                    // WHATWG Custom Elements §4.4.3: the constructed element keeps the
+                    // registered constructor's prototype so `instanceof X` succeeds.
+                    if let Ok(prototype) = constructor.get(js_string!("prototype"), context)
+                        && let Some(prototype) = prototype.as_object()
+                    {
+                        let _ = value.set_prototype(Some(prototype));
+                    }
+                    return Ok(value.into());
+                }
+            }
+            // Legacy plain-function constructors do not call `super()`: run them on
+            // the already-created element wrapper so their setup still applies.
+            if !constructed_node {
+                let _ = constructor.call(&wrapper, &[], context);
+            }
         }
     }
     Ok(wrapper)

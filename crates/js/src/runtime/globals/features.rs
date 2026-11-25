@@ -23,10 +23,49 @@ fn image_constructor(
 /// `new Element()` is illegal per Web IDL, but the constructor must exist for
 /// `instanceof Element` and `Element.prototype` (#1877).
 fn element_illegal_constructor(
-    _this: &JsValue,
+    this: &JsValue,
     _args: &[JsValue],
-    _context: &mut Context,
+    context: &mut Context,
 ) -> JsResult<JsValue> {
+    // WHATWG Custom Elements §4.4.3: during a registered constructor's `super()` call,
+    // the HTMLElement constructor creates the element with the registry's local name.
+    let mut tag =
+        with_context_host(context, |host| host.custom_element_construction.take()).flatten();
+    if tag.is_none()
+        && let Some(new_target_prototype) = this.as_object().and_then(|object| object.prototype())
+    {
+        // Direct `new X()` in a custom element constructor's `super()` carries the
+        // registered constructor's prototype as the fresh `this` prototype (WHATWG
+        // Custom Elements §4.4.3). Match it against the registry to infer the local name.
+        let registered = with_context_host(context, |host| {
+            host.custom_elements
+                .iter()
+                .map(|(name, handle)| (name.clone(), *handle))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+        for (name, handle) in registered {
+            if let Ok(constructor) = context
+                .global_object()
+                .get(js_string!(format!("__megi_ce_{handle}")), context)
+                && let Some(constructor) = constructor.as_callable()
+                && let Ok(prototype) = constructor.get(js_string!("prototype"), context)
+                && prototype.as_object() == Some(new_target_prototype.clone())
+            {
+                tag = Some(name);
+                break;
+            }
+        }
+    }
+    if let Some(tag) = tag {
+        let node = with_context_host(context, |host| {
+            host.document
+                .create_element(Namespace::Html, tag, Vec::new())
+        });
+        if let Some(node) = node {
+            return wrap_node(context, node);
+        }
+    }
     Err(boa_engine::JsNativeError::typ()
         .with_message("Illegal constructor")
         .into())
@@ -122,6 +161,11 @@ pub(crate) fn install_browser_features(context: &mut Context) -> Result<(), JsEr
         .map_err(|error| JsError::Internal(error.to_string()))?;
     // WHATWG DOM §4.9: the prelude installs the validating `Element.prototype.attachShadow`
     // on top of this native entry point (it needs to throw real DOMExceptions).
+    let _ = context.register_global_builtin_callable(
+        js_string!("__megi_slot_assigned_nodes_native"),
+        0,
+        native(crate::runtime::slot_assigned_nodes),
+    );
     let _ = context.register_global_builtin_callable(
         js_string!("__megi_attach_shadow_native"),
         1,

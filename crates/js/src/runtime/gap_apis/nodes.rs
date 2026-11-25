@@ -264,3 +264,24 @@ pub(crate) fn node_compare_document_position(
     .unwrap_or(0);
     Ok(JsValue::from(bits as f64))
 }
+
+/// `HTMLTemplateElement.content` — WHATWG HTML §4.11.3.
+pub(crate) fn node_content_get(
+    this: &boa_engine::JsValue,
+    _args: &[boa_engine::JsValue],
+    context: &mut boa_engine::Context,
+) -> boa_engine::JsResult<boa_engine::JsValue> {
+    use boa_engine::JsValue;
+    let node_id = super::this_node(this, context)?;
+    let content = super::with_context_host(context, |host| {
+        host.document
+            .try_node(node_id)
+            .and_then(|node| node.as_element())
+            .and_then(|element| element.template_contents)
+    })
+    .flatten();
+    match content {
+        Some(id) => super::wrap_node(context, id),
+        None => Ok(JsValue::null()),
+    }
+}

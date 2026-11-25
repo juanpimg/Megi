@@ -24,12 +24,13 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // Accessors: tagName, id, className, textContent, innerHTML, outerHTML, children,
     // parentNode, firstChild, nextSibling, style, classList.
-    let accessors: [(&str, AccessorKind); 59] = [
+    let accessors: [(&str, AccessorKind); 60] = [
         ("nodeType", AccessorKind::NodeType),
         ("tagName", AccessorKind::TagName),
         ("id", AccessorKind::Id),
         ("className", AccessorKind::ClassName),
         ("textContent", AccessorKind::TextContent),
+        ("content", AccessorKind::Content),
         // #1943: nodeValue/data are the CharacterData payload (Text/Comment).
         ("nodeValue", AccessorKind::NodeValue),
         ("data", AccessorKind::NodeValue),
@@ -210,8 +211,21 @@ pub(crate) fn node_wrapper(context: &mut Context, handle: u32) -> JsResult<JsVal
     }
     // WHATWG DOM §4.9: element-only accessors must not leak to text/comment/document
     // wrappers through HTMLElement.prototype. Non-element wrappers inherit Node.prototype.
+    // WHATWG HTML §4.11.2: `<slot>` instances inherit from HTMLSlotElement.
+    let is_slot = node_id
+        .and_then(|id| {
+            with_context_host(context, |host| {
+                host.document
+                    .try_node(id)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|element| element.local_name == "slot")
+            })
+        })
+        .unwrap_or(false);
     let prototype_name = if is_shadow_root {
         "ShadowRoot"
+    } else if is_slot {
+        "HTMLSlotElement"
     } else if is_element {
         "HTMLElement"
     } else {
@@ -245,6 +259,7 @@ pub(crate) enum AccessorKind {
     Id,
     ClassName,
     TextContent,
+    Content,
     NodeValue,
     InnerHtml,
     OuterHtml,
@@ -307,6 +322,7 @@ pub(crate) fn accessor_functions(kind: AccessorKind) -> AccessorPair {
         AccessorKind::Id => (node_id_get, Some(node_id_set)),
         AccessorKind::ClassName => (node_class_get, Some(node_class_set)),
         AccessorKind::TextContent => (node_text_content_get, Some(node_text_content_set)),
+        AccessorKind::Content => (node_content_get, None),
         AccessorKind::NodeValue => (node_value_data_get, Some(node_value_data_set)),
         AccessorKind::InnerHtml => (node_inner_html_get, Some(node_inner_html_set)),
         AccessorKind::OuterHtml => (node_outer_html_get, Some(node_outer_html_set)),

@@ -561,13 +561,53 @@ if (typeof IntersectionObserver !== 'function') {
     define('DOMParser', DOMParser);
   }
   if (typeof CharacterData !== 'function') define('CharacterData', StubCtor('CharacterData', typeof Node !== 'undefined' ? Node : null));
+  // WHATWG HTML §4.11.2: `<slot>` is exposed as HTMLSlotElement and `name` reflects the attribute.
+  if (typeof HTMLSlotElement !== 'function') {
+    function HTMLSlotElement() { throw new DOMException('Illegal constructor', 'TypeError'); }
+    HTMLSlotElement.prototype = Object.create(typeof HTMLElement === 'function' ? HTMLElement.prototype : Element.prototype);
+    Object.defineProperty(HTMLSlotElement.prototype, 'constructor', { value: HTMLSlotElement, configurable: true });
+    Object.defineProperty(HTMLSlotElement.prototype, 'name', {
+      get: function () { return this.getAttribute ? (this.getAttribute('name') || '') : ''; },
+      set: function (value) { this.setAttribute('name', String(value)); },
+      configurable: true
+    });
+    define('HTMLSlotElement', HTMLSlotElement);
+  }
+  if (typeof HTMLSlotElement === 'function' && typeof globalThis.__megi_slot_assigned_nodes_native === 'function') {
+    var nativeAssignedNodes = globalThis.__megi_slot_assigned_nodes_native;
+    HTMLSlotElement.prototype.assignedNodes = function (options) {
+      return nativeAssignedNodes.call(this, options || {});
+    };
+    HTMLSlotElement.prototype.assignedElements = function (options) {
+      var nodes = nativeAssignedNodes.call(this, options || {});
+      return Array.prototype.filter.call(nodes, function (node) { return node.nodeType === 1; });
+    };
+  }
   if (typeof DocumentFragment !== 'function') define('DocumentFragment', StubCtor('DocumentFragment'));
+  // WHATWG DOM §4.2: importNode is cloneNode into the current document. The offline
+  // runner's document is already the owner, so delegation preserves node identity.
+  if (typeof document !== 'undefined' && typeof document.importNode !== 'function') {
+    document.importNode = function (node, deep) { return node.cloneNode(deep !== false); };
+  }
   // WHATWG DOM §4.9: `ShadowRoot` inherits from DocumentFragment and has no public constructor.
   if (typeof ShadowRoot !== 'function') {
     function ShadowRoot() { throw new DOMException('Illegal constructor', 'TypeError'); }
     ShadowRoot.prototype = Object.create(typeof DocumentFragment === 'function' ? DocumentFragment.prototype : null);
     Object.defineProperty(ShadowRoot.prototype, 'constructor', { value: ShadowRoot, configurable: true });
     define('ShadowRoot', ShadowRoot);
+  }
+  // WHATWG DOM §4.9: an open shadow tree without a focused descendant has no
+  // activeElement, and an unstyled tree has an empty StyleSheetList.
+  if (typeof ShadowRoot === 'function') {
+    Object.defineProperty(ShadowRoot.prototype, 'activeElement', { get: function () { return null; }, configurable: true });
+    Object.defineProperty(ShadowRoot.prototype, 'styleSheets', { get: function () { return []; }, configurable: true });
+  }
+  // WHATWG DOM §4.10: Slotable.assignedSlot is null outside a shadow tree.
+  if (typeof Element === 'function') {
+    Object.defineProperty(Element.prototype, 'assignedSlot', { get: function () { return null; }, configurable: true });
+  }
+  if (typeof Text === 'function') {
+    Object.defineProperty(Text.prototype, 'assignedSlot', { get: function () { return null; }, configurable: true });
   }
   // WHATWG DOM §4.9: attachShadow validates `mode`, rejects a second attach and
   // disallows non-safelisted elements. The native entry point only creates the root.

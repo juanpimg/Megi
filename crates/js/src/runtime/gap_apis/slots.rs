@@ -96,7 +96,12 @@ pub(crate) fn slot_assigned_nodes(
     })
     .flatten()
     .unwrap_or_default();
-    let _ = args; // `{ flatten: true }` does not change this subset's result.
+    let flatten = args
+        .first()
+        .and_then(JsValue::as_object)
+        .and_then(|options| options.get(js_string!("flatten"), context).ok())
+        .and_then(|value| value.as_boolean())
+        .unwrap_or(false);
 
     let assigned = with_context_host(context, |host| {
         let document = &host.document;
@@ -120,7 +125,43 @@ pub(crate) fn slot_assigned_nodes(
             }
             child = document.try_node(id).and_then(|node| node.next_sibling);
         }
-        children
+        if flatten {
+            let mut flattened = Vec::new();
+            for id in children {
+                let is_slot = document
+                    .try_node(id)
+                    .and_then(|node| node.as_element())
+                    .is_some_and(|element| element.local_name == "slot");
+                if is_slot && id != slot {
+                    let name = document
+                        .try_node(id)
+                        .and_then(|node| node.as_element())
+                        .and_then(|element| element.get_attribute("name").map(str::to_owned))
+                        .unwrap_or_default();
+                    let mut nested = document
+                        .try_node(host_node)
+                        .and_then(|node| node.first_child);
+                    while let Some(candidate) = nested {
+                        let candidate_slot = document
+                            .try_node(candidate)
+                            .and_then(|node| node.as_element())
+                            .and_then(|element| element.get_attribute("slot").map(str::to_owned))
+                            .unwrap_or_default();
+                        if candidate_slot == name {
+                            flattened.push(candidate);
+                        }
+                        nested = document
+                            .try_node(candidate)
+                            .and_then(|node| node.next_sibling);
+                    }
+                } else {
+                    flattened.push(id);
+                }
+            }
+            flattened
+        } else {
+            children
+        }
     })
     .unwrap_or_default();
     wrap_list(context, assigned)
