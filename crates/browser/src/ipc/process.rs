@@ -72,12 +72,62 @@ pub fn kill_process_group(pid: u32) {
         .status();
 }
 
+/// Decodes a renderer response envelope and proves that it answers this slot's request.
+///
+/// #2308: a response is only accepted when its kind, request id and per-site token match
+/// the request that was sent, and when its generation follows the last accepted one.
+/// Semantic validation is delegated to [`validate_response`] so both the synchronous and
+/// reader-thread paths share one trust boundary.
+pub(crate) fn decode_validated_response(
+    header: &WireHeader,
+    response: IpcRenderResponse,
+    expected_token: &[u8; 32],
+    last_generation: u64,
+) -> Result<Validated<IpcRenderResponse>, IpcError> {
+    if header.kind != IPC_KIND_RESPONSE {
+        return Err(IpcError::Validation(format!(
+            "unexpected response kind {}",
+            header.kind
+        )));
+    }
+    if header.request_id != response.generation {
+        return Err(IpcError::Validation(format!(
+            "response request id {} does not match generation {}",
+            header.request_id, response.generation
+        )));
+    }
+    if header.site_token != *expected_token {
+        return Err(IpcError::Validation(
+            "response site token does not match this slot".to_owned(),
+        ));
+    }
+    validate_response(response, last_generation)
+        .map_err(|error| IpcError::Validation(error.to_string()))
+}
+
+/// A response that has crossed the trust boundary of a renderer slot (#2308).
+pub(crate) type ValidatedResponse = Result<Validated<IpcRenderResponse>, IpcError>;
+
+/// Token for standalone renderers that are not owned by a pool slot. The counter keeps
+/// tokens unique across spawns in one process; pooled renderers use the slot's token.
+fn default_token() -> [u8; 32] {
+    crate::site::derive_renderer_token(
+        &crate::site::SiteKey::Opaque("renderer"),
+        SCRATCH_COUNTER.fetch_add(1, Ordering::Relaxed),
+    )
+}
+
 /// A renderer process: the current executable launched with `--megi-ipc-worker` and
-/// driven over length-prefixed JSON on stdin/stdout (ADR-004 phase 3).
+/// driven over versioned envelopes on stdin/stdout (ADR-004 phase 3, #2308).
 pub struct ProcessRenderer {
     child: std::process::Child,
     stdin: std::process::ChildStdin,
     stdout: Option<std::process::ChildStdout>,
+    site_token: [u8; 32],
+    /// Generations are global to the browser, so a newly spawned slot may legitimately
+    /// answer generation N as its first frame. `None` pins that first frame via its
+    /// request id rather than assuming generation 1 (#2308).
+    last_generation: Option<u64>,
 }
 
 impl ProcessRenderer {
@@ -106,6 +156,24 @@ impl ProcessRenderer {
         allow_network: bool,
         read_path: Option<&Path>,
     ) -> Result<Self, IpcError> {
+        Self::spawn_with_args_with_network_and_token(
+            executable,
+            args,
+            allow_network,
+            read_path,
+            default_token(),
+        )
+    }
+
+    /// Core spawn path: the slot's token is stamped on every request envelope and used to
+    /// authenticate every response envelope (#2308).
+    pub(crate) fn spawn_with_args_with_network_and_token(
+        executable: &Path,
+        args: &[String],
+        allow_network: bool,
+        read_path: Option<&Path>,
+        site_token: [u8; 32],
+    ) -> Result<Self, IpcError> {
         let scratch = renderer_scratch_dir()?;
         let mut child =
             renderer_command_with_network(executable, args, &scratch, allow_network, read_path)
@@ -123,27 +191,48 @@ impl ProcessRenderer {
             child,
             stdin,
             stdout: Some(stdout),
+            site_token,
+            last_generation: None,
         })
     }
 
-    /// Renders one request in the child process and returns the serializable result.
+    /// Renders one request in the child process and returns the validated result.
     pub fn render(&mut self, request: IpcRenderRequest) -> Result<IpcRenderResponse, IpcError> {
-        write_message(&mut self.stdin, &request)?;
+        Ok(self.render_validated(request)?.into_inner())
+    }
+
+    /// Envelope-aware variant of [`Self::render`] kept under the newtype proof for the
+    /// stateful session and for the pool's reader thread.
+    pub(crate) fn render_validated(
+        &mut self,
+        request: IpcRenderRequest,
+    ) -> Result<Validated<IpcRenderResponse>, IpcError> {
+        self.write_request(&request)?;
         let stdout = self.stdout.as_mut().ok_or_else(|| {
             IpcError::Io("renderer stdout is owned by the reader thread".to_owned())
         })?;
-        read_message(stdout)
+        let (header, response) =
+            read_framed_envelope::<_, IpcRenderResponse>(stdout)?.ok_or(IpcError::Truncated)?;
+        // Generations are globally allocated, so one slot can see gaps; only a stale or
+        // repeated generation is fatal. The exact generation is pinned by the request id.
+        if let Some(last) = self.last_generation
+            && request.generation <= last
+        {
+            return Err(IpcError::Validation(format!(
+                "stale generation {} after {last}",
+                request.generation
+            )));
+        }
+        let last = request.generation.saturating_sub(1);
+        let validated = decode_validated_response(&header, response, &self.site_token, last)?;
+        self.last_generation = Some(validated.inner().generation);
+        Ok(validated)
     }
 
     /// Spawns a renderer whose stdout is drained by a reader thread into a channel, so the
     /// event loop can send requests and poll replies without blocking (ADR-004 phase 3).
-    pub fn spawn_with_reader() -> Result<
-        (
-            Self,
-            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
+    pub fn spawn_with_reader()
+    -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
         Self::spawn_with_reader_with_network(true, None)
     }
 
@@ -151,13 +240,7 @@ impl ProcessRenderer {
     pub(crate) fn spawn_with_reader_with_network(
         allow_network: bool,
         read_path: Option<&Path>,
-    ) -> Result<
-        (
-            Self,
-            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
+    ) -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
         let executable =
             std::env::current_exe().map_err(|error| IpcError::Io(error.to_string()))?;
         Self::spawn_with_reader_from_args_with_network(
@@ -172,13 +255,7 @@ impl ProcessRenderer {
     /// integration tests that drive the real `megi --megi-ipc-worker` binary).
     pub fn spawn_with_reader_from(
         executable: &Path,
-    ) -> Result<
-        (
-            Self,
-            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
+    ) -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
         Self::spawn_with_reader_from_args(executable, &["--megi-ipc-worker".to_owned()])
     }
 
@@ -186,13 +263,7 @@ impl ProcessRenderer {
     pub fn spawn_with_reader_from_args(
         executable: &Path,
         args: &[String],
-    ) -> Result<
-        (
-            Self,
-            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
+    ) -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
         Self::spawn_with_reader_from_args_with_network(executable, args, true, None)
     }
 
@@ -202,15 +273,32 @@ impl ProcessRenderer {
         args: &[String],
         allow_network: bool,
         read_path: Option<&Path>,
-    ) -> Result<
-        (
-            Self,
-            std::sync::mpsc::Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
-        let mut renderer =
-            Self::spawn_with_args_with_network(executable, args, allow_network, read_path)?;
+    ) -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
+        Self::spawn_with_reader_from_args_with_network_and_token(
+            executable,
+            args,
+            allow_network,
+            read_path,
+            default_token(),
+        )
+    }
+
+    /// Core reader-thread spawn: the thread authenticates each envelope against this
+    /// renderer's token before publishing a validated response (#2308).
+    pub(crate) fn spawn_with_reader_from_args_with_network_and_token(
+        executable: &Path,
+        args: &[String],
+        allow_network: bool,
+        read_path: Option<&Path>,
+        site_token: [u8; 32],
+    ) -> Result<(Self, std::sync::mpsc::Receiver<ValidatedResponse>), IpcError> {
+        let mut renderer = Self::spawn_with_args_with_network_and_token(
+            executable,
+            args,
+            allow_network,
+            read_path,
+            site_token,
+        )?;
         let stdout = renderer
             .stdout
             .take()
@@ -218,14 +306,36 @@ impl ProcessRenderer {
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let mut stdout = stdout;
+            let mut last_generation: Option<u64> = None;
             loop {
-                match read_message_checked::<_, IpcRenderResponse>(&mut stdout) {
-                    Ok(Some(response)) => {
-                        if sender.send(Ok(response)).is_err() {
+                let incoming = match read_framed_envelope::<_, IpcRenderResponse>(&mut stdout) {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => break,
+                    Err(error) => {
+                        let _ = sender.send(Err(error));
+                        break;
+                    }
+                };
+                // The first generation in a slot can be any value: the browser-wide
+                // counter keeps advancing as new sites are spawned (#2308). Pin it to
+                // the request id, and accept gaps while rejecting stale/repeated frames.
+                let response_generation = incoming.1.generation;
+                if let Some(last) = last_generation
+                    && response_generation <= last
+                {
+                    let _ = sender.send(Err(IpcError::Validation(format!(
+                        "stale generation {response_generation} after {last}"
+                    ))));
+                    break;
+                }
+                let last = response_generation.saturating_sub(1);
+                match decode_validated_response(&incoming.0, incoming.1, &site_token, last) {
+                    Ok(validated) => {
+                        last_generation = Some(validated.inner().generation);
+                        if sender.send(Ok(validated)).is_err() {
                             break;
                         }
                     }
-                    Ok(None) => break,
                     Err(error) => {
                         let _ = sender.send(Err(error));
                         break;
@@ -236,9 +346,25 @@ impl ProcessRenderer {
         Ok((renderer, receiver))
     }
 
-    /// Writes one render request without waiting for the response.
+    /// Writes one render request as a versioned envelope (#2308).
     pub fn write_request(&mut self, request: &IpcRenderRequest) -> Result<(), IpcError> {
-        write_message(&mut self.stdin, request)
+        self.write_request_with_token(request, self.site_token)
+    }
+
+    /// Envelope write with an explicit slot token, used by the pool so the token chosen at
+    /// slot creation remains the authoritative one even after a renderer replacement.
+    pub(crate) fn write_request_with_token(
+        &mut self,
+        request: &IpcRenderRequest,
+        site_token: [u8; 32],
+    ) -> Result<(), IpcError> {
+        write_framed_envelope(
+            &mut self.stdin,
+            IPC_KIND_REQUEST,
+            request.generation,
+            site_token,
+            request,
+        )
     }
 
     /// PID of the renderer process (diagnostics/tests).

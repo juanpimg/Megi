@@ -7,6 +7,9 @@
 use std::io::{Read, Write};
 
 mod cookie_policy;
+#[cfg(test)]
+#[path = "ipc/envelope_tests.rs"]
+mod envelope_tests;
 mod file_grant;
 mod options;
 mod process;
@@ -22,6 +25,7 @@ mod regions;
 mod sandbox;
 mod session;
 mod validated;
+mod worker_stream;
 pub use process_pool::{
     MAX_PROCESS_RENDERERS, ProcessRenderPool, request_process_site, request_sandbox_allows_network,
     request_sandbox_read_path,
@@ -32,9 +36,11 @@ pub use regions::{
 };
 pub use session::{ProcessFrame, ProcessRenderSession};
 pub use validated::{
-    IPC_ENVELOPE_HEADER_LEN, IPC_MAGIC, IPC_VERSION, MAX_IPC_CSS_DIMENSION, Validated,
-    ValidationError, WireHeader, read_framed_envelope, validate_response, write_framed_envelope,
+    IPC_ENVELOPE_HEADER_LEN, IPC_KIND_REQUEST, IPC_KIND_RESPONSE, IPC_MAGIC, IPC_VERSION,
+    MAX_IPC_CSS_DIMENSION, Validated, ValidationError, WireHeader, read_framed_envelope,
+    validate_response, write_framed_envelope,
 };
+pub use worker_stream::{run_ipc_worker, run_ipc_worker_stream, run_ipc_worker_stream_with};
 
 /// Maximum accepted IPC payload (32 MiB cap for control and frame messages).
 pub const MAX_IPC_PAYLOAD: usize = 32 * 1024 * 1024;
@@ -55,13 +61,19 @@ pub enum IpcError {
     Io(String),
     /// The watchdog killed a renderer that did not answer in [`RENDER_WATCHDOG_TIMEOUT`].
     Watchdog(u64),
+    /// A response failed wire-header or semantic validation (#2308). The peer is
+    /// untrustworthy from this point on, so the slot must be retired.
+    Validation(String),
 }
 
 impl IpcError {
     /// True when this error means the renderer process is gone (EOF, broken pipe or a
     /// watchdog kill) and the pool must drop the slot and spawn a fresh process.
     pub fn is_fatal(&self) -> bool {
-        matches!(self, Self::Truncated | Self::Io(_) | Self::Watchdog(_))
+        matches!(
+            self,
+            Self::Truncated | Self::Io(_) | Self::Watchdog(_) | Self::Validation(_)
+        )
     }
 }
 
@@ -75,6 +87,7 @@ impl std::fmt::Display for IpcError {
             Self::Watchdog(generation) => {
                 write!(f, "renderer watchdog timeout for generation {generation}")
             }
+            Self::Validation(reason) => write!(f, "IPC validation failed: {reason}"),
         }
     }
 }
@@ -187,143 +200,6 @@ pub struct IpcRenderResponse {
     /// Enforcement level obtained by this renderer before reading IPC (`M3#4`).
     #[serde(default)]
     pub sandbox_mode: String,
-}
-
-/// Entry point for `--megi-ipc-worker`: serves framed requests until stdin closes.
-pub fn run_ipc_worker() -> Result<(), IpcError> {
-    // M3#4: restrict this process before any untrusted IPC frame is read. The parent only
-    // prepares the scratch cwd; the child decides its own mode, so no unsafe pre_exec is used.
-    let scratch = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let allow_network = std::env::var("MEGI_SANDBOX_ALLOW_NETWORK")
-        .map(|value| value != "0")
-        .unwrap_or(true);
-    sandbox::enforce_worker_sandbox(&scratch, allow_network);
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut reader = stdin.lock();
-    let mut writer = stdout.lock();
-    run_ipc_worker_stream(&mut reader, &mut writer)
-}
-
-/// Stream-based worker loop: serves framed requests until EOF. Testable in memory, which
-/// gives the per-site process backend real protocol E2E coverage without a display server.
-pub fn run_ipc_worker_stream<R: Read, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-) -> Result<(), IpcError> {
-    run_ipc_worker_stream_with(reader, writer, crate::worker::render_document_with_options)
-}
-
-fn run_ipc_worker_stream_with<R: Read, W: Write, F>(
-    reader: &mut R,
-    writer: &mut W,
-    mut render_fn: F,
-) -> Result<(), IpcError>
-where
-    F: FnMut(
-        &crate::worker::RenderRequest,
-        &megi_webview::render::RenderOptions,
-    ) -> Result<crate::worker::RenderFrame, String>,
-{
-    loop {
-        let request: IpcRenderRequest = match read_message_checked(reader)? {
-            Some(request) => request,
-            None => return Ok(()), // parent closed stdin: clean shutdown
-        };
-        let render_request = crate::worker::RenderRequest {
-            generation: request.generation,
-            input: request.input.clone(),
-            css_width: request.css_width,
-            css_height: request.css_height,
-            base_override: request.base_override.clone(),
-            scripting: request.scripting,
-            find_query: request.find_query.clone(),
-            host_events: Vec::new(),
-            host_dom_events: Vec::new(),
-            form_post: None,
-        };
-        let options = request.options.to_render_options();
-        let render_result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            render_fn(&render_request, &options)
-        })) {
-            Ok(result) => result,
-            Err(payload) => {
-                let reason = payload
-                    .downcast_ref::<&str>()
-                    .map(|s| (*s).to_string())
-                    .or_else(|| payload.downcast_ref::<String>().cloned())
-                    .unwrap_or_else(|| "unknown panic".to_string());
-                Err(format!("render worker panicked: {reason}"))
-            }
-        };
-        let response = match render_result {
-            Ok(frame) => {
-                let ordinals = DocumentNodeOrdinals::build(&frame.document);
-                IpcRenderResponse {
-                    generation: frame.generation,
-                    png_bytes: frame.png_bytes,
-                    content_height: frame.content_height,
-                    css_width: request.css_width,
-                    title: frame.title,
-                    document_url: frame.document_url,
-                    scripts_executed: frame.scripts_executed,
-                    script_timers_pending: frame.script_timers_pending,
-                    warnings: frame.warnings,
-                    script_errors: frame.script_errors,
-                    links: frame
-                        .links
-                        .iter()
-                        .map(|region| IpcLinkRegion::from_region_indexed(region, &ordinals))
-                        .collect(),
-                    images: frame
-                        .images
-                        .iter()
-                        .map(|region| IpcImageRegion::from_region_indexed(region, &ordinals))
-                        .collect(),
-                    forms: frame
-                        .forms
-                        .iter()
-                        .map(|control| IpcFormControl::from_control_indexed(control, &ordinals))
-                        .collect(),
-                    find_matches: frame
-                        .find_matches
-                        .iter()
-                        .map(|m| IpcFindMatch::from_match_indexed(m, &ordinals))
-                        .collect(),
-                    find_rects: frame
-                        .find_rects
-                        .iter()
-                        .copied()
-                        .map(IpcRect::from_rect)
-                        .collect(),
-                    document_html: crate::download::serialize_document(&frame.document),
-                    error: None,
-                    sandbox_mode: sandbox::reported_sandbox_mode().to_owned(),
-                }
-            }
-            Err(error) => IpcRenderResponse {
-                generation: request.generation,
-                png_bytes: Vec::new(),
-                content_height: 0,
-                css_width: 0,
-                title: None,
-                document_url: request.input,
-                scripts_executed: 0,
-                script_timers_pending: 0,
-                warnings: 0,
-                script_errors: 0,
-                links: Vec::new(),
-                images: Vec::new(),
-                forms: Vec::new(),
-                find_matches: Vec::new(),
-                find_rects: Vec::new(),
-                document_html: String::new(),
-                error: Some(error),
-                sandbox_mode: sandbox::reported_sandbox_mode().to_owned(),
-            },
-        };
-        write_message(writer, &response)?;
-    }
 }
 
 /// A DOM patch sent from the parent to a renderer process: the full post-mutation DOM as a
@@ -466,8 +342,9 @@ mod tests {
             options: IpcRenderOptions::default(),
         };
         let mut input = Vec::new();
-        write_message(&mut input, &req1).unwrap();
-        write_message(&mut input, &req2).unwrap();
+        let token = [0x33u8; 32];
+        write_framed_envelope(&mut input, IPC_KIND_REQUEST, req1.generation, token, &req1).unwrap();
+        write_framed_envelope(&mut input, IPC_KIND_REQUEST, req2.generation, token, &req2).unwrap();
 
         let mut output = Vec::new();
         run_ipc_worker_stream_with(&mut &input[..], &mut output, |req, options| {
@@ -479,7 +356,10 @@ mod tests {
         .expect("worker stream should survive panic");
 
         let mut cursor = &output[..];
-        let resp1: IpcRenderResponse = read_message(&mut cursor).unwrap();
+        let (header1, resp1): (WireHeader, IpcRenderResponse) =
+            read_framed_envelope(&mut cursor).unwrap().unwrap();
+        assert_eq!(header1.kind, IPC_KIND_RESPONSE);
+        assert_eq!(header1.site_token, token);
         assert_eq!(resp1.generation, 1);
         assert!(
             resp1
@@ -489,7 +369,10 @@ mod tests {
             "expected panic error, got {:?}",
             resp1.error
         );
-        let resp2: IpcRenderResponse = read_message(&mut cursor).unwrap();
+        let (header2, resp2): (WireHeader, IpcRenderResponse) =
+            read_framed_envelope(&mut cursor).unwrap().unwrap();
+        assert_eq!(header2.request_id, 2);
+        assert_eq!(header2.site_token, token);
         assert_eq!(resp2.generation, 2);
         assert!(resp2.error.is_none());
     }

@@ -11,9 +11,10 @@ pub struct ProcessFrame {
 }
 
 impl ProcessFrame {
-    /// Converts a wire response into a parent-side frame. A failed render has no DOM to
-    /// restore, so an empty document is used and the error is preserved in the response.
-    pub fn from_response(response: IpcRenderResponse) -> Self {
+    /// Converts a validated wire response into a parent-side frame (#2308). A failed render
+    /// has no DOM to restore, so an empty document is used and the error is preserved.
+    pub fn from_response(response: Validated<IpcRenderResponse>) -> Self {
+        let response = response.into_inner();
         let document = if response.document_html.is_empty() {
             megi_webview::core::Document::new()
         } else {
@@ -116,6 +117,8 @@ pub struct ProcessRenderSession {
     document: Option<megi_webview::core::Document>,
     last_viewport: Option<(u32, u32)>,
     last_options: Option<IpcRenderOptions>,
+    /// Last generation accepted from this renderer; patches must use `last + 1` (#2308).
+    last_generation: u64,
 }
 
 impl ProcessRenderSession {
@@ -125,6 +128,7 @@ impl ProcessRenderSession {
             document: None,
             last_viewport: None,
             last_options: None,
+            last_generation: 0,
         })
     }
 
@@ -132,7 +136,8 @@ impl ProcessRenderSession {
     pub fn render(&mut self, request: IpcRenderRequest) -> Result<ProcessFrame, IpcError> {
         let viewport = (request.css_width, request.css_height);
         let options = request.options.clone();
-        let response = self.renderer.render(request)?;
+        let response = self.renderer.render_validated(request)?;
+        self.last_generation = response.inner().generation;
         self.last_viewport = Some(viewport);
         self.last_options = Some(options);
         self.apply_response(response)
@@ -142,7 +147,8 @@ impl ProcessRenderSession {
     /// been rendered yet.
     pub fn patch(&mut self, base_url: &str) -> Result<ProcessFrame, IpcError> {
         let request = self.build_patch_request(base_url)?;
-        let response = self.renderer.render(request)?;
+        let response = self.renderer.render_validated(request)?;
+        self.last_generation = response.inner().generation;
         self.apply_response(response)
     }
 
@@ -154,7 +160,8 @@ impl ProcessRenderSession {
         let patch = DomPatch::from_document(document, base_url);
         let (css_width, css_height) = self.last_viewport.unwrap_or((800, 600));
         Ok(IpcRenderRequest {
-            generation: 0,
+            // #2308: reuse of generation 0 would be rejected by the parent's validation.
+            generation: self.last_generation.saturating_add(1),
             input: patch.input,
             css_width,
             css_height,
@@ -165,9 +172,12 @@ impl ProcessRenderSession {
         })
     }
 
-    fn apply_response(&mut self, response: IpcRenderResponse) -> Result<ProcessFrame, IpcError> {
-        if let Some(error) = response.error {
-            return Err(IpcError::Io(error));
+    fn apply_response(
+        &mut self,
+        response: Validated<IpcRenderResponse>,
+    ) -> Result<ProcessFrame, IpcError> {
+        if let Some(error) = &response.inner().error {
+            return Err(IpcError::Io(error.clone()));
         }
         let frame = ProcessFrame::from_response(response);
         self.document = Some(frame.document.clone());
@@ -193,13 +203,15 @@ mod tests {
             document: Some(doc),
             last_viewport: Some((800, 600)),
             last_options: None,
+            last_generation: 4,
         };
         let req = session.build_patch_request("https://example.com/").unwrap();
         assert_eq!((req.css_width, req.css_height), (800, 600));
+        assert_eq!(req.generation, 5, "a patch must advance the generation");
 
         // An error response must not overwrite the cached document.
         let err_resp = IpcRenderResponse {
-            generation: 0,
+            generation: 5,
             png_bytes: Vec::new(),
             content_height: 0,
             css_width: 800,
@@ -218,7 +230,8 @@ mod tests {
             error: Some("render failed".to_owned()),
             sandbox_mode: String::new(),
         };
-        assert!(session.apply_response(err_resp).is_err());
+        let validated = validate_response(err_resp, 4).expect("error frame still validates");
+        assert!(session.apply_response(validated).is_err());
         assert!(session.document().is_some());
     }
 }

@@ -251,11 +251,35 @@ impl IpcRenderOptions {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        IpcRenderRequest, IpcRenderResponse, read_message, run_ipc_worker_stream,
-        run_ipc_worker_stream_with, write_message,
+        IPC_KIND_REQUEST, IPC_KIND_RESPONSE, IpcRenderRequest, IpcRenderResponse, WireHeader,
+        read_framed_envelope, run_ipc_worker_stream, run_ipc_worker_stream_with,
+        write_framed_envelope,
     };
     use super::*;
     use std::time::Duration;
+
+    const TEST_TOKEN: [u8; 32] = [0x77; 32];
+
+    fn write_request(buffer: &mut Vec<u8>, request: &IpcRenderRequest) {
+        write_framed_envelope(
+            buffer,
+            IPC_KIND_REQUEST,
+            request.generation,
+            TEST_TOKEN,
+            request,
+        )
+        .expect("write request envelope");
+    }
+
+    fn read_response(buffer: &[u8]) -> IpcRenderResponse {
+        let (header, response): (WireHeader, IpcRenderResponse) =
+            read_framed_envelope(&mut &buffer[..])
+                .expect("read response envelope")
+                .expect("frame");
+        assert_eq!(header.kind, IPC_KIND_RESPONSE);
+        assert_eq!(header.site_token, TEST_TOKEN);
+        response
+    }
 
     #[test]
     fn ipc_render_options_round_trip_filters_httponly_and_preserves_caps() {
@@ -331,7 +355,7 @@ mod tests {
             options: IpcRenderOptions::from_render_options(&source),
         };
         let mut input = Vec::new();
-        write_message(&mut input, &req).expect("write request");
+        write_request(&mut input, &req);
         let mut output = Vec::new();
         run_ipc_worker_stream_with(&mut &input[..], &mut output, |req, options| {
             assert_eq!(options.time_ms, 250.0);
@@ -348,7 +372,7 @@ mod tests {
         })
         .expect("worker stream");
 
-        let response: IpcRenderResponse = read_message(&mut &output[..]).expect("read response");
+        let response = read_response(&output);
         // The child's Set-Cookie may not flow back over IPC (plan §Task 2).
         let wire = serde_json::to_value(&response).expect("serialize response");
         assert!(wire.get("cookies").is_none());
@@ -371,10 +395,10 @@ mod tests {
             options: IpcRenderOptions::from_render_options(&source),
         };
         let mut input = Vec::new();
-        write_message(&mut input, &req).expect("write");
+        write_request(&mut input, &req);
         let mut output = Vec::new();
         run_ipc_worker_stream(&mut &input[..], &mut output).expect("stream");
-        let response: IpcRenderResponse = read_message(&mut &output[..]).expect("read");
+        let response = read_response(&output);
         let img = megi_webview::image::decode_png(
             &response.png_bytes,
             &megi_webview::image::PngLimits::default(),

@@ -1,7 +1,9 @@
 //! Real E2E for the per-site renderer-process backend (ADR-004 / F7-ISOLATION).
 //! Spawns the actual `megi --megi-ipc-worker` child and drives it over the framed IPC.
 
-use megi_browser::ipc::{IpcRenderRequest, IpcRenderResponse, ProcessRenderPool, ProcessRenderer};
+use megi_browser::ipc::{
+    IpcRenderRequest, IpcRenderResponse, ProcessRenderPool, ProcessRenderer, Validated,
+};
 
 fn request(generation: u64, url: &str) -> IpcRenderRequest {
     IpcRenderRequest {
@@ -55,7 +57,12 @@ fn wait_for_responses(pool: &mut ProcessRenderPool, count: usize) -> Vec<IpcRend
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let mut out = Vec::new();
     while out.len() < count && std::time::Instant::now() < deadline {
-        out.extend(pool.drain().into_iter().filter_map(|result| result.ok()));
+        out.extend(
+            pool.drain()
+                .into_iter()
+                .filter_map(|result| result.ok())
+                .map(Validated::into_inner),
+        );
         if out.len() < count {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }

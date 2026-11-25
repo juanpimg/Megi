@@ -12,6 +12,12 @@ pub const IPC_MAGIC: [u8; 4] = *b"MEGI";
 /// Current versioned IPC wire format version.
 pub const IPC_VERSION: u16 = 1;
 
+/// Envelope kind for a parent → renderer render request (#2308).
+pub const IPC_KIND_REQUEST: u16 = 1;
+
+/// Envelope kind for a renderer → parent render response (#2308).
+pub const IPC_KIND_RESPONSE: u16 = 2;
+
 /// Fixed byte length of `magic[4] | version:u16 | kind:u16 | request_id:u64 | site_token:[u8;32] | len:u32`.
 pub const IPC_ENVELOPE_HEADER_LEN: usize = 52;
 

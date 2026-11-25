@@ -4,15 +4,26 @@
 //! an mpsc channel, so the event loop never blocks waiting for a reply — unlike the original
 //! synchronous `ProcessRenderSession`. A bounded LRU evicts the least-recently-used site.
 
+use super::process::ValidatedResponse;
 use super::*;
 use crate::site::SiteKey;
 use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Instant;
 
 /// Max simultaneous renderer processes (mirrors the thread pool cap).
 pub const MAX_PROCESS_RENDERERS: usize = 8;
+
+/// Monotonic slot-instance counter used to derive a fresh token on every spawn (#2308).
+static SLOT_TOKEN_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Every slot instance (including a respawn after a crash) gets a distinct token, so a
+/// response from a retired renderer cannot authenticate against the replacement (#2308).
+fn derive_slot_token(site: &SiteKey) -> [u8; 32] {
+    crate::site::derive_renderer_token(site, SLOT_TOKEN_COUNTER.fetch_add(1, Ordering::Relaxed))
+}
 
 /// Effective site of a process render request. `base_override` wins for patched DOM.
 pub fn request_process_site(request: &IpcRenderRequest) -> SiteKey {
@@ -21,7 +32,7 @@ pub fn request_process_site(request: &IpcRenderRequest) -> SiteKey {
 
 pub use super::sandbox::{request_sandbox_allows_network, request_sandbox_read_path};
 
-type TaggedResponse = (Option<u64>, Result<IpcRenderResponse, IpcError>);
+type TaggedResponse = (Option<u64>, ValidatedResponse);
 
 enum SlotBackend {
     Process(ProcessRenderer),
@@ -40,9 +51,13 @@ impl SlotBackend {
         }
     }
 
-    fn write_request(&mut self, request: &IpcRenderRequest) -> Result<(), IpcError> {
+    fn write_request(
+        &mut self,
+        request: &IpcRenderRequest,
+        site_token: [u8; 32],
+    ) -> Result<(), IpcError> {
         match self {
-            Self::Process(renderer) => renderer.write_request(request),
+            Self::Process(renderer) => renderer.write_request_with_token(request, site_token),
             #[cfg(test)]
             Self::Mock { alive } => {
                 if *alive {
@@ -82,8 +97,10 @@ impl SlotBackend {
 
 struct Slot {
     site: SiteKey,
+    /// Unforgeable-per-instance correlation tag stamped on request envelopes (#2308).
+    site_token: [u8; 32],
     backend: SlotBackend,
-    responses: Receiver<Result<IpcRenderResponse, IpcError>>,
+    responses: Receiver<ValidatedResponse>,
     pending: VecDeque<u64>,
     /// Send time for each `pending` generation, in the same order (T5 watchdog).
     sent_at: VecDeque<(u64, Instant)>,
@@ -105,8 +122,9 @@ impl Slot {
         loop {
             match self.responses.try_recv() {
                 Ok(Ok(response)) => {
-                    self.take_pending(response.generation);
-                    out.push((Some(response.generation), Ok(response)));
+                    let generation = response.inner().generation;
+                    self.take_pending(generation);
+                    out.push((Some(generation), Ok(response)));
                 }
                 Ok(Err(error)) if error.is_fatal() => {
                     let first_gen = self.pending.pop_front();
@@ -195,11 +213,12 @@ impl ProcessRenderPool {
     fn push_mock_slot_for_test(
         &mut self,
         site: SiteKey,
-        responses: Receiver<Result<IpcRenderResponse, IpcError>>,
+        responses: Receiver<ValidatedResponse>,
         alive: bool,
     ) {
         self.clock = self.clock.saturating_add(1);
         self.slots.push(Slot {
+            site_token: derive_slot_token(&site),
             site,
             backend: SlotBackend::Mock { alive },
             responses,
@@ -213,21 +232,23 @@ impl ProcessRenderPool {
         &self,
         allow_network: bool,
         read_path: Option<&Path>,
-    ) -> Result<
-        (
-            ProcessRenderer,
-            Receiver<Result<IpcRenderResponse, IpcError>>,
-        ),
-        IpcError,
-    > {
+        site_token: [u8; 32],
+    ) -> Result<(ProcessRenderer, Receiver<ValidatedResponse>), IpcError> {
         match &self.executable {
-            Some(path) => ProcessRenderer::spawn_with_reader_from_args_with_network(
+            Some(path) => ProcessRenderer::spawn_with_reader_from_args_with_network_and_token(
                 path,
                 &self.args,
                 allow_network,
                 read_path,
+                site_token,
             ),
-            None => ProcessRenderer::spawn_with_reader_with_network(allow_network, read_path),
+            None => ProcessRenderer::spawn_with_reader_from_args_with_network_and_token(
+                &std::env::current_exe().map_err(|error| IpcError::Io(error.to_string()))?,
+                &self.args,
+                allow_network,
+                read_path,
+                site_token,
+            ),
         }
     }
 
@@ -249,10 +270,12 @@ impl ProcessRenderPool {
         let index = match self.slots.iter().position(|slot| slot.site == site) {
             Some(index) => index,
             None if self.slots.len() < self.max => {
+                let site_token = derive_slot_token(&site);
                 let (renderer, responses) =
-                    self.spawn_renderer(allow_network, read_path.as_deref())?;
+                    self.spawn_renderer(allow_network, read_path.as_deref(), site_token)?;
                 self.slots.push(Slot {
                     site: site.clone(),
+                    site_token,
                     backend: SlotBackend::Process(renderer),
                     responses,
                     pending: VecDeque::new(),
@@ -269,12 +292,14 @@ impl ProcessRenderPool {
                     .min_by_key(|(_, slot)| slot.last_used)
                     .map(|(index, _)| index)
                     .expect("non-empty pool");
+                let site_token = derive_slot_token(&site);
                 let (renderer, responses) =
-                    self.spawn_renderer(allow_network, read_path.as_deref())?;
+                    self.spawn_renderer(allow_network, read_path.as_deref(), site_token)?;
                 let old = std::mem::replace(
                     &mut self.slots[index],
                     Slot {
                         site: site.clone(),
+                        site_token,
                         backend: SlotBackend::Process(renderer),
                         responses,
                         pending: VecDeque::new(),
@@ -288,7 +313,10 @@ impl ProcessRenderPool {
             }
         };
         self.slots[index].last_used = self.clock;
-        self.slots[index].backend.write_request(&request)?;
+        let site_token = self.slots[index].site_token;
+        self.slots[index]
+            .backend
+            .write_request(&request, site_token)?;
         self.slots[index].pending.push_back(request.generation);
         self.slots[index]
             .sent_at
@@ -336,8 +364,8 @@ impl ProcessRenderPool {
         out
     }
 
-    /// Drains all available responses without blocking.
-    pub fn drain(&mut self) -> Vec<Result<IpcRenderResponse, IpcError>> {
+    /// Drains all available validated responses without blocking.
+    pub fn drain(&mut self) -> Vec<ValidatedResponse> {
         self.drain_tagged()
             .into_iter()
             .map(|(_, response)| response)
@@ -390,89 +418,5 @@ impl ProcessRenderPool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_req(generation: u64, site: &str) -> IpcRenderRequest {
-        IpcRenderRequest {
-            generation,
-            input: site.to_owned(),
-            css_width: 200,
-            css_height: 100,
-            base_override: None,
-            scripting: false,
-            find_query: None,
-            options: IpcRenderOptions::default(),
-        }
-    }
-
-    #[test]
-    fn fatal_ipc_error_notifies_every_in_flight_generation() {
-        let mut pool = ProcessRenderPool::new(2);
-        let (tx, rx) = std::sync::mpsc::channel();
-        pool.push_mock_slot_for_test(crate::site::site_key("https://crash.example/"), rx, true);
-
-        pool.send(test_req(11, "https://crash.example/a"))
-            .expect("send 11");
-        pool.send(test_req(12, "https://crash.example/b"))
-            .expect("send 12");
-
-        tx.send(Err(IpcError::Truncated)).expect("inject fatal");
-        let drained = pool.drain_tagged();
-        assert_eq!(
-            drained.len(),
-            2,
-            "both in-flight requests must receive errors"
-        );
-        assert_eq!(drained[0].0, Some(11));
-        assert_eq!(drained[1].0, Some(12));
-        assert!(drained.iter().all(|(_, res)| res.is_err()));
-        assert_eq!(pool.len(), 0);
-        assert_eq!(pool.recoveries(), 1);
-    }
-
-    #[test]
-    fn dead_slot_replaced_by_send_reports_in_flight_failures() {
-        let mut pool = ProcessRenderPool::new(2);
-        let site = crate::site::site_key("https://dead.example/");
-        let (_tx, rx) = std::sync::mpsc::channel();
-        pool.push_mock_slot_for_test(site.clone(), rx, true);
-        pool.send(test_req(31, "https://dead.example/a"))
-            .expect("send 31");
-        pool.send(test_req(32, "https://dead.example/b"))
-            .expect("send 32");
-        assert!(pool.kill_child(&site));
-
-        let retired = pool.slots.remove(0);
-        pool.retire_slot(retired, "renderer died");
-        let drained = pool.drain_tagged();
-        assert_eq!(drained.len(), 2);
-        assert_eq!(drained[0].0, Some(31));
-        assert_eq!(drained[1].0, Some(32));
-        assert!(drained.iter().all(|(_, res)| res.is_err()));
-    }
-
-    #[test]
-    fn disconnected_reader_notifies_every_in_flight_generation() {
-        let mut pool = ProcessRenderPool::new(2);
-        let (tx, rx) = std::sync::mpsc::channel();
-        pool.push_mock_slot_for_test(crate::site::site_key("https://eof.example/"), rx, true);
-
-        pool.send(test_req(21, "https://eof.example/a"))
-            .expect("send 21");
-        pool.send(test_req(22, "https://eof.example/b"))
-            .expect("send 22");
-
-        drop(tx);
-        let drained = pool.drain_tagged();
-        assert_eq!(
-            drained.len(),
-            2,
-            "channel close must fail both pending calls"
-        );
-        assert_eq!(drained[0].0, Some(21));
-        assert_eq!(drained[1].0, Some(22));
-        assert!(drained.iter().all(|(_, res)| res.is_err()));
-        assert_eq!(pool.len(), 0);
-    }
-}
+#[path = "process_pool_tests.rs"]
+mod tests;

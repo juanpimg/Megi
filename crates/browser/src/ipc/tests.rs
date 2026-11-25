@@ -2,6 +2,38 @@
 
 use super::*;
 
+const TEST_TOKEN: [u8; 32] = [0x11; 32];
+
+fn write_request_frame(buffer: &mut Vec<u8>, request: &IpcRenderRequest) {
+    write_framed_envelope(
+        buffer,
+        IPC_KIND_REQUEST,
+        request.generation,
+        TEST_TOKEN,
+        request,
+    )
+    .expect("write request envelope");
+}
+
+fn read_response_frame(cursor: &mut &[u8]) -> IpcRenderResponse {
+    let (header, response) = read_framed_envelope(cursor)
+        .expect("read response envelope")
+        .expect("response frame");
+    assert_eq!(header.kind, IPC_KIND_RESPONSE);
+    assert_eq!(header.site_token, TEST_TOKEN);
+    response
+}
+
+fn minimal_png() -> Vec<u8> {
+    let mut bytes = vec![0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1A, b'\n'];
+    bytes.extend_from_slice(&13u32.to_be_bytes());
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&1u32.to_be_bytes());
+    bytes.extend_from_slice(&1u32.to_be_bytes());
+    bytes.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
+    bytes
+}
+
 #[test]
 fn dom_patch_carries_a_data_url_and_base() {
     let mut document = megi_webview::core::Document::new();
@@ -48,7 +80,7 @@ fn restore_document_recovers_the_serialized_dom() {
 fn process_frame_restores_dom_from_wire_response() {
     let response = IpcRenderResponse {
         generation: 3,
-        png_bytes: vec![0x89, b'P', b'N', b'G'],
+        png_bytes: minimal_png(),
         content_height: 100,
         css_width: 100,
         title: Some("probe".to_owned()),
@@ -67,7 +99,7 @@ fn process_frame_restores_dom_from_wire_response() {
         error: None,
         sandbox_mode: String::new(),
     };
-    let frame = ProcessFrame::from_response(response);
+    let frame = ProcessFrame::from_response(validate_response(response, 2).expect("valid frame"));
     assert_eq!(frame.response.generation, 3);
     let node = frame
         .document
@@ -98,7 +130,7 @@ fn failed_response_uses_an_empty_document() {
         error: Some("boom".to_owned()),
         sandbox_mode: String::new(),
     };
-    let frame = ProcessFrame::from_response(response);
+    let frame = ProcessFrame::from_response(validate_response(response, 0).expect("valid frame"));
     assert!(frame.document.get_element_by_id("anything").is_none());
     assert_eq!(frame.response.error.as_deref(), Some("boom"));
 }
@@ -229,6 +261,10 @@ fn fatal_ipc_errors_trigger_process_respawn() {
     assert!(IpcError::Io("broken pipe".to_owned()).is_fatal());
     assert!(!IpcError::InvalidPayload("bad json".to_owned()).is_fatal());
     assert!(!IpcError::TooLarge(1).is_fatal());
+    assert!(
+        IpcError::Validation("bad site token".to_owned()).is_fatal(),
+        "#2308: a forged response must retire the slot"
+    );
 }
 
 #[test]
@@ -250,13 +286,13 @@ fn worker_stream_serves_requests_from_distinct_sites() {
             find_query: None,
             options: IpcRenderOptions::default(),
         };
-        write_message(&mut input, &request).expect("write request");
+        write_request_frame(&mut input, &request);
     }
     let mut output = Vec::new();
     crate::ipc::run_ipc_worker_stream(&mut &input[..], &mut output).expect("worker stream");
     let mut cursor = &output[..];
     for expected_generation in [1u64, 2] {
-        let response: IpcRenderResponse = read_message(&mut cursor).expect("read response");
+        let response = read_response_frame(&mut cursor);
         assert_eq!(response.generation, expected_generation);
         assert_eq!(response.css_width, 320);
         assert!(
@@ -275,10 +311,25 @@ fn worker_stream_serves_requests_from_distinct_sites() {
 fn worker_stream_detects_a_truncated_request_from_a_dead_peer() {
     // E2E crash signal: a peer that dies mid-frame yields Truncated, which the pool classifies
     // as fatal and uses to respawn the renderer process.
-    let truncated = [0u8, 2];
+    let mut frame = Vec::new();
+    write_request_frame(
+        &mut frame,
+        &IpcRenderRequest {
+            generation: 1,
+            input: "data:text/html,<p>cut</p>".to_owned(),
+            css_width: 100,
+            css_height: 100,
+            base_override: None,
+            scripting: false,
+            find_query: None,
+            options: IpcRenderOptions::default(),
+        },
+    );
+    frame.truncate(super::IPC_ENVELOPE_HEADER_LEN + 2);
+    let mut truncated = &frame[..];
     let mut output = Vec::new();
     assert_eq!(
-        crate::ipc::run_ipc_worker_stream(&mut &truncated[..], &mut output),
+        crate::ipc::run_ipc_worker_stream(&mut truncated, &mut output),
         Err(IpcError::Truncated)
     );
     assert!(output.is_empty(), "no response for an incomplete request");
@@ -404,12 +455,13 @@ fn worker_stream_and_process_frame_preserve_many_link_and_form_nodes() {
         options: IpcRenderOptions::default(),
     };
     let mut input = Vec::new();
-    write_message(&mut input, &request).expect("write request");
+    write_request_frame(&mut input, &request);
     let mut output = Vec::new();
     crate::ipc::run_ipc_worker_stream(&mut &input[..], &mut output).expect("worker stream");
 
-    let response: IpcRenderResponse = read_message(&mut &output[..]).expect("read response");
-    let process_frame = crate::ipc::ProcessFrame::from_response(response);
+    let response = read_response_frame(&mut &output[..]);
+    let validated = validate_response(response, 0).expect("validated response");
+    let process_frame = crate::ipc::ProcessFrame::from_response(validated);
     let render_frame = process_frame.to_render_frame(400).expect("render frame");
     assert!(
         render_frame.links.len() >= 200,

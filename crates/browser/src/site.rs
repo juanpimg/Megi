@@ -40,6 +40,37 @@ pub fn site_key(url: &str) -> SiteKey {
     }
 }
 
+/// Deterministic 32-byte renderer token for a site and slot instance (#2308).
+///
+/// RPC 4086 / FIPS 180-4 style domain separation is not needed here: this token is a
+/// per-slot correlation tag, not a secret or a hash of untrusted input. FNV-1a mixes the
+/// canonical site key, this process's pid and a monotonically increasing slot counter; no
+/// randomness source or new dependency is involved.
+pub(crate) fn derive_renderer_token(site: &SiteKey, counter: u64) -> [u8; 32] {
+    let canonical = match site {
+        SiteKey::Origin { scheme, host, port } => format!("origin:{scheme}://{host}:{port}"),
+        SiteKey::Opaque(label) => format!("opaque:{label}"),
+    };
+    let mut state: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in canonical
+        .as_bytes()
+        .iter()
+        .chain(&(std::process::id() as u64).to_be_bytes())
+        .chain(&counter.to_be_bytes())
+    {
+        state ^= u64::from(*byte);
+        state = state.wrapping_mul(0x0100_0000_01b3);
+    }
+    let mut token = [0u8; 32];
+    for chunk in token.as_chunks_mut::<8>().0 {
+        state = state
+            .wrapping_mul(0x0100_0000_01b3)
+            .wrapping_add(0x9e37_79b9_7f4a_7c15);
+        chunk.copy_from_slice(&state.to_be_bytes());
+    }
+    token
+}
+
 /// True when two tabs with these keys may share a renderer (same effective origin).
 pub fn can_share(a: &SiteKey, b: &SiteKey) -> bool {
     a == b
