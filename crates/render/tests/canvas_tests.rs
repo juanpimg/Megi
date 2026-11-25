@@ -27,6 +27,16 @@ fn render_page(html: &str) -> megi_render::RenderOutput {
     output
 }
 
+fn distinct_colors(pixmap: &megi_paint::Pixmap) -> usize {
+    use std::collections::HashSet;
+    pixmap
+        .pixels
+        .iter()
+        .map(|c| (c.r, c.g, c.b, c.a))
+        .collect::<HashSet<_>>()
+        .len()
+}
+
 fn count_color(pixmap: &megi_paint::Pixmap, color: megi_css::Color) -> usize {
     pixmap
         .pixels
@@ -68,6 +78,51 @@ fn canvas_without_script_paints_no_red() {
         0,
         "no script => no red canvas"
     );
+}
+
+#[test]
+fn canvas_full_fixture_matches_versioned_golden() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("workspace root");
+    let fixture = root.join("tests/fixtures/render/canvas_full.html");
+    let golden = root.join("tests/fixtures/render/canvas_full/golden.png");
+    let url = format!("file://{}", fixture.display());
+    let options = RenderOptions {
+        viewport: Viewport::new(400, 260).expect("viewport"),
+        ..RenderOptions::default()
+    };
+    let mut first = render_url(&url, &options).expect("first render");
+    let mut second = render_url(&url, &options).expect("second render");
+    assert_eq!(first.stats.scripts_executed, 1);
+    assert_eq!(first.stats.console_errors, 0, "{:?}", first.stats.warnings);
+    assert_eq!(
+        first.png_bytes(),
+        second.png_bytes(),
+        "PNG output must be byte-identical across runs"
+    );
+    let expected = std::fs::read(&golden).expect("versioned golden PNG");
+    assert_eq!(
+        first.png_bytes(),
+        expected,
+        "canvas_full PNG must match the versioned golden byte-for-byte"
+    );
+    assert!(
+        distinct_colors(&first.pixmap) > 20,
+        "gradients and alpha blending must produce many intermediate colors"
+    );
+    for color in [
+        megi_css::Color::new(0xEF, 0x44, 0x44, 0xFF), // fillRect + getImageData marker
+        megi_css::Color::new(0xF9, 0x73, 0x16, 0xFF), // arc fill
+        megi_css::Color::new(0xA8, 0x55, 0xF7, 0xFF), // radial gradient center
+        megi_css::Color::new(0x0E, 0xA5, 0xE9, 0xFF), // measureText marker
+    ] {
+        assert!(
+            count_color(&first.pixmap, color) > 0,
+            "missing canvas color {color:?}"
+        );
+    }
 }
 
 #[test]

@@ -27,8 +27,18 @@ digest_file() {
     fi
 }
 
+md5_file() {
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum "$1"
+    elif command -v md5 >/dev/null 2>&1; then
+        md5 "$1"
+    else
+        python3 -c 'import hashlib,sys; print(hashlib.md5(open(sys.argv[1],"rb").read()).hexdigest(), sys.argv[1])' "$1"
+    fi
+}
+
 check_json() {
-    python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d, dict) and d.get("png"), "invalid --json output"'
+    python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d, dict) and (d.get("png") or d.get("png_bytes")), "invalid --json output"'
 }
 
 echo "==> basic fixture (640x400)"
@@ -72,6 +82,25 @@ cargo run -q -p megi-render -- tests/fixtures/render/showcase/index.html \
     "$outdir/megi-showcase.png" --width 1024 --height 768 --json | check_json
 python3 tools/png_check.py "$outdir/megi-showcase.png"
 digest_file "$outdir/megi-showcase.png"
+
+echo "==> full canvas 2D fixture (400x260, paths/gradients/drawImage/alpha/text/getImageData)"
+for run in 1 2; do
+    cargo run -q -p megi-render -- tests/fixtures/render/canvas_full.html \
+        "$outdir/megi-canvas-full-$run.png" --width 400 --height 260 --json | check_json
+    python3 tools/png_check.py "$outdir/megi-canvas-full-$run.png"
+    md5_file "$outdir/megi-canvas-full-$run.png"
+done
+if ! cmp -s "$outdir/megi-canvas-full-1.png" "$outdir/megi-canvas-full-2.png"; then
+    echo "ERROR: canvas_full md5 differs between the two runs" >&2
+    exit 1
+fi
+echo "canvas_full PNG is byte-identical across two runs (md5 above)"
+if cmp -s "$outdir/megi-canvas-full-1.png" tests/fixtures/render/canvas_full/golden.png; then
+    echo "canvas_full PNG matches the versioned golden byte-for-byte"
+else
+    echo "ERROR: canvas_full PNG does not match tests/fixtures/render/canvas_full/golden.png" >&2
+    exit 1
+fi
 
 echo "==> golden comparison"
 if cmp -s "$outdir/megi-showcase.png" tests/fixtures/render/showcase/golden.png; then

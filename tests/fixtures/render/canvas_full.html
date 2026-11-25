@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Canvas 2D full surface</title></head>
+<body style="margin:0;background:#ffffff">
+<canvas id="scene" width="400" height="240"></canvas>
+<script>
+  var c = document.getElementById('scene');
+  var ctx = c.getContext('2d');
+
+  // Rects: fill, clear hole and stroke (WHATWG canvas §4.12.5.1).
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(0, 0, 80, 40);
+  ctx.clearRect(20, 10, 20, 10);
+  ctx.strokeStyle = '#111827';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(90, 2, 60, 36);
+
+  // Linear and radial gradients.
+  var linear = ctx.createLinearGradient(0, 40, 160, 40);
+  linear.addColorStop(0, '#22c55e');
+  linear.addColorStop(1, '#eab308');
+  ctx.fillStyle = linear;
+  ctx.fillRect(0, 40, 160, 30);
+  var radial = ctx.createRadialGradient(60, 110, 4, 60, 110, 30);
+  radial.addColorStop(0, '#a855f7');
+  radial.addColorStop(1, '#3b82f6');
+  ctx.fillStyle = radial;
+  ctx.fillRect(30, 80, 100, 60);
+
+  // Paths: arc and cubic Bezier.
+  ctx.fillStyle = '#f97316';
+  ctx.beginPath();
+  ctx.arc(250, 60, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.moveTo(180, 120);
+  ctx.bezierCurveTo(220, 80, 280, 80, 320, 120);
+  ctx.stroke();
+
+  // Offscreen canvas drawn with globalAlpha (bridge + compositing).
+  var stamp = document.createElement('canvas');
+  stamp.width = 8;
+  stamp.height = 8;
+  var stampCtx = stamp.getContext('2d');
+  stampCtx.fillStyle = '#14b8a6';
+  stampCtx.fillRect(0, 0, 8, 8);
+  ctx.globalAlpha = 0.5;
+  ctx.drawImage(stamp, 330, 90, 40, 40);
+  ctx.globalAlpha = 1;
+
+  // Text paint and metrics.
+  ctx.fillStyle = '#2563eb';
+  ctx.fillText('AB', 200, 140);
+  ctx.strokeStyle = '#1e40af';
+  ctx.strokeText('CD', 200, 160);
+  var advance = ctx.measureText('AB').width;
+
+  // getImageData feeds a marker pixel back into the canvas, and measureText
+  // determines a second marker width, so both APIs are observed in the golden.
+  var pixel = ctx.getImageData(5, 5, 1, 1).data;
+  ctx.fillStyle = 'rgb(' + pixel[0] + ',' + pixel[1] + ',' + pixel[2] + ')';
+  ctx.fillRect(0, 220, 20, 8);
+  ctx.fillStyle = '#0ea5e9';
+  ctx.fillRect(30, 220, Math.max(1, Math.min(40, advance)), 8);
+</script>
+</body>
+</html>
