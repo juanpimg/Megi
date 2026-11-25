@@ -81,6 +81,45 @@ class MilestoneCheckerTests(unittest.TestCase):
         self.assertNotEqual(result, 0)
         self.assertIn("no recorded evidence", output.getvalue())
 
+    def test_integer_phase_id_does_not_crash(self) -> None:
+        """A numeric TOML id must be stringified, not crash .upper() lookup."""
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = 0\ntitle = "x"\nitems = ["evidence"]\npending = []\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("0", 1, root=self.root)
+        self.assertEqual(result, 0)
+        self.assertIn("verified", output.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("milestone M0 not found", output.getvalue())
+
+    def test_string_items_is_rejected_not_false_pass(self) -> None:
+        """A string `items` must not let items[index-1] yield a character as PASS."""
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = "verified criterion"\npending = []\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("malformed criterion list", output.getvalue())
+        self.assertNotIn("verified: v", output.getvalue())
+
+    def test_string_pending_is_rejected(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = "still pending"\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", 1, root=self.root)
+        self.assertNotEqual(result, 0)
+        self.assertIn("malformed criterion list", output.getvalue())
+
+    def test_match_mode_rejects_malformed_lists(self) -> None:
+        self._write("docs/status/progress.toml",
+                    '[[phase]]\nid = "M0"\ntitle = "x"\nitems = "verified criterion"\npending = []\n')
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            result = check_milestone.check("M0", None, root=self.root, match="verified")
+        self.assertNotEqual(result, 0)
+        self.assertIn("malformed criterion list", output.getvalue())
+
     def test_empty_string_pending_fails(self) -> None:
         self._write("docs/status/progress.toml",
                     '[[phase]]\nid = "M0"\ntitle = "x"\nitems = []\npending = [""]\n')

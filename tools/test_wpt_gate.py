@@ -148,6 +148,18 @@ class WptGateTest(unittest.TestCase):
         self.assertIn("allowlist[0]", message)
         self.assertIn("key", message)
 
+    def test_baseline_bool_passed_or_total_is_rejected(self) -> None:
+        """A JSON boolean is an int subclass in Python; it must not pass as a count."""
+        for field in ("passed", "total"):
+            saved = baseline()
+            saved[field] = True
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "baseline.json"
+                path.write_text(json.dumps(saved), encoding="utf-8")
+                with self.assertRaises(ValueError) as caught:
+                    wpt_gate.load_baseline(path)
+            self.assertIn("baseline passed/total must be integers", str(caught.exception))
+
     def test_rebaseline_writes_toml_that_gate_accepts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
