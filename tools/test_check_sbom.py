@@ -43,6 +43,16 @@ class CheckSbomTests(unittest.TestCase):
         (self._dir / "broken.json").write_text("{not json", encoding="utf-8")
         self.assertEqual(self._run(), 1)
 
+    def test_non_utf8_bytes_fail_without_traceback(self) -> None:
+        # A UTF-16 BOM is not UTF-8 SBOM JSON: reject it cleanly, never crash.
+        (self._dir / "sbom.json").write_bytes(b'\xff\xfe{"bomFormat":"CycloneDX"}')
+        stderr = StringIO()
+        with redirect_stdout(StringIO()), redirect_stderr(stderr):
+            rc = check_sbom.main([str(self._dir)])
+        self.assertEqual(rc, 1)
+        self.assertIn("invalid SBOM JSON", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
+
     def test_valid_cyclonedx_json_passes(self) -> None:
         (self._dir / "sbom.json").write_text(json.dumps(VALID_BOM), encoding="utf-8")
         self.assertEqual(self._run(), 0)

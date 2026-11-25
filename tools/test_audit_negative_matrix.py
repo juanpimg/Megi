@@ -129,6 +129,31 @@ class NegativeMatrixContract(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def test_check_mode_rejects_malformed_toml_without_traceback(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write("schema = 1\n[os.linux\n")
+            path = Path(handle.name)
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "tools/audit_negative_matrix.py",
+                    "--check",
+                    "--path",
+                    str(path),
+                ],
+                cwd=ROOT,
+                env=dict(os.environ, TMPDIR="/var/tmp"),
+                capture_output=True,
+                text=True,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 1, output)
+            self.assertIn("cannot read matrix", output)
+            self.assertNotIn("Traceback", output)
+        finally:
+            path.unlink(missing_ok=True)
+
     def _tampered_first_linux_slot(self, field: str, value: str) -> Path:
         text = MATRIX.read_text(encoding="utf-8")
         marker = "\n[os.macos]\n"
