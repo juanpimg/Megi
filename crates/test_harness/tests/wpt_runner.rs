@@ -61,6 +61,40 @@ fn wpt_component_runner_executes_real_js_subtests() {
 }
 
 #[test]
+fn wpt_shadow_dom_fixtures_execute_real_js_subtests() {
+    let results = run_wpt_dir(workspace_root(), "shadow-dom")
+        .expect("shadow-dom fixtures must be declared in tests/wpt/MANIFEST.json");
+    assert!(
+        !results.is_empty(),
+        "the runner executed no shadow-dom subtests"
+    );
+    for result in &results {
+        assert!(
+            result.fixture.starts_with("shadow-dom/"),
+            "unexpected fixture: {}",
+            result.fixture
+        );
+    }
+    let (passed, total) = summary(&results);
+    let failures: Vec<&WptResult> = results.iter().filter(|r| r.status != "PASS").collect();
+    assert!(
+        failures.is_empty(),
+        "allowlist is empty: {} non-PASS shadow-dom subtests of {total}: {}",
+        failures.len(),
+        failures
+            .iter()
+            .take(5)
+            .map(|r| format!("{} ({})", r.display_name(), r.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    assert!(
+        passed >= 9,
+        "expected at least 9 shadow-dom PASS, got {passed}/{total}"
+    );
+}
+
+#[test]
 fn wpt_component_runner_rejects_undeclared_directory() {
     let error = run_wpt_dir(workspace_root(), "dom/not-vendored")
         .expect_err("a directory absent from the manifest must not silently pass");

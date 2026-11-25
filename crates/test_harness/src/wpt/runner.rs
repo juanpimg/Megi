@@ -45,12 +45,13 @@ pub fn run_wpt_dir(root: &std::path::Path, dir: &str) -> Result<Vec<WptResult>, 
         let path = base.join(&fixture);
         let html = std::fs::read_to_string(&path)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-        results.extend(run_fixture(&fixture, &html, &resources)?);
+        results.extend(run_fixture(root, &fixture, &html, &resources)?);
     }
     Ok(results)
 }
 
 fn run_fixture(
+    root: &std::path::Path,
     fixture: &str,
     html: &str,
     resources: &[(String, String)],
@@ -68,6 +69,15 @@ fn run_fixture(
         runtime
             .eval(&code, "<wpt-support-resource>")
             .map_err(|error| format!("{fixture}: support resource {name} failed: {error}"))?;
+    }
+    for (path, script) in manifest::support_scripts(root)? {
+        // WPT support scripts start with `"use strict";`. In direct eval that turns
+        // top-level `var` into a local binding, so the fixture cannot see the helpers.
+        // The vendored bytes stay untouched; only the injected copy drops that directive.
+        let script = script.strip_prefix("\"use strict\";").unwrap_or(&script);
+        runtime
+            .eval(script, &format!("<wpt-support-script {path}>"))
+            .map_err(|error| format!("{fixture}: support script {path} failed: {error}"))?;
     }
     let mut results = Vec::new();
     // `.any.js` fixtures are scripts with a `// META:` header, not HTML documents.

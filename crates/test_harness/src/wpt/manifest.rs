@@ -69,6 +69,22 @@ pub fn support_resources(root: &Path) -> Result<Vec<(String, String)>, String> {
     Ok(resources)
 }
 
+/// Support JavaScript (WPT `resources/*.js`) injected before a fixture's own scripts.
+pub fn support_scripts(root: &Path) -> Result<Vec<(String, String)>, String> {
+    let mut scripts = Vec::new();
+    for entry in entries(root)? {
+        if entry.kind != "support" || !entry.path.ends_with(".js") {
+            continue;
+        }
+        let path = wpt_root(root).join(&entry.path);
+        let text = std::fs::read_to_string(&path)
+            .map_err(|error| format!("cannot read {}: {error}", entry.path))?;
+        scripts.push((entry.path.clone(), text));
+    }
+    scripts.sort();
+    Ok(scripts)
+}
+
 /// All directories with adopted fixtures, sorted for deterministic report ordering.
 pub fn adopted_dirs(root: &Path) -> Result<Vec<String>, String> {
     let mut dirs: Vec<String> = entries(root)?
