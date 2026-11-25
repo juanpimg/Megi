@@ -85,7 +85,7 @@
     "bytes": 3592,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: createElementNS does not upgrade prefixed custom elements",
+    "skip_reason": "not adopted: two subtests still fail (HTMLUnknownElement not callable; string third argument ignored mismatch)",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -95,7 +95,7 @@
     "bytes": 11254,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: NewTarget sanity checks and extends validation are incomplete",
+    "skip_reason": "not adopted: eight subtests still fail (instanceof Element not callable; inferred localName undefined; proxy counting)",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -965,7 +965,7 @@
     "bytes": 16472,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: assignedNodes returns no nodes after slot/name attribute mutations and inserting slots is not callable",
+    "skip_reason": "not adopted: assignedNodes is empty after slot/name attribute mutations and slot insertion",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
@@ -1005,7 +1005,7 @@
     "bytes": 4619,
     "license": "BSD-3-Clause",
     "kind": "skip",
-    "skip_reason": "not adopted: assignedSlot is undefined on text nodes (Text.prototype lacks the getter)",
+    "skip_reason": "not adopted: assignedSlot on text nodes is not exposed through Text.prototype",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },
