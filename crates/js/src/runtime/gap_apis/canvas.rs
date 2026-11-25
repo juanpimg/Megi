@@ -20,7 +20,9 @@ pub(crate) fn canvas_get_context(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     let kind = arg_string(args, 0, context)?;
-    if kind != "2d" {
+    let is_2d = kind == "2d";
+    let is_webgl = matches!(kind.as_str(), "webgl" | "experimental-webgl");
+    if !is_2d && !is_webgl {
         return Ok(JsValue::null());
     }
     let Some(node) = canvas_element_node(this, context) else {
@@ -34,6 +36,13 @@ pub(crate) fn canvas_get_context(
     }
     let handle = canvas_ops::handle_for(context, node)
         .ok_or_else(|| js_error("no active JavaScript host"))?;
+    // WHATWG HTML §4.12.5: a canvas keeps a single context type for its lifetime.
+    if !canvas_ops::surface_value(context, node, |s| s.claim_context(is_webgl)).unwrap_or(false) {
+        return Ok(JsValue::null());
+    }
+    if is_webgl {
+        return Ok(super::webgl::build_webgl_context(handle, context).into());
+    }
 
     let mut init = ObjectInitializer::new(context);
     init.property(

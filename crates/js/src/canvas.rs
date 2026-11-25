@@ -17,6 +17,8 @@ mod state;
 pub use gradient::{Gradient, LinearGradient, RadialGradient};
 pub use path::Subpath;
 pub use state::{Affine2D, CanvasState};
+pub mod webgl;
+pub use webgl::{ContextMode, WebGLState};
 
 /// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
 pub const MAX_CANVAS_DIM: u32 = 4096;
@@ -165,6 +167,10 @@ pub struct CanvasSurface {
     pub fill_gradient: Option<usize>,
     /// Active stroke gradient index (overrides `stroke_style` when `Some`).
     pub stroke_gradient: Option<usize>,
+    /// First context type requested for this canvas (WHATWG HTML §4.12.5).
+    pub context_mode: ContextMode,
+    /// Software WebGL state (WebGL 1.0 §5.14, §6.2); unused by 2D painting.
+    pub webgl: WebGLState,
 }
 
 /// Maximum number of path primitives retained by a canvas context (#1959).
@@ -216,7 +222,25 @@ impl CanvasSurface {
             gradients: Vec::new(),
             fill_gradient: None,
             stroke_gradient: None,
+            context_mode: ContextMode::None,
+            webgl: WebGLState::new(width, height),
         })
+    }
+
+    /// Claims the canvas for a `webgl` (`true`) or `2d` (`false`) context.
+    /// WHATWG HTML §4.12.5: a canvas keeps one context type for its lifetime.
+    /// The enum stays private to the surface; callers only see a boolean.
+    pub fn claim_context(&mut self, wants_webgl: bool) -> bool {
+        let requested = if wants_webgl {
+            ContextMode::WebGL
+        } else {
+            ContextMode::Canvas2D
+        };
+        if self.context_mode != ContextMode::None && self.context_mode != requested {
+            return false;
+        }
+        self.context_mode = requested;
+        true
     }
 
     /// Applies a parsed `fillStyle`/`strokeStyle` (WHATWG HTML §4.12.5.1).

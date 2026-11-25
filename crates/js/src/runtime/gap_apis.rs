@@ -8,6 +8,7 @@ mod frames;
 mod install;
 mod nodes;
 mod slots;
+mod webgl;
 
 pub(crate) use canvas::*;
 pub(crate) use frames::*;
