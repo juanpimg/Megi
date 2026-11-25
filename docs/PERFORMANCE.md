@@ -414,3 +414,57 @@ Filas nuevas de r33–r36 (19) que no tienen par en r32: matriz completa
 - **Perfil**: `performance` vía `powerprofilesctl` (reversible); loads
   1,0–2,1 durante las mediciones.
 - **website/pages.yml**: del dueño, no se tocan.
+
+---
+
+## 15. JS en caliente: tiempo de motor frente a tiempo de binding (ronda 37 parcial)
+
+Medición puntual para la decisión de M8#1, **no una nueva baseline completa**: la
+baseline r36 de 81 filas (§3) sigue vigente. El criterio y el procedimiento están
+en `docs/superpowers/plans/2026-11-24-js-evolution-plan.md:61-112`; la decisión,
+en `docs/adr/2026-11-24-js-jit-decision.md`.
+
+- **Código**: `crates/bench/src/benches/js_hot.rs` (commits `c6394c3f` y
+  `76d3be52`). Tres filas nuevas, `group = "js"`: `js/hot-engine`,
+  `js/hot-bindings` y `js/hot-corpus-wikipedia-null`.
+- **Carga**: patrón real de `tests/fixtures/js_corpus/jquery_like.html`:
+  `querySelectorAll('.item')` seguido de 100 pasadas sobre 200 nodos con
+  `getAttribute('data-index')` (20 000 llamadas). Las dos primeras filas
+  comparten el mismo script y número de llamadas; cambia sólo el objeto detrás
+  de `items[i]`: *shims* JS planos (sin cruzar a Rust) frente a *wrappers* DOM
+  reales. El *setup* de los 200 *shims* se evalúa **fuera** de la ventana
+  temporizada; la primera ronda de 7 pasadas (`target/bench-r37-js-run1..7.json`)
+  asignaba los *shims* dentro de cada `eval` y quedó descartada por confundir
+  asignación con coste de binding.
+- **Comando canónico**: `cargo +1.99.1 run --release -p megi-bench -- --filter js --iterations 5 --warmup 1 --json` (7 pasadas, `nice -n 19`, un solo cargo a la vez).
+  `cargo bench -p megi-bench js_hot` **no** es el verificador: compila el
+  harness de unit tests del binario e imprime `running 0 tests`.
+- **Ventana**: 2026-11-25, HEAD `76d3be52`, sin cambios en el árbol,
+  `rustc 1.99.1 (58cf8f9c3 2026-10-13)`, i7-12700H/20 hilos, `iterations = 5`,
+  `warmup = 1`. Load 1 min **2,33–5,64** y 15 min **22,72–22,95**: máquina
+  compartida, los valores son direccionales, no un SLA.
+- **Artefactos**: `target/bench-r37-js-fixed-run1..7.json` (sin commitear).
+  Publicados en `docs/status/bench-baseline.json` bajo
+  `addenda.js-r37` mediante `python3 tools/update_bench_baseline.py --write/--check`;
+  `tools/bench_compare.py` sigue leyendo **sólo** `rows` (r36), por lo que un
+  addendum jamás reescribe ni oculta la baseline completa.
+
+| Fila (mediana de 7 medianas) | ms | rango de las 7 pasadas (ms) | p95 muestral (ms) |
+|---|---:|---:|---:|
+| `js/hot-engine` (`engine_time_ms`) | **5.229** | 4.799–5.754 | 6.145 |
+| `js/hot-bindings` (`binding_time_ms` + engine) | **9.458** | 8.336–10.007 | 10.663 |
+| `js/hot-corpus-wikipedia-null` (script real) | **0.136** | 0.113–0.184 | 0.188 |
+
+- `p95 muestral` = vecino más cercano por rango sobre las 35 muestras (7 pasadas
+  × 5 iteraciones), no mediana de p95 por pasada.
+- El par da **+4.229 ms** de puente Rust sobre el mismo trabajo JS
+  (**1,809×**, 0,211 µs por `getAttribute`); motor 3,825 M llamadas/s, bindings
+  2,115 M llamadas/s. Es una medida del *bridge* del arnés, **no** una
+  comparación Boa/QuickJS ni una predicción de JIT.
+- El script real del corpus tarda **0,136 ms**, el 2,6 % del tiempo de motor del
+  bucle sintético: en este corpus el cuello no está en el intérprete. Con load
+  compartido y dispersión del 10 % (motor) / 20 % (bindings), los deltas <10 %
+  no se atribuyen sin A/B intercalado.
+- Verificación de la nueva fila: `cargo +1.99.1 test --release -p megi-bench js_hot`
+  → 6 passed, 0 failed, EXIT=0; el test `engine_script_has_no_setup_work`
+  impide reintroducir el *setup* dentro del temporizador.
