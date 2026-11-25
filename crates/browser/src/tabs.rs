@@ -46,7 +46,7 @@ fn blank_tab_title() -> &'static str {
     crate::i18n::strings(crate::i18n::Locale::current()).new_tab
 }
 
-/// Result of [`TabsState::close`].
+/// Result of closing a tab.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CloseOutcome {
     /// The tab was removed; the active index was adjusted and remains valid.

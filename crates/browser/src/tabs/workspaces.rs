@@ -162,7 +162,7 @@ impl TabsState {
             .count()
     }
 
-    /// Maps a visible position to a global index into [`TabsState::tabs`].
+    /// Maps a visible position to a global index into the tab list.
     pub fn visible_tab_index(&self, visible: usize) -> Option<usize> {
         self.tabs
             .iter()
