@@ -10,8 +10,8 @@
 //! 2. All 62 `tree-construction/*.dat` files are content-identical to their exported `.json`.
 //! 3. All 14 tokenizer suites run: 7,050/7,050 state-runs, including `xmlViolation.test` 4/4 with
 //!    the WHATWG HTML §13.2.9 XML-infoset coercion enabled.
-//! 4. All 2,769 fixture parse-error annotations (2,779 run-level checks) match `(code, line, col)`;
-//!    only 37 documented order-only differences remain.
+//! 4. All 2,769 fixture parse-error annotations (2,779 run-level checks) match `(code, line, col)`
+//!    and source order; there is no order-only allowlist.
 //! 5. All 62 tree-construction suites run: **3,904/3,904** mode-runs. The four `#script-on`
 //!    `scripted_*` suites execute parser-inserted scripts (WP-6.4) through the JS executor
 //!    installed by `megi_test_harness::tree_harness`; there are no known tree failures.

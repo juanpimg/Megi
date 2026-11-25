@@ -467,3 +467,32 @@ pub fn run_tokenizer_suite_file(path: &Path) -> Result<Vec<TokenizerRunResult>, 
 
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tokenizer_tests_dir;
+
+    /// Regression test for the html5lib parse-error *order* gap at `test3.test` #369
+    /// (`<!DOCTYPE a PUBLIC"` + U+000B): input-stream errors must be reported at the source
+    /// position where the code point is consumed, i.e. interleaved with tokenizer errors.
+    #[test]
+    fn test3_case_369_parse_errors_match_html5lib_order() {
+        let path = tokenizer_tests_dir().join("test3.test");
+        let runs = run_tokenizer_suite_file(&path).expect("test3.test must run");
+        let run = runs
+            .iter()
+            .find(|r| r.index == 369)
+            .expect("test3.test case #369 must run");
+        assert!(
+            run.errors_passed,
+            "parse-error multiset changed: expected {:?}, actual {:?}",
+            run.expected_errors, run.actual_errors
+        );
+        assert!(
+            run.errors_in_order,
+            "parse-error sequence differs from html5lib-tests: expected {:?}, actual {:?}",
+            run.expected_errors, run.actual_errors
+        );
+    }
+}
