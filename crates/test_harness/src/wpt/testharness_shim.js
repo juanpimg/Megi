@@ -171,17 +171,34 @@
   };
 
   globalThis.async_test = function (fn, name) {
+    // WHATWG testharness.js accepts async_test(name) and only marks the test
+    // complete when the fixture calls done() from an asynchronous callback.
+    if (typeof fn !== "function") {
+      name = fn;
+      fn = null;
+    }
+    var status = "PASS";
+    var message = "";
+    var done = false;
     var pending = {
       name: name,
-      step: function (fn) {
-        try { fn(pending); } catch (error) { record(name, "FAIL", error); }
+      step: function (stepFn) {
+        if (done) return;
+        try { stepFn(pending); }
+        catch (error) { status = "FAIL"; message = text(error); }
       },
-      step_func: function (fn) {
-        return function () { pending.step(function () { fn.apply(pending, arguments); }); };
+      step_func: function (stepFn) {
+        return function () { pending.step(function () { stepFn.apply(pending, arguments); }); };
       },
-      done: function () { record(name, "NOTRUN", "async_test is not driven by this runner"); }
+      done: function () {
+        if (done) return;
+        done = true;
+        record(name, status, message);
+      }
     };
-    try { fn(pending); } catch (error) { record(name, "FAIL", error); }
+    if (fn) {
+      try { fn(pending); } catch (error) { status = "FAIL"; message = text(error); done = true; record(name, status, message); }
+    }
     return pending;
   };
 

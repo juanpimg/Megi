@@ -95,6 +95,29 @@ fn wpt_shadow_dom_fixtures_execute_real_js_subtests() {
 }
 
 #[test]
+fn wpt_custom_element_registry_executes_real_js_subtests() {
+    let results = run_wpt_dir(workspace_root(), "custom-elements")
+        .expect("custom-elements fixtures must be declared in tests/wpt/MANIFEST.json");
+    let (passed, total) = summary(&results);
+    assert!(
+        passed >= 37,
+        "expected ≥37 custom-element PASS, got {passed}/{total}"
+    );
+    let failures: Vec<&WptResult> = results.iter().filter(|r| r.status != "PASS").collect();
+    assert!(
+        failures.is_empty(),
+        "allowlist is empty: {} non-PASS custom-element subtests: {}",
+        failures.len(),
+        failures
+            .iter()
+            .take(8)
+            .map(|r| format!("{} ({})", r.display_name(), r.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+}
+
+#[test]
 fn wpt_component_runner_rejects_undeclared_directory() {
     let error = run_wpt_dir(workspace_root(), "dom/not-vendored")
         .expect_err("a directory absent from the manifest must not silently pass");
