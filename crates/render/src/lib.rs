@@ -83,8 +83,9 @@
 //!   even after script mutations (layout/paint *are* recomputed from the mutated DOM).
 //! - `window.matchMedia(query).matches` is evaluated with the same [`megi_css::MediaContext`]
 //!   (render viewport, screen medium) as the stylesheet cascade, and
-//!   `innerWidth`/`innerHeight`/`devicePixelRatio` (fixed 1.0) come from the render
-//!   viewport, so scripts and layout agree.
+//!   `innerWidth`/`innerHeight` come from the render viewport and `devicePixelRatio`
+//!   comes from [`RenderOptions::device_pixel_ratio`] (the host's real device scale),
+//!   so scripts and layout agree.
 //! - `requestAnimationFrame` callbacks are queued 16 virtual milliseconds ahead and pumped
 //!   by the deterministic event loop (timestamp = absolute virtual ms), so script-driven
 //!   animations mutate the DOM and reach the PNG; `cancelAnimationFrame` is supported.

@@ -3,10 +3,22 @@
 
 use super::*;
 
+/// Render options for one window render. The real winit device scale must reach the
+/// renderer so page scripts (`window.devicePixelRatio`) and responsive image selection
+/// see the same DPR as the window, instead of the pipeline's hardcoded 1.0.
+pub(super) fn render_options_for_scale(
+    base: &megi_webview::render::RenderOptions,
+    scale_factor: f64,
+) -> megi_webview::render::RenderOptions {
+    let mut options = base.clone();
+    options.device_pixel_ratio = crate::scale::sanitize_scale(scale_factor) as f32;
+    options
+}
+
 impl WindowApp {
     /// Builds a render worker using this window's cloned options and event proxy.
     fn new_worker(&self) -> Worker {
-        let render_options = self.render_options.clone();
+        let render_options = render_options_for_scale(&self.render_options, self.scale_factor);
         let proxy = self.proxy.clone();
         spawn_worker(
             move |request: &RenderRequest| {
@@ -29,7 +41,10 @@ impl WindowApp {
             base_override: request.base_override.clone(),
             scripting: request.scripting,
             find_query: request.find_query.clone(),
-            options: crate::ipc::IpcRenderOptions::from_render_options(&self.render_options),
+            options: crate::ipc::IpcRenderOptions::from_render_options(&render_options_for_scale(
+                &self.render_options,
+                self.scale_factor,
+            )),
         };
         let pool = self.process_pool.get_or_insert_with(|| {
             crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
@@ -110,8 +125,7 @@ impl WindowApp {
         self.send_render(request);
     }
 
-    /// Clears all per-page state (scroll, stale links/forms/title/find, frame counters)
-    /// when navigating to a new page. Shared by `start_navigation` and form POSTs (#1824)
+    /// Clears all per-page state (scroll, stale links/forms/title/find, frame counters)    /// when navigating to a new page. Shared by `start_navigation` and form POSTs (#1824)
     /// so both behave as a real navigation instead of an in-place frame replacement.
     pub(super) fn clear_page_state(&mut self) {
         self.reader_html = None;
@@ -455,5 +469,17 @@ impl WindowApp {
             }
         }
         applied
+    }
+}
+
+#[cfg(test)]
+mod scale_tests {
+    use super::*;
+
+    #[test]
+    fn window_render_options_carry_device_pixel_ratio() {
+        let options =
+            render_options_for_scale(&megi_webview::render::RenderOptions::default(), 1.25);
+        assert_eq!(options.device_pixel_ratio, 1.25);
     }
 }

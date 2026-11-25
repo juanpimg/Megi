@@ -19,7 +19,8 @@
 //! `matchMedia(query)` is evaluated with the same [`megi_css::MediaContext`] used to load the
 //! page's stylesheets (viewport from the render options, `screen` medium), so media queries
 //! seen by scripts agree with the CSS cascade. `window.innerWidth`/`innerHeight`/
-//! `devicePixelRatio` come from the same viewport (DPR is fixed at 1.0 by the pipeline).
+//! `devicePixelRatio` come from the same viewport, with DPR taken from the host's
+//! [`crate::RenderOptions::device_pixel_ratio`] (1.0 for headless renders).
 
 use std::collections::HashMap;
 use std::sync::Arc;

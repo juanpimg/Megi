@@ -209,6 +209,9 @@ pub(crate) fn run_script_stage<'a>(
             media_context.clone(),
             (options.viewport.width, options.viewport.height),
         );
+        // The real device scale comes from the host (winit in the window path); without
+        // it every page sees DPR 1.0 on HiDPI displays.
+        host_context.device_pixel_ratio = options.device_pixel_ratio;
         #[cfg(feature = "js")]
         for iframe in document.get_elements_by_tag_name("iframe") {
             let Some(data) = document.try_node(iframe).and_then(|n| n.as_element()) else {
