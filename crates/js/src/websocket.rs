@@ -11,6 +11,10 @@ use boa_engine::{
 
 use crate::error::JsError;
 
+/// Native-to-JS marker for a typed quota failure (#2311). The prelude turns this
+/// into a `DOMException` named `QuotaExceededError`; keep both strings in sync.
+const WS_LIMIT_PREFIX: &str = "WebSocketLimitError: ";
+
 const WEBSOCKET_PRELUDE: &str = r####"
 (function () {
   var g = typeof window !== "undefined" ? window : globalThis;
@@ -78,8 +82,24 @@ const WEBSOCKET_PRELUDE: &str = r####"
     self._handle = __megi_ws_native(target, "open", "");
     if (typeof self._handle !== "number" || self._handle < 0) {
       self.readyState = 3;
-      var errMsg = typeof self._handle === "string" ? self._handle : "WebSocket connection failed";
-      var err2 = { type: "error", message: errMsg };
+      var rawError = typeof self._handle === "string" ? self._handle : "WebSocket connection failed";
+      var errMsg = rawError;
+      var typedError = null;
+      if (rawError.indexOf("WebSocketLimitError: ") === 0) {
+        // #2311: the connection cap is a quota failure, not an opaque message.
+        // Hand scripts a typed DOMException they can branch on by `name`.
+        errMsg = rawError.slice("WebSocketLimitError: ".length);
+        if (typeof DOMException === "function") {
+          typedError = new DOMException(errMsg, "QuotaExceededError");
+        } else {
+          typedError = new Error(errMsg);
+          typedError.name = "QuotaExceededError";
+        }
+      }
+      var err2 = {
+        type: "error", message: errMsg,
+        name: typedError ? typedError.name : "", error: typedError
+      };
       setTimeout(function () { self._fire("error", err2); }, 0);
       return;
     }
@@ -150,6 +170,19 @@ fn ws_native(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
     let op = string(1);
 
     if op == "open" {
+        // #2311 / RFC 6455 §4.1: enforce the per-document cap *before* invoking the
+        // provider. Each successful open registers a transport and, in the real
+        // host, starts a receive thread holding an FD; the provider may allocate
+        // both eagerly, so checking afterwards would already be too late.
+        let (limit, live) = match crate::host::host_cell(context) {
+            Ok(host) => (host.max_websockets, host.websockets.len()),
+            Err(error) => return Ok(JsValue::from(js_string!(error.to_string()))),
+        };
+        if live >= limit {
+            return Ok(JsValue::from(js_string!(format!(
+                "{WS_LIMIT_PREFIX}WebSocket connection limit exceeded ({limit} per document)"
+            ))));
+        }
         // Clone the Arc from the immutable provider slot so the provider runs with
         // no active host borrow (a transport factory may re-enter JavaScript).
         let provider = crate::providers::providers(context)

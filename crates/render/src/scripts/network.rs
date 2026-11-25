@@ -14,6 +14,9 @@ pub(crate) fn install_network_providers(
     host: &ScriptingHostContext,
     limits: ScriptingLimits,
 ) {
+    // #2311: bound live WebSockets for every document, even in the no-worker mode,
+    // before any provider can open a socket and start its receive thread.
+    runtime.set_max_websockets(limits.max_websockets);
     if host.enable_workers {
         // R203: fetch() provider backed by the render's effective FetchOptions. Scripts run
         // synchronously; the Promise settles when the host drains microtasks. CORS policy is
@@ -218,5 +221,70 @@ pub(crate) fn install_network_providers(
         runtime.set_worker_loader(Arc::new(move |url| {
             load_worker_source(url, worker_allow_file, max_worker_bytes)
         }));
+    }
+}
+
+#[cfg(all(test, feature = "js"))]
+mod ws_budget_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A transport that allocates no socket or thread: this test only checks the
+    /// connection budget installed by the render stage.
+    struct EmptyTransport;
+
+    impl megi_js::host::WebSocketTransport for EmptyTransport {
+        fn send(&mut self, _text: &str) -> Result<(), megi_js::JsError> {
+            Ok(())
+        }
+        fn poll(&mut self) -> Vec<megi_js::host::WebSocketEvent> {
+            Vec::new()
+        }
+        fn close(&mut self) {}
+    }
+
+    /// #2311: `ScriptingLimits::max_websockets` must reach the js runtime, which
+    /// checks live transports before invoking the (possibly eager) provider.
+    #[test]
+    fn websocket_cap_from_scripting_limits_is_enforced_before_the_provider() {
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
+        let limits = ScriptingLimits {
+            max_websockets: 2,
+            ..ScriptingLimits::default()
+        };
+        let url = Url::parse("http://example.com/").expect("document url");
+        install_network_providers(&mut runtime, &url, &ScriptingHostContext::empty(), limits);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&calls);
+        let provider: megi_js::host::WebSocketProvider = Arc::new(move |_url| {
+            seen.fetch_add(1, Ordering::SeqCst);
+            Ok(Box::new(EmptyTransport))
+        });
+        runtime.set_websocket_provider(provider);
+        runtime
+            .eval(
+                "globalThis.__wsErrors = []; \
+                 for (var i = 0; i < 3; i++) { \
+                   var ws = new WebSocket('ws://example.com/' + i); \
+                   ws.onerror = function (e) { __wsErrors.push(e.message); }; \
+                 } \
+                 'started';",
+                "t",
+            )
+            .expect("construct sockets");
+        runtime.run_tasks(8).expect("error timers");
+        let errors = runtime.eval("__wsErrors.join(';')", "t").expect("errors");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "the provider must not be called past the configured cap"
+        );
+        assert_eq!(
+            errors
+                .matches("WebSocket connection limit exceeded (2 per document)")
+                .count(),
+            1,
+            "the third open must be capped before the provider: {errors}"
+        );
     }
 }

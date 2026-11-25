@@ -55,6 +55,7 @@ impl Host {
             worker_loader: None,
             fetch_provider: None,
             websocket_provider: None,
+            max_websockets: MAX_WEBSOCKETS,
             websockets: std::collections::HashMap::new(),
             websocket_next_handle: 1,
             shadow_roots: std::collections::HashMap::new(),

@@ -3,6 +3,7 @@
 #![cfg(feature = "js")]
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use megi_js::error::JsError;
@@ -314,5 +315,56 @@ fn websocket_send_preserves_binary_arraybuffer_and_typed_array_bytes() {
             SentFrame::Binary(vec![0x00, 0x80]),
             SentFrame::Text("hello".to_owned()),
         ]
+    );
+}
+
+/// #2311: every `new WebSocket()` used to reach the provider and start a pump
+/// thread/FD. Opening more than the per-document cap must fail before the
+/// provider is called, and JS must see a typed `QuotaExceededError`.
+#[test]
+fn websocket_connection_cap_rejects_before_calling_provider() {
+    const CAP: usize = 16;
+
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&calls);
+    let mut runtime = JsRuntime::new().expect("runtime");
+    let provider: WebSocketProvider = Arc::new(move |_url| {
+        seen.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(MockTransport {
+            events: VecDeque::new(),
+            sent: Arc::new(Mutex::new(Vec::new())),
+        }))
+    });
+    runtime.set_websocket_provider(provider);
+    let result = runtime
+        .eval(
+            "globalThis.__errors = []; \
+             var sockets = []; \
+             for (var i = 0; i < 17; i++) { \
+               var ws = new WebSocket('ws://example.com/' + i); \
+               ws.onerror = function (e) { \
+                 __errors.push((e.error && e.error.name) + '|' + e.message); \
+               }; \
+               sockets.push(ws); \
+             } \
+             String([sockets.length, sockets[16].readyState]);",
+            "t",
+        )
+        .expect("construct");
+    assert_eq!(
+        result, "17,3",
+        "the 17th socket must fail to open: {result}"
+    );
+    let tasks = runtime.run_tasks(8).expect("run error event timers");
+    assert!(tasks > 0, "the error event must be dispatched");
+    let errors = runtime.eval("__errors.join(';')", "t").expect("errors");
+    assert_eq!(
+        errors, "QuotaExceededError|WebSocket connection limit exceeded (16 per document)",
+        "the cap must surface as a typed JS error: {errors}"
+    );
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        CAP,
+        "the provider must not be invoked past the connection cap"
     );
 }

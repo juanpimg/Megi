@@ -21,6 +21,10 @@ const DEFAULT_MAX_MODULE_FETCHES: usize = 1024;
 const DEFAULT_MAX_FETCH_CALLS: usize = 64;
 /// Maximum total bytes a page's scripts may pull through `fetch()` (#660).
 const DEFAULT_MAX_FETCH_BYTES: usize = 32 * 1024 * 1024;
+/// Default cap on live WebSocket connections per document (#2311).
+const DEFAULT_MAX_WEBSOCKETS: usize = 16;
+/// Hard ceiling: callers may tighten the WebSocket budget but never raise it (#2311).
+const HARD_MAX_WEBSOCKETS: usize = DEFAULT_MAX_WEBSOCKETS;
 /// Default total loop-iteration budget across all scripts of the page.
 pub const DEFAULT_MAX_TOTAL_LOOP_ITERATIONS: u64 = 1_000_000;
 /// Default maximum number of timer callbacks pumped after the scripts.
@@ -93,6 +97,9 @@ pub struct ScriptingLimits {
     pub max_fetch_calls: usize,
     /// Maximum total bytes fetched through `fetch()` per page (#660).
     pub max_fetch_bytes: usize,
+    /// Maximum number of simultaneously open WebSockets per document (#2311). Each open
+    /// owns a socket and a pump thread; the js runtime enforces this before the provider.
+    pub max_websockets: usize,
     /// Maximum size of one script source (bytes).
     pub max_script_bytes: usize,
     /// Maximum total script bytes per page (inline + external, bytes).
@@ -126,6 +133,7 @@ impl ScriptingLimits {
             .min(HARD_MAX_TOTAL_LOOP_ITERATIONS);
         self.max_tasks = self.max_tasks.min(HARD_MAX_TASKS);
         self.max_virtual_time_ms = self.max_virtual_time_ms.min(HARD_MAX_VIRTUAL_TIME_MS);
+        self.max_websockets = self.max_websockets.min(HARD_MAX_WEBSOCKETS);
         self
     }
 }
@@ -138,6 +146,7 @@ impl Default for ScriptingLimits {
             max_module_fetches: DEFAULT_MAX_MODULE_FETCHES,
             max_fetch_calls: DEFAULT_MAX_FETCH_CALLS,
             max_fetch_bytes: DEFAULT_MAX_FETCH_BYTES,
+            max_websockets: DEFAULT_MAX_WEBSOCKETS,
             max_script_bytes: DEFAULT_MAX_SCRIPT_BYTES,
             max_total_bytes: DEFAULT_MAX_TOTAL_SCRIPT_BYTES,
             budget: ScriptBudget::default(),
@@ -471,7 +480,9 @@ mod real_site_budget_tests {
         hostile.total_loop_iterations = u64::MAX;
         hostile.max_tasks = usize::MAX;
         hostile.max_virtual_time_ms = u64::MAX;
+        hostile.max_websockets = usize::MAX;
         let clamped = hostile.clamped();
+        assert_eq!(clamped.max_websockets, HARD_MAX_WEBSOCKETS);
         assert_eq!(
             clamped.total_loop_iterations,
             HARD_MAX_TOTAL_LOOP_ITERATIONS

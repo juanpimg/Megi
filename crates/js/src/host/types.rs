@@ -159,6 +159,11 @@ pub enum WebSocketEvent {
     Error(String),
 }
 
+/// Hard per-document cap on live WebSocket transports (#2311). Every open owns a
+/// socket (and, in the real host, a receive thread), so scripts must not be able
+/// to grow either without bound by calling `new WebSocket()` in a loop.
+pub const MAX_WEBSOCKETS: usize = 16;
+
 /// Host-owned WebSocket transport: the JS side sends text and polls for incoming events.
 /// The real implementation (in the shell) drives `megi_net::websocket::WebSocketClient`.
 pub trait WebSocketTransport: Send {
