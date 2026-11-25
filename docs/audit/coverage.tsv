@@ -1,6 +1,6 @@
 path	lines	category	phase	auditor	date	status	findings	notes
 .cargo/config.toml	19	manifest	F3	lead	2026-11-25	covered	CARGO-FORK-DEFAULT	read full config; huacnlee fork defaults with rustup proxy fallback
-.deslop-please.allow	219	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
+.deslop-please.allow	222	fixture	F1	pdf-evidence	2026-11-25	covered	DESLOP-ALLOW-REFRESH	refreshed stale module-cycle/tangle entries after upstream JS changes
 .github/CODEOWNERS	31	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/bug_report.yml	59	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/ISSUE_TEMPLATE/feature_request.yml	48	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -944,11 +944,11 @@ crates/net/src/h2/hpack/huffman.rs	90	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/net/src/h2/hpack/tests.rs	141	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/mod.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/hsts.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/http.rs	366	src	F2	perf-hn-images	2026-11-25	covered	#maximal-modularity,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior audit)
 crates/net/src/http/chunked.rs	340	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/core.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/headers.rs	86	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http/pool.rs	450	src	F2	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
+crates/net/src/http/pool.rs	456	src	F2	perf-hn-images	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior pooling audit)
 crates/net/src/http/preflight.rs	85	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/redirect.rs	36	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/request.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -964,8 +964,8 @@ crates/net/src/loader.rs	195	src	F2	wave-max-mod	2026-11-19	covered	#maximal-mod
 crates/net/src/loader/core.rs	395	src	F2	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
 crates/net/src/loader/fetch.rs	357	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/loader/helpers.rs	57	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/loader/load.rs	253	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/loader/tests.rs	197	src	F2	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
+crates/net/src/loader/load.rs	271	src	F2	perf-hn-images	2026-11-25	covered	#maximal-modularity,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior audit)
+crates/net/src/loader/tests.rs	288	src	F2	perf-hn-images	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior pooling audit)
 crates/net/src/mime.rs	277	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/mixed_content.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/pac.rs	478	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1150,12 +1150,12 @@ crates/render/src/dom_summary.rs	155	src	F2	opencode-agent	2026-11-24	covered	#2
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/frames.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images.rs	43	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/images/load.rs	296	src	F2	perf-image-stage	2026-11-25	covered	#M9-IMAGE	re-read after content-addressed decode dedup
+crates/render/src/images/load.rs	318	src	F2	integrate-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn,WP-5.11	re-read after warm-pool fix and inline-SVG spacer exemption
 crates/render/src/images/selection.rs	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/images/tests.rs	110	src	F2	perf-image-stage	2026-11-25	covered	#M9-IMAGE	re-read after content-addressed decode dedup
+crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn	re-read after warm-pool image batch fix (kept dedup audit)
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/inline_svg.rs	273	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/inline_svg.rs	277	src	F2	integrate-hn-images	2026-11-25	covered	WP-5.11,WP-SITE-hn	re-read after zero-area spacer exemption for synthetic inline SVG
 crates/render/src/lib.rs	292	src	F2	lead	2026-11-25	covered	M7-dom-css-js-feature	re-read after gating computed-style re-export behind js feature
 crates/render/src/main.rs	480	src	F2	opencode-agent	2026-11-24	covered	#2269	re-read after dom_summary extraction
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
