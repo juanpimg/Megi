@@ -1,4 +1,4 @@
-//! Canvas 2D state stack, 2D affine transforms, linear gradients, and drawImage.
+//! Canvas 2D state stack, 2D affine transforms, gradients, and drawImage.
 //!
 //! Spec: WHATWG HTML §4.12.5.1.2 (Transformations), §4.12.5.1.3 (Compositing),
 //! §4.12.5.1.5 (Fill and stroke styles / Gradients), §4.12.5.1.14 (Drawing images).
@@ -10,9 +10,6 @@ pub const MAX_CANVAS_STATE_STACK: usize = 64;
 
 /// Maximum gradients retained per canvas surface.
 pub const MAX_CANVAS_GRADIENTS: usize = 256;
-
-/// Maximum color stops per gradient.
-pub const MAX_CANVAS_GRADIENT_STOPS: usize = 64;
 
 /// 2D affine transformation matrix `[a c e; b d f; 0 0 1]` (WHATWG HTML §4.12.5.1.2).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,88 +74,6 @@ impl Affine2D {
             e: (self.c * self.f - self.d * self.e) * inv,
             f: (self.b * self.e - self.a * self.f) * inv,
         })
-    }
-}
-
-/// Linear gradient paint source in user space (WHATWG HTML §4.12.5.1.5).
-#[derive(Clone, Debug, PartialEq)]
-pub struct LinearGradient {
-    pub x0: f64,
-    pub y0: f64,
-    pub x1: f64,
-    pub y1: f64,
-    pub stops: Vec<(f64, Rgba)>,
-}
-
-impl LinearGradient {
-    pub fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
-        Self {
-            x0,
-            y0,
-            x1,
-            y1,
-            stops: Vec::new(),
-        }
-    }
-
-    pub fn add_color_stop(&mut self, offset: f64, color: Rgba) -> bool {
-        if !offset.is_finite()
-            || !(0.0..=1.0).contains(&offset)
-            || self.stops.len() >= MAX_CANVAS_GRADIENT_STOPS
-        {
-            return false;
-        }
-        self.stops.push((offset, color));
-        self.stops.sort_by(|a, b| a.0.total_cmp(&b.0));
-        true
-    }
-
-    pub fn sample(&self, x: f64, y: f64) -> Rgba {
-        let Some(&(first_off, first_col)) = self.stops.first() else {
-            return Rgba {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: 0,
-            };
-        };
-        if self.stops.len() == 1 {
-            return first_col;
-        }
-        let dx = self.x1 - self.x0;
-        let dy = self.y1 - self.y0;
-        let len2 = dx * dx + dy * dy;
-        if !len2.is_finite() || len2 <= f64::EPSILON {
-            return self.stops.last().map_or(first_col, |s| s.1);
-        }
-        let t = (((x - self.x0) * dx + (y - self.y0) * dy) / len2).clamp(0.0, 1.0);
-        if t <= first_off {
-            return first_col;
-        }
-        for pair in self.stops.windows(2) {
-            let (t0, c0) = pair[0];
-            let (t1, c1) = pair[1];
-            if t <= t1 {
-                let span = t1 - t0;
-                let frac = if span <= f64::EPSILON {
-                    1.0
-                } else {
-                    ((t - t0) / span).clamp(0.0, 1.0)
-                };
-                let lerp = |a: u8, b: u8| -> u8 {
-                    (f64::from(a) + (f64::from(b) - f64::from(a)) * frac)
-                        .round()
-                        .clamp(0.0, 255.0) as u8
-                };
-                return Rgba {
-                    r: lerp(c0.r, c1.r),
-                    g: lerp(c0.g, c1.g),
-                    b: lerp(c0.b, c1.b),
-                    a: lerp(c0.a, c1.a),
-                };
-            }
-        }
-        self.stops.last().map_or(first_col, |s| s.1)
     }
 }
 
@@ -265,7 +180,27 @@ impl CanvasSurface {
             return None;
         }
         let id = self.gradients.len();
-        self.gradients.push(LinearGradient::new(x0, y0, x1, y1));
+        self.gradients
+            .push(Gradient::Linear(LinearGradient::new(x0, y0, x1, y1)));
+        Some(id)
+    }
+
+    /// Creates a radial gradient; returns `None` on invalid radii or capacity limits.
+    pub fn create_radial_gradient(
+        &mut self,
+        x0: f64,
+        y0: f64,
+        r0: f64,
+        x1: f64,
+        y1: f64,
+        r1: f64,
+    ) -> Option<usize> {
+        if self.gradients.len() >= MAX_CANVAS_GRADIENTS {
+            return None;
+        }
+        let gradient = RadialGradient::new(x0, y0, r0, x1, y1, r1)?;
+        let id = self.gradients.len();
+        self.gradients.push(Gradient::Radial(gradient));
         Some(id)
     }
 

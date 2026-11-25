@@ -148,3 +148,30 @@ fn linear_gradient_fill_rect_interpolates_stops() {
     );
     assert!(parts[5] > 230 && parts[4] < 25, "right blue: {parts:?}");
 }
+
+#[test]
+fn radial_gradient_fill_rect_interpolates_from_center() {
+    // WHATWG HTML §4.12.5.1.5: createRadialGradient paints stops along the cone
+    // between the two circles, so the inner stop colors the center and the outer
+    // stop colors the rim (#M6 Canvas 2D).
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 40; c.height = 40; \
+             var ctx = c.getContext('2d'); \
+             var g = ctx.createRadialGradient(20, 20, 0, 20, 20, 20); \
+             g.addColorStop(0, '#ff0000'); g.addColorStop(1, '#0000ff'); \
+             ctx.fillStyle = g; ctx.fillRect(0, 0, 40, 40); \
+             var center = ctx.getImageData(20, 20, 1, 1).data; \
+             var rim = ctx.getImageData(39, 20, 1, 1).data; \
+             [center[0], center[2], rim[0], rim[2]].join(',');",
+            "radial_gradient",
+        )
+        .expect("createRadialGradient must be available");
+    let parts: Vec<u8> = out
+        .split(',')
+        .map(|s| s.parse::<u8>().expect("u8"))
+        .collect();
+    assert!(parts[0] > 200 && parts[1] < 55, "center red: {parts:?}");
+    assert!(parts[2] < 55 && parts[3] > 200, "rim blue: {parts:?}");
+}

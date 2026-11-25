@@ -32,6 +32,11 @@ pub(crate) fn register_canvas_2d_methods(init: &mut ObjectInitializer<'_>) {
             4,
             canvas_create_linear_gradient as NativeFn,
         ),
+        (
+            "createRadialGradient",
+            6,
+            canvas_create_radial_gradient as NativeFn,
+        ),
     ] {
         init.function(native(function), js_string!(name), arity);
     }
@@ -273,6 +278,11 @@ fn canvas_create_linear_gradient(
         canvas_ops::surface_value(context, node, |s| s.create_linear_gradient(x0, y0, x1, y1))
             .flatten()
             .ok_or_else(|| js_error("canvas gradient limit or invalid coordinates"))?;
+    canvas_gradient_object(handle, grad_id, context)
+}
+
+/// Builds the JS `CanvasGradient` wrapper used by both gradient constructors.
+fn canvas_gradient_object(handle: u32, grad_id: usize, context: &mut Context) -> JsResult<JsValue> {
     let mut init = ObjectInitializer::new(context);
     init.property(
         js_string!("__megi_canvas_node"),
@@ -290,6 +300,33 @@ fn canvas_create_linear_gradient(
         2,
     );
     Ok(init.build().into())
+}
+
+/// `createRadialGradient` (WHATWG HTML §4.12.5.1.5): a gradient between two circles.
+fn canvas_create_radial_gradient(
+    this: &JsValue,
+    args: &[JsValue],
+    context: &mut Context,
+) -> JsResult<JsValue> {
+    let node = canvas_context_node(this, context)?;
+    let x0 = canvas_number(args, 0, context)?;
+    let y0 = canvas_number(args, 1, context)?;
+    let r0 = canvas_number(args, 2, context)?;
+    let x1 = canvas_number(args, 3, context)?;
+    let y1 = canvas_number(args, 4, context)?;
+    let r1 = canvas_number(args, 5, context)?;
+    // WHATWG HTML §4.12.5.1.5: radii must be finite and non-negative.
+    if r0 < 0.0 || r1 < 0.0 || !r0.is_finite() || !r1.is_finite() {
+        return Err(js_error("createRadialGradient expects non-negative radii"));
+    }
+    let handle = canvas_ops::handle_for(context, node)
+        .ok_or_else(|| js_error("no active JavaScript host"))?;
+    let grad_id = canvas_ops::surface_value(context, node, |s| {
+        s.create_radial_gradient(x0, y0, r0, x1, y1, r1)
+    })
+    .flatten()
+    .ok_or_else(|| js_error("canvas gradient limit or invalid coordinates"))?;
+    canvas_gradient_object(handle, grad_id, context)
 }
 
 fn canvas_gradient_add_color_stop(

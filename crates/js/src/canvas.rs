@@ -9,12 +9,14 @@ use std::collections::HashMap;
 use megi_core::NodeId;
 
 mod color;
+mod gradient;
 pub(crate) mod ops;
 pub use color::rgba_to_css;
 mod path;
 mod state;
+pub use gradient::{Gradient, LinearGradient, RadialGradient};
 pub use path::Subpath;
-pub use state::{Affine2D, CanvasState, LinearGradient};
+pub use state::{Affine2D, CanvasState};
 
 /// Maximum surface dimension and pixel count (DoS bound; a 4096×4096 surface is 64 MiB).
 pub const MAX_CANVAS_DIM: u32 = 4096;
@@ -157,8 +159,8 @@ pub struct CanvasSurface {
     pub transform: Affine2D,
     /// Saved drawing states (`save()` / `restore()`).
     pub state_stack: Vec<CanvasState>,
-    /// Linear gradients created via `createLinearGradient()`.
-    pub gradients: Vec<LinearGradient>,
+    /// Gradients created via `createLinearGradient()` / `createRadialGradient()`.
+    pub gradients: Vec<Gradient>,
     /// Active fill gradient index (overrides `fill_style` when `Some`).
     pub fill_gradient: Option<usize>,
     /// Active stroke gradient index (overrides `stroke_style` when `Some`).
