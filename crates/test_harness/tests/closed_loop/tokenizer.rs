@@ -52,11 +52,11 @@ fn test_closed_loop_tokenizer_all_14_files_exact_gate() {
 /// Every fixture case declares `errors: [{code, line, col}]` (2,769 annotations, checked once per
 /// initial state => 2,779 run-level expectations). The comparison is:
 /// - exact `(code, line, col)` multisets for every run (position encoding included);
-/// - exact sequence order except for the documented `KNOWN_TOKENIZER_ERROR_ORDER_GAPS` runs
-///   identified by `(suite, case_index, initial_state)`, where html5lib-tests interleaves
-///   input-stream and tokenizer errors differently;
-/// - `xmlViolation.test` asserts tokens only, but its U+FFFF input still legitimately raises one
-///   `noncharacter-in-input-stream` error: counted and asserted, never silently dropped.
+/// - exact source order with no order-only allowlist: input-stream errors (§13.2.3.5) are
+///   interleaved with tokenizer-state errors at the offending code point (§13.2.2);
+/// - `xmlViolation.test` asserts coerced tokens only. Its U+FFFF input still raises one
+///   `noncharacter-in-input-stream` error (verified below); with no annotation to compare it is
+///   excluded from the multiset/order gates rather than counted as a conformance gap.
 #[test]
 fn test_closed_loop_tokenizer_parse_errors_gate() {
     use std::collections::BTreeSet;
@@ -91,20 +91,29 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         for run in &results {
             expected_total += run.expected_errors.len();
             actual_total += run.actual_errors.len();
+            if is_xml_violation {
+                // The fixture declares no error annotations, so there is nothing to compare.
+                // Verify instead that the correct §13.2.2 error is still reported for U+FFFF.
+                if run.index == 0 {
+                    assert_eq!(
+                        run.actual_errors,
+                        vec![("noncharacter-in-input-stream".to_string(), 1, 2)],
+                        "U+FFFF must report noncharacter-in-input-stream (WHATWG HTML §13.2.2)"
+                    );
+                }
+                xml_violation_errors += run.actual_errors.len();
+                continue;
+            }
             if !run.errors_passed {
-                // xmlViolation.test declares no error annotations; its extra input-stream error is
-                // counted/asserted separately below instead of being compared.
                 // #1735: `<div/>`-style runs emit one documented extra trailing-solidus error;
                 // exact matches are listed in KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.
-                if !is_xml_violation
-                    && !is_known_tokenizer_multiset_gap(
-                        suite_name,
-                        run.index,
-                        &run.initial_state,
-                        &run.expected_errors,
-                        &run.actual_errors,
-                    )
-                {
+                if !is_known_tokenizer_multiset_gap(
+                    suite_name,
+                    run.index,
+                    &run.initial_state,
+                    &run.expected_errors,
+                    &run.actual_errors,
+                ) {
                     multiset_mismatches.push(format!(
                         "{suite_name} #{} [{}]: expected {:?}, actual {:?}",
                         run.index, run.initial_state, run.expected_errors, run.actual_errors
@@ -118,29 +127,6 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
                 ));
             }
         }
-
-        if is_xml_violation {
-            xml_violation_errors += results
-                .iter()
-                .map(|run| run.actual_errors.len())
-                .sum::<usize>();
-            continue;
-        }
-
-        let expected_suite: BTreeSet<(usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
-            .iter()
-            .filter(|(name, _, _)| *name == suite_name)
-            .map(|(_, index, state)| (*index, (*state).to_string()))
-            .collect();
-        let actual_suite: BTreeSet<(usize, String)> = results
-            .iter()
-            .filter(|run| run.errors_passed && !run.errors_in_order)
-            .map(|run| (run.index, run.initial_state.clone()))
-            .collect();
-        assert_eq!(
-            actual_suite, expected_suite,
-            "Parse-error ORDER differs in {suite_name}: expected documented runs {expected_suite:?}, got {actual_suite:?}"
-        );
     }
 
     assert!(
@@ -164,27 +150,23 @@ fn test_closed_loop_tokenizer_parse_errors_gate() {
         "Run-level tokenizer parse-error expectation count changed (annotations are checked once \
          per initial state)"
     );
-    // #1735: each documented multiset gap emits one extra trailing-solidus error.
+    // #1735: each documented multiset gap emits one extra trailing-solidus error; xmlViolation
+    // contributes the one spec-mandated noncharacter error verified above.
     assert_eq!(
         actual_total,
-        expected_total
-            + XML_VIOLATION_UNANNOTATED_ERRORS
-            + KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.len(),
-        "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes \
-         {XML_VIOLATION_UNANNOTATED_ERRORS} documented unannotated input-stream error(s); \
-         #1735 contributes {} documented trailing-solidus errors)",
+        expected_total + 1 + KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.len(),
+        "Tokenizer emitted an unexpected number of parse errors (xmlViolation.test contributes one \
+         documented input-stream error; #1735 contributes {} documented trailing-solidus errors)",
         KNOWN_TOKENIZER_ERROR_MULTISET_GAPS.len()
     );
-    let expected_order_gaps: BTreeSet<(String, usize, String)> = KNOWN_TOKENIZER_ERROR_ORDER_GAPS
-        .iter()
-        .map(|(suite, index, state)| ((*suite).to_string(), *index, (*state).to_string()))
-        .collect();
-    assert_eq!(
-        actual_order_gaps, expected_order_gaps,
-        "Total documented parse-error order-only differences changed (by identity)"
+    assert!(
+        actual_order_gaps.is_empty(),
+        "Parse errors are not in source order in {} run(s): {:?}",
+        actual_order_gaps.len(),
+        actual_order_gaps
     );
     assert_eq!(
-        xml_violation_errors, XML_VIOLATION_UNANNOTATED_ERRORS,
-        "xmlViolation.test unannotated input-stream error count changed"
+        xml_violation_errors, 1,
+        "xmlViolation.test must still report exactly one input-stream error for U+FFFF"
     );
 }

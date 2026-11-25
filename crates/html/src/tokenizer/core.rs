@@ -98,6 +98,12 @@ impl Tokenizer {
         while !matches!(self.tokens.last(), Some(Token::Eof)) {
             self.step();
         }
+        // WHATWG HTML §13.2.2: parse errors are tied to the input character that caused them.
+        // §13.2.3.5 preprocessing records input-stream errors eagerly (before tokenization),
+        // while state-machine errors are appended as states consume characters, so the two
+        // kinds were emitted out of source order. Sort stably by (line, col) to interleave
+        // them at the offending code point; equal positions keep their emission order.
+        self.errors.sort_by_key(|error| (error.line, error.col));
     }
 
     /// Fast path for the "data" state: consumes consecutive ordinary characters (anything

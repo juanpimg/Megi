@@ -50,7 +50,7 @@ You are working on Megi, a from-scratch browser engine in Rust (Edition 2024, 17
   python3 tools/update_progress.py --check
   python3 tools/update_coverage.py --check
   python3 tools/audit_coverage.py --check --strict
-- Known caveat: `test_harness --summary --strict` currently fails on 38 documented parse-error differences; the gate is the non-strict `--summary`, which must say PASS.
+- No known conformance caveat: `test_harness --summary` and `--summary --strict` both say PASS, with zero allowlisted failures and zero parse-error order/multiset differences (WHATWG HTML §13.2.2/§13.2.3.5).
 - `./tools/dev.sh all` is the aggregate check; run it too when practical.
 - Report failures by name with their exit codes. Never claim a green suite without pasting the command output.
 
