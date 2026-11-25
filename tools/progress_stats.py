@@ -240,7 +240,8 @@ def render_wpt_headline(report: dict, epoch: dict | None = None) -> str:
     epoch = epoch or report.get("epoch", {})
     revision = str(epoch.get("wpt_revision", "unknown"))[:7]
     counts = report["counts"]
-    dirs = report.get("run_info", {}).get("dirs") or sorted(
+    run_info = report.get("run_info") or {}
+    dirs = (run_info.get("dirs") or []) or sorted(
         {str(Path(r["test"]).parent) for r in report["results"]}
     )
     details = [
@@ -259,13 +260,14 @@ def render_wpt_headline(report: dict, epoch: dict | None = None) -> str:
 def wpt_fields(report: dict) -> dict:
     """The manifest/[wpt] projection of a generated WPT report."""
     counts = report["counts"]
+    run_info = report.get("run_info") or {}
     return {
         "revision": report["epoch"]["wpt_revision"],
         "manifest_sha256": report["epoch"]["manifest_sha256"],
         **counts,
         "passed": counts["pass"],
         "total": report["total"],
-        "dirs": len(report["run_info"]["dirs"]),
+        "dirs": len(run_info.get("dirs") or []),
         "allowlist": 0,
         "distribution": "; ".join(
             f"{label}={counts[field]}" for field, label in (

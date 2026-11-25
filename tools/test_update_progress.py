@@ -225,5 +225,33 @@ class CountTestsCacheTest(unittest.TestCase):
         self.assertEqual(cache.content, {"head": "abc1234", "tests": 2})
 
 
+class ProgressStatsNullRunInfoTest(unittest.TestCase):
+    """triage-r40: `run_info: null` must not crash the [wpt] projection or headline."""
+
+    def setUp(self) -> None:
+        self.r = report(
+            {"pass": 3, "fail": 0, "timeout": 0, "notrun": 0, "error": 0},
+            3,
+            ["tests/wpt/css/css-syntax"],
+        )
+        self.r["run_info"] = None
+
+    def test_render_wpt_headline_tolerates_null_run_info(self) -> None:
+        self.assertEqual(
+            update_progress.render_wpt_headline(self.r, self.r["epoch"]),
+            "WPT ab2ef95 — 3/3 subtests pasados (dirs: 1)",
+        )
+
+    def test_wpt_fields_tolerates_null_run_info(self) -> None:
+        fields = update_progress.wpt_fields(self.r)
+        # The [wpt] projection has no results-derived fallback: a missing dirs
+        # list is counted as zero rather than crashing the manifest generation.
+        self.assertEqual(fields["dirs"], 0)
+        self.assertEqual(
+            fields["headline"],
+            "WPT ab2ef95 — 3/3 subtests pasados (dirs: 1)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
