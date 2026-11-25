@@ -41,7 +41,7 @@ def check(
         return 1
     with path.open("rb") as handle:
         data = tomllib.load(handle)
-    phase = next((p for p in data.get("phase", []) if p.get("id", "").upper() == milestone.upper()), None)
+    phase = next((p for p in data.get("phase", []) if str(p.get("id", "")).upper() == milestone.upper()), None)
     if phase is None:
         print(f"FAIL: milestone {milestone} not found")
         return 1
