@@ -83,6 +83,17 @@ impl WindowApp {
                 "data:text/html;base64,{}",
                 megi_webview::net::base64_encode(html.as_bytes())
             )
+        } else if crate::pages::is_settings_url(&self.input) {
+            // Like history, the generated page is rebuilt from live shell state here;
+            // headless `prepare_input` keeps its deterministic all-off default.
+            let html = crate::pages::settings_page_html_with_state(
+                crate::i18n::Locale::current(),
+                self.settings_state(),
+            );
+            format!(
+                "data:text/html;base64,{}",
+                megi_webview::net::base64_encode(html.as_bytes())
+            )
         } else {
             self.input.clone()
         };

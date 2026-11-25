@@ -1,6 +1,6 @@
 # Zen-inspired UI evolution: end-to-end implementation plan
 
-Status: **proposed** — ready to execute in the isolated worktree `docs/ui-zen-plan`.
+Status: **implemented** — phases 0–4 present in local `main`; Phase 5 documentation closed in this worktree.
 Owner: repository agent. Base: `origin/main` at `065ae4ca`.
 
 ## 1. Goal and non-goals
@@ -235,6 +235,52 @@ Acceptance: WPT gate and page goldens unchanged unless explicitly declared.
 - Open/track issues for deferred Zen features (Split View, Glance, Mods) as
   follow-ups, not as silent omissions.
 - Merge to `main` only after every phase acceptance is green.
+
+## Implementation record
+
+Phases 0–4 were verified by reading the committed sources in the local `main`
+checkout at `aae7ff7f` (the settings bridge also has uncommitted local edits in
+that checkout; they are not part of this record). Verifiable local commits:
+
+- Phase 0: `5ce9179a` (design tokens), `9079c506` (central shortcut registry).
+- Phase 1: `4acf43dc` (pure rail layout/paint), `60f05a1a` (inset presentation),
+  `6927497d` (rail in window lifecycle), `7dfbd8df` (rail/Ctrl+B shell tests).
+- Phase 2: `df255f32` (compact chrome and rail peek), `34a458a9` (compact golden).
+- Phase 3: `d6cfb08a` (local workspace tab model), `b3e7888a` (workspace shortcuts),
+  `a3699de7` (workspace switch fix).
+- Phase 4: `1dae07cf` (generated `megi://settings` page), `8d21e846` (toggle tests),
+  `337111c9` (state-driven toggles), `506cad77` (checkbox → shell-state bridge).
+
+The committed registry (`crates/browser/src/window/shortcuts.rs`) binds Ctrl+B to
+the rail, Ctrl+Shift+B to compact mode, and Ctrl+Alt+W / Ctrl+Shift+W /
+Ctrl+Alt+Shift+W to workspace cycle / new / close. Settings toggles are derived
+from `ShellSettingsState` and written back to `WindowApp` without a second UI stack.
+
+### Limitations (honest)
+
+- `python3 tools/update_coverage.py --check` exits 1 with `error: capacidades done
+  sin evidencia verificable: F1-TOKENIZER, F1-TREE, F1-SERIALIZER, F2-SYNTAX`;
+  pre-existing evidence gaps, not introduced by this UI work (re-run here: rc=1).
+- `wp_generate --all` was previously reported at rc=1 because the `gh` token is
+  invalid. Not re-run during this closure (no network); treat as unverified here.
+- `deslop-please --allow .deslop-please.allow` was previously reported to time out
+  during indexing. Not re-run during this closure; no clean result is claimed.
+- The full AGENTS.md §6 workspace gate was not repeated during development because
+  of the disk budget. Scoped verification was documented in each phase's commits;
+  no full-gate "green" claim is made in this document.
+
+## Deferred work
+
+Explicit follow-ups, not silent omissions (no `gh issue create` was attempted: the
+token is invalid):
+
+- Split View: needs multiple live documents/webviews per window.
+- Glance: needs a second live preview surface.
+- Live Folders, Mods and Sync: need folder services or remote sync; outside the
+  local overlay scope.
+- Workspace persistence: the workspace assignment is not restored from the session
+  (`crates/browser/src/tabs.rs` marks it as deferred to phase 5). Kept as an
+  explicit follow-up; not implemented by the landed phases 0–4.
 
 ## 6. Verification matrix
 

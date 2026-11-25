@@ -295,8 +295,30 @@ pub(super) mod chrome_mode {
             }
         }
 
-        fn compact(&self) -> bool {
+        pub(in crate::window) fn compact(&self) -> bool {
             self.compact
+        }
+
+        pub(in crate::window) fn reduced_motion(&self) -> bool {
+            self.reduced_motion
+        }
+
+        /// Sets the value written by the settings page's compact-mode switch.
+        pub(in crate::window) fn set_compact(&mut self, compact: bool) {
+            self.compact = compact;
+        }
+
+        /// Sets the value written by the settings page's reduced-motion switch.
+        pub(in crate::window) fn set_reduced_motion(&mut self, reduced_motion: bool) {
+            self.reduced_motion = reduced_motion;
+        }
+
+        /// Aligns the peek geometry with the rail value written by the settings page.
+        pub(in crate::window) fn set_rail_open(&mut self, open: bool) {
+            if self.rail_open != open {
+                self.rail_open = open;
+                self.peek_start = None;
+            }
         }
 
         fn band_css_height(&self) -> f32 {

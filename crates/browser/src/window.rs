@@ -39,6 +39,8 @@ pub mod rail_state;
 #[cfg(feature = "window")]
 mod save_as;
 #[cfg(feature = "window")]
+mod shell_settings;
+#[cfg(feature = "window")]
 #[cfg(feature = "window")]
 mod shortcuts;
 #[cfg(all(test, feature = "window"))]
