@@ -2,25 +2,26 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "6e705178405838132ddb89da90c56490920b6b6d0abb7ecfd2ad816a4cdbcd0a"
+    "manifest_sha256": "e1af9d73e10545e3e811f0cc18f4a8587b4c6e729e4e5aaaada8837c25e1578d"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "5 vendored WPT fixtures (478 executed subtests, 2 dirs); NOT full WPT conformance",
-    "adopted_subtests": 478,
+    "scope": "7 vendored WPT fixtures (487 executed subtests, 3 dirs); NOT full WPT conformance",
+    "adopted_subtests": 487,
     "dirs": [
       "tests/wpt/css/css-syntax",
-      "tests/wpt/html/webappapis/atob"
+      "tests/wpt/html/webappapis/atob",
+      "tests/wpt/shadow-dom"
     ]
   },
   "counts": {
-    "pass": 478,
+    "pass": 487,
     "fail": 0,
     "timeout": 0,
     "notrun": 0,
     "error": 0
   },
-  "total": 478,
+  "total": 487,
   "results": [
     {
       "key": "a910cc01afb1e595196fd254a259635dfa0610cee9736eb1952513feae8da5f1",
@@ -2888,6 +2889,60 @@
       "key": "e7efb6ff2f79650bb70afdaf4f5d3deb9565990abd38d60fa2f4ce5c56df81df",
       "test": "tests/wpt/html/webappapis/atob/base64.html",
       "subtest": "html/webappapis/atob/base64.html::atob() setup.",
+      "status": "PASS"
+    },
+    {
+      "key": "d5773f5fecdfcb0e74e312eb449c08148168340f267bf1368e5e75ff4da567fb",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Check the existence of Element.attachShadow",
+      "status": "PASS"
+    },
+    {
+      "key": "6dcd5ed046b87e7cf62f7ba917f2f42dd4a01888f74511e256686e3f6df67808",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Nodes other than Element should not have attachShadow",
+      "status": "PASS"
+    },
+    {
+      "key": "886224bd651cc6953b3e9555c63bd1367567517cb181c73cfebe1a1f68c97480",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Element.attachShadow must throw a TypeError if mode is not \"open\" or \"closed\"",
+      "status": "PASS"
+    },
+    {
+      "key": "edbec438b9663a54880c8773658982b010e3a4e1a5ea5ee688dbafb7ad41e258",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Element.attachShadow must create an instance of ShadowRoot",
+      "status": "PASS"
+    },
+    {
+      "key": "d08bfb45e2d80f6fd5bda24e3adce198aa3830c18d85a63431e09bc9bbb2c9aa",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Element.attachShadow must throw a InvalidStateError if the context object already hosts a shadow tree",
+      "status": "PASS"
+    },
+    {
+      "key": "4e03afa2f4778c2be499378ff7026e85293fcecc5bda2f17186d2d7bd9fd3702",
+      "test": "tests/wpt/shadow-dom/Element-interface-attachShadow.html",
+      "subtest": "shadow-dom/Element-interface-attachShadow.html::Element.attachShadow must throw a NotSupportedError for non-safelisted elements",
+      "status": "PASS"
+    },
+    {
+      "key": "9512e76cb95b8e68a11fe7b34cfd482af3983df6a31a1fd5f73b0b9e00aedf9f",
+      "test": "tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html",
+      "subtest": "shadow-dom/Element-interface-shadowRoot-attribute.html::shadowRoot must be defined on Element prototype",
+      "status": "PASS"
+    },
+    {
+      "key": "79c26afafd575f7710237abb2d9eac46f41ee67208b9657e882109da7855c77c",
+      "test": "tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html",
+      "subtest": "shadow-dom/Element-interface-shadowRoot-attribute.html::shadowRoot attribute must return the open shadow root associated with the element",
+      "status": "PASS"
+    },
+    {
+      "key": "3d498640499541b5647254c74f48caa0edf81af2820d7b701db2da1cdaafccec",
+      "test": "tests/wpt/shadow-dom/Element-interface-shadowRoot-attribute.html",
+      "subtest": "shadow-dom/Element-interface-shadowRoot-attribute.html::shadowRoot attribute must return null if the shadow root attached to the element is closed",
       "status": "PASS"
     }
   ]
