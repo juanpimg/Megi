@@ -71,3 +71,44 @@ fn webgl_read_pixels_honors_array_byte_offset_and_bounds() {
         .expect("webgl readPixels must not throw");
     assert_eq!(out, "0|255|0|255|9,9,9,9");
 }
+
+#[test]
+fn webgl_triangle_rasterises_a_real_surface_region() {
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 8; c.height = 8; \
+             document.body.appendChild(c); \
+             var gl = c.getContext('webgl'); \
+             gl.viewport(0, 0, 8, 8); \
+             gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); \
+             gl.vertices = [-0.5, -0.5, 0.5, -0.5, 0, 0.5]; \
+             gl.drawArrays(gl.TRIANGLES, 0, 3); \
+             var inside = new Uint8Array(4); \
+             gl.readPixels(4, 4, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, inside); \
+             var outside = new Uint8Array(4); \
+             gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, outside); \
+             [inside.join(','), outside.join(',')].join('|');",
+            "webgl_triangle",
+        )
+        .expect("webgl triangle drawArrays must not throw");
+    assert_eq!(out, "255,255,255,255|255,0,0,255");
+}
+
+#[test]
+fn webgl_buffer_sub_data_accepts_nan_offset_without_error() {
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c = document.createElement('canvas'); \
+             var gl = c.getContext('experimental-webgl'); \
+             var buffer = gl.createBuffer(); \
+             gl.bindBuffer(gl.ARRAY_BUFFER, buffer); \
+             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1]), gl.STATIC_DRAW); \
+             gl.bufferSubData(gl.ARRAY_BUFFER, NaN, new Float32Array([2])); \
+             [gl.getError(), WebGLRenderingContext.NO_ERROR, !!buffer].join('|');",
+            "webgl_buffer_sub_data",
+        )
+        .expect("webgl bufferSubData must not throw");
+    assert_eq!(out, "0|0|true");
+}

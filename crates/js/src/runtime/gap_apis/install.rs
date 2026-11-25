@@ -9,6 +9,24 @@ pub(crate) const PRELUDE: &str =
 
 pub(crate) fn install_gap_apis(context: &mut Context) -> Result<(), JsError> {
     let global = context.global_object();
+    let mut webgl_ctor = ObjectInitializer::new(context);
+    for (name, value) in [
+        ("NO_ERROR", crate::canvas::webgl::NO_ERROR),
+        ("INVALID_ENUM", crate::canvas::webgl::INVALID_ENUM),
+        ("INVALID_VALUE", crate::canvas::webgl::INVALID_VALUE),
+        ("INVALID_OPERATION", crate::canvas::webgl::INVALID_OPERATION),
+    ] {
+        webgl_ctor.property(js_string!(name), JsValue::from(value), Attribute::all());
+    }
+    let webgl_ctor = webgl_ctor.build();
+    global
+        .set(
+            js_string!("WebGLRenderingContext"),
+            JsValue::from(webgl_ctor),
+            false,
+            context,
+        )
+        .map_err(|error| JsError::Internal(error.to_string()))?;
     for (name, getter) in [
         ("innerWidth", window_inner_width as NativeFn),
         ("innerHeight", window_inner_height),

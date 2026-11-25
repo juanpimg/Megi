@@ -9,6 +9,7 @@ mod install;
 mod nodes;
 mod slots;
 mod webgl;
+mod webgl_buffers;
 
 pub(crate) use canvas::*;
 pub(crate) use frames::*;

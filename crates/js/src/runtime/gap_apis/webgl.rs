@@ -5,6 +5,10 @@
 //! this module never names `Host` and adds no capability to that boundary.
 
 use super::canvas_support::{canvas_context_node, canvas_number};
+use super::webgl_buffers::{
+    webgl_bind_buffer, webgl_buffer_data, webgl_buffer_sub_data, webgl_create_buffer,
+    webgl_get_error,
+};
 use super::*;
 use crate::canvas::ops as canvas_ops;
 use crate::canvas::webgl;
@@ -64,9 +68,12 @@ pub(crate) fn build_webgl_context(handle: u32, context: &mut Context) -> JsObjec
         ("COLOR_BUFFER_BIT", webgl::COLOR_BUFFER_BIT),
         ("DEPTH_BUFFER_BIT", webgl::DEPTH_BUFFER_BIT),
         ("POINTS", webgl::POINTS),
+        ("TRIANGLES", webgl::TRIANGLES),
         ("DEPTH_TEST", webgl::DEPTH_TEST),
         ("RGBA", webgl::RGBA),
         ("UNSIGNED_BYTE", webgl::UNSIGNED_BYTE),
+        ("ARRAY_BUFFER", webgl::ARRAY_BUFFER),
+        ("STATIC_DRAW", webgl::STATIC_DRAW),
     ] {
         init.property(js_string!(name), JsValue::from(value), Attribute::all());
     }
@@ -77,6 +84,11 @@ pub(crate) fn build_webgl_context(handle: u32, context: &mut Context) -> JsObjec
         ("enable", webgl_enable as NativeFn),
         ("drawArrays", webgl_draw_arrays as NativeFn),
         ("readPixels", webgl_read_pixels as NativeFn),
+        ("getError", webgl_get_error as NativeFn),
+        ("createBuffer", webgl_create_buffer as NativeFn),
+        ("bindBuffer", webgl_bind_buffer as NativeFn),
+        ("bufferData", webgl_buffer_data as NativeFn),
+        ("bufferSubData", webgl_buffer_sub_data as NativeFn),
     ] {
         init.function(native(function), js_string!(name), 8);
     }
