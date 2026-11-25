@@ -38,12 +38,12 @@ tests = 3498
 tests_commit = "7c7a94ce"
 tests_date = "2026-11-25"
 crates = 18
-rust_lines = 257743
+rust_lines = 258743
 unsafe_forbidden_crates = 18
 
 [gate]
 status = "PASS"
-verified_commit = "7c7a94ce"
+verified_commit = "f771cd80"
 tokenizer = "7050 / 7050"
 tree = "3904 / 3904"
 serializer = "230 / 230"

@@ -64,7 +64,7 @@ crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#193
 crates/browser/src/a11y_backend.rs	451	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/a11y_backend_orphan_tests.rs	105	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
 crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#upstream	re-read
-crates/browser/src/chrome.rs	436	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome.rs	453	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar_paint.rs	181	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/downloads_panel.rs	83	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -80,9 +80,11 @@ crates/browser/src/chrome/tab_strip.rs	428	src	F2	wave-max-mod	2026-11-19	covere
 crates/browser/src/chrome/tests/address_bar.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/dropdown.rs	107	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/menus.rs	157	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tests/mod.rs	154	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/tests/mod.rs	155	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/paint.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/tabs.rs	103	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/tests/tokens.rs	94	src	F2	jp	2026-11-25	covered	#2290	Phase 0 token parity tests
+crates/browser/src/chrome/tokens.rs	137	src	F2	jp	2026-11-25	covered	#2290	Phase 0 shell design tokens; byte-identical aliases verified by tests
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli/args.rs	196	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read updated --print-to-pdf help text
 crates/browser/src/cli/finish.rs	234	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: PDF mode validation and DevTools port propagation coexist
@@ -167,18 +169,19 @@ crates/browser/src/site.rs	182	src	F2	issue-2308	2026-11-25	covered	#2308	re-rea
 crates/browser/src/tabs.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/tabs/tests.rs	200	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/title.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window.rs	159	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window.rs	161	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/accessibility.rs	254	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
 crates/browser/src/window/desktop.rs	335	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/window/events.rs	495	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/window/events.rs	479	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/form_controls.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/frontend.rs	189	src	F2	juanpimg	2026-11-24	covered	upstream merge	Re-read after main merge
 crates/browser/src/window/input.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/window/presentation.rs	325	src	F2	juanpimg	2026-11-24	covered	#1724	document-field IME preedit status helper
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/tests.rs	249	src	F2	juanpimg	2026-11-24	covered	#1724	TDD tests for document IME preedit status
+crates/browser/src/window/shortcuts.rs	220	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
+crates/browser/src/window/tests.rs	394	src	F2	juanpimg	2026-11-24	covered	#1724	TDD tests for document IME preedit status
 crates/browser/src/window/ui.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/window/worker.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -225,7 +228,7 @@ crates/core/src/query/lookup.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/core/src/query/mod.rs	12	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mutation.rs	398	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/text.rs	234	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/terminal_text.rs	143	src	F2	opencode-agent	2026-11-25	covered	#2309	read line by line: terminal text sanitizer
+crates/core/src/terminal_text.rs	143	src	F2	jp	2026-11-25	covered	#2290	Re-read after Phase 0 cherry-pick
 crates/core/src/unit_tests/arena_core.rs	477	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_mutations.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/unit_tests/arena_traversal.rs	498	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -431,7 +434,7 @@ crates/html/src/tree_builder.rs	406	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/html/src/tree_builder/adoption.rs	267	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/body.rs	383	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/body_tail.rs	364	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/html/src/tree_builder/builder.rs	377	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/html/src/tree_builder/builder.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/dispatch.rs	323	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/dispatch_tail.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/html/src/tree_builder/document.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -643,7 +646,7 @@ crates/js/src/canvas/ops.rs	201	src	F2	arch-agent	2026-11-25	covered	ADR-006	Rea
 crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/state.rs	328	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/canvas/tests.rs	172	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
-crates/js/src/canvas/webgl.rs	365	src	F2	integration-agent	2026-11-25	covered	M6-webgl-foundation	Re-read after cherry-pick of c25dd265 onto 065ae4ca; WebGL 1.0 5.14/6.2 state and raster ops
+crates/js/src/canvas/webgl.rs	365	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	Re-read after cherry-pick of c25dd265 onto 065ae4ca; WebGL 1.0 5.14/6.2 state and raster ops
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/computed_style.rs	185	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -655,12 +658,12 @@ crates/js/src/events/install.rs	200	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/src/events/listeners.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host.rs	322	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/host/impl_host.rs	326	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
-crates/js/src/host/state.rs	185	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/host/impl_host.rs	362	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
+crates/js/src/host/state.rs	189	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
 crates/js/src/host/timer_queue.rs	206	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
-crates/js/src/host/types.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/host/types.rs	445	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/import_map.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/import_map/parser.rs	246	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/lib.rs	314	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -681,19 +684,19 @@ crates/js/src/runtime/frames/accessors.rs	430	src	F2	wave-max-mod	2026-11-19	cov
 crates/js/src/runtime/frames/bridge.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/runtime_impl.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames/state.rs	264	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis.rs	35	src	F2	integration-agent	2026-11-25	covered	M6-webgl-foundation	Re-read after cherry-pick: webgl binding module registration
+crates/js/src/runtime/gap_apis.rs	35	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	Re-read after cherry-pick: webgl binding module registration
 crates/js/src/runtime/gap_apis/canvas.rs	406	src	F2	integration-agent	2026-11-25	covered	M6-webgl-foundation	Re-read after cherry-pick: getContext webgl claim and dispatch (406 lines)
 crates/js/src/runtime/gap_apis/canvas_paths.rs	409	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/canvas_support.rs	51	src	F2	arch-agent	2026-11-25	covered	ADR-006	Re-read after mechanical rebase onto origin/main e420384d
 crates/js/src/runtime/gap_apis/ce_registry.js	118	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	implemented and read while extending shadow-dom/custom-elements WPT support
 crates/js/src/runtime/gap_apis/frames.rs	232	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
-crates/js/src/runtime/gap_apis/install.rs	64	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/gap_apis/install.rs	64	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	final formatted state, gates green
 crates/js/src/runtime/gap_apis/nodes.rs	287	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_b.js	923	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/gap_apis/slots.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/webgl.rs	262	src	F2	integration-agent	2026-11-25	covered	M6-webgl-foundation	Re-read after cherry-pick of c25dd265 onto 065ae4ca; CanvasOps bindings only, no Host capability
-crates/js/src/runtime/gap_apis/webgl_buffers.rs	130	src	F2	round30-webgl	2026-11-25	covered	#M6#4	WP-DEPTH-m6-webgl-software: reviewed and verified by 5 JS tests, WPT 1/1 and deterministic golden
+crates/js/src/runtime/gap_apis/webgl.rs	262	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	Re-read after cherry-pick of c25dd265 onto 065ae4ca; CanvasOps bindings only, no Host capability
+crates/js/src/runtime/gap_apis/webgl_buffers.rs	130	src	F2	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -730,8 +733,8 @@ crates/js/src/runtime/workers.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/src/runtime/workers/api.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/workers/dom_proxy.rs	255	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/src/runtime/workers/messaging.rs	131	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/workers/state.rs	323	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/websocket.rs	345	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/workers/state.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/websocket.rs	378	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr/prelude_a.js	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr/prelude_b.js	364	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -773,7 +776,7 @@ crates/js/tests/iframe_tests.rs	201	test	F1	wave-max-mod	2026-11-19	covered	#max
 crates/js/tests/import_maps_r187.rs	314	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/intl_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/jquery_tests.rs	124	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/js/tests/js_tests.rs	335	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/js_tests.rs	371	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -782,8 +785,8 @@ crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/webgl_tests.rs	114	test	F1	integration-agent	2026-11-25	covered	M6-webgl-foundation	Re-read after cherry-pick of c25dd265 onto 065ae4ca; 3 observable pixel tests
-crates/js/tests/websocket_api_tests.rs	318	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/webgl_tests.rs	114	test	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	Re-read after cherry-pick of c25dd265 onto 065ae4ca; 3 observable pixel tests
+crates/js/tests/websocket_api_tests.rs	370	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers.rs	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers/basic.rs	194	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/workers/dom_proxy.rs	411	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
@@ -1167,10 +1170,10 @@ crates/render/src/scripts/event_loop.rs	259	src	F2	wave-max-mod	2026-11-19	cover
 crates/render/src/scripts/execution.rs	240	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/lifecycle.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/modules.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/network.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/network.rs	290	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/providers.rs	294	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
-crates/render/src/scripts/tests.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/types.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/tests.rs	494	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/types.rs	493	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1385,7 +1388,7 @@ docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	document
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
-docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	round30-webgl	2026-11-25	covered	#M6#4	WP-DEPTH-m6-webgl-software: reviewed and verified by 5 JS tests, WPT 1/1 and deterministic golden
+docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 docs/architecture-baseline.json	110	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/architecture-deps.toml	41	docs	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 docs/audit/FINDINGS.md	254	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1953,7 +1956,7 @@ tests/fixtures/render/webfont-multisource.html	20	fixture	F1	waveF1	2026-11-17	c
 tests/fixtures/render/webfont-remote.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webfont-starvation.html	28	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webfont.html	23	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
-tests/fixtures/render/webgl_triangle.html	27	fixture	F1	round30-webgl	2026-11-25	covered	#M6#4	WP-DEPTH-m6-webgl-software: reviewed and verified by 5 JS tests, WPT 1/1 and deterministic golden
+tests/fixtures/render/webgl_triangle.html	27	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tests/fixtures/render/webgl_triangle/golden.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/webp.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webp_lossy.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -2138,8 +2141,8 @@ tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not r
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html	32	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html	29	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html	30	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
-tests/wpt/MANIFEST.json	1352	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
-tests/wpt/NOTICE.md	142	docs	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
+tests/wpt/MANIFEST.json	1352	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	element constructor support and skip reasons audited in round 21
+tests/wpt/NOTICE.md	142	docs	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	element constructor support and skip reasons audited in round 21
 tests/wpt/WPT-REVISION.json	6	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/allowlist.toml	2	manifest	F3	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/baseline.json	9	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
@@ -2273,8 +2276,8 @@ tests/wpt/url/urlsearchparams-has.any.js	24	fixture	F1	wpt-components-scope	2026
 tests/wpt/url/urlsearchparams-set.any.js	22	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/url/urlsearchparams-sort.any.js	62	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/url/urlsearchparams-stringifier.any.js	123	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
-tests/wpt/webgl/bufferSubData.html	26	fixture	F1	round30-webgl	2026-11-25	covered	#M6#4	WP-DEPTH-m6-webgl-software: reviewed and verified by 5 JS tests, WPT 1/1 and deterministic golden
-tests/wpt/webgl/common.js	13	fixture	F1	round30-webgl	2026-11-25	covered	#M6#4	WP-DEPTH-m6-webgl-software: reviewed and verified by 5 JS tests, WPT 1/1 and deterministic golden
+tests/wpt/webgl/bufferSubData.html	26	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
+tests/wpt/webgl/common.js	13	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/audit_coverage.py	409	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/audit_negative_matrix.py	273	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
@@ -2292,7 +2295,7 @@ tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/progress_render.py	401	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
 tools/progress_stats.py	278	tool	F3	jp	2026-11-25	covered	#2290	re-read after dirty-tree cache guard
 tools/real_site_check.py	357	tool	F3	lead	2026-11-25	covered	M2-RELEASE-REMEASURE	
-tools/render_fixture.sh	130	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/render_fixture.sh	130	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test_audit_coverage.py	331	tool	F3	wm-merge	2026-11-21	covered	#upstream	re-read after main merge
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
@@ -2317,7 +2320,7 @@ tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotat
 tools/test_update_bench_baseline.py	112	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 tools/test_update_coverage.py	762	tool	F3	jp	2026-11-24	covered	#2290	
 tools/test_update_progress.py	229	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding non-numeric manifest tests regression test
-tools/test_vendor_wpt.py	179	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	vendor tests reviewed
+tools/test_vendor_wpt.py	179	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	vendor tests reviewed
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
@@ -2328,7 +2331,7 @@ tools/update_bench_baseline.py	177	tool	F3	lead	2026-11-25	covered	M8-JIT-DECISI
 tools/update_coverage.py	649	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	471	tool	F3	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	offline vendor checker reviewed
+tools/vendor_wpt.py	471	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	offline vendor checker reviewed
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
