@@ -131,6 +131,27 @@ pub(crate) fn install_network_providers(
                         Some("error") => req_options.redirect_mode = megi_net::RedirectMode::Error,
                         _ => req_options.redirect_mode = megi_net::RedirectMode::Follow,
                     }
+                    // WHATWG Fetch §4.8.3 (CORS-preflight fetch): a cross-origin request with
+                    // a non-simple method or header needs an OPTIONS handshake first; abort
+                    // before the real request when it fails (#2296). XHR uses this same native
+                    // fetch provider, so both APIs are covered by this one check.
+                    if let (Some(origin), Some(target)) = (
+                        req_options.origin.as_deref(),
+                        megi_net::Origin::from_url(&url),
+                    ) && megi_net::Origin::parse(origin)
+                        .is_some_and(|parsed| !parsed.is_same_origin(&target))
+                        && megi_net::requires_preflight(&request.method, &header_refs)
+                    {
+                        megi_net::http::preflight(
+                            &url,
+                            &req_options,
+                            &request.method,
+                            &header_refs,
+                        )
+                        .map_err(|error| {
+                            megi_js::JsError::Runtime(format!("CORS preflight: {error}"))
+                        })?;
+                    }
                     let response = megi_net::http::fetch_with_method(
                         &url,
                         &req_options,
@@ -285,6 +306,136 @@ mod ws_budget_tests {
                 .count(),
             1,
             "the third open must be capped before the provider: {errors}"
+        );
+    }
+}
+
+#[cfg(all(test, feature = "js"))]
+mod cors_preflight_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    /// Real loopback peer: it records the `OPTIONS` preflight and the real `PUT`, answering
+    /// the preflight with 403 so a request that skipped it would still hit the server.
+    fn failing_preflight_server() -> (u16, std::thread::JoinHandle<(usize, usize, bool)>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+        let port = listener.local_addr().expect("local addr").port();
+        let server = std::thread::spawn(move || {
+            let (mut options, mut puts, mut asked_method) = (0, 0, false);
+            // Exactly one request reaches the peer: `OPTIONS` after the fix, `PUT` before it.
+            for _ in 0..1 {
+                let Ok((mut stream, _)) = listener.accept() else {
+                    break;
+                };
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .expect("stream timeout");
+                let mut request_line = String::new();
+                let mut headers = String::new();
+                {
+                    let mut reader = BufReader::new(&mut stream);
+                    if reader.read_line(&mut request_line).is_err() {
+                        break;
+                    }
+                    loop {
+                        let mut line = String::new();
+                        match reader.read_line(&mut line) {
+                            Ok(0) | Err(_) => break,
+                            Ok(_) if line == "\r\n" => break,
+                            Ok(_) => headers.push_str(&line.to_ascii_lowercase()),
+                        }
+                    }
+                }
+                if request_line.starts_with("OPTIONS ") {
+                    options += 1;
+                    asked_method |= headers.contains("access-control-request-method: put");
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    );
+                } else if request_line.starts_with("PUT ") {
+                    puts += 1;
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                    );
+                }
+            }
+            (options, puts, asked_method)
+        });
+        (port, server)
+    }
+
+    /// WHATWG Fetch §4.8.3 (CORS-preflight fetch): a cross-origin `PUT` with `X-Token`
+    /// must send `OPTIONS` first and must not send the real request when it fails (#2296).
+    #[test]
+    fn non_simple_cross_origin_fetch_preflights_before_the_real_request() {
+        let (port, server) = failing_preflight_server();
+        // The document lives on 127.0.0.2, the target peer on 127.0.0.1: distinct origins.
+        let document_url =
+            Url::parse(&format!("http://127.0.0.2:{port}/app.html")).expect("document url");
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
+        install_network_providers(
+            &mut runtime,
+            &document_url,
+            &ScriptingHostContext::empty(),
+            ScriptingLimits::default(),
+        );
+        let script = format!(
+            "window.__state = ''; \
+             fetch('http://127.0.0.1:{port}/resource', \
+                   {{ method: 'PUT', headers: {{ 'X-Token': '1' }} }}) \
+                 .then(function (r) {{ __state = 'resolved:' + r.status; }}, \
+                       function (e) {{ __state = 'rejected:' + String(e); }});"
+        );
+        runtime.eval(&script, "t").expect("fetch script");
+        runtime.run_microtasks().expect("microtasks");
+        let state = runtime.eval("__state", "t").expect("state");
+        let (options, puts, asked_method) = server.join().expect("loopback server");
+        assert!(state.starts_with("rejected:"), "fetch must reject: {state}");
+        assert_eq!(options, 1, "exactly one OPTIONS preflight, got {options}");
+        assert_eq!(
+            puts, 0,
+            "the real PUT must not be sent after a failed preflight"
+        );
+        assert!(
+            asked_method,
+            "OPTIONS must carry Access-Control-Request-Method: PUT"
+        );
+    }
+
+    /// XHR dispatches through the same `__megi_fetch_native` provider, so it must abort
+    /// its real request on a failed preflight as well (#2296).
+    #[test]
+    fn xhr_non_simple_cross_origin_request_preflights_too() {
+        let (port, server) = failing_preflight_server();
+        let document_url =
+            Url::parse(&format!("http://127.0.0.2:{port}/app.html")).expect("document url");
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
+        install_network_providers(
+            &mut runtime,
+            &document_url,
+            &ScriptingHostContext::empty(),
+            ScriptingLimits::default(),
+        );
+        let script = format!(
+            "window.__state = ''; \
+             var xhr = new XMLHttpRequest(); \
+             xhr.onload = function () {{ __state = 'loaded:' + xhr.status; }}; \
+             xhr.onerror = function () {{ __state = 'error'; }}; \
+             xhr.open('PUT', 'http://127.0.0.1:{port}/resource'); \
+             xhr.setRequestHeader('X-Token', '1'); \
+             xhr.send('x');"
+        );
+        runtime.eval(&script, "t").expect("xhr script");
+        runtime.run_microtasks().expect("microtasks");
+        let state = runtime.eval("__state", "t").expect("state");
+        let (options, puts, _) = server.join().expect("loopback server");
+        assert_eq!(state, "error", "XHR must report a network error: {state}");
+        assert_eq!(options, 1, "exactly one OPTIONS preflight, got {options}");
+        assert_eq!(
+            puts, 0,
+            "the real PUT must not be sent after a failed preflight"
         );
     }
 }
