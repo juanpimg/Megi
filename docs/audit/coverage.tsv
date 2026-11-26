@@ -360,7 +360,7 @@ crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk1.rs	401	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
-crates/css/src/user_agent/chunk2.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/user_agent/chunk2.rs	243	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	346	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
