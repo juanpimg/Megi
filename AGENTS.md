@@ -55,7 +55,7 @@ El índice operativo es `docs/AGENT-INDEX.md`.
 
 ## 3. DAG: quién puede importar a quién
     core → html, css, net, js, image, fonts
-    css + fonts → layout → paint → raster → render → webview → browser
+    css + fonts → layout → paint → raster → render → webview → browser; browser → sandbox (hoja; ver docs/architecture-deps.toml)
     image + fonts → svg → render
     display (core + fonts) es el contrato de paint y raster.
 Prohibiciones clave:
@@ -64,8 +64,8 @@ Prohibiciones clave:
 - `layout` NUNCA importa `paint`, `display` ni `render`.
 - `paint` NUNCA importa `render`, `webview` ni UI; `raster` es su dependencia de
   rasterización de bajo nivel (spec §2.3: `paint` extrae su rasterizador) y NUNCA importa `layout`.
-- `webview` NUNCA importa winit/softbuffer/UI; `browser` no importa crates de motor
-  directamente (solo `webview`).
+- `webview` NUNCA importa winit/softbuffer/UI; `browser` solo importa `webview` y
+  `sandbox` (las dependencias de UI son externas y opcionales, en features).
 - `test_harness`/`bench` son herramientas: nadie del motor depende de ellos.
 
 ## 4. Tamaño y forma de archivos
