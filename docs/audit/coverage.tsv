@@ -845,8 +845,8 @@ crates/layout/src/block/width.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/flex.rs	142	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
-crates/layout/src/flex/helpers.rs	387	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
-crates/layout/src/flex/layout.rs	485	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/layout/src/flex/helpers.rs	402	src	F2	juanpimg	2026-11-26	covered	flex-padding-integration	Read in full: flex auto base size counts item edges once
+crates/layout/src/flex/layout.rs	492	src	F2	juanpimg	2026-11-26	covered	flex-padding-integration	Read in full: flex auto base size counts item edges once
 crates/layout/src/flex/minimum.rs	53	src	F2	lead	2026-11-26	covered	RENDER-FORMS-FLEX-SVG	read and verified during integration
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -900,8 +900,9 @@ crates/layout/tests/container_queries.rs	179	test	F1	wave-max-mod	2026-11-19	cov
 crates/layout/tests/deep_tree.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/dialog.rs	97	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/flex/alignment.rs	209	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/flex/main.rs	135	test	F1	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/layout/tests/flex/main.rs	136	test	F1	juanpimg	2026-11-26	covered	flex-padding-integration	Read in full: flex auto base size counts item edges once
 crates/layout/tests/flex/min_auto.rs	89	test	F1	lead	2026-11-26	covered	RENDER-FORMS-FLEX-SVG	read and verified during integration
+crates/layout/tests/flex/nav_wrap.rs	48	test	F1	juanpimg	2026-11-26	covered	flex-padding-integration	Read in full: flex auto base size counts item edges once
 crates/layout/tests/flex/placement.rs	245	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/float_budget.rs	168	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/floats.rs	499	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
