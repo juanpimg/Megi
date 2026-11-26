@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!--
+  M2#5 — deterministic bidi/CJK render fixture with the known overlaps closed.
+
+  Overlap regression (issue #1013, "Wikipedia Vector: overlapping inline/float nav
+  items"): the left/right Vector navigation tabs used to collapse and paint on top of
+  each other.  The fix makes intrinsic-content-width computation sum flex row items
+  and inline children, and honours white-space: nowrap/pre, so each tab keeps its own
+  box.  W3C CSS Flexbox §3 (flex container / intrinsic sizing) and CSS Text §3
+  (white-space: nowrap) require exactly that sizing; CSS 2.2 §9.4.2 lays out the
+  inline text inside every tab.
+
+  Bidi/CJK regression: WHATWG HTML §13.2.6.4 (directionality of elements / the
+  `dir` attribute) and Unicode UAX #9 define the visual reordering of RTL runs;
+  W3C CSS Writing Modes Level 3 §5.1 maps `direction` / `unicode-bidi` to the
+  bidi algorithm.  Every label below is a fixed code-point sequence (no clocks,
+  no network, no script), so the PNG must be byte-identical on every render.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>M2#5 — bidi/CJK stability, Vector overlaps closed</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { width: 760px; font-family: sans-serif; font-size: 14px; color: #111; }
+
+  /* The two nested row flex containers that used to collapse in #1013. */
+  #vector-nav { display: flex; flex-direction: row; white-space: nowrap; }
+  .tabbar {
+    display: flex;
+    flex-direction: row;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .tabbar > li {
+    margin-left: 8px;
+    margin-right: 8px;
+    padding: 2px 0;
+  }
+
+  /* RTL embedding level 1: UAX #9 L2 reverses the run for display. */
+  #rtl-arabic { direction: rtl; unicode-bidi: embed; }
+  #rtl-hebrew { direction: rtl; unicode-bidi: embed; }
+  #bidi-override { direction: ltr; unicode-bidi: bidi-override; }
+  #cjk { white-space: pre; }
+</style>
+</head>
+<body>
+  <nav id="vector-nav">
+    <ul class="tabbar" id="left-tabs">
+      <li id="tab-articulo"><a>Artículo</a></li>
+      <li id="tab-discusion"><a>Discusción</a></li>
+    </ul>
+    <ul class="tabbar" id="right-tabs">
+      <li id="tab-leer"><a>Leer</a></li>
+      <li id="tab-editar"><a>Editar</a></li>
+      <li id="tab-historial"><a>Ver historial</a></li>
+    </ul>
+  </nav>
+
+  <h1 id="heading">Rust</h1>
+
+  <p id="rtl-arabic" lang="ar" dir="rtl">مرحبا بالعالم</p>
+  <p id="rtl-hebrew" lang="he" dir="rtl">שלום עולם</p>
+  <p id="bidi-override">abc def</p>
+  <p id="cjk" lang="zh">中文日本語한국어</p>
+  <p id="colon">puede referirse a: Quinto álbum</p>
+</body>
+</html>

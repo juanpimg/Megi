@@ -24,7 +24,6 @@ subtitle = "Hitos M0–M12 — criterios de aceptación verificables hacia un na
 
 # Highest-signal gaps, ordered by milestone dependency (not by date).
 next_up = [
-  "M2: completar Bidi/CJK y estabilizar md5 de fixtures con solapes conocidos",
   "M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas",
   "M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes",
   "M6: spike de Canvas 2D avanzado / WebGL software antes de escribir código del motor",
@@ -38,7 +37,7 @@ tests = 3637
 tests_commit = "abc4ad80"
 tests_date = "2026-11-26"
 crates = 18
-rust_lines = 268789
+rust_lines = 268908
 unsafe_forbidden_crates = 18
 
 [gate]
@@ -96,10 +95,9 @@ items = [
   "SVG con texto, gradientes y patterns — `crates/svg/src/`",
   "Canvas 2D utilizable (rutas, ángulos `arc`, Bézier, transformaciones, `save`/`restore`, gradientes lineales y `drawImage`) — `crates/js/src/canvas/{path.rs,state.rs}`, `tests/fixtures/render/canvas_paths.html`; `cargo test -p megi-js --test canvas_paths_tests && cargo test -p megi-render --test canvas_tests`",
   "Bidi y CJK completos — `cargo +1.99.1 test -p megi-layout --test bidi_tests --locked -- --test-threads=1` (7 passed), `cargo +1.99.1 test -p megi-layout --lib bidi --locked -- --test-threads=1` (8 passed), `cargo +1.99.1 test -p megi-fonts --test font_engine shaping --locked -- --test-threads=1` (12 passed); `crates/layout/src/bidi.rs:346-428`, `crates/layout/src/bidi/bidi_tests.rs:8-124`, `crates/layout/tests/bidi_tests.rs:47-145`, `crates/layout/src/inline/tokens.rs:297-392`; commits `188b8e53`, `6f812d65`",
+  "Fixtures con md5 estable tras completar los solapes conocidos — `tests/fixtures/render/bidi_stability.html` (árabe/hebreo con reorden UAX #9, CJK y nav anidado tipo Vector, sin script/reloj/red; WHATWG HTML §13.2.6.4, W3C CSS Writing Modes §5.1 / Flexbox §3 / Text §3); golden `tests/fixtures/render/bidi_stability/golden.png` md5 `9f34dbf7b8cd921c35caa2396d62a70c` (18506 B; golden NUEVO, sin md5 anterior que rebaselinear), byte-idéntico en dos renders CLI (`md5sum` iguales, `cmp` EXIT=0, `console_errors=0`, `warnings=[]`) y en los dos renders consecutivos del test; RED `cargo test -p megi-render --test bidi_stability_tests -- --test-threads=1` EXIT=101 (golden aún no versionado; el test de solapes ya pasaba porque el fix está en main), verde EXIT=0 (2/2); solape conocido #1013 «Wikipedia Vector: overlapping inline/float nav items» cerrado por nombre: `known_vector_nav_tab_overlaps_are_absent` exige 5 pestañas con caja de margen positiva y sin intersección par a par; `python3 tools/check_milestone.py M2 5` PASS",
 ]
-pending = [
-  "Fixtures con md5 estable tras completar los solapes conocidos",
-]
+pending = []
 
 # --- M3 — Frontera de seguridad ---------------------------------------------------------
 [[phase]]

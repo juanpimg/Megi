@@ -4,7 +4,7 @@
 
 ![Tests](docs/status/badge-tests.svg) ![Conformance](docs/status/badge-conformance.svg) ![Crates](docs/status/badge-crates.svg) ![unsafe](docs/status/badge-unsafe.svg) ![WPT](docs/status/badge-wpt.svg)
 
-**Snapshot** — commit `abc4ad80` (2026-11-26) · hitos cerrados **5/13** · criterios verificados **46/64** (**71%**) · **3,637** tests · conformance **PASS** · **18** crates · **268,789** lines of Rust
+**Snapshot** — commit `8b640d76` (2026-11-26) · hitos cerrados **6/13** · criterios verificados **47/64** (**73%**) · **3,637** tests · conformance **PASS** · **18** crates · **268,908** lines of Rust
 
 > Generated from `docs/status/progress.toml` plus measured repository data (git HEAD/date, `cargo test --workspace -- --list`, `test_harness --summary`, crate list and `#![forbid(unsafe_code)]` scan). Each bar counts acceptance criteria with cited evidence; no phase estimate is involved.
 
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **M0** | Verdad y cimiento | `████████████████████` 7/7 | 100% |
 | **M1** | Interactividad | `████████████████████` 4/4 | 100% |
-| **M2** | Profundidad declarativa | `████████████████░░░░` 4/5 | 80% |
+| **M2** | Profundidad declarativa | `████████████████████` 5/5 | 100% |
 | **M3** | Frontera de seguridad | `████████████████████` 5/5 | 100% |
 | **M4** | Componentes y persistencia | `████████████████░░░░` 5/6 | 83% |
 | **M5** | Plataforma nativa | `█████████████░░░░░░░` 4/6 | 66% |
@@ -29,7 +29,7 @@
 | **M10** | Plataforma extendida | `░░░░░░░░░░░░░░░░░░░░` 0/5 | 0% |
 | **M11** | Integración nativa | `░░░░░░░░░░░░░░░░░░░░` 0/3 | 0% |
 | **M12** | Cobertura media/legal | `████████████████████` 2/2 | 100% |
-| | **Roadmap** | `██████████████░░░░░░` 46/64 | **71%** |
+| | **Roadmap** | `██████████████░░░░░░` 47/64 | **73%** |
 
 ## Detalle de criterios por hito
 
@@ -54,7 +54,7 @@
 - 10 fixtures E2E de tarea de usuario — `cargo test -p megi-render --test e2e_task_fixtures` (10/10 PASS, 0 `console_errors`)
 - Corpus sin console_errors — `docs/status/real-sites.json` (4/4 sitios con `console_errors = 0`)
 
-### M2 — Profundidad declarativa (80%)
+### M2 — Profundidad declarativa (100%)
 
 **Verificado**
 
@@ -62,10 +62,7 @@
 - SVG con texto, gradientes y patterns — `crates/svg/src/`
 - Canvas 2D utilizable (rutas, ángulos `arc`, Bézier, transformaciones, `save`/`restore`, gradientes lineales y `drawImage`) — `crates/js/src/canvas/{path.rs,state.rs}`, `tests/fixtures/render/canvas_paths.html`; `cargo test -p megi-js --test canvas_paths_tests && cargo test -p megi-render --test canvas_tests`
 - Bidi y CJK completos — `cargo +1.99.1 test -p megi-layout --test bidi_tests --locked -- --test-threads=1` (7 passed), `cargo +1.99.1 test -p megi-layout --lib bidi --locked -- --test-threads=1` (8 passed), `cargo +1.99.1 test -p megi-fonts --test font_engine shaping --locked -- --test-threads=1` (12 passed); `crates/layout/src/bidi.rs:346-428`, `crates/layout/src/bidi/bidi_tests.rs:8-124`, `crates/layout/tests/bidi_tests.rs:47-145`, `crates/layout/src/inline/tokens.rs:297-392`; commits `188b8e53`, `6f812d65`
-
-**Pendiente**
-
-- Fixtures con md5 estable tras completar los solapes conocidos
+- Fixtures con md5 estable tras completar los solapes conocidos — `tests/fixtures/render/bidi_stability.html` (árabe/hebreo con reorden UAX #9, CJK y nav anidado tipo Vector, sin script/reloj/red; WHATWG HTML §13.2.6.4, W3C CSS Writing Modes §5.1 / Flexbox §3 / Text §3); golden `tests/fixtures/render/bidi_stability/golden.png` md5 `9f34dbf7b8cd921c35caa2396d62a70c` (18506 B; golden NUEVO, sin md5 anterior que rebaselinear), byte-idéntico en dos renders CLI (`md5sum` iguales, `cmp` EXIT=0, `console_errors=0`, `warnings=[]`) y en los dos renders consecutivos del test; RED `cargo test -p megi-render --test bidi_stability_tests -- --test-threads=1` EXIT=101 (golden aún no versionado; el test de solapes ya pasaba porque el fix está en main), verde EXIT=0 (2/2); solape conocido #1013 «Wikipedia Vector: overlapping inline/float nav items» cerrado por nombre: `known_vector_nav_tab_overlaps_are_absent` exige 5 pestañas con caja de margen positiva y sin intersección par a par; `python3 tools/check_milestone.py M2 5` PASS
 
 ### M3 — Frontera de seguridad (100%)
 
@@ -190,9 +187,9 @@
 
 | Metric | Value |
 |---|---|
-| Commit | `abc4ad80` (2026-11-26) |
+| Commit | `8b640d76` (2026-11-26) |
 | Crates in the workspace | 18 |
-| Lines of Rust (tracked `.rs`) | 268789 |
+| Lines of Rust (tracked `.rs`) | 268908 |
 | Tests (`cargo test --workspace -- --list`) | 3637 |
 | Crates with `#![forbid(unsafe_code)]` | 18 / 18 |
 | Conformance gate | **PASS** |
@@ -231,7 +228,6 @@ Capability coverage and WPT conformance are separate metrics; this P/T is genera
 
 ## Next up
 
-- M2: completar Bidi/CJK y estabilizar md5 de fixtures con solapes conocidos
 - M3: publicar el sandbox enforced en Linux, macOS y Windows con 12 pruebas negativas
 - M4: ampliar el informe WPT de 100 subtests CSS Syntax a 100+ subtests de componentes
 - M6: spike de Canvas 2D avanzado / WebGL software antes de escribir código del motor
