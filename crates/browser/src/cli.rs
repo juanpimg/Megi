@@ -1,7 +1,7 @@
 //! CLI argument parsing and URL/path normalization (pure, testable, no display needed).
 //!
 //! ```text
-//! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T]
+//! megi <url|file> [--width W] [--height H] [--screenshot PATH] [--title T] [--rail] [--compact]
 //! ```
 //!
 //! Without `--screenshot` the CLI opens a winit window; with it, Megi runs headless and

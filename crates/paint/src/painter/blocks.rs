@@ -176,6 +176,16 @@ fn paint_float(
         TextDecoration::NONE,
         alpha,
     );
+    // CSS 2.2 Appendix E step 5 paints non-positioned floats (§9.5) as one
+    // unit. A floating `<img>` is blockified into a plain block box, so the
+    // inline walker never sees a `BoxType::Replaced` child to emit its bitmap
+    // (the Wikipedia globe). Emit the replaced content of the float itself.
+    if !hidden
+        && let Some(node_id) = layout_box.node_id()
+        && resources.images.contains_key(&node_id)
+    {
+        paint_replaced_element(layout_box, node_id, list, resources, alpha);
+    }
     if overflow_clip.is_some() {
         pop_rounded_group(list, resources);
     }

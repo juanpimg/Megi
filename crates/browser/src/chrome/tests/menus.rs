@@ -148,7 +148,7 @@ fn history_button_geometry_and_hit_testing() {
 
 #[test]
 fn chrome_geometry_helpers() {
-    assert_eq!(CHROME_HEIGHT, 58.0);
+    assert_eq!(CHROME_HEIGHT, 78.0);
     assert!(in_chrome(10.0, 10.0, 640.0));
     assert!(!in_chrome(10.0, CHROME_HEIGHT + 1.0, 640.0));
     assert_eq!(truncate_title("Hello World", 5), "Hell…");

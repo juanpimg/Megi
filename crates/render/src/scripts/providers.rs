@@ -107,7 +107,8 @@ pub(crate) fn install_style_providers(
 ) {
     // Browser-facing host providers (R96): getComputedStyle reads the pre-script snapshot,
     // matchMedia evaluates with the render's MediaContext (same viewport as the cascade),
-    // and innerWidth/innerHeight/devicePixelRatio come from the real viewport (DPR 1.0).
+    // and innerWidth/innerHeight/devicePixelRatio come from the real viewport and the
+    // host-supplied device scale (winit's scale_factor in the window path).
     if let Some(styles) = host.styles.clone() {
         let layout = host.layout.clone();
         // F6-GETCOMPUTEDSTYLE-PERF (#1868): serialize each node's 42 CSS pairs once,
@@ -124,7 +125,7 @@ pub(crate) fn install_style_providers(
     let viewport_info = megi_js::host::ViewportInfo {
         width: host.viewport.0,
         height: host.viewport.1,
-        device_pixel_ratio: 1.0,
+        device_pixel_ratio: f64::from(host.device_pixel_ratio),
         scroll_x: 0.0,
         scroll_y: 0.0,
     };

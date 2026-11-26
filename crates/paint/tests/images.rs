@@ -65,6 +65,27 @@ fn tree_with_image(document: &Document, image_id: megi_core::NodeId, rect: Rect)
     root
 }
 
+#[test]
+fn wiki_header_floated_replaced_element_emits_image() {
+    let (document, ids) = node_ids(1);
+    let mut root = tree_with_image(&document, ids[0], Rect::new(10.0, 10.0, 20.0, 20.0));
+    // CSS 2.2 §9.5: a float is out of flow, so it is painted in Appendix E
+    // step 5 and never visited by the inline walker. The float pass itself
+    // must emit its replaced content (Wikipedia's `mw-logo-icon`).
+    root.children[0].is_float = true;
+    let store = store_with(ids[0], 1, 1, vec![255, 0, 0, 255]);
+    let display_list = build_display_list_with_images(&root, VIEWPORT, &store);
+    assert_eq!(
+        display_list
+            .iter()
+            .filter(|item| matches!(item, DisplayItem::Image { .. }))
+            .count(),
+        1,
+        "a floated <img> must emit its DisplayItem::Image"
+    );
+    assert_eq!(render(&display_list).pixel(11, 11), Color::RED);
+}
+
 fn store_with(image_id: megi_core::NodeId, width: u32, height: u32, data: Vec<u8>) -> ImageStore {
     let image = RgbaImage::new(width, height, data).expect("valid RGBA data");
     let mut store = ImageStore::new();

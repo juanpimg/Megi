@@ -27,10 +27,15 @@ pub(in crate::window) struct ChromeMode {
 }
 
 impl ChromeMode {
-    pub(in crate::window) fn new(reduced_motion: bool) -> Self {
+    /// Seeds both shell switches from the startup selector (`--rail`, `--compact`).
+    /// A default selector leaves the first frame byte-identical to the legacy shell.
+    pub(in crate::window) fn new(
+        reduced_motion: bool,
+        startup: crate::window::StartupChrome,
+    ) -> Self {
         Self {
-            compact: false,
-            rail_open: false,
+            compact: startup.compact,
+            rail_open: startup.rail,
             peek_start: None,
             reduced_motion,
         }

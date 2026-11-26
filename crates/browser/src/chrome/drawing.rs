@@ -115,9 +115,111 @@ pub(crate) fn paint_favicon(
             }
         }
     } else {
+        // Fallback is a rounded accent tile with a solid accent core, matching
+        // the active-tab underline instead of a bare square dot.
+        let tile = Color::new(ACCENT.r, ACCENT.g, ACCENT.b, 0x44);
+        fill_round(
+            pixmap,
+            Rect::new(x_css, y_css, 14.0, 14.0),
+            scale,
+            4.0,
+            tile,
+        );
+        fill_round(
+            pixmap,
+            Rect::new(x_css + 4.0, y_css + 4.0, 6.0, 6.0),
+            scale,
+            2.0,
+            ACCENT,
+        );
+    }
+}
+
+/// Stamps a straight line from overlapping square pixels. The paint crate only
+/// exposes rect fills, so chrome icons stay dependency-free and deterministic.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn stroke_line(
+    pixmap: &mut Pixmap,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    thickness: f32,
+    color: Color,
+    scale: f32,
+) {
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let steps = (dx.abs().max(dy.abs()) * scale).ceil().max(1.0) as usize;
+    let size = (thickness * scale).max(1.0);
+    for step in 0..=steps {
+        let t = step as f32 / steps as f32;
         pixmap.fill_rect(
-            Rect::new(x_css * scale, y_css * scale, 8.0 * scale, 8.0 * scale),
-            Color::new(icon.color[0], icon.color[1], icon.color[2], 0xFF),
+            Rect::new(
+                (x0 + dx * t) * scale - size / 2.0,
+                (y0 + dy * t) * scale - size / 2.0,
+                size,
+                size,
+            ),
+            color,
+        );
+    }
+}
+
+/// Draws a chevron inside `rect`; `left` selects the pointing direction.
+pub(crate) fn paint_chevron(pixmap: &mut Pixmap, rect: Rect, scale: f32, left: bool, color: Color) {
+    let cy = rect.y + rect.height / 2.0;
+    let tip = rect.x + rect.width * if left { 0.30 } else { 0.70 };
+    let outer = rect.x + rect.width * if left { 0.70 } else { 0.30 };
+    let dy = rect.height * 0.20;
+    stroke_line(pixmap, outer, cy - dy, tip, cy, 2.2, color, scale);
+    stroke_line(pixmap, tip, cy, outer, cy + dy, 2.2, color, scale);
+}
+
+/// Draws a circular arrow (open arc plus a small arrowhead) inside `rect`.
+pub(crate) fn paint_reload(pixmap: &mut Pixmap, rect: Rect, scale: f32, color: Color) {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let radius = rect.width * 0.30;
+    let start = -0.35 * std::f32::consts::PI;
+    let sweep = 1.65 * std::f32::consts::PI;
+    const SEGMENTS: usize = 20;
+    let mut previous = None;
+    for segment in 0..=SEGMENTS {
+        let angle = start + sweep * segment as f32 / SEGMENTS as f32;
+        let point = (cx + radius * angle.cos(), cy + radius * angle.sin());
+        if let Some((px, py)) = previous {
+            stroke_line(pixmap, px, py, point.0, point.1, 2.0, color, scale);
+        }
+        previous = Some(point);
+    }
+    let end = start + sweep;
+    let ex = cx + radius * end.cos();
+    let ey = cy + radius * end.sin();
+    let tangent = end + std::f32::consts::FRAC_PI_2;
+    for offset in [-0.55, 0.55] {
+        let angle = tangent + offset;
+        stroke_line(
+            pixmap,
+            ex,
+            ey,
+            ex - 5.0 * angle.cos(),
+            ey - 5.0 * angle.sin(),
+            2.0,
+            color,
+            scale,
+        );
+    }
+}
+
+/// Paints a three-row soft shadow immediately below the chrome band. Each row
+/// fades out; the shadow is pure geometry, no GPU or animation.
+pub(crate) fn paint_band_shadow(pixmap: &mut Pixmap, scale: f32, width: f32, band_css: f32) {
+    let top = (band_css * scale).round();
+    for (row, alpha) in [0x2A, 0x16, 0x0A].into_iter().enumerate() {
+        pixmap.fill_rect(
+            Rect::new(0.0, top + row as f32, width * scale, scale),
+            Color::new(0, 0, 0, alpha),
         );
     }
 }

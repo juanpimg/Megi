@@ -63,9 +63,14 @@ pub(crate) fn layout_flex_children(
         let Some(child_style) = child.style.clone() else {
             continue;
         };
-        if matches!(child_style.position, Position::Absolute | Position::Fixed) || child.is_float {
+        if matches!(child_style.position, Position::Absolute | Position::Fixed) {
             continue;
         }
+        // CSS Flexbox 1 §4: `float` on an in-flow child of a flex container is
+        // ignored — it remains a flex item. Wikipedia's titlebar language
+        // selector (`float:right` inside a flex header) must not be dropped from
+        // the flex line; clearing the flag also lets the paint pass visit it.
+        child.is_float = false;
         let edges = resolve_edges(&child_style, container_width);
         let base_from_style = flex_base_main(
             &child_style,

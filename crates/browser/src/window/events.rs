@@ -60,6 +60,9 @@ impl ApplicationHandler<UserEvent> for WindowApp {
                 inner_size_writer: _,
             } => {
                 self.scale_factor = scale_factor;
+                // Workers capture the device scale in their render options; drop the
+                // pool so the next render spawns workers with the new DPR.
+                self.render_pool = None;
                 let (width, height) = self
                     .window
                     .as_ref()

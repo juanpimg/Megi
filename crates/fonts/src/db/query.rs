@@ -10,11 +10,23 @@ impl FontDatabase {
             let quoted = family.starts_with(QUOTED_FAMILY_PREFIX);
             let literal = unmark_family(family);
             let keyword = literal.to_ascii_lowercase();
+            if !quoted && keyword == "sans-serif" {
+                // CSS Fonts 4 §3.1 / fontconfig: `sans-serif` names the platform
+                // default UI face (Noto Sans on Linux). fontdb's `Family::SansSerif`
+                // alias can resolve to a different installed face (e.g. Nimbus Sans
+                // Narrow) and outrank the named fallbacks, so try the platform
+                // defaults first and keep the generic only as a last resort (#parity).
+                for name in SANS_FALLBACKS {
+                    expanded.push(Family::Name(name));
+                }
+                expanded.push(Family::SansSerif);
+                continue;
+            }
             let (generic, fallbacks): (Option<Family<'a>>, &[&'static str]) = if quoted {
                 (None, &[] as &[&'static str])
             } else {
                 match keyword.as_str() {
-                    "sans-serif" => (Some(Family::SansSerif), SANS_FALLBACKS),
+                    "sans-serif" => unreachable!("handled above"),
                     // CSS Fonts 4 §3.1: system-ui is the platform UI font. Do not
                     // use the `SansSerif` generic here: fontdb maps it to "Arial",
                     // which would outrank Noto Sans when MS fonts are installed.

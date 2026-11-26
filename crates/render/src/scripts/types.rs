@@ -243,6 +243,8 @@ pub struct ScriptingHostContext {
     pub media: megi_css::MediaContext,
     /// Viewport size in CSS pixels (`window.innerWidth`/`innerHeight`).
     pub viewport: (u32, u32),
+    /// Device pixel ratio exposed as `window.devicePixelRatio` (`RenderOptions::device_pixel_ratio`).
+    pub device_pixel_ratio: f32,
     /// Shared `localStorage` (see [`RenderStorage`]); `None` = per-render memory only.
     pub storage: Option<Arc<Mutex<RenderStorage>>>,
     /// Shared cookie jar backing `document.cookie` (and HTTP requests); `None` = per-render jar.
@@ -338,6 +340,7 @@ impl ScriptingHostContext {
             styles,
             media,
             viewport,
+            device_pixel_ratio: 1.0,
             storage: None,
             cookie_jar: None,
             fetch_options: megi_net::FetchOptions::default(),
@@ -371,6 +374,7 @@ impl ScriptingHostContext {
             styles: None,
             media: megi_css::MediaContext::with_viewport(800.0, 600.0),
             viewport: (800, 600),
+            device_pixel_ratio: 1.0,
             storage: None,
             cookie_jar: None,
             fetch_options: megi_net::FetchOptions::default(),

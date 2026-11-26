@@ -118,6 +118,17 @@ fn match_media_and_viewport_use_the_render_viewport() {
 }
 
 #[test]
+fn device_pixel_ratio_comes_from_render_options() {
+    // A HiDPI window forwards its real scale through `RenderOptions`; the JS
+    // provider must expose that value instead of the hardcoded 1.0.
+    let mut opts = options();
+    opts.device_pixel_ratio = 1.25;
+    let output = render_url(&fixture_path("browser_api.html"), &opts)
+        .unwrap_or_else(|error| panic!("render with DPR 1.25: {error}"));
+    assert_eq!(attribute(&output, "report", "data-dpr"), "1.25");
+}
+
+#[test]
 fn ready_state_transitions_loading_then_complete() {
     let output = render_fixture("browser_api.html");
     assert_eq!(

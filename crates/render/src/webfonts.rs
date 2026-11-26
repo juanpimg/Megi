@@ -7,8 +7,9 @@
 //!    [`megi_net::ResourceLoader`] (so `--no-network` and the HTTP cache apply), decodes WOFF2
 //!    into sfnt bytes with [`megi_fonts::decode_web_font`] and registers each face under its CSS
 //!    `font-family` alias with [`megi_fonts::FontDatabase::load_font_data_family`].
-//! 3. The resulting database starts from the deterministic bundled faces and is used by
-//!    **both** layout (`megi_layout::FontTextMeasurer`) and paint
+//! 3. The resulting database starts from the deterministic bundled faces (optionally plus
+//!    installed system faces in the opt-in Chrome-parity mode) and is used by **both** layout
+//!    (`megi_layout::FontTextMeasurer`) and paint
 //!    (`megi_paint::rasterize_display_list_with_font_database`).
 //!
 //! ## Limits (fixed, non-fatal warnings)
@@ -141,7 +142,28 @@ pub fn load_webfonts_with_csp(
     csp: Option<(&megi_net::csp::ContentSecurityPolicy, &Url)>,
     warnings: &mut Vec<String>,
 ) -> LoadedWebFonts {
-    let mut database = FontDatabase::new_with_bundled_fonts();
+    load_webfonts_with_system_fonts(faces, loader, no_network, limits, csp, false, warnings)
+}
+
+/// Like [`load_webfonts_with_csp`] but optionally loads installed system faces too.
+///
+/// CSS Fonts 4 §3.1: a system-backed database resolves generic `sans-serif` to the
+/// platform default face (Noto Sans on Linux, like Chrome). `system_fonts = false`
+/// (the default) keeps the bundled-only database so deterministic goldens do not change.
+pub fn load_webfonts_with_system_fonts(
+    faces: &[LocatedFontFace],
+    loader: &mut ResourceLoader,
+    no_network: bool,
+    limits: WebFontLimits,
+    csp: Option<(&megi_net::csp::ContentSecurityPolicy, &Url)>,
+    system_fonts: bool,
+    warnings: &mut Vec<String>,
+) -> LoadedWebFonts {
+    let mut database = if system_fonts {
+        FontDatabase::new_with_bundled_and_system_fonts()
+    } else {
+        FontDatabase::new_with_bundled_fonts()
+    };
     let mut seen: HashSet<String> = HashSet::new();
     let mut loaded = 0usize;
     let mut failed = 0usize;
@@ -319,6 +341,39 @@ mod supported_format_tests {
             lib_src.contains(&expected_caps),
             "lib.rs doc comment must match MAX_WEB_FONTS={}",
             super::MAX_WEB_FONTS
+        );
+    }
+}
+
+#[cfg(test)]
+mod system_fonts_parity_tests {
+    use crate::{RenderOptions, Viewport, render_url};
+
+    #[test]
+    fn system_fonts_mode_resolves_generic_sans_serif_to_noto_sans() {
+        // CSS Fonts 4 §3.1: `sans-serif` is the platform default face (Noto Sans
+        // on Linux, like Chrome). The opt-in mode must use it; the default stays bundled.
+        let page = |family: &str| {
+            format!("data:text/html,<style>body{{font:32px {family}}}</style><p>Handgloves</p>")
+        };
+        let opts = RenderOptions {
+            viewport: Viewport::new(420, 120).expect("viewport"),
+            ..RenderOptions::default()
+        };
+        let bundled = render_url(&page("sans-serif"), &opts).expect("bundled render");
+        let system_opts = RenderOptions {
+            system_fonts: true,
+            ..opts.clone()
+        };
+        let generic = render_url(&page("sans-serif"), &system_opts).expect("system render");
+        let explicit = render_url(&page("'Noto Sans'"), &system_opts).expect("explicit render");
+        assert_ne!(
+            bundled.png, generic.png,
+            "opt-in mode must change the sans-serif glyphs"
+        );
+        assert_eq!(
+            generic.png, explicit.png,
+            "sans-serif must resolve to Noto Sans in --system-fonts mode"
         );
     }
 }

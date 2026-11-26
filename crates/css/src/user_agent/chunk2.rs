@@ -63,7 +63,9 @@ pub(crate) mod tests {
         let textarea = style(&styles, textarea);
         assert!(matches!(textarea.width, Length::Px(width) if width > 100.0));
         assert!(matches!(textarea.height, Length::Px(height) if height > 20.0));
-        assert_eq!(select_overflow(&styles, select), Overflow::Hidden);
+        // Native selects paint their option label + arrow without clipping (#2290):
+        // the UA sheet now uses `overflow: visible` and an intrinsic width.
+        assert_eq!(select_overflow(&styles, select), Overflow::Visible);
         // Fonts are inherited (the UA sheet does not force a widget font).
         assert!(styles.values().all(|style| style.font_size > 0.0));
     }

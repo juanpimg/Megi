@@ -1,7 +1,7 @@
 //! Painting for the address bar and the history button that shares its strip.
 
 use megi_webview::layout::Rect;
-use megi_webview::paint::Pixmap;
+use megi_webview::paint::{Color, Pixmap};
 
 use super::address_bar::{address_text_x, split_url_for_display};
 use super::drawing::*;
@@ -23,7 +23,17 @@ pub(crate) fn paint_address_bar(
         ),
         COLOR_ADDRESS_STRIP,
     );
-    // Rounded pill: a 1 px border around the same surface used by the active tab.
+    // One-pixel separators give the taller band clear top and bottom edges.
+    for y in [TAB_STRIP_HEIGHT, CHROME_HEIGHT - 1.0] {
+        pixmap.fill_rect(
+            Rect::new(0.0, y * scale, width * scale, scale),
+            COLOR_BORDER,
+        );
+    }
+    // Rounded pill: a soft shadow behind a 1 px border makes the field distinct
+    // from the strip without adding a second accent or a GPU effect.
+    let shadow = Rect::new(bar.x + 1.0, bar.y + 2.0, bar.width, bar.height);
+    fill_round(pixmap, shadow, scale, PILL_RADIUS, COLOR_SHADOW);
     fill_round(pixmap, bar, scale, PILL_RADIUS, COLOR_BORDER);
     fill_round(
         pixmap,
@@ -37,11 +47,22 @@ pub(crate) fn paint_address_bar(
         (PILL_RADIUS - 1.0).max(0.0),
         COLOR_ADDRESS_BG,
     );
+    // Inset highlight and a 1 px bottom rule give the pill a bevel instead of a
+    // flat dark rectangle. Both are pure fill operations in the same palette.
+    pixmap.fill_rect(
+        Rect::new(
+            (bar.x + 3.0) * scale,
+            (bar.y + 1.0) * scale,
+            (bar.width - 6.0).max(0.0) * scale,
+            scale,
+        ),
+        Color::new(0x5C, 0x64, 0x73, 0xFF),
+    );
     let editing = view.address.is_editing();
     let mut text_x = address_text_x(width);
     if !editing && let Some(icon) = view.favicons.get(view.active_tab).and_then(Option::as_ref) {
-        paint_favicon(pixmap, icon, text_x, bar.y + 4.0, scale);
-        text_x += 22.0;
+        paint_favicon(pixmap, icon, text_x, bar.y + 5.0, scale);
+        text_x += 24.0;
     }
     let text_y = bar.y + 7.0;
     if editing {
@@ -172,10 +193,10 @@ pub(crate) fn paint_history_button(pixmap: &mut Pixmap, scale: f32, view: &Chrom
     draw_text(
         pixmap,
         "H",
-        rect.x + 7.0,
-        rect.y + 4.0,
+        rect.x + 8.0,
+        rect.y + 5.0,
         scale,
-        11.0,
+        MENU_TEXT_SIZE,
         COLOR_ADDRESS_TEXT,
     );
 }
@@ -193,7 +214,7 @@ pub mod compact {
     };
 
     /// Smallest accepted chrome hit target, in CSS pixels.
-    pub const MIN_HIT_TARGET_CSS: f32 = 22.0;
+    pub const MIN_HIT_TARGET_CSS: f32 = 24.0;
     /// Duration of the hover-peek width transition, in milliseconds.
     pub const PEEK_ANIMATION_MS: u32 = 120;
 
@@ -264,7 +285,9 @@ pub mod compact {
         let address_start =
             ((TAB_STRIP_HEIGHT * scale).round() as usize).min(layer.height as usize);
         let band_end = ((CHROME_HEIGHT * scale).ceil() as usize).min(layer.height as usize);
-        let shift = ((CHROME_HEIGHT - COMPACT_CHROME_HEIGHT) * scale).round() as usize;
+        // The hidden surface is exactly the tab strip: moving the address strip up
+        // by its height lands it at row 0, with no gap and no page overflow.
+        let shift = (TAB_STRIP_HEIGHT * scale).round() as usize;
         let rows = band_end.saturating_sub(address_start);
         if rows == 0 || shift == 0 || shift > address_start {
             return;

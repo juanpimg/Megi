@@ -1,32 +1,17 @@
-//! Browser chrome drawn by the shell over the rendered page: tab strip, address bar and the
-//! floating `<select>` dropdown.
+//! Browser chrome over the page: tab strip, address bar and floating menus.
 //!
-//! Visual design: one accent color drives focus/loading/active-tab affordances, every
-//! surface uses the antialiased rounded-rectangle primitives already in `paint`, and the
-//! address pill splits scheme/authority/path into a text hierarchy. All of it stays pure
-//! (`Pixmap` in, pixels out), deterministic, and free of new dependencies.
+//! One accent drives focus/loading/active-tab affordances; surfaces use `paint`'s
+//! rounded-rect primitives and the pill splits scheme/authority/path. Painting is
+//! pure (`Pixmap` in, pixels out), deterministic and dependency-free.
+//! The chrome is an **overlay**: the page keeps its viewport, the top
+//! [`CHROME_HEIGHT`] CSS pixels are occluded and clicks there go to the shell.
+//! Geometry is CSS pixels, scaled at paint time; `--chrome` includes it in
+//! headless screenshots.
 //!
-//! The chrome is an **overlay** painted on the physical framebuffer after the page frame
-//! (documented trade-off: the rendered page keeps its full viewport, so the top
-//! [`CHROME_HEIGHT`] CSS pixels are occluded by the chrome; clicks there are handled by the
-//! chrome and never reach the page). All geometry is expressed in CSS pixels and scaled by
-//! the effective device scale when painted. The drawing code is pure (a `0RGB` buffer in,
-//! pixels out) so it is unit-tested without a display; headless screenshots can include the
-//! chrome with `--chrome`.
-//!
-//! Deliberate limits: no autocomplete, no visual history dropdown, no favicon network
-//! fetch in the chrome painter (the worker supplies decoded 16x16 icons or a dot),
-//! no native menus, ASCII text rendered with the paint crate's built-in 8×8 bitmap font
-//! (uppercase glyphs used for lowercase input), and the address bar edits the URL only
-//! (search terms are treated as URLs). The tab strip shows a compact title per tab with
-//! `+`/`×` affordances and a `+N` overflow marker; there is no drag/reorder.
-//!
-//! The implementation is split into cohesive submodules declared below: `drawing`
-//! (shared primitives), `address_bar`, `tab_strip` (incl. the hidden-tab overflow),
-//! `dropdown`, `menus`, `history_menu`, `status_bar` and `navigation`. This file
-//! keeps the shared palette/geometry constants, the [`ChromeView`] data contract and the
-//! two top-level entry points, and re-exports the public API so `crate::chrome::*` paths
-//! are unchanged for the shell.
+//! Limits: no autocomplete UI, no favicon fetching in the painter, no native
+//! menus, URL-only address edits, no tab drag/reorder. Feature submodules own
+//! layout/hit-testing/painting; this file keeps tokens, [`ChromeView`] and the
+//! two entry points, re-exporting the stable `crate::chrome::*` API.
 
 use megi_webview::layout::Rect;
 use megi_webview::paint::{Color, Pixmap};
@@ -91,8 +76,8 @@ pub use tab_strip::{
 };
 pub use tokens::{HEIGHT_COMPACT, Palette, Radius, Spacing};
 
-// The historical constants become aliases of the tokens. Every painted pixel is
-// produced from these names, so their values must stay byte-identical.
+// Public constants alias the tokens so every painted pixel still comes from one
+// named source; the values now encode the refreshed visual design.
 const TOKEN_PALETTE: Palette = Palette::DEFAULT;
 const TOKEN_RADIUS: Radius = Radius::DEFAULT;
 const TOKEN_SPACING: Spacing = Spacing::DEFAULT;
@@ -110,9 +95,19 @@ const PILL_RADIUS: f32 = TOKEN_RADIUS.pill;
 /// Corner radius of floating menus and dropdowns.
 const MENU_RADIUS: f32 = TOKEN_RADIUS.menu;
 /// Address bar font size, shared by text, URL hierarchy and the caret measurement.
-const ADDRESS_TEXT_SIZE: f32 = 13.0;
+const ADDRESS_TEXT_SIZE: f32 = 16.0;
+/// Tab title font size, in CSS pixels. 16 px reads at a glance in a 40 px strip.
+pub const TAB_TITLE_TEXT_SIZE: f32 = 16.0;
+/// Rail title/glyph font size, in CSS pixels.
+pub const RAIL_TEXT_SIZE: f32 = 13.0;
+/// Navigation glyph font size, in CSS pixels.
+pub const NAV_TEXT_SIZE: f32 = 14.0;
+/// Floating menu / overflow row font size, in CSS pixels.
+pub const MENU_TEXT_SIZE: f32 = 13.0;
+/// Bottom status bar font size, in CSS pixels.
+pub const STATUS_TEXT_SIZE: f32 = 13.0;
 /// Height of one dropdown option row, in CSS pixels.
-pub const DROPDOWN_ROW_HEIGHT: f32 = 18.0;
+pub const DROPDOWN_ROW_HEIGHT: f32 = 20.0;
 /// Maximum number of visible dropdown rows before the list scrolls.
 pub const DROPDOWN_MAX_VISIBLE: usize = 8;
 /// Minimum width of a tab, in CSS pixels.
@@ -120,11 +115,11 @@ pub const TAB_MIN_WIDTH: f32 = 72.0;
 /// Maximum width of a tab, in CSS pixels.
 pub const TAB_MAX_WIDTH: f32 = 200.0;
 /// Width reserved for the `+` new-tab button, in CSS pixels.
-pub const NEW_TAB_WIDTH: f32 = 28.0;
-/// Width of the tab close affordance, in CSS pixels.
-pub const TAB_CLOSE_WIDTH: f32 = 14.0;
+pub const NEW_TAB_WIDTH: f32 = 34.0;
+/// Width and height of the tab close affordance, in CSS pixels (clickable target).
+pub const TAB_CLOSE_WIDTH: f32 = 24.0;
 /// Width reserved for the `+N` overflow marker, in CSS pixels.
-pub const TAB_OVERFLOW_WIDTH: f32 = 34.0;
+pub const TAB_OVERFLOW_WIDTH: f32 = 40.0;
 
 /// Single accent used for focus, the active tab, the caret and loading feedback.
 /// Keeping one accent is what makes the chrome read as a coherent design.
@@ -170,7 +165,7 @@ pub const COLOR_DISABLED: Color = TOKEN_PALETTE.disabled;
 /// Per-tab loading indicator (deterministic dot while the render worker runs).
 pub const COLOR_LOADING: Color = ACCENT;
 /// Height of one overflow-menu row, in CSS pixels.
-pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 18.0;
+pub const OVERFLOW_MENU_ROW_HEIGHT: f32 = 20.0;
 /// Maximum open-tab rows in the overflow menu before it scrolls.
 pub const OVERFLOW_MENU_MAX_VISIBLE: usize = 8;
 /// Height of the link-hover status bar at the bottom of the window, in CSS pixels.
@@ -178,7 +173,7 @@ pub const STATUS_BAR_HEIGHT: f32 = TOKEN_SPACING.status_bar_height;
 /// Width of the context menu, in CSS pixels.
 pub const CONTEXT_MENU_WIDTH: f32 = TOKEN_SPACING.context_menu_width;
 /// Height of one context-menu row, in CSS pixels.
-pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 20.0;
+pub const CONTEXT_MENU_ROW_HEIGHT: f32 = 22.0;
 /// Link-hover status bar background.
 pub const COLOR_STATUS_BAR: Color = COLOR_TAB_STRIP;
 /// Link-hover status text.
@@ -261,8 +256,8 @@ pub struct ChromeView<'a> {
     /// Optional vertical tab rail painted below the top band (Phase 1 UI).
     /// `None` keeps every existing chrome pixel byte-identical.
     pub rail: Option<RailView<'a>>,
-    /// Compact 40 px band: hide the tab strip, keep the 28 px address strip.
-    /// `false` keeps every existing chrome pixel byte-identical.
+    /// Compact 38 px band: hide the tab strip, keep the address strip.
+    /// `false` paints the full 78 px band.
     pub compact: bool,
 }
 
@@ -319,6 +314,12 @@ pub fn draw_chrome(
     if let Some(menu) = view.menu {
         paint_context_menu(&mut pixmap, scale, view, menu);
     }
+    let band_css = if view.compact {
+        COMPACT_CHROME_HEIGHT
+    } else {
+        CHROME_HEIGHT
+    };
+    drawing::paint_band_shadow(&mut pixmap, scale, css_width, band_css);
     let mut painted = 0usize;
     for (index, color) in pixmap.pixels.iter().enumerate() {
         if color.a == 0 {
@@ -364,10 +365,13 @@ pub fn draw_chrome_over_pixmap(
         1.0
     };
     let rows = rows.min(height);
-    // The painted surfaces only need the band they can cover; every paint helper
-    // clips/fills within this height and the composite loop below mirrors the
-    // full-buffer mix for exactly these rows.
-    let mut band = Pixmap::new(width, rows);
+    // Compact mode paints the address strip at `TAB_STRIP_HEIGHT` and then shifts
+    // it up, so the scratch layer must cover the full legacy band even though only
+    // `rows` of it end up visible. Transparent vacated rows are skipped below.
+    let band_rows = (((CHROME_HEIGHT * scale).ceil() as u32) + 4)
+        .max(rows)
+        .min(height);
+    let mut band = Pixmap::new(width, band_rows);
     let css_width = view.css_width.max(1.0);
     if !view.compact {
         paint_tab_strip(&mut band, scale, view, css_width);
@@ -378,6 +382,12 @@ pub fn draw_chrome_over_pixmap(
     if view.compact {
         compact::shift_band_up(&mut band, scale);
     }
+    let band_css = if view.compact {
+        COMPACT_CHROME_HEIGHT
+    } else {
+        CHROME_HEIGHT
+    };
+    drawing::paint_band_shadow(&mut band, scale, css_width, band_css);
     debug_assert!(view.dropdown.is_none());
     debug_assert!(view.overflow.is_none());
     debug_assert!(view.menu.is_none());

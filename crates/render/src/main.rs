@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! render <url|file> <out.png> [--width W] [--height H] [--base URL]
-//!        [--no-network] [--no-scripting] [--cookies] [--origin ORIGIN] [--json]
+//!        [--no-network] [--no-scripting] [--system-fonts] [--cookies] [--origin ORIGIN] [--json]
 //! ```
 //!
 //! Exit codes: `0` success, `1` render error (typed message on stderr), `2` usage error.
@@ -33,6 +33,7 @@ options:
   --sw-offline   <url|file> is an HTML fixture: register a service worker,
                  cut the network, reload the cached document and write its PNG
   --no-scripting ignore <script> elements (no JS execution, no re-render)
+  --system-fonts also load installed system fonts (generic families match Chrome)
   --cookies      enable a per-render cookie jar (Set-Cookie stored and sent to
                  subresources/redirects; also enables credentialed CORS)
   --origin URL   CORS Origin override for subresource fetches (default: the
@@ -51,6 +52,7 @@ struct Args {
     no_network: bool,
     sw_offline: bool,
     no_scripting: bool,
+    system_fonts: bool,
     cookies: bool,
     origin: Option<String>,
     json: bool,
@@ -107,6 +109,7 @@ fn run() -> Result<(), CliError> {
         } else {
             ScriptingMode::default()
         },
+        system_fonts: args.system_fonts,
         cookies: args.cookies,
         origin: args.origin.clone(),
         max_image_dim: args.max_image_dim,
@@ -221,6 +224,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
     let mut no_network = false;
     let mut sw_offline = false;
     let mut no_scripting = false;
+    let mut system_fonts = false;
     let mut cookies = false;
     let mut origin = None;
     let mut json = false;
@@ -237,6 +241,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
             "--no-network" => no_network = true,
             "--sw-offline" => sw_offline = true,
             "--no-scripting" => no_scripting = true,
+            "--system-fonts" => system_fonts = true,
             "--script-budget" => {
                 let value = args.next().ok_or_else(|| {
                     CliError::Usage("--script-budget requires small|real".to_owned())
@@ -308,6 +313,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, CliError> {
         no_network,
         sw_offline,
         no_scripting,
+        system_fonts,
         cookies,
         origin,
         json,
@@ -476,5 +482,14 @@ mod script_budget_cli_tests {
         ]))
         .expect_err("unknown profile");
         assert!(format!("{err:?}").contains("unknown --script-budget"));
+    }
+
+    #[test]
+    fn system_fonts_flag_is_opt_in() {
+        let base = parse_args(args(&["data:text/html,x", "/tmp/x.png"])).expect("default");
+        assert!(!base.system_fonts, "system fonts must be opt-in");
+        let on = parse_args(args(&["data:text/html,x", "/tmp/x.png", "--system-fonts"]))
+            .expect("--system-fonts must be accepted");
+        assert!(on.system_fonts);
     }
 }

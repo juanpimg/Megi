@@ -204,6 +204,11 @@ pub struct RenderOptions {
     pub max_web_font_bytes: usize,
     /// Maximum encoded bytes accepted for all web fonts per render (#531).
     pub max_total_web_font_bytes: usize,
+    /// Opt-in Chrome-parity mode: load installed system faces into the per-render font
+    /// database (bundled faces keep priority), so CSS generic families resolve like Chrome
+    /// (`sans-serif` → Noto Sans on Linux, CSS Fonts 4 §3.1). Default `false`: bundled faces
+    /// only, keeping deterministic goldens byte-identical. CLI: `--system-fonts`.
+    pub system_fonts: bool,
     /// Time used to evaluate CSS animations/transitions, in milliseconds (`--time`).
     ///
     /// `0` (the initial state) is the default; a caller that wants a later animation frame
@@ -370,6 +375,7 @@ impl Default for RenderOptions {
             max_web_fonts: DEFAULT_MAX_WEB_FONTS,
             max_web_font_bytes: DEFAULT_MAX_WEB_FONT_BYTES,
             max_total_web_font_bytes: DEFAULT_MAX_TOTAL_WEB_FONT_BYTES,
+            system_fonts: false,
             time_ms: 0.0,
             scripting: ScriptingMode::default(),
             scripting_limits: ScriptingLimits::default(),

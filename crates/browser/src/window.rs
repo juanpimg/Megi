@@ -52,6 +52,19 @@ mod worker;
 #[cfg(feature = "window")]
 use desktop::*;
 
+/// Startup chrome selection from the CLI (`--rail` and `--compact`).
+///
+/// Both selectors default to `false` so the first frame stays byte-identical to
+/// the legacy shell; keyboard shortcuts (`Ctrl+B`, `Ctrl+Shift+B`) remain free
+/// to change the state after the window opens.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StartupChrome {
+    /// Open the vertical tab rail (expanded) on the first frame.
+    pub rail: bool,
+    /// Start with the compact chrome band instead of the full one.
+    pub compact: bool,
+}
+
 /// Shell-specific view settings for one window: page zoom and auto-refresh policy.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WindowViewOptions {
@@ -69,6 +82,8 @@ pub struct WindowViewOptions {
     pub process_render: bool,
     /// Suppress chrome animation (`prefers-reduced-motion: reduce`, opt-in flag).
     pub reduced_motion: bool,
+    /// Chrome state selected for the first frame (`--rail`, `--compact`).
+    pub startup_chrome: StartupChrome,
 }
 
 impl Default for WindowViewOptions {
@@ -81,6 +96,7 @@ impl Default for WindowViewOptions {
             download_dir: None,
             process_render: true,
             reduced_motion: false,
+            startup_chrome: StartupChrome::default(),
         }
     }
 }
@@ -96,6 +112,7 @@ impl WindowViewOptions {
             download_dir: None,
             process_render: true,
             reduced_motion: false,
+            startup_chrome: StartupChrome::default(),
         }
     }
 
@@ -108,6 +125,12 @@ impl WindowViewOptions {
     /// Suppresses chrome transitions when the user prefers reduced motion.
     pub fn with_reduced_motion(mut self, enabled: bool) -> Self {
         self.reduced_motion = enabled;
+        self
+    }
+
+    /// Selects the rail and compact-band state of the first frame.
+    pub fn with_startup_chrome(mut self, startup_chrome: StartupChrome) -> Self {
+        self.startup_chrome = startup_chrome;
         self
     }
 

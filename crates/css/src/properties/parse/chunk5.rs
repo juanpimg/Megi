@@ -122,6 +122,53 @@ pub(crate) fn parse_image_value(value: &str) -> Option<String> {
     None
 }
 
+/// Decodes CSS string escapes in a serialized declaration value.
+///
+/// CSS Syntax 3 §4.3.5: a backslash followed by a code point escapes to that
+/// code point (`\"` → `"`); a backslash followed by 1–6 hex digits is a numeric
+/// escape with an optional trailing whitespace. The cascade re-escapes string
+/// tokens when it serializes declarations, so a URL inside `url("...")` arrives
+/// here still carrying those escapes. Without decoding, Wikipedia's SVG data
+/// URLs reach the SVG parser as `xmlns=\"...\"` and fail with "attribute not
+/// quoted" (CSS Values 3 §3.2 `<url>`).
+fn unescape_css_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            // Trailing backslash is dropped (CSS Syntax 3 §4.3.5 EOF escape).
+            break;
+        };
+        if next.is_ascii_hexdigit() {
+            let mut hex = String::from(next);
+            while hex.len() < 6 && chars.peek().is_some_and(|ch| ch.is_ascii_hexdigit()) {
+                hex.push(chars.next().expect("peeked hex digit"));
+            }
+            if let Some(code) = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
+                && code != '\0'
+                && !(0xD800..=0xDFFF).contains(&u32::from(code))
+            {
+                out.push(code);
+            } else {
+                out.push('\u{fffd}');
+            }
+            // One whitespace after a numeric escape is consumed as a delimiter.
+            if chars.peek().is_some_and(|ch| ch.is_ascii_whitespace()) {
+                chars.next();
+            }
+        } else if next == '\n' {
+            // Escaped newline is a line continuation: emit nothing.
+        } else {
+            out.push(next);
+        }
+    }
+    out
+}
+
 /// Parses a single `url(...)` component into its inner URL (quotes removed).
 pub(crate) fn parse_url_component(component: &str) -> Option<String> {
     let component = component.trim();
@@ -143,7 +190,27 @@ pub(crate) fn parse_url_component(component: &str) -> Option<String> {
     if inner.is_empty() {
         None
     } else {
-        Some(inner.to_string())
+        Some(unescape_css_string(inner))
+    }
+}
+
+#[cfg(test)]
+mod wiki_header_tests {
+    use super::parse_url_component;
+
+    #[test]
+    fn wiki_header_url_escaped_quote_unescapes() {
+        // CSS Syntax 3 §4.3.5: `\"` inside a string token escapes to a literal
+        // `"`. The serialized declaration re-escapes the quote, so the raw URL
+        // component still contains `\"`; it must be unescaped before the URL is
+        // handed to Fetch. Wikipedia's search/language icons are SVG data URLs
+        // written exactly this way (`xmlns=\"http://...\"`).
+        let raw = r#"url("data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\"/>")"#;
+        let url = parse_url_component(raw).expect("url component");
+        assert_eq!(
+            url,
+            "data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+        );
     }
 }
 

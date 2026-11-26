@@ -414,10 +414,10 @@ pub(crate) fn address_text_x(width: f32) -> f32 {
 /// [`ChromeView::history_button`] is set so headless chrome goldens stay unchanged.
 pub fn history_button_rect(css_width: f32) -> Rect {
     Rect::new(
-        (css_width - 28.0).max(2.0),
-        TAB_STRIP_HEIGHT + 4.0,
-        22.0,
-        20.0,
+        (css_width - 34.0).max(2.0),
+        TAB_STRIP_HEIGHT + 5.0,
+        28.0,
+        28.0,
     )
 }
 

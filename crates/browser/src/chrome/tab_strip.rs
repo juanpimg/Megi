@@ -93,12 +93,12 @@ pub fn layout_tabs(titles: &[String], width: f32, active: usize) -> TabStripLayo
     for index in 0..visible.min(titles.len()) {
         let rect = Rect::new(cursor, 0.0, tab_width, TAB_STRIP_HEIGHT);
         let close = Rect::new(
-            (cursor + tab_width - TAB_CLOSE_WIDTH - 2.0).max(cursor),
-            7.0,
+            (cursor + tab_width - TAB_CLOSE_WIDTH - 3.0).max(cursor),
+            (TAB_STRIP_HEIGHT - TAB_CLOSE_WIDTH) / 2.0,
             TAB_CLOSE_WIDTH,
             TAB_CLOSE_WIDTH,
         );
-        let max_chars = ((tab_width - TAB_CLOSE_WIDTH - 8.0) / 7.0).max(4.0) as usize;
+        let max_chars = ((tab_width - TAB_CLOSE_WIDTH - 14.0) / 8.0).max(4.0) as usize;
         tabs.push(TabRect {
             index,
             rect,
@@ -288,6 +288,8 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
         Rect::new(0.0, 0.0, width * scale, TAB_STRIP_HEIGHT * scale),
         COLOR_TAB_STRIP,
     );
+    // A subtle top rule frames the strip instead of letting it fade into the edge.
+    pixmap.fill_rect(Rect::new(0.0, 0.0, width * scale, scale), COLOR_BORDER);
     let layout = layout_tabs(view.tabs, width, view.active_tab);
     for tab in &layout.tabs {
         let active = tab.index == view.active_tab;
@@ -301,9 +303,9 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
             pixmap.fill_rect(
                 Rect::new(
                     tab.rect.x * scale,
-                    6.0 * scale,
+                    8.0 * scale,
                     scale,
-                    (TAB_STRIP_HEIGHT - 6.0) * scale,
+                    (TAB_STRIP_HEIGHT - 8.0) * scale,
                 ),
                 COLOR_TAB_SEPARATOR,
             );
@@ -313,26 +315,26 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
             // which page is visible without relying on a lighter background alone.
             pixmap.fill_rect(
                 Rect::new(
-                    (tab.rect.x + 2.0) * scale,
-                    (TAB_STRIP_HEIGHT - 2.0) * scale,
-                    (tab.rect.width - 4.0).max(0.0) * scale,
-                    2.0 * scale,
+                    (tab.rect.x + 3.0) * scale,
+                    (TAB_STRIP_HEIGHT - 3.0) * scale,
+                    (tab.rect.width - 6.0).max(0.0) * scale,
+                    3.0 * scale,
                 ),
                 ACCENT,
             );
         }
-        let mut title_x = tab.rect.x + 6.0;
+        let mut title_x = tab.rect.x + 8.0;
         if let Some(Some(icon)) = view.favicons.get(tab.index) {
-            title_x = tab.rect.x + 23.0;
-            paint_favicon(pixmap, icon, tab.rect.x + 3.0, tab.rect.y + 4.0, scale);
+            title_x = tab.rect.x + 25.0;
+            paint_favicon(pixmap, icon, tab.rect.x + 4.0, tab.rect.y + 11.0, scale);
         }
         draw_text(
             pixmap,
             &tab.title,
             title_x,
-            tab.rect.y + 8.0,
+            tab.rect.y + 10.0,
             scale,
-            11.0,
+            TAB_TITLE_TEXT_SIZE,
             COLOR_TEXT,
         );
         if view.loading && tab.index == view.active_tab {
@@ -347,14 +349,14 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
             );
         }
         let close = tab.close;
-        fill_round(pixmap, close, scale, 3.0, COLOR_ADDRESS_BG);
+        fill_round(pixmap, close, scale, 4.0, COLOR_ADDRESS_BG);
         draw_text(
             pixmap,
             "x",
-            close.x + 3.0,
+            close.x + 4.0,
             close.y + 2.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_TEXT,
         );
     }
@@ -363,21 +365,29 @@ pub(crate) fn paint_tab_strip(pixmap: &mut Pixmap, scale: f32, view: &ChromeView
         draw_text(
             pixmap,
             &format!("+{}", layout.hidden),
-            overflow.x + 6.0,
-            overflow.y + 8.0,
+            overflow.x + 8.0,
+            overflow.y + 11.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_TEXT,
         );
     }
     let new_tab = layout.new_tab;
+    // A rounded 24 px tile makes the new-tab control obvious and clickable.
+    fill_round(
+        pixmap,
+        Rect::new(new_tab.x + 5.0, new_tab.y + 8.0, 24.0, 24.0),
+        scale,
+        6.0,
+        COLOR_ADDRESS_BG,
+    );
     draw_text(
         pixmap,
         "+",
-        new_tab.x + 9.0,
-        new_tab.y + 8.0,
+        new_tab.x + 11.0,
+        new_tab.y + 10.0,
         scale,
-        14.0,
+        18.0,
         COLOR_TEXT,
     );
 }
@@ -408,11 +418,11 @@ pub(crate) fn paint_overflow_menu(
             .unwrap_or("Tab");
         draw_text(
             pixmap,
-            &truncate_title(title, ((rect.width - 24.0) / 7.0).max(4.0) as usize),
-            rect.x + 5.0,
-            rect.y + 5.0,
+            &truncate_title(title, ((rect.width - 28.0) / 8.0).max(4.0) as usize),
+            rect.x + 6.0,
+            rect.y + 4.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
         draw_text(
@@ -421,7 +431,7 @@ pub(crate) fn paint_overflow_menu(
             layout.close[row].x + 3.0,
             layout.close[row].y + 3.0,
             scale,
-            10.0,
+            MENU_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
     }

@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn settings_switches_round_trip_through_chrome_mode() {
-        let mut mode = ChromeMode::new(false);
+        let mut mode = ChromeMode::new(false, crate::window::StartupChrome::default());
         assert_eq!(settings_state(&mode, false), ShellSettingsState::default());
 
         let on = ShellSettingsState {

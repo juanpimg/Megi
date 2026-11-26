@@ -198,10 +198,10 @@ pub(crate) fn paint_context_menu(
         draw_text(
             pixmap,
             item.label,
-            row.x + 8.0,
-            row.y + 6.0,
+            row.x + 10.0,
+            row.y + 4.0,
             scale,
-            11.0,
+            MENU_TEXT_SIZE,
             COLOR_ADDRESS_TEXT,
         );
     }

@@ -32,6 +32,44 @@ fn layout_tree(doc: &Document, styles: &HashMap<NodeId, ComputedStyle>) -> Layou
     layout_document(doc, styles, Rect::new(0.0, 0.0, 800.0, 600.0)).expect("layout")
 }
 
+fn find_replaced_box(root: &LayoutBox, id: NodeId) -> Option<&LayoutBox> {
+    if matches!(root.box_type, BoxType::Replaced(node) if node == id) {
+        return Some(root);
+    }
+    root.children
+        .iter()
+        .find_map(|child| find_replaced_box(child, id))
+}
+
+#[test]
+fn wiki_header_floated_img_keeps_replaced_box() {
+    // CSS 2.2 §9.5 / §9.7: a float blockifies *non-replaced* inline boxes; a
+    // replaced element keeps its intrinsic dimensions. Wikipedia's logo is a
+    // floated `<img width=50 height=50>` inside a flex item.
+    let (mut doc, mut styles, p) = setup();
+    let img = doc.create_element(Namespace::Html, "img", vec![]);
+    doc.append_child(p, img);
+    let mut img_style = ComputedStyle::initial();
+    img_style.float = megi_css::Float::Left;
+    img_style.width = megi_css::Length::Px(50.0);
+    styles.insert(img, img_style);
+    let mut sizes = HashMap::new();
+    sizes.insert(img, (120.0, 80.0));
+
+    let tree = layout_document_with_replaced_sizes(
+        &doc,
+        &styles,
+        Rect::new(0.0, 0.0, 800.0, 600.0),
+        &sizes,
+    )
+    .expect("layout");
+    let replaced = find_replaced_box(&tree, img).expect("floated img is a replaced box");
+    assert!(replaced.is_float, "the box still floats");
+    assert_eq!(replaced.intrinsic_size, Some((120.0, 80.0)));
+    assert!((replaced.dimensions.content.width - 50.0).abs() < 0.001);
+    assert!((replaced.dimensions.content.height - 33.333).abs() < 0.01);
+}
+
 #[test]
 fn test_img_default_intrinsic_size() {
     let (mut doc, mut styles, p) = setup();

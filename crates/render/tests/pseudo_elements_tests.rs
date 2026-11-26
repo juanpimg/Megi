@@ -146,3 +146,79 @@ fn js_get_bounding_client_rect_uses_originating_element_not_pseudo_box() {
         output.stats.console
     );
 }
+
+#[test]
+fn absolute_after_does_not_widen_its_inline_anchor() {
+    // CSS 2.2 §9.6: an absolutely positioned box is out of flow and must not
+    // advance the inline cursor of its parent. Wikipedia's tab underlines are
+    // `a::after { position:absolute; left:0; width:100% }`; painting them in flow
+    // after the label pushes the underline into the neighbouring tab.
+    let html = r#"<!doctype html><html><head><style>
+        body { margin: 0; font: 14px sans-serif; }
+        ul { display: flex; }
+        li { white-space: nowrap; margin: 0 8px; }
+        a { display: inline-flex; position: relative; }
+        a::after { content: ''; position: absolute; left: 0; bottom: 0;
+                   width: 100%; height: 2px; background: rgb(0,0,255); }
+    </style></head><body><ul>
+        <li><a href="one"><span>Primera pestaña</span></a></li>
+        <li><a href="two"><span>Segunda</span></a></li>
+    </ul></body></html>"#;
+    let options = RenderOptions {
+        viewport: Viewport::new(320, 120).expect("viewport"),
+        ..RenderOptions::default()
+    };
+    let output = render_url(&data_url(html), &options).expect("render tabs");
+    let anchors = output.document.get_elements_by_tag_name("a");
+    assert_eq!(anchors.len(), 2);
+
+    for (i, id) in anchors.iter().enumerate() {
+        let anchor_x = output
+            .hit_regions
+            .iter()
+            .filter(|region| region.node_id == Some(*id) && region.rect.height > 5.0)
+            .map(|region| region.rect.x)
+            .next()
+            .expect("anchor box");
+        let text_width: f32 = output
+            .hit_regions
+            .iter()
+            .filter(|region| {
+                region.kind == megi_display::HitKind::Text && (region.rect.x - anchor_x).abs() < 1.0
+            })
+            .map(|region| region.rect.width)
+            .sum();
+        let own_widths: Vec<f32> = output
+            .hit_regions
+            .iter()
+            .filter(|region| region.node_id == Some(*id) && region.rect.height > 5.0)
+            .map(|region| region.rect.width)
+            .collect();
+        // CSS 2.2 §9.4.2: the inline box spans its own content, not the following
+        // sibling's. Before the fix it absorbed the out-of-flow `::after` width.
+        assert!(
+            own_widths.iter().all(|width| *width <= text_width + 1.0),
+            "anchor {i} inline box {own_widths:?} wider than its text {text_width}"
+        );
+        let painted_right: Vec<f32> = output
+            .hit_regions
+            .iter()
+            .filter(|region| region.node_id == Some(*id))
+            .map(|region| region.rect.x + region.rect.width)
+            .collect();
+        let next_x = anchors
+            .get(i + 1)
+            .and_then(|next| {
+                output
+                    .hit_regions
+                    .iter()
+                    .find(|region| region.node_id == Some(*next) && region.rect.height > 5.0)
+                    .map(|region| region.rect.x)
+            })
+            .unwrap_or(320.0);
+        assert!(
+            painted_right.iter().all(|right| *right < next_x),
+            "anchor {i} painted rects end at {painted_right:?}, overlapping next tab at {next_x}"
+        );
+    }
+}
