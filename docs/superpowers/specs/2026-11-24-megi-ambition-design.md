@@ -1,6 +1,6 @@
 # Diseño — Hoja de ruta de Megi hacia un navegador 100 % utilizable en producción
 
-> **Estado**: propuesta para aprobación del dueño del proyecto. Documento de diseño; no contiene código ni cambia dependencias.
+> **Estado**: **aprobada** (PR #2290, mergeado; es la estrategia vigente). Documento de diseño; no contiene código ni cambia dependencias.
 > **Fecha**: 2026-11-24 · **Fuente**: debate de cinco mesas paralelas + builder check + revisión posterior del dueño.
 > **Versión 2**: elimina la calendarización y los topes funcionales de la v1. Organiza el trabajo por **hitos de capacidad**, no por fechas, y añade un **motor de work packages** para que los agentes de IA tengan trabajo continuo. El objetivo declarado es **un navegador 100 % utilizable en producción**.
 
