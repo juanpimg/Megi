@@ -30,7 +30,7 @@ Cargo.toml	80	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	254	docs	F3	m2-fixture	2026-11-26	covered	M2#5-regenerated-243-lines	regenerated with tools/update_progress.py after rebase
+PROGRESS.md	254	docs	F3	opencode-agent	2026-11-26	covered	#audit	regenerated progress artifacts
 README.md	190	docs	F3	jp	2026-11-24	covered	#2290	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
