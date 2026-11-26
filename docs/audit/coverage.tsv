@@ -22,7 +22,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 .gitignore	65	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
-AGENTS.md	130	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after referencing tool ref checker
+AGENTS.md	136	docs	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: conformance freshness gate extension
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 CONTRIBUTING.md	327	docs	F3	jp	2026-11-25	covered	#2290	
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
@@ -2365,12 +2365,13 @@ tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
+tools/check_conformance_freshness.py	76	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: conformance freshness gate extension
 tools/check_deslop_doc.py	123	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: deslop doc/allowlist consistency checker
 tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	102	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site report gate extension
+tools/check_no_compile_gates.py	104	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: conformance freshness gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2403,6 +2404,7 @@ tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read aft
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
+tools/test_check_conformance_freshness.py	89	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: conformance freshness gate extension
 tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for deslop doc checker
 tools/test_check_doc_tool_refs.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
