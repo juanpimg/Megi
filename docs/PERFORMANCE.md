@@ -214,16 +214,16 @@ del crate render. `crates/bench/Cargo.toml` añade la dependencia `render`
 
 | Modo | r32 | r31 | PNG |
 |---|---:|---:|---:|
-| shell showcase headless | **26,28 ms** | 29,85 | 80 220 B (`c95c7eff…`) |
+| shell showcase headless | **26,28 ms** | 29,85 | 80 361 B (`92618586…`) |
 | showcase `--chrome` | **27,32 ms** | 31,09 | 86 629 B |
 | showcase `--chrome --chrome-menu` | **30,42 ms** | 34,34 | 88 003 B |
 | `find.html --find` | **10,60 ms** | 11,95 | 29 950 B |
-| showcase `--save-png` | **26,74 ms** | 30,31 | 80 220 B |
+| showcase `--save-png` | **26,74 ms** | 30,31 | 80 361 B |
 | about:history | **10,00 ms** | 10,44 | 18 204 B |
 | directorio file:// | **11,35 ms** | 12,83 | — |
 | error page | **10,38 ms** | 12,57 | — |
 
-Goldens de página: showcase **`c95c7eff…`** 80 220 B, basic **`e943565d…`**
+Goldens de página: showcase **`92618586…`** 80 361 B, basic **`e943565d…`**
 21 090 B, phase4 **`9e957177…`** 42 853 B, `basic.rgba` **`60f8984e…`**
 1 920 000 B — intactos. Chrome/menu no son goldens de página (llevan UI).
 
@@ -366,7 +366,7 @@ Filas nuevas de r33–r36 (19) que no tienen par en r32: matriz completa
 3. Guardar JSON; regresión si empeora >15 % reproducible. Filas:
    `--filter image`, `--filter paint`, `--filter render`, `--filter pipeline`,
    `--filter shell/chrome-png`, `--filter css`.
-4. Goldens: showcase `c95c7eff…` 80 220 B; basic `e943565d…` 21 090 B; phase4
+4. Goldens: showcase `92618586…` 80 361 B; basic `e943565d…` 21 090 B; phase4
    `9e957177…` 42 853 B; `basic.rgba` `60f8984e…`.
 5. `render/html-to-png` mide el crate render; no lo sustituyas por `pipeline/*`
    (composición manual).
