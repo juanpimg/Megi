@@ -59,6 +59,72 @@ fn inline_svg_is_rasterized_like_an_image() {
 }
 
 #[test]
+fn inline_svg_fill_currentcolor_inherits_parent_color() {
+    // MDN/Google ship icons with `fill="currentColor"`; the computed `color` of the host
+    // element must reach the rasterized SVG instead of painting a black square.
+    let output = render_fixture("svg_inline_current_color.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    assert!(
+        count_color(&output.pixmap, BLUE) > 200,
+        "currentColor must inherit the parent's computed blue, got {} blue px",
+        count_color(&output.pixmap, BLUE)
+    );
+}
+
+#[test]
+fn inline_svg_stroke_currentcolor_inherits_class_color() {
+    let output = render_fixture("svg_inline_current_color_class.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    let forest_green = megi_css::Color::new(0x00, 0x80, 0x00, 0xFF);
+    assert!(
+        count_color(&output.pixmap, forest_green) > 100,
+        "stroke=currentColor must inherit the CSS class color, got {} px",
+        count_color(&output.pixmap, forest_green)
+    );
+}
+
+#[test]
+fn inline_svg_currentcolor_inherits_through_nested_hosts() {
+    let output = render_fixture("svg_inline_current_color_nested.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    assert!(
+        count_color(&output.pixmap, BLUE) > 200,
+        "color must inherit through nested hosts, got {} blue px",
+        count_color(&output.pixmap, BLUE)
+    );
+}
+
+#[test]
+fn inline_svg_explicit_color_outranks_inherited_color() {
+    let output = render_fixture("svg_inline_current_color_own.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    assert!(
+        count_color(&output.pixmap, RED) > 200,
+        "explicit SVG color must win, got {} red px",
+        count_color(&output.pixmap, RED)
+    );
+    assert_eq!(
+        count_color(&output.pixmap, BLUE),
+        0,
+        "parent color must not leak over an explicit SVG color"
+    );
+}
+
+#[test]
+fn inline_svg_mdn_style_icon_uses_inherited_stroke_color() {
+    // Verbatim SVG markup from MDN's /en-US/docs/Web/CSS/color search icon (fill="none",
+    // stroke="currentColor"), hosted on an element whose color comes from a CSS class.
+    let output = render_fixture("svg_inline_mdn_icon.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    let mdn_blue = megi_css::Color::new(0x0B, 0x5F, 0xFF, 0xFF);
+    assert!(
+        count_color(&output.pixmap, mdn_blue) > 20,
+        "MDN-style currentColor stroke must inherit the host color, got {} px",
+        count_color(&output.pixmap, mdn_blue)
+    );
+}
+
+#[test]
 fn inline_svg_viewbox_honours_css_size() {
     let output = render_fixture("svg_inline_viewbox.html");
     assert_eq!(output.stats.inline_svgs, 1);
