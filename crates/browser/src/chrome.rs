@@ -20,7 +20,6 @@ mod address_bar;
 mod address_bar_paint;
 mod drawing;
 mod dropdown;
-mod history_menu;
 mod menus;
 mod native_widgets;
 mod navigation;
@@ -36,8 +35,8 @@ mod tests;
 // Internal paint entry points used by `draw_chrome` / `draw_chrome_over_pixmap`.
 use address_bar_paint::{paint_address_bar, paint_history_button};
 use dropdown::paint_dropdown;
-use history_menu::paint_history_menu;
 use menus::paint_context_menu;
+use menus::paint_history_menu;
 use navigation::paint_navigation_buttons;
 use status_bar::paint_status_bar;
 use tab_strip::{paint_overflow_menu, paint_tab_strip};
@@ -52,14 +51,15 @@ pub use address_bar_paint::compact::{
     MIN_HIT_TARGET_CSS, PEEK_ANIMATION_MS, band_css_height, band_pixels, peek_labels_visible,
     peek_width_css,
 };
+pub use drawing::{mask_page_corner_0rgb, mask_page_corner_pixmap};
 pub use dropdown::{
     DropdownItem, DropdownList, DropdownState, dropdown_items, dropdown_layout,
     dropdown_layout_items,
 };
-pub use history_menu::{HistoryMenuLayout, history_menu_hit, history_menu_layout};
 pub use menus::{
-    ContextMenu, ContextMenuItem, ContextMenuLayout, MenuAction, context_menu_hit,
-    context_menu_layout,
+    ContextMenu, ContextMenuItem, ContextMenuLayout, HistoryMenuLayout, MenuAction,
+    context_menu_hit, context_menu_layout, draw_downloads_panel, draw_save_as_dialog,
+    history_menu_hit, history_menu_layout,
 };
 pub use navigation::{
     NavigationButton, NavigationButtons, navigation_button_at, navigation_buttons,
@@ -70,17 +70,17 @@ pub use rail::{
     layout_rail, paint_rail, rail_hit, rail_hover_hit, rail_tab_accessibility,
     strip_tab_accessibility,
 };
-pub use shell::{
-    RAIL_CSS, SIDEBAR_MAX, WINDOW_MARGIN, ShellHit, ShellLayout, ShellView, layout_shell,
-    mask_page_corner_0rgb, mask_page_corner_pixmap, paint_shell, paint_window_frame, shell_hit,
-    sidebar_width,
-};
+pub use shell::{paint_shell, paint_window_frame};
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{
     OverflowHit, OverflowLayout, OverflowMenu, TabHit, TabRect, TabStripLayout, layout_tabs,
     overflow_menu_hit, overflow_menu_layout, tab_strip_hit, truncate_title,
 };
 pub use tokens::{HEIGHT_COMPACT, Palette, Radius, ShellPalette, Spacing};
+pub use tokens::{
+    RAIL_CSS, SIDEBAR_MAX, ShellHit, ShellLayout, ShellView, WINDOW_MARGIN, layout_shell,
+    shell_hit, sidebar_width,
+};
 
 // Public constants alias the tokens so every painted pixel still comes from one
 // named source; the values now encode the refreshed visual design.
@@ -296,9 +296,15 @@ pub fn draw_chrome(
     if let Some(shell) = view.shell {
         // Reference shell paints the whole surface in one pass; legacy nav buttons
         // stay on top so their existing hit rectangles match the painted pixels.
-        let layout = shell::layout_shell(css_width, dest_height as f32 / scale, scale, &shell);
+        let layout = tokens::layout_shell(css_width, dest_height as f32 / scale, scale, &shell);
         if shell.sidebar {
-            shell::mask_page_corner_0rgb(dest, dest_width, scale, layout.page, shell::WINDOW_RADIUS);
+            drawing::mask_page_corner_0rgb(
+                dest,
+                dest_width,
+                scale,
+                layout.page,
+                tokens::WINDOW_RADIUS,
+            );
         }
         shell::paint_shell(&mut pixmap, scale, &layout, &shell);
         if !view.compact {
@@ -402,10 +408,10 @@ pub fn draw_chrome_over_pixmap(
     let mut band = Pixmap::new(width, band_rows);
     let css_width = view.css_width.max(1.0);
     if let Some(shell) = view.shell {
-        let layout = shell::layout_shell(css_width, height as f32 / scale, scale, &shell);
+        let layout = tokens::layout_shell(css_width, height as f32 / scale, scale, &shell);
         shell::paint_shell(&mut band, scale, &layout, &shell);
         if shell.sidebar {
-            shell::mask_page_corner_pixmap(dest, scale, layout.page, shell::WINDOW_RADIUS);
+            drawing::mask_page_corner_pixmap(dest, scale, layout.page, tokens::WINDOW_RADIUS);
         }
         if !view.compact {
             paint_navigation_buttons(&mut band, scale, view);
@@ -462,14 +468,6 @@ pub fn draw_chrome_over_pixmap(
     painted += draw_rail_over_pixmap(dest, scale, view);
     painted
 }
-
-#[path = "chrome/save_as.rs"]
-mod save_as;
-pub use save_as::draw_save_as_dialog;
-
-#[path = "chrome/downloads_panel.rs"]
-mod downloads_panel;
-pub use downloads_panel::draw_downloads_panel;
 
 #[path = "chrome/native_widget_overlay.rs"]
 mod native_widget_overlay;

@@ -31,8 +31,8 @@ pub(super) fn render_target_with_chrome_mode(
     // the page is laid out in that reduced viewport and composited into the frame.
     let band_css = crate::chrome::band_css_height(compact);
     let band_rows = (band_css.ceil() as u32).min(height);
-    let sidebar_cols = (crate::chrome::sidebar_width(width as f32).ceil() as u32)
-        .min(width.saturating_sub(1));
+    let sidebar_cols =
+        (crate::chrome::sidebar_width(width as f32).ceil() as u32).min(width.saturating_sub(1));
     let page_width = width.saturating_sub(sidebar_cols).max(1);
     let bottom_margin = (crate::chrome::WINDOW_MARGIN.ceil() as u32).min(height);
     let page_height = height

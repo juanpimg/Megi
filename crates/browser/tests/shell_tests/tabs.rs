@@ -277,8 +277,8 @@ fn chrome_geometry_scales_with_the_device_scale() {
         ime_preedit: "",
         compact: false,
         rail: None,
-    shell: None,
-};
+        shell: None,
+    };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = megi_browser::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
     assert!(painted > 0);
@@ -349,8 +349,8 @@ fn single_workspace_chrome_render_is_byte_identical_to_legacy_inputs() {
             ime_preedit: "",
             compact: false,
             rail: None,
-        shell: None,
-}
+            shell: None,
+        }
     }
     let legacy = view(&legacy_titles, tabs.active_index(), &address);
     let visible = view(&visible_titles, tabs.visible_active_index(), &address);
