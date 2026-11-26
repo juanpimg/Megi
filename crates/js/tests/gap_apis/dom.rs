@@ -185,5 +185,25 @@ fn base64_roundtrip() {
 
 #[test]
 fn no_default_stub_still_compiles() {
-    let _ = Budget::default();
+    // #2438: a discarded `Budget::default()` only proves the type exists. Pin the
+    // anti-DoS values so a future stub (all zeroes or an unbounded budget) fails.
+    let budget = Budget::default();
+    assert_eq!(
+        budget,
+        Budget {
+            loop_iterations: 5_000_000,
+            recursion_limit: 512,
+            stack_size_limit: 20_480,
+        },
+        "default anti-DoS budget changed"
+    );
+    assert!(budget.loop_iterations > 0);
+    assert!(budget.recursion_limit > 0);
+    assert!(budget.stack_size_limit > 0);
+    assert!(
+        budget.loop_iterations > Budget::SMALL.loop_iterations
+            && budget.recursion_limit > Budget::SMALL.recursion_limit
+            && budget.stack_size_limit > Budget::SMALL.stack_size_limit,
+        "the default budget must be larger than the conservative SMALL budget"
+    );
 }
