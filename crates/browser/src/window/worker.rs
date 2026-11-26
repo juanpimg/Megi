@@ -39,9 +39,10 @@ impl WindowApp {
     /// Queues a render to the per-site process pool (ADR-004 phase 3). Responses arrive
     /// asynchronously through the pool's reader threads and are drained like worker messages.
     fn send_process_render(&mut self, request: RenderRequest) -> bool {
-        let options = crate::ipc::IpcRenderOptions::from_render_options(
-            &render_options_for_scale(&self.render_options, self.scale_factor),
-        )
+        let options = crate::ipc::IpcRenderOptions::from_render_options(&render_options_for_scale(
+            &self.render_options,
+            self.scale_factor,
+        ))
         .with_raster_scale(request.raster_scale);
         let wire = crate::ipc::IpcRenderRequest {
             generation: request.generation,
