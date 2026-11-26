@@ -17,7 +17,7 @@
 
 > No es una meta: es lo medible hoy. Leer antes de elegir trabajo.
 
-- **6/13** hitos cerrados · **47/64** criterios verificados (**73 %**) · **3.697** tests · **18** crates (`PROGRESS.md:7`).
+- **6/13** hitos cerrados · **47/64** criterios verificados (**73 %**) · **3.709** tests · **18** crates · **273.985** líneas de Rust (snapshot `40fb793c`, 2026-11-26; `PROGRESS.md:7`).
 - Gate html5lib PASS (7.050 + 3.904 + 230) y CSS 30/30; **WPT 596/596 en 18 fixtures/6 dirs** (~0,03 % del árbol de referencia, 103 fixtures `skip`) — `docs/status/wpt.md`.
 - **Test262: 13 casos locales**, no el árbol tc39 — `docs/status/test262.json`.
 - Sitios reales (live): **2 PASS / 1 DEGRADED / 1 ERROR** — `docs/status/real-sites.json`.
@@ -27,7 +27,7 @@
 - 50 gates Python en verde (`python3 tools/check_no_compile_gates.py`); `update_coverage` depende de un sello de conformidad fresco.
 
 **Plan activo de auditoría línea por línea**: `docs/superpowers/plans/2026-11-26-line-by-line-audit-plan.md`.
-**Auditoría completada en dos pasadas**: 18 crates / 270.986 líneas + tools/fuzz/CI/tests/docs; 141 hallazgos, 140 issues (#2315–#2454). Índice y cómo continuar: `docs/audit/LINE_BY_LINE-RESULTS.md`.
+**Auditoría completada en dos pasadas**: 18 crates / 270.986 líneas en el snapshot auditado (el snapshot generado actual publica 273.985 en `PROGRESS.md`) + tools/fuzz/CI/tests/docs; 141 hallazgos, 140 issues (#2315–#2454). Índice y cómo continuar: `docs/audit/LINE_BY_LINE-RESULTS.md`.
 
 ## Hitos M0–M12
 
@@ -98,7 +98,7 @@ python3 tools/wp_plan.py --board
 | `PROGRESS.md`, `docs/status/*` (generados) | fuentes: `docs/status/progress.toml`, `coverage.toml` |
 | `docs/audit/FINDINGS.md` (registro/generado) | `docs/audit/README.md` y hallazgos abiertos |
 
-Si encuentras una cifra o fecha vieja en un doc histórico, **no la corrijas a ciegas**: verifica el código y abre un `WP-AUDIT`.
+Si encuentras una cifra o fecha vieja en un doc histórico, **no la corrijas a ciegas**: verifica el código y **abre un issue** para el doc (regla de `AGENTS.md` §0); el `WP-AUDIT` se deriva del issue si el motor de WPs debe generarlo.
 
 ## Verificación antes de reportar éxito
 
