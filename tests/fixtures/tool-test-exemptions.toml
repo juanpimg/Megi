@@ -1,0 +1,30 @@
+# Tools that intentionally have no dedicated `tools/test_<name>.py` module.
+# Every entry needs a reason; the checker rejects stale or empty entries.
+
+[[exemption]]
+name = "audit_recover_issues.py"
+reason = "One-shot audit recovery/reporting utility over GitHub issues; no reusable pure logic to test."
+
+[[exemption]]
+name = "check_fixture_hashes.py"
+reason = "Whole-tree fixture inventory check; validated by running it over the versioned fixtures."
+
+[[exemption]]
+name = "coverage_report.py"
+reason = "lcov-to-badge reporter; exercised by the coverage CI job and checked against generated artifacts."
+
+[[exemption]]
+name = "progress_render.py"
+reason = "Byte-producing renderer split verbatim from update_progress; byte-identical regeneration is its test."
+
+[[exemption]]
+name = "progress_stats.py"
+reason = "Pure measurement helpers split from update_progress; covered through update_progress tests."
+
+[[exemption]]
+name = "test262_gate.py"
+reason = "Monotonic gate over generated Test262 reports; exercised by its own CI job and rebaseline flow."
+
+[[exemption]]
+name = "test262_stats.py"
+reason = "Projection helpers split from update_progress; covered through update_progress tests."
