@@ -13,6 +13,22 @@
    `docs/images/ui-target.jpg` son la referencia visual obligatoria (UI oscura
    inspirada en Zen Browser).
 
+## Estado real verificado (2026-11-26)
+
+> No es una meta: es lo medible hoy. Leer antes de elegir trabajo.
+
+- **6/13** hitos cerrados · **47/64** criterios verificados (**73 %**) · **3.697** tests · **18** crates (`PROGRESS.md:7`).
+- Gate html5lib PASS (7.050 + 3.904 + 230) y CSS 30/30; **WPT 596/596 en 18 fixtures/6 dirs** (~0,03 % del árbol de referencia, 103 fixtures `skip`) — `docs/status/wpt.md`.
+- **Test262: 13 casos locales**, no el árbol tc39 — `docs/status/test262.json`.
+- Sitios reales (live): **2 PASS / 1 DEGRADED / 1 ERROR** — `docs/status/real-sites.json`.
+- Cobertura 76/76 **autorreferencial** — `docs/status/coverage.json`.
+- Paridad visual vs Chrome: 0,92 % example, 4,88 % Wikipedia, 10,78 % rust, 17,39 % HN — `docs/VISUAL-PARITY.md`.
+- 34 targets de fuzz y 176 semillas, **sin ejecuciones publicadas**; sandbox `enforced` sólo en Linux.
+- 49 gates Python en verde (`python3 tools/check_no_compile_gates.py`); `update_coverage` depende de un sello de conformidad fresco.
+
+**Plan activo de auditoría línea por línea**: `docs/superpowers/plans/2026-11-26-line-by-line-audit-plan.md`.
+Parte del estado: escaneo por área completado en 5 dominios (core/html, CSS/layout/paint, net/js/render, browser/shell, herramientas); lectura línea por línea y conversión a WPs pendientes.
+
 ## Hitos M0–M12
 
 | Hito | Nombre | Plan(es) | Cierre |

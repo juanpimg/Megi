@@ -1,0 +1,13 @@
+id = "WP-USER-ui-gate"
+source = "user"
+file = "tools/check_window_ui.py"
+expected = "gate Python de paridad visual con capturas reales y umbrales MAE documentados, registrado en check_no_compile_gates"
+actual = "solo existen goldens headless byte-idénticos; la ventana real se validaba a mano y fallos de UI llegaban al usuario"
+spec = "docs/UI-TARGET.md / docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md Task 5"
+acceptance = "tests de check_window_ui en verde; check_no_compile_gates incluye el gate window_ui; capturas 1000x700 con MAE HN<=18, rust<=14, wikipedia<=22 registradas en docs/UI-TARGET.md"
+verify_cmd = "python3 -m unittest tools.test_check_window_ui"
+metric = "user_issues"
+milestone = "M9"
+impact = 9
+frequency = 8
+profile = "light"

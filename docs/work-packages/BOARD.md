@@ -55,6 +55,11 @@ _(empty)_
 - WP-DEPTH-m9-03
 - WP-DEPTH-m9-04
 - WP-SITE-example
+- WP-USER-ui-favicon
+- WP-USER-ui-gate
+- WP-USER-ui-icons
+- WP-USER-ui-shell
+- WP-USER-ui-titles
 
 ## done
 

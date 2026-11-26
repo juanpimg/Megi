@@ -1,0 +1,13 @@
+id = "WP-USER-ui-icons"
+source = "user"
+file = "crates/browser/src/chrome/icons.rs"
+expected = "iconos SVG propios rasterizados con el crate svg y tokens de estado con contraste verificable"
+actual = "la chrome dibuja glifos a mano con lneas; no hay atlas de iconos ni estados hover/foco"
+spec = "docs/UI-TARGET.md / docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md Task 1"
+acceptance = "IconAtlas::paint rasteriza los 14 iconos sin pixeles transparentes; oversized SVG rechazado; STATE.focus contraste >= 4.5; tests RED->GREEN"
+verify_cmd = "cargo test -p megi-browser --test chrome_icons"
+metric = "user_issues"
+milestone = "M9"
+impact = 8
+frequency = 8
+profile = "heavy"

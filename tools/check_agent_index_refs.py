@@ -16,6 +16,7 @@ PLANS = Path("docs/superpowers/plans")
 BACKTICK = re.compile(r"`([^`]+)`")
 EXTENSIONS = (".md", ".toml", ".json", ".html", ".py", ".sh", ".jpg", ".png")
 PLAN_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}-.+\.md$")
+TOOL_PATH = re.compile(r"tools/[A-Za-z0-9_./-]+\.(?:py|sh)")
 
 
 def referenced_paths(text: str) -> set[str]:
@@ -23,6 +24,10 @@ def referenced_paths(text: str) -> set[str]:
     result: set[str] = set()
     for raw in BACKTICK.findall(text):
         value = raw.strip()
+        tool = TOOL_PATH.search(value)
+        if tool:
+            result.add(tool.group(0))
+            continue
         if "*" in value or not value.endswith(EXTENSIONS):
             continue
         if "/" in value:
