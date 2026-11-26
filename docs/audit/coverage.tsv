@@ -2385,7 +2385,7 @@ tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wa
 tools/check_fixture_links.py	50	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fixture symlink gate extension
 tools/check_fuzz_manifest.py	58	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	136	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fixture symlink gate extension
+tools/check_no_compile_gates.py	138	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: Test262 artifact gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2401,6 +2401,7 @@ tools/check_real_site_snapshots.py	64	tool	F3	opencode-agent	2026-11-26	covered	
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/check_status_badges.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
+tools/check_test262_artifacts.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: Test262 artifact gate extension
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/check_toolchain_config.py	73	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: toolchain config gate extension
 tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
@@ -2455,6 +2456,7 @@ tools/test_check_real_site_snapshots.py	82	tool	F3	opencode-agent	2026-11-26	cov
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_check_status_badges.py	80	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
+tools/test_check_test262_artifacts.py	91	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: Test262 artifact gate extension
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/test_check_toolchain_config.py	89	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: toolchain config gate extension
 tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
