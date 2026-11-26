@@ -45,7 +45,7 @@ Todos en `docs/superpowers/plans/`:
 - `2026-11-24-web-platform-extension-plan.md`
 - `2026-11-24-devtools-platform-plan.md`
 - `2026-11-24-work-package-engine-plan.md`
-- `2026-11-25-zen-inspired-ui-plan.md` — evolución de la UI del shell inspirada en Zen Browser
+- `2026-11-26-ui-quality-unblock-plan.md` — calidad de la UI del shell sin Rune: 5 WPs paralelos, iconos SVG, estados/foco, favicons y gate visual
 - `2026-11-24-production-readiness-plan.md`
 - `2026-11-24-extended-platform-plan.md`
 - `2026-11-24-native-integration-plan.md`
