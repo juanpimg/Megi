@@ -1189,7 +1189,8 @@ crates/render/src/images/selection.rs	327	src	F2	wave-max-mod	2026-11-19	covered
 crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn	re-read after warm-pool image batch fix (kept dedup audit)
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/inline_svg.rs	277	src	F2	integrate-hn-images	2026-11-25	covered	WP-5.11,WP-SITE-hn	re-read after zero-area spacer exemption for synthetic inline SVG
+crates/render/src/inline_svg.rs	295	src	F2	integrate-hn-images	2026-11-25	covered	WP-5.11,WP-SITE-hn	re-read after zero-area spacer exemption for synthetic inline SVG
+crates/render/src/inline_svg/current_color.rs	134	src	F2	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	computed host color cascade injection; read in full
 crates/render/src/lib.rs	295	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/main.rs	495	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
@@ -1217,7 +1218,7 @@ crates/render/src/scripts/tests.rs	494	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/render/src/scripts/types.rs	497	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/svg_assets.rs	205	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/webfonts.rs	378	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/ws_bridge.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1263,7 +1264,7 @@ crates/render/tests/import_media_tests/imports.rs	159	test	F1	wave-max-mod	2026-
 crates/render/tests/import_media_tests/main.rs	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/import_media_tests/media.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/import_media_tests/showcase.rs	94	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/inline_svg_tests.rs	356	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/inline_svg_tests.rs	422	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/jpeg_gif_tests.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/js_corpus_tests.rs	228	test	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	offline corpus with binding/semantic gate reviewed
 crates/render/tests/js_geometry_tests.rs	72	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2007,6 +2008,11 @@ tests/fixtures/render/svg_img.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-
 tests/fixtures/render/svg_inline_block.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/svg_inline_class.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/svg_inline_corrupt.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/svg_inline_current_color.html	8	fixture	F1	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	local fixture read and verified
+tests/fixtures/render/svg_inline_current_color_class.html	9	fixture	F1	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	local fixture read and verified
+tests/fixtures/render/svg_inline_current_color_nested.html	8	fixture	F1	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	local fixture read and verified
+tests/fixtures/render/svg_inline_current_color_own.html	8	fixture	F1	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	local fixture read and verified
+tests/fixtures/render/svg_inline_mdn_icon.html	9	fixture	F1	inline-svg-fix	2026-11-26	covered	WP-inline-svg-currentColor	local fixture read and verified
 tests/fixtures/render/svg_inline_multiple.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/svg_inline_simple.html	12	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/svg_inline_use.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
