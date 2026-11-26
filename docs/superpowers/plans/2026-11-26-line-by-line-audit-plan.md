@@ -32,7 +32,7 @@ barra de producción de spec §2 esté sin cumplir. El propio spec lo dice en `:
 | Paridad visual vs Chrome | example 0,92 %; Wikipedia 4,88 %; rust 10,78 %; HN 17,39 % de píxeles distintos con `--system-fonts` | `docs/VISUAL-PARITY.md:43-53` |
 | Fuzzing | 34 targets, 176 seeds; **sin ejecuciones publicadas** (barra: 1 M/target) | `fuzz/Cargo.toml`; `.github/workflows/fuzz-nightly.yml`; spec §2/:31 |
 | Sandbox | `enforced` solo en Linux; macOS/Windows `unsupported` | `crates/browser/src/ipc/sandbox.rs:28-33`; `PROGRESS.md:103` |
-| Gates sin compilar | 49 gates Python en verde, pero `update_coverage` depende de un sello de conformidad fresco | `tools/check_no_compile_gates.py` |
+| Gates sin compilar | **50/50** gates Python en verde (49 módulos `unittest`); ledger `docs/audit/coverage.tsv` con 0 filas pendientes; `update_coverage` depende de un sello de conformidad fresco | `tools/check_no_compile_gates.py`; `tools/audit_coverage.py --check --strict` |
 
 **Conclusión**: hoy Megi es un pipeline de render determinista con JS embebido y
 un shell funcional, **no** un motor equivalente a Ladybird. Las métricas en verde
