@@ -7,7 +7,9 @@ import json
 import subprocess
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
+from unittest import mock
 
 from tools import vendor_wpt
 
@@ -85,6 +87,55 @@ class VendorWptTest(unittest.TestCase):
             ["WPT-REVISION.json: phase must be one of [1, 2, 3], got []"],
         )
 
+    def test_markdown_testharness_entry_is_reported(self) -> None:
+        """#2433: prose must not be classified as an executable WPT fixture."""
+        entries = manifest_bytes(self.wpt)
+        entries[-1]["kind"] = "testharness"
+        entries[-1]["skip_reason"] = ""
+        self.write({"revision": PIN, "source": "web-platform-tests/wpt", "phase": 1}, entries)
+        errors = vendor_wpt.check_manifest(self.root)
+        self.assertTrue(
+            any("requires a test file extension" in error for error in errors), errors
+        )
+
+    def test_testharness_without_subtests_is_reported(self) -> None:
+        """#2434: an adopted fixture with zero subtests must be recorded as skip."""
+        entries = manifest_bytes(self.wpt)
+        entries[0]["subtest_count_expected"] = 0
+        self.write({"revision": PIN, "source": "web-platform-tests/wpt", "phase": 1}, entries)
+        errors = vendor_wpt.check_manifest(self.root)
+        self.assertTrue(
+            any("at least one expected subtest" in error for error in errors), errors
+        )
+
+    def test_vendor_classifies_readme_as_documentation(self) -> None:
+        """#2433: README.md is skipped before the testharness default is applied."""
+        source = self.root / "wpt-readme-source"
+        source.mkdir()
+        (source / "LICENSE").write_text("BSD 3-Clause\n", encoding="utf-8")
+        fixture = source / "css/css-syntax/anb-parsing.html"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"<title>anb</title>\n")
+        (source / "css/css-syntax/README.md").write_text("prose\n", encoding="utf-8")
+        # `vendor()` rewrites the whole manifest, so remove the other setUp fixtures
+        # that this synthetic source does not provide.
+        for relative in FIXTURES[:2]:
+            (self.wpt / relative).unlink()
+        # The pinned upstream commit is not present in this synthetic checkout;
+        # only the rev-parse probe is stubbed, the vendor logic itself is real.
+        with mock.patch.object(
+            vendor_wpt.subprocess, "run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ):
+            vendor_wpt.vendor(source, PIN, ["css/css-syntax"], self.root)
+        entries = {entry["path"]: entry for entry in vendor_wpt.load_manifest(self.root)}
+        self.assertEqual(entries["css/css-syntax/README.md"]["kind"], "skip")
+        self.assertEqual(
+            entries["css/css-syntax/README.md"]["skip_reason"],
+            "documentation (not a WPT fixture)",
+        )
+        self.assertEqual(entries["css/css-syntax/anb-parsing.html"]["kind"], "testharness")
+
     def test_undeclared_file_is_reported_with_path(self) -> None:
         extra = self.wpt / "css/css-syntax/extra.html"
         extra.write_bytes(b"<html></html>\n")
@@ -122,6 +173,30 @@ class VendorWptTest(unittest.TestCase):
             100,
             f"manifest adopts only {adopted} subtests; the M4 floor is 100",
         )
+
+    def test_repository_adopted_fixtures_all_execute_subtests(self) -> None:
+        """#2434: no testharness entry may inflate the adopted denominator with 0 tests."""
+        zero = [
+            entry["path"] for entry in vendor_wpt.load_manifest(ROOT)
+            if entry["kind"] == "testharness" and entry["subtest_count_expected"] == 0
+        ]
+        self.assertEqual(zero, [])
+
+    def test_repository_debt_dirs_declare_milestones_and_followups(self) -> None:
+        """#2432: whole excluded directories carry an issue and a rebaseline milestone."""
+        self.assertEqual(
+            set(vendor_wpt.NOT_ADOPTED_DIRS), set(vendor_wpt.NOT_ADOPTED_DEBT)
+        )
+        manifest = vendor_wpt.load_manifest(ROOT)
+        per_dir = Counter(
+            entry["dir"] for entry in manifest
+            if entry["kind"] == "skip" and entry["dir"] in vendor_wpt.NOT_ADOPTED_DEBT
+        )
+        for directory, (milestone, issues) in vendor_wpt.NOT_ADOPTED_DEBT.items():
+            self.assertIn(milestone, {"M2", "M4"})
+            self.assertTrue(issues.startswith("#"))
+            self.assertIn(issues, vendor_wpt.NOT_ADOPTED_DIRS[directory])
+            self.assertGreater(per_dir[directory], 0)
 
     def test_import_files_records_canvas_subset_without_dropping_existing_entries(self) -> None:
         """M6#3: explicit files can be adopted without revendoring whole directories."""

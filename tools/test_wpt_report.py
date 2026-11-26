@@ -29,6 +29,23 @@ REPORT = {
 }
 
 
+class WptReportScopeTests(unittest.TestCase):
+    def test_repository_report_publishes_the_excluded_denominator(self) -> None:
+        """#2432: 596/596 must be labelled as partial WPT coverage, not full conformance."""
+        path = Path(__file__).resolve().parent.parent / wpt_report.STATUS_DIR / "wpt.json"
+        report = json.loads(path.read_text(encoding="utf-8"))
+        scope = report["run_info"]["scope"]
+        run_info = report["run_info"]
+        self.assertIn("adopted", scope)
+        self.assertIn("excluded", scope)
+        self.assertIn("NOT full WPT conformance", scope)
+        self.assertGreater(run_info["excluded_files"], 0)
+        self.assertEqual(
+            run_info["excluded_files"], sum(run_info["excluded_by_kind"].values())
+        )
+        self.assertTrue(run_info["debt_dirs"])
+
+
 class WptReportCheckTests(unittest.TestCase):
     def check(self, root: Path) -> tuple[int, str, str]:
         """Run --check against a temp root without invoking cargo or the network."""
