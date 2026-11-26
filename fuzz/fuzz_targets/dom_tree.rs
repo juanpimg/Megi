@@ -60,4 +60,12 @@ fuzz_target!(|data: &[u8]| {
         }
     }
     let _ = doc.children(doc.root()).count();
+
+    // Mutations must leave a well-formed arena: reparent/remove paths silently returning
+    // `Err` used to be discarded, hiding corruption from the harness (#2421).
+    assert!(
+        doc.validate_invariants().is_ok(),
+        "DOM invariants violated: {:?}",
+        doc.validate_invariants().err()
+    );
 });
