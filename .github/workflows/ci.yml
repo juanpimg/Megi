@@ -136,6 +136,21 @@ jobs:
           tools.test_fuzz_targets
           tools.test_gitleaks_config
           tools.test_release_workflow
+          tools.test_check_deslop_doc
+          tools.test_check_doc_tool_refs
+          tools.test_check_no_compile_gates
+          tools.test_check_parity_baseline
+          tools.test_check_parity_docs
+          tools.test_check_parity_inventory
+          tools.test_check_parity_ledger
+          tools.test_check_parity_schema
+          tools.test_check_real_site_snapshots
+          tools.test_check_tool_test_coverage
+          tools.test_test262_report
+          tools.test_test_inspector
+          tools.test_visual_parity
+          tools.test_visual_parity_report
+          tools.test_whatwg_spec
 
   quality:
     name: Quality gate (fmt, clippy, tests, docs)
