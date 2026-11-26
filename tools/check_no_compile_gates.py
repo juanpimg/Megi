@@ -49,6 +49,7 @@ TEST_MODULES = (
     "tools.test_check_closed_work_packages",
     "tools.test_check_toolchain_config",
     "tools.test_check_workflow_metadata",
+    "tools.test_check_coverage_svg",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -83,6 +84,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("closed_work_packages", (PY, "tools/check_closed_work_packages.py")),
     ("toolchain_config", (PY, "tools/check_toolchain_config.py")),
     ("workflow_metadata", (PY, "tools/check_workflow_metadata.py")),
+    ("coverage_svg", (PY, "tools/check_coverage_svg.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
