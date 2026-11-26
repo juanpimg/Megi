@@ -33,7 +33,8 @@ class GateDefinitionTests(unittest.TestCase):
                 "tool_test_coverage", "real_site_manifest", "status_json",
                 "work_packages", "python_syntax", "progress_consistency", "wp_board",
                 "wpt_artifacts", "real_site_report", "conformance_freshness",
-                "deslop_allowlist", "agent_index_refs", "workflow_scripts", "python_tests",
+                "deslop_allowlist", "agent_index_refs", "workflow_scripts",
+                "status_badges", "python_tests",
             },
         )
 
@@ -65,7 +66,7 @@ class CliTests(unittest.TestCase):
     def test_real_run_passes_all_gates(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("25/26 compile-free gates passed", result.stdout)
+        self.assertIn("26/27 compile-free gates passed", result.stdout)
         self.assertNotIn("FAIL", result.stdout)
 
     def test_runner_has_no_cargo_in_its_own_source(self) -> None:
