@@ -39,6 +39,7 @@ TEST_MODULES = (
     "tools.test_check_wpt_artifacts",
     "tools.test_check_real_site_report",
     "tools.test_check_conformance_freshness",
+    "tools.test_check_deslop_allowlist",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -63,6 +64,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("wpt_artifacts", (PY, "tools/check_wpt_artifacts.py")),
     ("real_site_report", (PY, "tools/check_real_site_report.py")),
     ("conformance_freshness", (PY, "tools/check_conformance_freshness.py")),
+    ("deslop_allowlist", (PY, "tools/check_deslop_allowlist.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
