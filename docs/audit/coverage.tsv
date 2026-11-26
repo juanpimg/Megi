@@ -1254,7 +1254,7 @@ crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290
 crates/render/tests/hn_arrow_tests.rs	69	test	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/image_scaled_tests.rs	64	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/image_scaled_tests.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/images_tests.rs	469	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/import_map_tests.rs	262	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/import_media_tests/caps.rs	87	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1271,7 +1271,7 @@ crates/render/tests/js_providers_tests.rs	330	test	F1	wave-max-mod	2026-11-19	co
 crates/render/tests/mask_tests.rs	75	test	F1	lead	2026-11-25	covered	CSS-MASK-IMAGE	Read 75-line end-to-end tests; green
 crates/render/tests/mixed_content_tests.rs	423	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/module_scripts_minified_tests.rs	92	test	F1	opencode-agent	2026-11-24	covered	#2242	E2E render coverage of minified ES namespace import; asserts no scripts_failed/console_errors/warnings and post-script DOM text ns-minified-ok
-crates/render/tests/module_scripts_tests.rs	181	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/module_scripts_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/network_advanced_tests/common.rs	203	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/network_advanced_tests/compression.rs	81	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/network_advanced_tests/cookies.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2382,9 +2382,10 @@ tools/check_doc_images.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	re
 tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+tools/check_fixture_links.py	50	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fixture symlink gate extension
 tools/check_fuzz_manifest.py	58	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	134	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
+tools/check_no_compile_gates.py	136	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fixture symlink gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2435,6 +2436,7 @@ tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#au
 tools/test_check_doc_images.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documentation image gate extension
 tools/test_check_doc_tool_refs.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
+tools/test_check_fixture_links.py	70	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fixture symlink gate extension
 tools/test_check_fuzz_manifest.py	78	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge

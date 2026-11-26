@@ -54,6 +54,7 @@ TEST_MODULES = (
     "tools.test_check_conformance_badges",
     "tools.test_check_coverage_html_areas",
     "tools.test_check_fuzz_manifest",
+    "tools.test_check_fixture_links",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -93,6 +94,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("conformance_badges", (PY, "tools/check_conformance_badges.py")),
     ("coverage_html_areas", (PY, "tools/check_coverage_html_areas.py")),
     ("fuzz_manifest", (PY, "tools/check_fuzz_manifest.py")),
+    ("fixture_links", (PY, "tools/check_fixture_links.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
