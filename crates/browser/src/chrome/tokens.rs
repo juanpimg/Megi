@@ -201,8 +201,20 @@ pub const RAIL_CSS: f32 = 52.0;
 pub const WINDOW_MARGIN: f32 = 8.0;
 pub const WINDOW_RADIUS: f32 = 20.0;
 pub(crate) const SHELL: ShellPalette = ShellPalette::DARK;
-pub(crate) const HISTORY_TOP: f32 = 292.0;
 pub(crate) const HISTORY_ROW: f32 = 32.0;
+
+/// Number of columns of `pitch`-wide cells that fit in a sidebar content column.
+/// The shell is responsive: a narrow window shows fewer tiles instead of clipping.
+pub(crate) fn sidebar_columns(content_w: f32, pitch: f32) -> usize {
+    ((content_w + 9.0) / pitch).floor().clamp(1.0, 4.0) as usize
+}
+
+/// Y coordinate of the first history row, derived from the responsive tile rows.
+pub(crate) fn sidebar_history_top(sidebar_y: f32, content_w: f32) -> f32 {
+    let columns = sidebar_columns(content_w, 52.0);
+    let rows = 8_usize.div_ceil(columns);
+    sidebar_y + 168.0 + 12.0 + rows as f32 * 52.0 + 10.0
+}
 pub fn sidebar_width(width: f32) -> f32 {
     (width.max(1.0) * 0.22).clamp(96.0, SIDEBAR_MAX)
 }
@@ -331,7 +343,8 @@ pub fn shell_hit(
     if super::drawing::contains(layout.toggle, x, y) {
         return Some(ShellHit::ToggleSidebar);
     }
-    let first_row = layout.sidebar.y + HISTORY_TOP;
+    let content_w = (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0);
+    let first_row = sidebar_history_top(layout.sidebar.y, content_w);
     if y >= first_row {
         let row = ((y - first_row) / HISTORY_ROW) as usize;
         if row < view.labels.len() {

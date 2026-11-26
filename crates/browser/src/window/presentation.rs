@@ -32,13 +32,22 @@ impl WindowApp {
             .max(1)
     }
 
-    /// Page width available after the open rail column is reserved.
+    /// Page width available after the shell sidebar column is reserved.
+    ///
+    /// The dark shell paints a sidebar of `sidebar_width()` CSS pixels, not the
+    /// legacy 168 px rail; the renderer and the blit must agree with it or the
+    /// page is clipped under the sidebar (#UI-TARGET).
     pub fn page_viewport_width(&self) -> u32 {
-        rail_state::page_viewport_width_for(
-            self.metrics.css_width,
-            self.rail_open,
-            self.rail_expanded,
-        )
+        if self.rail_open {
+            let sidebar = chrome::sidebar_width(self.metrics.css_width as f32).ceil() as u32;
+            self.metrics.css_width.saturating_sub(sidebar).max(1)
+        } else {
+            rail_state::page_viewport_width_for(
+                self.metrics.css_width,
+                self.rail_open,
+                self.rail_expanded,
+            )
+        }
     }
 
     /// CSS width of the rail column; zero while closed to preserve legacy pixels.
@@ -275,7 +284,14 @@ impl WindowApp {
             chrome_scale_f64,
             height,
         );
-        let rail_px = present::chrome_rail_pixels_for(chrome_scale_f64, rail_css_width, width);
+        // The shell sidebar owns the left column in the window path; keep the blit
+        // inset in sync with the width the shell paints, not the legacy rail width.
+        let sidebar_css = if shell_sidebar {
+            chrome::sidebar_width(self.metrics.css_width as f32)
+        } else {
+            rail_css_width
+        };
+        let rail_px = present::chrome_rail_pixels_for(chrome_scale_f64, sidebar_css, width);
         // The frame is rasterized at physical resolution; CSS scroll/viewport
         // coordinates are converted to raster rows inside the present layer.
         let presented = if rail_px == 0 {
@@ -397,8 +413,11 @@ impl WindowApp {
             ..view
         };
         let _ = chrome::draw_chrome(&mut buffer, width, height, chrome_scale, &view);
-        // Closed rail yields `None`, so this is a no-op for legacy frames.
-        let _ = chrome::draw_rail(&mut buffer, width, height, chrome_scale, &view);
+        // The dark shell paints its own sidebar; the legacy rail must not be
+        // composited on top of it (it showed stale tab rows over Espacios/Favoritos).
+        if !shell_sidebar {
+            let _ = chrome::draw_rail(&mut buffer, width, height, chrome_scale, &view);
+        }
         if self.download_panel.open {
             let lines: Vec<String> = self
                 .download_manager
@@ -466,32 +485,4 @@ impl WindowApp {
     }
 }
 
-/// Titles of the tabs in the active workspace, in visible order.
-///
-/// The chrome strip and rail must not reveal or count tabs from other groups.
-pub(super) fn workspace_chrome_titles(tabs: &TabsState) -> Vec<String> {
-    tabs.visible_tabs()
-        .map(crate::tabs::Tab::display_title)
-        .collect()
-}
-
-/// Index of the active tab among the visible ones (not the global tab index).
-pub(super) fn workspace_chrome_active(tabs: &TabsState) -> usize {
-    tabs.visible_active_index()
-}
-
-/// Accessibility names for the visible tab strip.
-///
-/// With one workspace the names are unchanged. With several groups, each name
-/// carries the active workspace label so screen-reader users can name the group.
-pub(super) fn workspace_a11y_titles(tabs: &TabsState) -> Vec<String> {
-    let labels = workspace_chrome_titles(tabs);
-    if !tabs.has_multiple_workspaces() {
-        return labels;
-    }
-    let workspace = crate::tabs::Workspace::label(tabs.workspace());
-    labels
-        .into_iter()
-        .map(|title| format!("{workspace} — {title}"))
-        .collect()
-}
+pub(super) use super::{workspace_a11y_titles, workspace_chrome_active, workspace_chrome_titles};

@@ -229,15 +229,18 @@ fn shell_paint_uses_measured_dark_surfaces_and_traffic_lights() {
 fn shell_hit_matches_sidebar_geometry() {
     let labels = vec!["Alpha".to_owned(), "Beta".to_owned()];
     let view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
-    let layout = layout_shell(640.0, 400.0, 1.0, &view);
+    let layout = layout_shell(640.0, 800.0, 1.0, &view);
     assert_eq!(
         shell_hit(
             640.0,
-            400.0,
+            800.0,
             1.0,
             &view,
             layout.sidebar.x + 120.0,
-            layout.sidebar.y + 292.0 + 5.0
+            super::tokens::sidebar_history_top(
+                layout.sidebar.y,
+                (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0),
+            ) + 5.0
         ),
         Some(ShellHit::Activate(0)),
         "first history row is clickable"

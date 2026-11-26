@@ -463,9 +463,11 @@ pub fn draw_chrome_over_pixmap(
         );
         painted += 1;
     }
-    // Opt-in vertical rail (Phase 1). `None` is a no-op, keeping the default
-    // headless `--chrome` bytes exactly as before.
-    painted += draw_rail_over_pixmap(dest, scale, view);
+    // Opt-in vertical rail (Phase 1). The dark shell paints its own sidebar; the
+    // legacy rail must not be composited over it (it would show stale tabs on top).
+    if view.shell.as_ref().is_none_or(|shell| !shell.sidebar) {
+        painted += draw_rail_over_pixmap(dest, scale, view);
+    }
     painted
 }
 

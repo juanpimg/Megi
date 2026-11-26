@@ -95,19 +95,25 @@ pub(crate) fn layout_flex_children(
                 || (row && child_style.width_fit_content)
                 || (!row && child_style.height_fit_content));
         if row && content_based_base {
-            crate::block::calculate_shrink_to_fit_width(
-                child,
-                container_width,
-                container_width,
-                measurer,
-            );
-            // The shrink-to-fit helper returns the intrinsic contribution with
-            // this box's own edges included; flex base sizes are content-box
-            // sizes, and `outer_main()` adds the edges back below.
-            let own_edges = edges_main_with_margin(&edges, row);
-            // Round up: a subpixel-short base size would rewrap text that the
-            // intrinsic measurement says fits on one line.
-            let measured = (child.dimensions.content.width - own_edges).max(0.0).ceil();
+            // CSS Flexbox 1 §9.2 step 3D: auto basis + auto size takes
+            // max-content, not a shrink-to-fit size clamped by the parent.
+            // Only `fit-content` keeps that clamp (CSS Sizing 3 §5).
+            if child_style.width_fit_content {
+                crate::block::calculate_shrink_to_fit_width(
+                    child,
+                    container_width,
+                    container_width,
+                    measurer,
+                );
+            } else {
+                let (_, max) =
+                    crate::block::intrinsic_content_widths(child, container_width, measurer);
+                child.dimensions.content.width = max;
+            }
+            // Contributions are edges-inclusive; base sizes are content boxes.
+            let measured = (child.dimensions.content.width - edges_main_with_margin(&edges, row))
+                .max(0.0)
+                .ceil();
             base_main = clamp_main(
                 &child_style,
                 measured,
