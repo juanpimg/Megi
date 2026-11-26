@@ -21,7 +21,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/release.yml	267	ci	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	verify job + keyless cosign signing reviewed
 .github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 .gitignore	65	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
-.gitleaks.toml	39	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
+.gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	127	docs	F3	jp	2026-11-25	covered	#2290	
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 CONTRIBUTING.md	327	docs	F3	jp	2026-11-25	covered	#2290	
@@ -132,16 +132,16 @@ crates/browser/src/ipc.rs	383	src	F2	issue-2308	2026-11-25	covered	#2308	re-read
 crates/browser/src/ipc/cookie_policy.rs	119	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/envelope_tests.rs	174	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/file_grant.rs	114	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/ipc/options.rs	418	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
+crates/browser/src/ipc/options.rs	434	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/process.rs	453	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/process_pool.rs	422	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/process_pool_tests.rs	130	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/regions.rs	443	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/sandbox.rs	78	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/ipc/session.rs	237	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
+crates/browser/src/ipc/session.rs	238	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/tests.rs	483	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/validated.rs	223	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/ipc/worker_stream.rs	168	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
+crates/browser/src/ipc/worker_stream.rs	169	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/lib.rs	386	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -163,7 +163,8 @@ crates/browser/src/pdf.rs	400	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF
 crates/browser/src/pdf/objects.rs	60	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read page parser and text writer after @page size/margin change
 crates/browser/src/pdf/page.rs	228	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read page parser and text writer after @page size/margin change
 crates/browser/src/pdf/text.rs	165	src	F2	feat-pdf-page-css	2026-11-25	covered	M5-PDF-PAGE	Re-read page parser and text writer after @page size/margin change
-crates/browser/src/present.rs	473	src	F2	jp	2026-11-25	covered	#2290	Re-read full file after clippy/fmt fixes for Phase 1 insets API
+crates/browser/src/present.rs	281	src	F2	jp	2026-11-25	covered	#2290	Re-read full file after clippy/fmt fixes for Phase 1 insets API
+crates/browser/src/present/unit_tests.rs	315	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/browser/src/reader.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/refresh.rs	206	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/scale.rs	173	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -189,11 +190,11 @@ crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covere
 crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	431	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/window/form_controls.rs	443	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
+crates/browser/src/window/form_controls.rs	447	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
 crates/browser/src/window/frontend.rs	262	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
-crates/browser/src/window/presentation.rs	482	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/presentation.rs	486	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/settings/chrome_mode.rs	157	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/settings/mod.rs	46	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
@@ -203,16 +204,17 @@ crates/browser/src/window/tests/chrome_mode.rs	128	src	F2	lead	2026-11-26	covere
 crates/browser/src/window/tests/mod.rs	486	src	F2	integration	2026-11-25	covered	#2295	read after rebase
 crates/browser/src/window/tests/rail.rs	138	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/ui.rs	456	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/worker.rs	485	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/window/worker.rs	499	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	re-read after DPR raster-scale forwarding and rustfmt
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
-crates/browser/src/worker/render.rs	417	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/store.rs	215	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/tests_extra.rs	198	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/types.rs	124	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/worker/unit_tests.rs	247	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/pool.rs	475	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
+crates/browser/src/worker/render.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/store.rs	221	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/tests_extra.rs	200	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/types.rs	143	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/worker/unit_tests.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/devtools_protocol.rs	337	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
+crates/browser/tests/dpr_raster_tests.rs	47	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/browser/tests/file_grant_tests.rs	119	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/ipc_semantic_tests.rs	135	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
@@ -220,20 +222,20 @@ crates/browser/tests/ipc_validation_tests.rs	166	test	F1	auto-round-03	2026-11-2
 crates/browser/tests/print_pdf_e2e.rs	102	test	F1	pdf-evidence	2026-11-25	covered	M5-PDF-E2E	read full 102-line E2E; real binary print-to-pdf and byte determinism
 crates/browser/tests/process_e2e_tests.rs	168	test	F1	issue-2308	2026-11-25	covered	#2308	re-read for envelope E2E
 crates/browser/tests/sandbox_e2e_tests.rs	297	test	F1	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
-crates/browser/tests/script_navigation_tests.rs	62	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
+crates/browser/tests/script_navigation_tests.rs	63	test	F1	nav-merge	2026-11-24	covered	#upstream	re-read
 crates/browser/tests/shell_tests/basics.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/content.rs	205	test	F1	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after path-independent compact golden fix
-crates/browser/tests/shell_tests/find.rs	119	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/forms.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/find.rs	121	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/forms.rs	136	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/main.rs	18	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
-crates/browser/tests/shell_tests/misc.rs	176	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/options.rs	186	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/pages.rs	178	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/misc.rs	177	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/options.rs	187	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/pages.rs	179	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/rail_tests.rs	83	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
-crates/browser/tests/shell_tests/saves.rs	140	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/tabs.rs	435	test	F1	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/tests/shell_tests/worker.rs	215	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/saves.rs	141	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/shell_tests/tabs.rs	437	test	F1	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/tests/shell_tests/worker.rs	218	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/spawn_hardening_tests.rs	57	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/watchdog_tests.rs	66	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/webdriver_bidi.rs	344	test	F1	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
@@ -275,14 +277,15 @@ crates/css/src/calc.rs	195	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/css/src/calc/mixed_tests.rs	56	src	F2	juanpimg	2026-11-20	covered	#1928	unit tests for mixed calc evaluation, split from calc.rs
 crates/css/src/calc/parser.rs	346	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
 crates/css/src/calc/tests.rs	96	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
-crates/css/src/cascade.rs	157	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade.rs	158	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk1.rs	473	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk2.rs	403	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk2/supports.rs	195	src	F2	lead	2026-11-25	covered	CSS-SUPPORTS-CASCADE	Read 195-line evaluator; TDD 6 tests green
 crates/css/src/cascade/chunk3.rs	490	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
-crates/css/src/cascade/chunk4.rs	362	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade/chunk4.rs	251	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk4/document.rs	147	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test
+crates/css/src/cascade/chunk6.rs	118	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/css/src/color.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk1.rs	418	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk2.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -397,7 +400,9 @@ crates/css/tests/transform.rs	281	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/display/src/lib.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/display/src/lib.rs	472	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/display/src/scale.rs	341	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
+crates/display/src/scale/dpr_raster_scale_tests.rs	241	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/display/src/shadow_bounds_tests.rs	47	src	F2	jp	2026-11-25	covered	#2143,#1716	
 crates/display/tests/contract.rs	16	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/Cargo.toml	25	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -409,7 +414,7 @@ crates/fonts/src/db.rs	351	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/db/query.rs	366	src	F2	lead+wiki-serif-parity	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE #wiki-serif-parity	Read merge bdda7be8 diff (chrome, CLI, DPR, fonts, flex/CSS, IFC, painting); named-only system serif fallback added
 crates/fonts/src/db/shape.rs	422	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: font() system-ui path unchanged; bundled-only non-empty DB serif fallback uses named system faces
-crates/fonts/src/db/tests.rs	248	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: serif generic + empty-DB NoFontAvailable regressions plus sans-serif/Noto Sans red-green tests
+crates/fonts/src/db/tests.rs	285	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: serif generic + empty-DB NoFontAvailable regressions plus sans-serif/Noto Sans red-green tests
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1189,9 +1194,9 @@ crates/render/src/lib.rs	295	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER
 crates/render/src/main.rs	495	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/render/src/pipeline/final_stage.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/final_stage.rs	362	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/imports.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/options.rs	415	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/render/src/pipeline/options.rs	444	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/pipeline/output.rs	231	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/resources.rs	267	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/pipeline/script.rs	458	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -1213,7 +1218,7 @@ crates/render/src/scripts/types.rs	497	src	F2	lead	2026-11-26	covered	HERO-CTA-W
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/webfonts.rs	379	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/render/src/webfonts.rs	378	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/ws_bridge.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/background_layers_tests.rs	136	test	F1	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -1226,6 +1231,7 @@ crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	cover
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/document_cookie_tests.rs	113	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dom_observability_tests.rs	171	test	F1	jsfree-fix	2026-11-24	covered	CI-JSFREE-DOM-OBS	read line by line: CLI JSON observability tests
+crates/render/tests/dpr_raster_tests.rs	52	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/render/tests/e2e_task_fixtures.rs	162	test	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 crates/render/tests/encode_png_tests.rs	62	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/error_page_tests.rs	39	test	F1	docs-cleanup	2026-11-24	covered	#2255	
@@ -1416,12 +1422,13 @@ docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#224
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	100	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
-docs/ARCHITECTURE.md	229	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+docs/ARCHITECTURE.md	237	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/DESLOP-AUDIT.md	61	docs	F3	opencode-agent	2026-11-25	covered	#audit	read line by line
+docs/DPR-RASTER-BOUNDARY.md	79	docs	F3	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 docs/FUZZING.md	306	docs	F3	jp	2026-11-25	covered	#2290	documentation aligned
 docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
