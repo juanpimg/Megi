@@ -19,9 +19,11 @@ Un **work package (WP)** es la unidad atómica de trabajo para los agentes de IA
 | `verify_cmd` | str | no vacío: comando que demuestra el cierre |
 | `metric` | str | `wpt_passed`, `js262_passed`, `sites_passed`, `fuzz_crashes`, `audit_pending`, `depth_closed` o `user_issues` |
 | `milestone` | str | hito M0–M12 |
-| `profile` | str | `light` o `heavy`, derivado de `verify_cmd`: `cargo`/WPT/Test262/fuzz son `heavy`; Python/docs/git son `light`. Permite repartir trabajo entre una máquina grande y otra con poco disco. |
 
-Opcionales: `impact` (1–10), `frequency` (1–10). Prioridad = `impact × frequency`.
+Opcionales: `profile` (`light` o `heavy`; si falta o está vacío se deriva de `verify_cmd`:
+`cargo`/WPT/Test262/fuzz son `heavy`; Python/docs/git son `light`. Permite repartir trabajo
+entre una máquina grande y otra con poco disco), `impact` (1–10), `frequency` (1–10).
+Prioridad = `impact × frequency`.
 
 ## Fuentes y generadores
 

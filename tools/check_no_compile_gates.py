@@ -56,6 +56,8 @@ TEST_MODULES = (
     "tools.test_check_fuzz_manifest",
     "tools.test_check_fixture_links",
     "tools.test_check_test262_artifacts",
+    "tools.test_check_milestone_index",
+    "tools.test_check_wp_schema_docs",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -97,6 +99,8 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("fuzz_manifest", (PY, "tools/check_fuzz_manifest.py")),
     ("fixture_links", (PY, "tools/check_fixture_links.py")),
     ("test262_artifacts", (PY, "tools/check_test262_artifacts.py")),
+    ("milestone_index", (PY, "tools/check_milestone_index.py")),
+    ("wp_schema_docs", (PY, "tools/check_wp_schema_docs.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
