@@ -1,14 +1,28 @@
 # Resultados de la auditoría línea por línea (2026-11-26)
 
 > Índice de hallazgos publicados. Plan: `docs/superpowers/plans/2026-11-26-line-by-line-audit-plan.md`.
-> Estado: **auditoría completada**; los hallazgos están como issues, no como cambios de código.
+> Estado: **auditoría completada en dos pasadas**; los hallazgos están como issues, no como cambios de código.
 
 ## Cobertura
 
 - **18 crates** de `crates/`, **270.986 líneas Rust** leídas línea por línea por 8 subagentes.
 - **80 hallazgos** confirmados con `archivo:línea`, norma e impacto.
 - **79 issues creadas** (#2315–#2393); 1 duplicado omitido.
-- Sin `cargo`, sin cambios de código del motor.
+- Segunda pasada: `tools/*.py`, `fuzz/`, `.github/workflows/`, `tests/` y `docs/` leídos línea por línea por 5 subagentes: **61 hallazgos**, **61 issues** (#2394–#2454).
+- Total: **140 issues** (#2315–#2454). Sin `cargo`, sin cambios de código del motor.
+
+### Segunda pasada (herramientas, fuzz, CI, tests y docs)
+
+| Informe | Hallazgos publicados | Rango |
+|---|---:|---|
+| `ci.md` | 12 | #2394–#2405 |
+| `docs.md` | 12 | #2406–#2417 |
+| `fuzz.md` | 11 | #2418–#2428 |
+| `tests.md` | 11 | #2429–#2439 |
+| `tools.md` | 15 | #2440–#2454 |
+
+> Los rangos son orientativos; la fuente de verdad es `issues-created.json` de cada pasada.
+> Los listados completos de la segunda pasada están en `/tmp/opencode/audit-line2/`.
 
 ## Desglose
 

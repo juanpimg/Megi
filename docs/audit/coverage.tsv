@@ -1447,7 +1447,7 @@ crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
-docs/AGENT-INDEX.md	119	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
+docs/AGENT-INDEX.md	119	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding second audit pass
 docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 docs/ARCHITECTURE.md	237	docs	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read during remote gate reconciliation
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
@@ -1473,7 +1473,7 @@ docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	opencode-agent	2026-11-25	cover
 docs/architecture-baseline.json	110	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/architecture-deps.toml	41	docs	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 docs/audit/FINDINGS.md	254	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/audit/LINE_BY_LINE-RESULTS.md	156	docs	F3	lead	2026-11-26	covered	UI-FAVICON-LINEBYLINE	read after remote UI favicon and audit index merge
+docs/audit/LINE_BY_LINE-RESULTS.md	170	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding second audit pass
 docs/audit/README.md	102	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/audit/coverage.tsv	0	generated	-			exempt		not read line by line: generated
 docs/audit/findings/f1/00-index.md	107	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned

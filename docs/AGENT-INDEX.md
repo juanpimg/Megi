@@ -27,7 +27,7 @@
 - 49 gates Python en verde (`python3 tools/check_no_compile_gates.py`); `update_coverage` depende de un sello de conformidad fresco.
 
 **Plan activo de auditoría línea por línea**: `docs/superpowers/plans/2026-11-26-line-by-line-audit-plan.md`.
-**Auditoría completada**: 18 crates / 270.986 líneas leídas línea por línea; 80 hallazgos, 79 issues (#2315–#2393). Índice y cómo continuar: `docs/audit/LINE_BY_LINE-RESULTS.md`.
+**Auditoría completada en dos pasadas**: 18 crates / 270.986 líneas + tools/fuzz/CI/tests/docs; 141 hallazgos, 140 issues (#2315–#2454). Índice y cómo continuar: `docs/audit/LINE_BY_LINE-RESULTS.md`.
 
 ## Hitos M0–M12
 
