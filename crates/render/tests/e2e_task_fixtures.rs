@@ -61,7 +61,11 @@ const TASKS: &[(&str, &str, &str)] = &[
         "edit and save a profile",
         "pass:profile saved",
     ),
-    ("checkout.html", "confirm an order", "pass:order confirmed"),
+    (
+        "checkout.html",
+        "confirm an order with the DOM total",
+        "pass:order confirmed $25",
+    ),
 ];
 
 fn fixtures_dir() -> PathBuf {

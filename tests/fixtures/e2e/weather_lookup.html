@@ -14,9 +14,15 @@
     document.getElementById('lookup').addEventListener('click', function () {
       var city = document.getElementById('city').value;
       if (!city) { throw new Error('missing city'); }
-      var temp = '21C';
-      document.getElementById('forecast').textContent = temp;
-      finish('pass:forecast ' + temp);
+      // #2431: fetch local, deterministic data instead of hard-coding the forecast.
+      fetch('forecast_data.json').then(function (response) { return response.json(); })
+        .then(function (data) {
+          var temp = data[city];
+          if (!temp) { console.error('unknown city: ' + city); finish('fail:weather'); return; }
+          document.getElementById('forecast').textContent = temp;
+          finish('pass:forecast ' + temp);
+        })
+        .catch(function (error) { console.error('weather failed: ' + error); finish('fail:weather'); });
     });
     document.getElementById('lookup').dispatchEvent(new Event('click'));
   } catch (error) {
