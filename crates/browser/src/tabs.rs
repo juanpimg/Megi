@@ -28,6 +28,7 @@ use crate::find::FindState;
 use crate::navigation::NavigationState;
 use crate::scroll::ScrollState;
 use crate::zoom;
+use megi_webview::net::url::{Scheme, percent_decode};
 
 mod workspaces;
 
@@ -163,10 +164,21 @@ impl Tab {
 
 /// Fallback title of a tab that has no document title yet.
 fn title_fallback(tab: &Tab) -> String {
-    match tab.navigation.current() {
-        Some(url) => url.as_str().to_string(),
-        None => blank_tab_title().to_string(),
+    let Some(url) = tab.navigation.current() else {
+        return blank_tab_title().to_string();
+    };
+    // WHATWG URL §4.4 "path": a `file:` URL's last non-empty path segment is the
+    // file name; a root path has none, so the serialized URL stays the fallback.
+    if url.scheme() == Scheme::File
+        && let Some(name) = url
+            .path()
+            .rsplit('/')
+            .find(|segment| !segment.is_empty())
+            .map(percent_decode)
+    {
+        return name;
     }
+    url.as_str()
 }
 
 /// Owned tab data for callers that persist or summarize tabs without borrowing them.

@@ -176,7 +176,7 @@ crates/browser/src/session/storage.rs	232	src	F2	issue-2307	2026-11-25	covered	#
 crates/browser/src/session/tests_a.rs	341	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/session/tests_b.rs	285	src	F2	issue-2307	2026-11-25	covered	#2307	added permission regression test; re-read after edit
 crates/browser/src/site.rs	182	src	F2	issue-2308	2026-11-25	covered	#2308	re-read for deterministic slot token derivation
-crates/browser/src/tabs.rs	421	src	F2	subagent	2026-11-25	covered	#2290	Deepen tabs module with internal helpers; public behavior unchanged
+crates/browser/src/tabs.rs	433	src	F2	jp	2026-11-26	covered	#2290	Re-read changed title_fallback: file tabs show decoded file name
 crates/browser/src/tabs/tests.rs	302	src	F2	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 crates/browser/src/tabs/workspaces.rs	387	src	F2	subagent	2026-11-25	covered	#2290	Extract workspace operations into internal helpers; behavior unchanged
 crates/browser/src/title.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -236,6 +236,7 @@ crates/browser/tests/shell_tests/saves.rs	141	test	F1	wave-max-mod	2026-11-19	co
 crates/browser/tests/shell_tests/tabs.rs	445	test	F1	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
 crates/browser/tests/shell_tests/worker.rs	218	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/spawn_hardening_tests.rs	57	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
+crates/browser/tests/tab_titles.rs	55	test	F1	jp	2026-11-26	covered	#2290	Read full file; WP-USER-ui-titles fallback tests
 crates/browser/tests/watchdog_tests.rs	66	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/webdriver_bidi.rs	344	test	F1	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
 crates/core/Cargo.toml	14	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1585,7 +1586,12 @@ docs/superpowers/plans/2026-11-24-security-isolation-plan.md	306	docs	F3	docs-cl
 docs/superpowers/plans/2026-11-24-web-platform-extension-plan.md	66	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-cleanup	2026-11-24	covered	#2290	full-coverage roadmap v3 re-read
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
+<<<<<<< HEAD
 docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md	326	docs	F3	plan-author	2026-11-26	covered	UI-TARGET	Read the full plan document before marking
+=======
+docs/superpowers/plans/2026-11-25-zen-inspired-ui-plan.md	329	docs	F3	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read implementation record and honest limitations
+docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md	326	docs	F3	jp	2026-11-26	covered	#2290	Read full 326-line plan; Task 4 implemented
+>>>>>>> a1c97fc0 (fix(tabs): WP-USER-ui-titles show file name for titled file tabs)
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
 docs/work-packages/BOARD.md	69	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
