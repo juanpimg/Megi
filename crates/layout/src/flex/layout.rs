@@ -87,7 +87,14 @@ pub(crate) fn layout_flex_children(
             matches!(child_style.height, Length::Auto) && child_style.calc_lengths.height.is_none()
         };
         let mut base_main = base_from_style;
-        if row && matches!(child_style.flex_basis, Length::Auto) && auto_main {
+        // CSS Sizing 3 §5: `width: fit-content` (and `height: fit-content` on the
+        // column axis) is a content-based preferred size, not `auto`. It must
+        // take part in the flex base size even when `flex-basis` is a length.
+        let content_based_base = auto_main
+            && (matches!(child_style.flex_basis, Length::Auto)
+                || (row && child_style.width_fit_content)
+                || (!row && child_style.height_fit_content));
+        if row && content_based_base {
             crate::block::calculate_shrink_to_fit_width(
                 child,
                 container_width,
@@ -110,6 +117,8 @@ pub(crate) fn layout_flex_children(
             edges,
             base_main,
             used_main: base_main,
+            min_content_main: 0.0,
+            auto_min_main: 0.0,
             used_cross: 0.0,
             line: 0,
             main_offset: 0.0,
@@ -155,6 +164,16 @@ pub(crate) fn layout_flex_children(
     if !current.is_empty() {
         lines.push(current);
     }
+
+    // 2b. Automatic minimum size (CSS Flexbox 1 §4.5).
+    minimum::resolve_automatic_minimums(
+        &mut items,
+        &lines,
+        row,
+        container_width,
+        main_gap,
+        measurer,
+    );
 
     // 3. Flexible lengths per line.
     for line in &lines {
@@ -422,11 +441,13 @@ fn layout_item_at(
         content_width,
         content_height,
     ));
-    // CSS Flexbox 1 §4.5: `min-width: auto` on a flex item resolves to the
-    // automatic minimum size (zero here), so the item can shrink below its
-    // min-content width. Its inline content must then wrap inside that width,
-    // including inside an otherwise unbreakable word.
-    pos.wrap_long_words = !matches!(item.style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre);
+    // CSS Flexbox 1 §4.5: the automatic minimum size keeps a flex item at its
+    // min-content width when that fits the line. Arbitrary word breaking is a
+    // last resort for content forced below that minimum (CSS Text 3 §4), so
+    // short labels such as "Web"/"CSS"/"Theme" stay whole. A genuinely long
+    // word that had to be capped by the available space still wraps.
+    pos.wrap_long_words = !matches!(item.style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre)
+        && item.min_content_main > item.used_main + 0.001;
     layout_box_contents(child, definite_height, false, measurer, pos);
     if row {
         item.used_cross = explicit_cross(

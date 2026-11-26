@@ -129,6 +129,19 @@ pub(super) fn clamp_main(
     size
 }
 
+/// Applies the content-based automatic minimum size (CSS Flexbox 1 §4.5) on top
+/// of the regular definite min/max constraints.
+pub(super) fn clamp_main_with_auto_min(
+    style: &ComputedStyle,
+    value: f32,
+    row: bool,
+    reference: f32,
+    main_edges: f32,
+    auto_min: f32,
+) -> f32 {
+    clamp_main(style, value, row, reference, main_edges).max(auto_min.max(0.0))
+}
+
 /// Resolves the flex base size (content box) of one item on the main axis.
 pub(super) fn flex_base_main(
     style: &ComputedStyle,
@@ -238,15 +251,21 @@ pub(super) fn resolve_flexible_lengths(
     if free > 0.0 {
         let grow_sum: f32 = line.iter().map(|index| items[*index].flex_grow).sum();
         if grow_sum > 0.0 {
+            // CSS Flexbox 1 §4.5: satisfy automatic minimum sizes before
+            // distributing the remaining positive free space, so a short word
+            // ("Web", "CSS", "Theme") keeps its min-content width.
+            let auto_min_sum: f32 = line.iter().map(|&index| items[index].auto_min_main).sum();
+            let distributable = (free - auto_min_sum).max(0.0);
             for index in line {
                 let item = &mut items[*index];
-                item.used_main += free * item.flex_grow / grow_sum;
-                item.used_main = clamp_main(
+                let base = item.used_main.max(item.auto_min_main);
+                item.used_main = clamp_main_with_auto_min(
                     &item.style,
-                    item.used_main,
+                    base + distributable * item.flex_grow / grow_sum,
                     row,
                     reference,
                     item.edges_main(row),
+                    item.auto_min_main,
                 );
             }
         }
@@ -279,12 +298,13 @@ pub(super) fn resolve_flexible_lengths(
                 let index = line[pos];
                 let factor = items[index].flex_shrink * items[index].base_main;
                 let target = original_used[pos] - deficit * factor / weight;
-                let clamped = clamp_main(
+                let clamped = clamp_main_with_auto_min(
                     &items[index].style,
                     target,
                     row,
                     reference,
                     items[index].edges_main(row),
+                    items[index].auto_min_main,
                 );
                 if clamped > target + 1e-4 {
                     items[index].used_main = clamped;
@@ -296,12 +316,13 @@ pub(super) fn resolve_flexible_lengths(
                     let index = line[pos];
                     let factor = items[index].flex_shrink * items[index].base_main;
                     let target = original_used[pos] - deficit * factor / weight;
-                    items[index].used_main = clamp_main(
+                    items[index].used_main = clamp_main_with_auto_min(
                         &items[index].style,
                         target,
                         row,
                         reference,
                         items[index].edges_main(row),
+                        items[index].auto_min_main,
                     );
                 }
                 break;
