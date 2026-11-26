@@ -1465,7 +1465,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/UI-TARGET.md	54	docs	F3	opencode-agent	2026-11-26	covered	#ui	read line by line: shell visual reference from project owner
+docs/UI-TARGET.md	87	docs	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 docs/VISUAL-PARITY.md	102	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
@@ -1865,6 +1865,12 @@ fuzz/fuzz_targets/woff2_decode.rs	26	fuzz	F1	waveF1	2026-11-17	covered	#1421-#14
 fuzz/src/lib.rs	181	fixture	F1	lead	2026-11-17	covered	shared fuzz helpers, read	read in the F3/F4 pass
 rust-toolchain.toml	3	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 tests/fixtures/chrome/compact.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/captures/hn.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/captures/rust.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/captures/wikipedia.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/hn.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/rust.png	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/chrome/ui/wikipedia.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/e2e/article_reader.html	25	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/checkout.html	26	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/news_filter.html	35	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
@@ -2413,6 +2419,8 @@ tools/audit_negative_matrix.py	273	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NO
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
+tools/capture_real_window.sh	21	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+tools/capture_window_ui.sh	20	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 tools/check_agent_index_refs.py	70	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_agents_constraints.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full file; compile-free gate registered in check_no_compile_gates.py
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
@@ -2433,7 +2441,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	156	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	re-read full file after remote agents-constraints gate merge (49 gates)
+tools/check_no_compile_gates.py	158	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2453,6 +2461,7 @@ tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	r
 tools/check_test262_artifacts.py	64	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 64-line compile-free gate; validates test262 artifacts
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/check_toolchain_config.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
+tools/check_window_ui.py	102	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/check_workflow_metadata.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_workflow_scripts.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
@@ -2517,6 +2526,7 @@ tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#au
 tools/test_check_test262_artifacts.py	91	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 91-line unit tests for test262 artifact gate
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/test_check_toolchain_config.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
+tools/test_check_window_ui.py	61	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/test_check_workflow_metadata.py	71	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_workflow_scripts.py	94	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge

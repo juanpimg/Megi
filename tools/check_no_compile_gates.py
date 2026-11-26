@@ -65,6 +65,7 @@ TEST_MODULES = (
     "tools.test_check_real_site_md5",
     "tools.test_check_wp_generator_functions",
     "tools.test_check_agents_constraints",
+    "tools.test_check_window_ui",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -115,6 +116,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("real_site_md5", (PY, "tools/check_real_site_md5.py")),
     ("wp_generator_functions", (PY, "tools/check_wp_generator_functions.py")),
     ("agents_constraints", (PY, "tools/check_agents_constraints.py")),
+    ("window_ui", (PY, "tools/check_window_ui.py", "--check")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
