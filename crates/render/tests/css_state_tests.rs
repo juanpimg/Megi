@@ -131,3 +131,36 @@ fn computed_styles_reflect_the_dynamic_states() {
         "filled text input keeps black"
     );
 }
+
+const VISITED_GREY: megi_css::Color = megi_css::Color::new(0x82, 0x82, 0x82, 0xFF);
+
+fn id_color(output: &megi_render::RenderOutput, wanted: &str) -> megi_css::Color {
+    let body = output.document.body().expect("body");
+    let node = output
+        .document
+        .descendants(body)
+        .find(|id| {
+            output
+                .document
+                .node(*id)
+                .as_element()
+                .and_then(|element| element.get_attribute("id"))
+                == Some(wanted)
+        })
+        .unwrap_or_else(|| panic!("missing #{wanted}"));
+    output.styles[&node].color
+}
+
+/// Selectors 4 §3.6.2 / WHATWG HTML §15.3.2: the author's `a:visited` rule must win for links
+/// the host marked as visited, while unvisited links keep `a:link`. Headless renders model
+/// history with `data-megi-visited`, like the other dynamic states in this file.
+#[test]
+fn visited_links_use_the_author_visited_colour() {
+    let output = render_fixture("visited_links.html");
+    assert_eq!(id_color(&output, "seen"), VISITED_GREY, "a:visited");
+    assert_eq!(id_color(&output, "fresh"), BLACK, "a:link");
+    assert!(
+        count_color(&output.pixmap, VISITED_GREY) > 10,
+        "visited link text must paint grey in the PNG"
+    );
+}
