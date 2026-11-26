@@ -296,7 +296,7 @@ crates/css/src/custom/chunk1.rs	376	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/css/src/custom/chunk2.rs	198	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/flex.rs	393	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/grid.rs	87	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/grid/chunk1.rs	371	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/grid/chunk1.rs	402	src	F2	wiki-grid-gap-fix	2026-11-26	covered	CSS-GRID-7.4/wiki-gap	Read full file: added grid-template shorthand split and case-folded grid-template-areas names
 crates/css/src/grid/chunk2.rs	321	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/grid/chunk3.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/lib.rs	144	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -910,7 +910,7 @@ crates/layout/tests/grid/common.rs	124	test	F1	wave-max-mod	2026-11-19	covered	#
 crates/layout/tests/grid/flow_areas.rs	304	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/placement.rs	301	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/grid/regressions.rs	137	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/grid/regressions.rs	188	test	F1	wiki-grid-gap-fix	2026-11-26	covered	CSS-GRID-7.4/wiki-gap	Read full file: added RED/GREEN geometry regression test for shorthand plus named areas
 crates/layout/tests/ifc_adversarial_tests/boundaries.rs	132	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/ifc_adversarial_tests/common.rs	43	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/ifc_adversarial_tests/edge_widths.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
