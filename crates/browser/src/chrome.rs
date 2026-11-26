@@ -63,7 +63,7 @@ pub use menus::{
 };
 pub use navigation::{
     NavigationButton, NavigationButtons, navigation_button_at, navigation_buttons,
-    navigation_buttons_width,
+    navigation_buttons_in_top_bar, navigation_buttons_width,
 };
 pub use rail::{
     RailHit, RailLayout, RailTabRect, RailView, ShellTabA11y, draw_rail, draw_rail_over_pixmap,
@@ -306,10 +306,8 @@ pub fn draw_chrome(
                 tokens::WINDOW_RADIUS,
             );
         }
+        // The shell paints navigation inside its single top bar.
         shell::paint_shell(&mut pixmap, scale, &layout, &shell);
-        if !view.compact {
-            paint_navigation_buttons(&mut pixmap, scale, view);
-        }
     } else {
         if !view.compact {
             paint_tab_strip(&mut pixmap, scale, view, css_width);
@@ -412,9 +410,6 @@ pub fn draw_chrome_over_pixmap(
         shell::paint_shell(&mut band, scale, &layout, &shell);
         if shell.sidebar {
             drawing::mask_page_corner_pixmap(dest, scale, layout.page, tokens::WINDOW_RADIUS);
-        }
-        if !view.compact {
-            paint_navigation_buttons(&mut band, scale, view);
         }
     } else {
         if !view.compact {

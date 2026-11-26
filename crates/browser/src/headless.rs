@@ -188,6 +188,8 @@ pub fn render_target_with_chrome_menu(
             labels: &tabs,
             favicons: &favicons,
             url: input,
+            can_go_back: false,
+            can_go_forward: false,
             active: 0,
             top_css: crate::chrome::CHROME_HEIGHT,
             sidebar: false,

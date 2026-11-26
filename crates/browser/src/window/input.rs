@@ -400,7 +400,13 @@ impl WindowApp {
             self.request_repaint();
             return;
         }
-        let buttons = chrome::navigation_buttons(self.metrics.css_width as f32);
+        // The dark shell puts navigation in the single top bar; hit-testing must
+        // use the same rectangles the painter uses.
+        let band_css = self.chrome_mode.state(std::time::Instant::now()).band_css;
+        let buttons = chrome::navigation_buttons_in_top_bar(
+            self.metrics.css_width as f32,
+            band_css,
+        );
         if let Some(button) = chrome::navigation_button_at(
             &buttons,
             x,

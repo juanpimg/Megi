@@ -382,6 +382,8 @@ impl WindowApp {
                 labels: &chrome_titles,
                 favicons: &favicons,
                 url: &chrome_fallback,
+                can_go_back: self.nav.can_go_back(),
+                can_go_forward: self.nav.can_go_forward(),
                 active: chrome_active_tab,
                 top_css: chrome_band_css,
                 sidebar: shell_sidebar,

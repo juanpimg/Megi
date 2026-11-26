@@ -226,6 +226,9 @@ pub struct ShellView<'a> {
     pub favicons: &'a [Option<crate::favicon::Favicon>],
     /// URL shown in the centred pill.
     pub url: &'a str,
+    /// Enabled state of the back/forward buttons in the unified top bar.
+    pub can_go_back: bool,
+    pub can_go_forward: bool,
     /// Index of the active tab.
     pub active: usize,
     /// Height of the top band in CSS pixels.
@@ -241,6 +244,8 @@ pub struct ShellLayout {
     pub top: Rect,
     /// Traffic-light centres.
     pub dots: [Rect; 3],
+    /// Back/forward/reload in the same top-bar row.
+    pub nav: super::NavigationButtons,
     /// Sidebar-toggle icon box.
     pub toggle: Rect,
     /// Centered address pill.
@@ -265,9 +270,8 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         (height - 2.0 * WINDOW_MARGIN).max(1.0),
     );
     let dot_size = if top >= 60.0 { 11.0 } else { 8.0 };
-    // The traffic lights sit in the upper strip; the legacy navigation buttons
-    // stay on the lower strip so their existing hit rectangles remain accurate.
-    let dot_y = if top >= 60.0 { 10.0 } else { 4.0 };
+    // Every top-bar control shares one row, centred vertically (UI-TARGET).
+    let dot_y = (top - dot_size) * 0.5;
     let dots = std::array::from_fn(|index| {
         Rect::new(
             WINDOW_MARGIN + 6.0 + index as f32 * (dot_size + 6.0),
@@ -277,7 +281,8 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         )
     });
     let toggle = Rect::new(WINDOW_MARGIN + 52.0, (dot_y - 3.0).max(2.0), 16.0, 16.0);
-    let nav_end = 4.0 + 3.0 * (super::NAV_BUTTON_SIZE + super::NAV_BUTTON_GAP);
+    let nav = super::navigation_buttons_in_top_bar(width, top);
+    let nav_end = nav.reload.x + nav.reload.width;
     let pill_width = (width * 0.48).clamp(120.0, (width - nav_end - 190.0).max(120.0));
     let pill_height = if top >= 60.0 { 34.0 } else { 26.0 };
     let pill = Rect::new(
@@ -311,6 +316,7 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         window,
         top: Rect::new(WINDOW_MARGIN, 0.0, width - 2.0 * WINDOW_MARGIN, top),
         dots,
+        nav,
         toggle,
         pill,
         actions,

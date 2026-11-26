@@ -9,6 +9,7 @@ use megi_webview::layout::Rect;
 use megi_webview::paint::Pixmap;
 
 use super::drawing::{draw_text, fill_round, paint_chevron, paint_favicon, stroke_line};
+use super::navigation::paint_navigation_buttons_at;
 use super::tokens::{
     HISTORY_ROW, SHELL, ShellLayout, ShellView, WINDOW_RADIUS, circle, fitted, sidebar_columns,
     sidebar_history_top,
@@ -236,6 +237,13 @@ pub fn paint_shell(pixmap: &mut Pixmap, scale: f32, layout: &ShellLayout, view: 
     let text = fitted(view.url, (layout.pill.width - 64.0).max(1.0), 14.0);
     let text_y = layout.pill.y + (layout.pill.height - 16.0) * 0.5;
     draw_text(pixmap, &text, text_x, text_y, scale, 14.0, SHELL.text);
+    paint_navigation_buttons_at(
+        pixmap,
+        scale,
+        &layout.nav,
+        view.can_go_back,
+        view.can_go_forward,
+    );
     paint_actions(pixmap, &layout.actions, scale);
     if view.sidebar {
         paint_sidebar(pixmap, scale, layout, view);

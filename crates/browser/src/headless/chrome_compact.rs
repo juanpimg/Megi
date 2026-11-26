@@ -85,6 +85,8 @@ pub(super) fn render_target_with_chrome_mode(
             labels: &tabs,
             favicons: &favicons,
             url: input,
+            can_go_back: false,
+            can_go_forward: false,
             active: 0,
             top_css: band_css,
             sidebar: true,
