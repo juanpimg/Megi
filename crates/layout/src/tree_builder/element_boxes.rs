@@ -1,5 +1,5 @@
 //! Helpers that build the non-recursive part of element boxes: pseudo-element
-//! boxes and the generated label box used by the native `<select>` control.
+//! boxes and the generated text boxes used by native `<select>`/`<input>` controls.
 //! Kept separate from `box_for_node.rs` to respect the module size budget.
 
 // Declared from `box_for_node.rs` with an explicit path; `super::super` is the
@@ -61,9 +61,55 @@ pub(super) fn select_control_content(doc: &Document, select_id: NodeId) -> (Stri
     (text, longest as f32 * 8.0 + 18.0)
 }
 
-/// Wraps the selected option label in a generated text box. The paint pass uses
-/// this box as the native-content marker for a replaced `<select>`.
-pub(super) fn select_label_box(
+// Private-use markers shared with `paint::painter::forms::input`: U+E000 marks a
+// value run and U+E001 a placeholder run. Paint strips them before shaping, so
+// they never reach the glyph rasterizer.
+const VALUE_MARKER: char = '\u{E000}';
+const PLACEHOLDER_MARKER: char = '\u{E001}';
+
+/// WHATWG HTML §4.10.5: a text/search/email/password control paints its value,
+/// or its placeholder while the value is empty. Password values are masked with
+/// one bullet per character; the raw attribute never reaches the paint pass.
+/// Generated text is carried in a child box because paint receives only the
+/// layout tree, not the document.
+pub(super) fn input_control_text(doc: &Document, input_id: NodeId) -> Option<String> {
+    let element = doc.node(input_id).as_element()?;
+    if element.namespace != Namespace::Html || !element.local_name.eq_ignore_ascii_case("input") {
+        return None;
+    }
+    let type_attribute = element
+        .get_attribute("type")
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let type_ = if type_attribute.is_empty() {
+        "text"
+    } else {
+        type_attribute.as_str()
+    };
+    if !matches!(type_, "text" | "search" | "email" | "password") {
+        return None;
+    }
+    let value = element.get_attribute("value").unwrap_or("");
+    if !value.is_empty() {
+        let shown = if type_ == "password" {
+            "•".repeat(value.chars().count())
+        } else {
+            value.to_owned()
+        };
+        return Some(format!("{VALUE_MARKER}{shown}"));
+    }
+    let placeholder = element.get_attribute("placeholder").unwrap_or("");
+    if placeholder.is_empty() {
+        None
+    } else {
+        Some(format!("{PLACEHOLDER_MARKER}{placeholder}"))
+    }
+}
+
+/// Wraps generated native-control text in a text box. The paint pass uses this
+/// box to paint a `<select>` label or a marked `<input>` value/placeholder.
+pub(super) fn generated_text_box(
     label: &str,
     child_style: &Option<Arc<ComputedStyle>>,
     own_style: &Arc<ComputedStyle>,
