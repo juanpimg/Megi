@@ -48,6 +48,7 @@ TEST_MODULES = (
     "tools.test_check_real_site_html",
     "tools.test_check_closed_work_packages",
     "tools.test_check_toolchain_config",
+    "tools.test_check_workflow_metadata",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -81,6 +82,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("real_site_html", (PY, "tools/check_real_site_html.py")),
     ("closed_work_packages", (PY, "tools/check_closed_work_packages.py")),
     ("toolchain_config", (PY, "tools/check_toolchain_config.py")),
+    ("workflow_metadata", (PY, "tools/check_workflow_metadata.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
