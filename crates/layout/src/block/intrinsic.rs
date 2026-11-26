@@ -3,7 +3,7 @@
 use super::*;
 use crate::box_tree::{BoxType, LayoutBox};
 use crate::inline::TextMeasurer;
-use megi_css::{ComputedStyle, Display, FlexDirection, FlexWrap, Position, WhiteSpace};
+use megi_css::{BoxSizing, ComputedStyle, Display, FlexDirection, FlexWrap, Position, WhiteSpace};
 
 /// Approximate intrinsic content widths: `(preferred minimum, preferred maximum)`.
 ///
@@ -112,25 +112,35 @@ pub(crate) fn collect_intrinsic_widths(
         | BoxType::TableRowGroup(_)
         | BoxType::TableRow(_) => {
             if let Some(style) = layout_box.style.as_ref() {
-                let edges =
+                // A definite `width` on a block is its intrinsic contribution even when the
+                // box has no in-flow children (CSS Sizing 3 §3). HN's `.votearrow` is exactly
+                // that: `<a><div width:10px; margin:0 2px></div></a>` inside a table cell.
+                // Without this, the cell collapsed to the bare 4px margin width and the
+                // background SVG bled over the first letter of the story title.
+                let definite_width = matches!(
+                    layout_box.box_type,
+                    BoxType::BlockNode(_) | BoxType::InlineBlock(_)
+                );
+                let margins =
                     resolve_length(style.margin.left, style.calc_lengths.margin_left, cb_width)
                         + resolve_length(
                             style.margin.right,
                             style.calc_lengths.margin_right,
                             cb_width,
-                        )
-                        + style.border_width.left
-                        + style.border_width.right
-                        + resolve_length(
-                            style.padding.left,
-                            style.calc_lengths.padding_left,
-                            cb_width,
-                        )
-                        + resolve_length(
-                            style.padding.right,
-                            style.calc_lengths.padding_right,
-                            cb_width,
                         );
+                let decoration = style.border_width.left
+                    + style.border_width.right
+                    + resolve_length(
+                        style.padding.left,
+                        style.calc_lengths.padding_left,
+                        cb_width,
+                    )
+                    + resolve_length(
+                        style.padding.right,
+                        style.calc_lengths.padding_right,
+                        cb_width,
+                    );
+                let edges = margins + decoration;
                 let is_flex_row = (style.display == Display::Flex || style.is_inline_flex)
                     && matches!(
                         style.flex_direction,
@@ -185,6 +195,30 @@ pub(crate) fn collect_intrinsic_widths(
                 }
                 *minimum = minimum.max(inner_min + edges);
                 *maximum = maximum.max(inner_max + edges);
+
+                // CSS Sizing 3 §3: a definite preferred size gives a definite intrinsic
+                // contribution, so children (even overflowing ones) cannot shrink the box
+                // below its declared width. Clamp it with min/max-width first.
+                if definite_width && let Some(specified) = specified_width(style, cb_width) {
+                    let min =
+                        resolve_min_max(style.min_width, style.calc_lengths.min_width, cb_width)
+                            .unwrap_or(0.0)
+                            .max(0.0);
+                    let max =
+                        resolve_min_max(style.max_width, style.calc_lengths.max_width, cb_width)
+                            .map(|value| value.max(0.0));
+                    let contribution = if style.box_sizing == BoxSizing::BorderBox {
+                        let border_box = specified.max(min).max(0.0);
+                        let border_box = max.map_or(border_box, |max| border_box.min(max));
+                        border_box.max(decoration) + margins
+                    } else {
+                        let content = specified.max(min).max(0.0);
+                        let content = max.map_or(content, |max| content.min(max));
+                        content + decoration + margins
+                    };
+                    *minimum = minimum.max(contribution);
+                    *maximum = maximum.max(contribution);
+                }
             }
         }
         BoxType::Replaced(_) => {

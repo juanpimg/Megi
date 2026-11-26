@@ -837,7 +837,7 @@ crates/layout/src/block/absolute.rs	284	src	F2	overflow-wrap-fix	2026-11-26	cove
 crates/layout/src/block/core.rs	404	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
 crates/layout/src/block/floats.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/block/height.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/block/intrinsic.rs	222	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/block/intrinsic.rs	256	src	F2	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	re-read after definite-width intrinsic contribution fix
 crates/layout/src/block/margin.rs	155	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
 crates/layout/src/block/positioning.rs	291	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
 crates/layout/src/block/sizing.rs	389	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1268,6 +1268,7 @@ crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	cov
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/render/tests/hn_arrow_tests.rs	69	test	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
+crates/render/tests/hn_title_mojibake_tests.rs	115	test	F1	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	read and verified in HN title regression
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1946,6 +1947,8 @@ tests/fixtures/render/grid_dense.html	9	fixture	F1	waveF1	2026-11-17	covered	#14
 tests/fixtures/render/grid_rows.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/grid_span.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/hero_cta.html	87	fixture	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
+tests/fixtures/render/hn_title_mojibake.html	21	fixture	F1	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	read and verified in HN title regression
+tests/fixtures/render/hn_title_mojibake.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/hn_votearrow.html	14	fixture	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
 tests/fixtures/render/image_formats.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/image_scaled.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
