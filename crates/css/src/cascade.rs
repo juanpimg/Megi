@@ -38,6 +38,23 @@ use crate::selector::{
 use crate::shorthand::expand_declarations;
 use megi_core::{Document, NodeId};
 
+/// The document element (`<html>`), whose computed font-size is the basis for `rem`.
+///
+/// `Document::root()` is the Document node and never receives a computed style, so
+/// callers must use this helper instead of `styles.get(&doc.root())` (CSS Values 4 §5.1).
+pub(crate) fn document_element_id(doc: &Document) -> Option<NodeId> {
+    let mut child = doc.node(doc.root()).first_child;
+    while let Some(id) = child {
+        if let Some(el) = doc.node(id).as_element()
+            && el.local_name.eq_ignore_ascii_case("html")
+        {
+            return Some(id);
+        }
+        child = doc.node(id).next_sibling;
+    }
+    None
+}
+
 /// Media environment used to evaluate `@media` rules and imported stylesheet media lists.
 ///
 /// Re-exported from [`crate::media`], which owns the full media query parser/evaluator.

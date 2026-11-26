@@ -344,3 +344,22 @@ fn math_function_prefix_never_panics_on_utf8_boundaries() {
         let _ = computed(&css);
     }
 }
+
+#[test]
+fn rem_lengths_use_the_document_element_font_size() {
+    // CSS Values 4 §5.1: `rem` is relative to the root ELEMENT's font-size, not
+    // the initial 16px. With `html { font-size: 75% }` a 2rem width is 24px.
+    let (_doc, styles, target) =
+        computed("html { font-size: 75% } #target { width: 2rem; padding-left: 1rem; }");
+    let style = style_of(&styles, target);
+    assert!(
+        matches!(style.width, megi_css::Length::Px(px) if (px - 24.0).abs() < 0.01),
+        "2rem must be 24px with a 12px root, got {:?}",
+        style.width
+    );
+    assert_eq!(
+        style.padding.left,
+        megi_css::Length::Px(12.0),
+        "1rem must be 12px with a 12px root"
+    );
+}

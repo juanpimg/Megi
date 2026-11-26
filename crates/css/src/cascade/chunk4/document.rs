@@ -25,6 +25,8 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
     let mut candidates: Vec<Candidate> = Vec::new();
     let check_pseudos = include_pseudos && collection.may_have_pseudo_rules();
     let root = doc.root();
+    // `rem` resolves against the document element, not the Document node (#rem-root).
+    let root_element = document_element_id(doc);
 
     // Collect elements in top-down pre-order traversal
     let mut stack = Vec::new();
@@ -56,7 +58,7 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
             let cascaded = owned_declarations(best);
 
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
-            let root_style = styles.get(&root);
+            let root_style = root_element.and_then(|element| styles.get(&element));
             // Inline `style="..."` and presentational-hint declarations live in a
             // per-element buffer whose memory could be reused by the next element, so
             // they are excluded from the cache (both are rare); everything else lives
@@ -110,7 +112,7 @@ pub(crate) fn resolve_document_styles_from_collection_inner(
 
             if check_pseudos {
                 let originating_style = styles.get(&node_id);
-                let pseudo_root_style = styles.get(&root);
+                let pseudo_root_style = root_element.and_then(|element| styles.get(&element));
                 for pseudo in [PseudoElement::Before, PseudoElement::After] {
                     let pseudo_cascaded = resolve_pseudo_cascaded_with_candidates(
                         doc,
