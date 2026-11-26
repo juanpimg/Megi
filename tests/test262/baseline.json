@@ -1,0 +1,9 @@
+{
+  "epoch": {
+    "manifest_sha256": "fa824be6dad79a3b4e24554d4bd89994af9cd8e99452589dc37727a0f768d5bb",
+    "scope": "ECMAScript language expressions/smoke subset, NOT full Test262 conformance"
+  },
+  "passed": 13,
+  "total": 13,
+  "allowlist": []
+}

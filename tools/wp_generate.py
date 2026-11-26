@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tools.wp_schema import WorkPackage, validate_wp  # noqa: E402
 from tools.wpt_gate import load_report as load_wpt_report  # noqa: E402
+from tools.test262_gate import load_report as load_test262_report  # noqa: E402
 
 SOURCES = ("wpt", "js262", "site", "fuzz", "audit", "depth", "user")
 QUEUE = Path("docs/work-packages/queue")
@@ -25,6 +26,11 @@ USER_LABELS = {"crash", "broken_site", "broken-site"}
 ID_PREFIXES = {"js262": "JS"}
 WPT_REPORT = "docs/status/wpt.json"           # real report written by tools/wpt_report.py
 WPT_LEGACY_REPORT = "tests/wpt/results/latest.json"
+TEST262_REPORT = "docs/status/test262.json"   # real subset report written by tools/test262_report.py
+TEST262_GATE_VERIFY = (
+    "python3 tools/test262_gate.py --check --report docs/status/test262.json "
+    "--baseline tests/test262/baseline.json --allowlist tests/test262/allowlist.toml"
+)
 # The gate is RED for an unallowlisted failing subtest and GREEN once it passes: spec §4.3 rule 2.
 WPT_GATE_VERIFY = (
     "python3 tools/wpt_gate.py --check --report docs/status/wpt.json "
@@ -192,7 +198,32 @@ def generate_js262(root: Path, issues: list[str] | None = None) -> list[WorkPack
         )
         if wp is not None:
             out.append(wp)
-    return out
+    report_path = _artifact(root, TEST262_REPORT)
+    if report_path:
+        try:
+            report = load_test262_report(report_path)  # validates epoch, keys and counts
+        except (ValueError, TypeError, OSError) as exc:
+            _note(issues, f"{TEST262_REPORT}: invalid report: {exc}")
+        else:
+            for result in report["results"]:
+                status = str(result["status"])
+                if status == "PASS":
+                    continue
+                key = str(result["key"])
+                subtest = str(result["subtest"])
+                wp = _safe_wp(
+                    issues,
+                    source="js262", key=f"{key[:12]}-{subtest}",
+                    file=str(result["test"]), expected="PASS",
+                    actual=f"{status} — {subtest} (key {key[:12]})",
+                    spec="spec v2 §2 — Test262 allowlist = 0 (declared subset)",
+                    acceptance=f"{subtest} (key {key[:12]}) pasa en el subconjunto declarado",
+                    verify_cmd=TEST262_GATE_VERIFY, metric="js262_passed",
+                    milestone="M9", impact=4, frequency=3,
+                )
+                if wp is not None:
+                    out.append(wp)
+    return _dedup_by_id(out)
 
 
 def generate_site(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:

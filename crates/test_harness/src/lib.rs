@@ -18,6 +18,8 @@ pub mod css_harness;
 #[cfg(feature = "js")]
 pub mod js_executor;
 pub mod serializer_harness;
+#[cfg(feature = "js")]
+pub mod test262;
 pub mod tokenizer_harness;
 pub mod tree_harness;
 pub mod wpt;

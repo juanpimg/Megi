@@ -1,0 +1,121 @@
+{
+  "schema": "megi-test262-report/1",
+  "epoch": {
+    "manifest_sha256": "fa824be6dad79a3b4e24554d4bd89994af9cd8e99452589dc37727a0f768d5bb",
+    "scope": "ECMAScript language expressions/smoke subset, NOT full Test262 conformance"
+  },
+  "run_info": {
+    "harness": "megi-test-harness --test262 (offline Boa assert shim)",
+    "scope": "ECMAScript language expressions/smoke subset, NOT full Test262 conformance",
+    "source": "locally authored Test262-style smoke cases (NOT the upstream tc39/test262 tree)",
+    "adopted_cases": 13,
+    "dirs": [
+      "language/expressions/arithmetic",
+      "language/expressions/comparison",
+      "language/expressions/other"
+    ]
+  },
+  "counts": {
+    "pass": 13,
+    "fail": 0,
+    "timeout": 0,
+    "notrun": 0,
+    "error": 0
+  },
+  "total": 13,
+  "results": [
+    {
+      "key": "4ef7985a1263a005531983e9891464f73547ab731b23f2a22545eb29f565cf32",
+      "test": "tests/test262/language/expressions/arithmetic/addition-numbers.js",
+      "subtest": "language/expressions/arithmetic/addition-numbers.js",
+      "status": "PASS",
+      "sha256": "b6287e078dddd8ebc7b152035bb0dec1754c62e8057ec92088f479820c14bb43"
+    },
+    {
+      "key": "3427d7e67ce13191c0454847c5d68c798857e364bd671f084c6e730133b300f7",
+      "test": "tests/test262/language/expressions/arithmetic/addition-strings.js",
+      "subtest": "language/expressions/arithmetic/addition-strings.js",
+      "status": "PASS",
+      "sha256": "0fe6edfadfcc20b455e5253ba7a38fe9b994b0e1210111708f9be2bddcaa3e72"
+    },
+    {
+      "key": "3056e4a66bbca39eb4c6252a2e585b83c8e16aeaa27e86e28592a1a19980671b",
+      "test": "tests/test262/language/expressions/arithmetic/division.js",
+      "subtest": "language/expressions/arithmetic/division.js",
+      "status": "PASS",
+      "sha256": "f8b78b77d5bc4bfb181f2cb3a99456e6e0285e46c5a80388d20f32ddf7e5d507"
+    },
+    {
+      "key": "46fd9c07f410f8dd60a00fd575dd3b8d009ea542ab89e2f2b9ab7992ce64d40c",
+      "test": "tests/test262/language/expressions/arithmetic/multiplication.js",
+      "subtest": "language/expressions/arithmetic/multiplication.js",
+      "status": "PASS",
+      "sha256": "92159d39863ef7f208d6fa0398301ce93384c12b11a5129bbd76145f1933f328"
+    },
+    {
+      "key": "3af1aa2ce5327f462c5d3fd0013c652b50286147a393a9f57fa2c5f9c1022905",
+      "test": "tests/test262/language/expressions/arithmetic/remainder.js",
+      "subtest": "language/expressions/arithmetic/remainder.js",
+      "status": "PASS",
+      "sha256": "413674dcde9ea5ce4ee90b5be487e5c2e154476e98c2a095c0aae458cd4abba2"
+    },
+    {
+      "key": "a06e1cc74ff203426bdf9c7dc4ce93f0351e9ba5d6e208db61864ea845387834",
+      "test": "tests/test262/language/expressions/arithmetic/subtraction.js",
+      "subtest": "language/expressions/arithmetic/subtraction.js",
+      "status": "PASS",
+      "sha256": "68a23c47e1341d878216dd5f0944b1caf3c1267dce6a8990b195cdc341b20917"
+    },
+    {
+      "key": "5f2b3a28dd904b2822a1d059e75e9bd7189d814704e6638453ff066aae3bceac",
+      "test": "tests/test262/language/expressions/comparison/relational.js",
+      "subtest": "language/expressions/comparison/relational.js",
+      "status": "PASS",
+      "sha256": "890c408435c6d60dbd399f6c2569796b6bd508c401e3a148fd6374ce75aad199"
+    },
+    {
+      "key": "8c227a4e8cf7c266ea3c0040413e31c089d7535de4fab4f4bf9dc4b132b95fa0",
+      "test": "tests/test262/language/expressions/comparison/strict-equal.js",
+      "subtest": "language/expressions/comparison/strict-equal.js",
+      "status": "PASS",
+      "sha256": "a2066df5bc91b9c179abd7c9f20311e275457f7f07a23e32843b0dddbba2537c"
+    },
+    {
+      "key": "386f8c79558ee018b1ece06fb9c838189dbd63be447859038b7bae6738341a77",
+      "test": "tests/test262/language/expressions/comparison/strict-not-equal.js",
+      "subtest": "language/expressions/comparison/strict-not-equal.js",
+      "status": "PASS",
+      "sha256": "054f618cda02ffe0b98ff76b99a225d14bb75a83e7a80a44746e51fbad3d4f60"
+    },
+    {
+      "key": "a1415cc6e18c64e2d5d132c53723e909cbe402e918cac197c634c91b87e10619",
+      "test": "tests/test262/language/expressions/other/conditional.js",
+      "subtest": "language/expressions/other/conditional.js",
+      "status": "PASS",
+      "sha256": "62256799bd4ffc472b372fed1936cca548ee9473c8a225525ee6ed5677c84407"
+    },
+    {
+      "key": "7a9ec4978f26d7365de661ab9479503917d1cfd0bd2dc1037f639f1555d87f8d",
+      "test": "tests/test262/language/expressions/other/logical-and.js",
+      "subtest": "language/expressions/other/logical-and.js",
+      "status": "PASS",
+      "sha256": "8760e540a054d0fc10d7b9b0a95e5b200b36178bfc913195aa872125bb745dd7"
+    },
+    {
+      "key": "090794a43fe2474c0dac180da2b4156eab73f3f93d5f2e708c1e7c49c790ff76",
+      "test": "tests/test262/language/expressions/other/property-access.js",
+      "subtest": "language/expressions/other/property-access.js",
+      "status": "PASS",
+      "sha256": "42c849c76bcc59f2bf70a4e849c3a65dd397e9ac0c674fb2629b9ea79635b8ad"
+    },
+    {
+      "key": "e09a5cc169f5d1c7692bcc0765ec99e8cce9dc25e230f12efc7f67f2e57e9dd3",
+      "test": "tests/test262/language/expressions/other/typeof.js",
+      "subtest": "language/expressions/other/typeof.js",
+      "status": "PASS",
+      "sha256": "0612c568a7979be909021ab75310008686c10087f2b0800884f18dcdd6153d8d"
+    }
+  ],
+  "allowlist": 0,
+  "headline": "Test262 fa824be \u2014 13/13 cases passed (dirs: 3)"
+}

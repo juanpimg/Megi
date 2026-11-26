@@ -1,0 +1,86 @@
+{
+  "schema": "megi-test262-manifest/1",
+  "source": "locally authored Test262-style smoke cases (NOT the upstream tc39/test262 tree)",
+  "scope": "ECMAScript language expressions/smoke subset, NOT full Test262 conformance",
+  "adopted_cases": 13,
+  "cases": [
+    {
+      "path": "language/expressions/arithmetic/addition-numbers.js",
+      "sha256": "b6287e078dddd8ebc7b152035bb0dec1754c62e8057ec92088f479820c14bb43",
+      "bytes": 296,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/arithmetic/addition-strings.js",
+      "sha256": "0fe6edfadfcc20b455e5253ba7a38fe9b994b0e1210111708f9be2bddcaa3e72",
+      "bytes": 319,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/arithmetic/division.js",
+      "sha256": "f8b78b77d5bc4bfb181f2cb3a99456e6e0285e46c5a80388d20f32ddf7e5d507",
+      "bytes": 305,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/arithmetic/multiplication.js",
+      "sha256": "92159d39863ef7f208d6fa0398301ce93384c12b11a5129bbd76145f1933f328",
+      "bytes": 296,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/arithmetic/remainder.js",
+      "sha256": "413674dcde9ea5ce4ee90b5be487e5c2e154476e98c2a095c0aae458cd4abba2",
+      "bytes": 296,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/arithmetic/subtraction.js",
+      "sha256": "68a23c47e1341d878216dd5f0944b1caf3c1267dce6a8990b195cdc341b20917",
+      "bytes": 293,
+      "dir": "language/expressions/arithmetic"
+    },
+    {
+      "path": "language/expressions/comparison/relational.js",
+      "sha256": "890c408435c6d60dbd399f6c2569796b6bd508c401e3a148fd6374ce75aad199",
+      "bytes": 344,
+      "dir": "language/expressions/comparison"
+    },
+    {
+      "path": "language/expressions/comparison/strict-equal.js",
+      "sha256": "a2066df5bc91b9c179abd7c9f20311e275457f7f07a23e32843b0dddbba2537c",
+      "bytes": 357,
+      "dir": "language/expressions/comparison"
+    },
+    {
+      "path": "language/expressions/comparison/strict-not-equal.js",
+      "sha256": "054f618cda02ffe0b98ff76b99a225d14bb75a83e7a80a44746e51fbad3d4f60",
+      "bytes": 301,
+      "dir": "language/expressions/comparison"
+    },
+    {
+      "path": "language/expressions/other/conditional.js",
+      "sha256": "62256799bd4ffc472b372fed1936cca548ee9473c8a225525ee6ed5677c84407",
+      "bytes": 385,
+      "dir": "language/expressions/other"
+    },
+    {
+      "path": "language/expressions/other/logical-and.js",
+      "sha256": "8760e540a054d0fc10d7b9b0a95e5b200b36178bfc913195aa872125bb745dd7",
+      "bytes": 345,
+      "dir": "language/expressions/other"
+    },
+    {
+      "path": "language/expressions/other/property-access.js",
+      "sha256": "42c849c76bcc59f2bf70a4e849c3a65dd397e9ac0c674fb2629b9ea79635b8ad",
+      "bytes": 392,
+      "dir": "language/expressions/other"
+    },
+    {
+      "path": "language/expressions/other/typeof.js",
+      "sha256": "0612c568a7979be909021ab75310008686c10087f2b0800884f18dcdd6153d8d",
+      "bytes": 339,
+      "dir": "language/expressions/other"
+    }
+  ]
+}

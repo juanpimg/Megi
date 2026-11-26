@@ -66,6 +66,8 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 import wpt_gate  # noqa: E402
 import wpt_report  # noqa: E402
+import test262_report  # noqa: E402
+import test262_stats  # noqa: E402
 # Re-exports: the public API of the generator stays in this module for existing callers.
 from progress_render import (  # noqa: E402
     FONT,
@@ -97,6 +99,8 @@ from progress_stats import (  # noqa: E402
     wpt_fields,
     xml_escape,
 )
+# Re-export: the public API stays in this module for existing callers.
+from test262_stats import test262_fields  # noqa: E402
 
 BADGE_FILES = {
     "tests": "badge-tests.svg",
@@ -104,6 +108,7 @@ BADGE_FILES = {
     "crates": "badge-crates.svg",
     "unsafe": "badge-unsafe.svg",
     "wpt": "badge-wpt.svg",
+    "test262": "badge-test262.svg",
 }
 GATE_SUITES = {
     "tokenizer": "Tokenizer Total",
@@ -207,6 +212,16 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
             sys.exit(f"error: WPT gate: {error}")
         wpt_report.write_report(root, report)
         wpt = wpt_fields(report)
+    # Test262 subset headline: derive from the committed report so it always matches the
+    # published P/T. Freshness is enforced by tools/test262_report.py --check and the gate.
+    # A missing report is tolerated so minimal fixture roots used by unit tests still render.
+    test262_path = root / STATUS_DIR / "test262.json"
+    test262: dict = {}
+    if test262_path.is_file():
+        try:
+            test262 = test262_fields(test262_report.load_report(test262_path))
+        except (OSError, ValueError) as failure:
+            sys.exit(f"error: Test262 report: {failure}")
     unsafe = unsafe_forbidden_crates(root)
     # Provenance: only claim the current commit for the test count / conformance gate when
     # they were actually measured here; with --no-count/--no-gate (or a failed count) keep
@@ -245,6 +260,7 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         "subtitle": manifest.get("subtitle", ""),
         "coverage": read_coverage(root),
         "wpt": wpt,
+        "test262": test262,
     }
 
     artifacts: dict[str, bytes] = {}
@@ -255,7 +271,7 @@ def build_artifacts(root: Path, no_count: bool, no_gate: bool) -> dict[str, byte
         if key in badges:
             artifacts[str(STATUS_DIR / filename)] = badges[key].encode("utf-8")
     artifacts[str(manifest_path.relative_to(root))] = update_manifest(
-        manifest_path.read_text(encoding="utf-8"), stats, gate, wpt
+        manifest_path.read_text(encoding="utf-8"), stats, gate, wpt, test262
     ).encode("utf-8")
     data["stats"]["rust_lines"] = comma(stats["rust_lines"])  # only for logging
     return artifacts, stats, gate

@@ -37,7 +37,7 @@ tests = 3639
 tests_commit = "07cf023f"
 tests_date = "2026-11-26"
 crates = 18
-rust_lines = 268908
+rust_lines = 269246
 unsafe_forbidden_crates = 18
 
 [gate]
@@ -58,6 +58,16 @@ dirs = 6
 allowlist = 0
 distribution = "PASS=596; FAIL=0; TIMEOUT=0; NOTRUN=0; harness_error=0"
 headline = "WPT ab2ef95 — 596/596 subtests pasados (dirs: 6)"
+status = "PASS"
+
+[test262]
+manifest_sha256 = "fa824be6dad79a3b4e24554d4bd89994af9cd8e99452589dc37727a0f768d5bb"
+scope = "ECMAScript language expressions/smoke subset, NOT full Test262 conformance"
+passed = 13
+total = 13
+dirs = 3
+allowlist = 0
+headline = "Test262 fa824be — 13/13 cases passed (dirs: 3)"
 status = "PASS"
 
 [[phase]]

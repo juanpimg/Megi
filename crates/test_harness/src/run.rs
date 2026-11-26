@@ -4,6 +4,17 @@ use super::*;
 
 pub fn run() {
     let args: Vec<String> = std::env::args().collect();
+    // Focused reporter for tools/test262_report.py: print only the curated Test262 subset.
+    // A failure here is a reported status, not a gate error; tools/test262_gate.py enforces it.
+    if args.iter().any(|a| a == "--test262") {
+        #[cfg(feature = "js")]
+        {
+            let _ = megi_test_harness::test262::summary::print_test262_suites(
+                &megi_test_harness::workspace_root(),
+            );
+        }
+        return;
+    }
     let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
     let strict = args.iter().any(|a| a == "--strict");
     let filter = args
@@ -421,6 +432,15 @@ pub fn run() {
             megi_test_harness::wpt::summary::component_failures_for_workspace();
         gate_failed |= !component_failures.is_empty();
         unknown_failures.extend(component_failures);
+    }
+
+    // ------------------------------------------- Test262 curated subset (real JavaScript)
+    #[cfg(feature = "js")]
+    {
+        let test262_failures =
+            megi_test_harness::test262::summary::test262_failures_for_workspace();
+        gate_failed |= !test262_failures.is_empty();
+        unknown_failures.extend(test262_failures);
     }
 
     // ---------------------------------------------------------------- gate status

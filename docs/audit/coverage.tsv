@@ -30,7 +30,7 @@ Cargo.toml	80	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata 
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-APACHE	176	fixture	F1	lead	2026-11-17	covered		not code: license text
 LICENSE-MIT	23	fixture	F1	lead	2026-11-17	covered		not code: license text
-PROGRESS.md	243	docs	F3	m2-fixture	2026-11-26	covered	M2#5-regenerated-243-lines	regenerated with tools/update_progress.py after rebase
+PROGRESS.md	254	docs	F3	m2-fixture	2026-11-26	covered	M2#5-regenerated-243-lines	regenerated with tools/update_progress.py after rebase
 README.md	190	docs	F3	jp	2026-11-24	covered	#2290	
 SECURITY.md	232	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 cliff.toml	54	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -1383,12 +1383,16 @@ crates/test_harness/Cargo.toml	24	manifest	F3	wave-max-mod	2026-11-19	covered	#m
 crates/test_harness/src/css_harness.rs	452	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	final formatted state, gates green
 crates/test_harness/src/css_harness/expanded.rs	105	src	F2	wpt-expand	2026-11-24	covered	WP-M4-WPT-100	
 crates/test_harness/src/js_executor.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/test_harness/src/lib.rs	347	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+crates/test_harness/src/lib.rs	349	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/src/main.rs	40	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
-crates/test_harness/src/run.rs	465	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+crates/test_harness/src/run.rs	485	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/src/serializer_harness/mod.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/optional.rs	386	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/serializer_harness/serialize.rs	116	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/test_harness/src/test262/manifest.rs	62	src	F2	subagent	2026-11-26	covered		read Rust runner/manifest/summary; TDD RED->GREEN verified
+crates/test_harness/src/test262/mod.rs	15	src	F2	subagent	2026-11-26	covered		read Rust runner/manifest/summary; TDD RED->GREEN verified
+crates/test_harness/src/test262/runner.rs	165	src	F2	subagent	2026-11-26	covered		read Rust runner/manifest/summary; TDD RED->GREEN verified
+crates/test_harness/src/test262/summary.rs	74	src	F2	subagent	2026-11-26	covered		read Rust runner/manifest/summary; TDD RED->GREEN verified
 crates/test_harness/src/tokenizer_harness.rs	498	src	F2	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 crates/test_harness/src/tree_harness.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/test_harness/src/wpt/manifest.rs	146	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final review after multi-section runner,
@@ -1515,6 +1519,7 @@ docs/status/COVERAGE.md	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-conformance.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-coverage.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-crates.svg	0	generated	-			exempt		not read line by line: generated
+docs/status/badge-test262.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-tests.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-unsafe.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-wpt.svg	0	generated	-			exempt		not read line by line: generated
@@ -1532,6 +1537,8 @@ docs/status/real-sites/hn.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/rust.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real-sites/wikipedia.png	0	binary	-			exempt		not read line by line: binary
 docs/status/real_sites.toml	0	generated	-			exempt		not read line by line: generated
+docs/status/test262.json	0	generated	-			exempt		not read line by line: generated
+docs/status/test262.md	0	generated	-			exempt		not read line by line: generated
 docs/status/work-packages.html	0	generated	-			exempt		not read line by line: generated
 docs/status/wpt.json	0	generated	-			exempt		not read line by line: generated
 docs/status/wpt.md	0	generated	-			exempt		not read line by line: generated
@@ -2183,6 +2190,23 @@ tests/html5lib-tests/tree-construction/tricky01.dat	0	vendored	-			exempt		not r
 tests/html5lib-tests/tree-construction/void-in-phrasing.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit01.dat	0	vendored	-			exempt		not read line by line: vendored
 tests/html5lib-tests/tree-construction/webkit02.dat	0	vendored	-			exempt		not read line by line: vendored
+tests/test262/MANIFEST.json	86	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/NOTICE.md	18	docs	F3	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/allowlist.toml	2	manifest	F3	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/baseline.json	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/addition-numbers.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/addition-strings.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/division.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/multiplication.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/remainder.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/arithmetic/subtraction.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/comparison/relational.js	10	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/comparison/strict-equal.js	10	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/comparison/strict-not-equal.js	9	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/other/conditional.js	10	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/other/logical-and.js	10	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/other/property-access.js	11	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
+tests/test262/language/expressions/other/typeof.js	10	fixture	F1	subagent	2026-11-26	covered		read curated fixtures, MANIFEST pins, baseline and empty allowlist
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.clearRect.zero.html	32	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html	29	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
 tests/wpt/2dcontext/drawing-rectangles-to-the-canvas/2d.strokeRect.basic.html	30	fixture	F1	lead	2026-11-25	covered	M6-CANVAS-WPT	
@@ -2337,11 +2361,14 @@ tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/progress_render.py	401	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
+tools/progress_render.py	458	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
 tools/progress_stats.py	280	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/real_site_check.py	362	tool	F3	jp	2026-11-25	covered	#2290	
 tools/render_fixture.sh	130	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
+tools/test262_gate.py	208	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
+tools/test262_report.py	303	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
+tools/test262_stats.py	26	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read after main merge
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
@@ -2362,6 +2389,7 @@ tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/test_real_site_check.py	510	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
+tools/test_test262_report.py	132	tool	F3	subagent	2026-11-26	covered		read new unit tests
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
 tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
@@ -2374,12 +2402,12 @@ tools/test_wpt_gate.py	193	tool	F3	jp	2026-11-25	covered	#2290	re-read after add
 tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
 tools/update_bench_baseline.py	180	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
 tools/update_coverage.py	653	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/update_progress.py	332	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
+tools/update_progress.py	348	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/vendor_wpt.py	472	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/wp_generate.py	448	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
+tools/wp_generate.py	479	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
 tools/wpt_gate.py	220	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding string test/subtest validation
