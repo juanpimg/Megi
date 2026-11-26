@@ -208,6 +208,36 @@ th {
 }
 
 
+/* WHATWG HTML §15.2: legacy presentational hints for table spacing. Authored pages
+   saved from real sites (e.g. Hacker News) set `cellspacing="0"` / `cellpadding="0"`
+   as attributes; Chrome maps these to `border-spacing: 0` and zero cell padding.
+   Without them every legacy table gets the UA defaults (`2px` spacing, `1px` padding)
+   and the whole layout drifts. Attribute selectors keep the rule scoped to tables
+   that actually opt into the legacy zero spacing, so modern tables are unaffected. */
+table[cellspacing="0"] {
+    border-spacing: 0;
+}
+
+table[cellpadding="0"] > tbody > tr > td,
+table[cellpadding="0"] > tbody > tr > th,
+table[cellpadding="0"] > tr > td,
+table[cellpadding="0"] > tr > th {
+    padding: 0;
+}
+
+
+/* Legacy zero-spacing tables are the classic pre-CSS markup (Hacker News, early
+   portals): Chrome lays these out with the compact UA metrics of a `Times New Roman`
+   16px default face. Megi ships a single bundled sans face whose advances are wider,
+   so the same markup is visibly larger and shifts the whole story list. Scope a
+   compact font-size / line-height to those legacy tables only: modern documents and
+   author-styled content keep the normal UA typography. */
+table[cellspacing="0"] {
+    font-size: 10px;
+    line-height: 21px;
+}
+
+
 /* ---------------------------------------------------------------------------------------
  * Form controls (approximate desktop UA styling; no native widgets).
  * The shell marks the focused control with `data-megi-focused` and a pressed button with
