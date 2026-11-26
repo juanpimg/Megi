@@ -1756,7 +1756,7 @@ does not yet follow strict semantic versioning; the format follows
 - Test suite: **301 tests** (was 165), all green; `fmt`, `clippy -D warnings`,
   `cargo doc` and the 4-suite conformance gate pass; MSRV 1.88 verified.
 
-## [0.1.0] — 2026-11-09
+## [0.1.0-pre.1] - 2026-11-09 (pre-alpha snapshot)
 
 ### Added
 
