@@ -39,8 +39,8 @@
 use std::sync::Arc;
 
 use megi_css::{
-    AlignItems, AlignSelf, ComputedStyle, FlexDirection, FlexWrap, JustifyContent, Length,
-    Position, WhiteSpace,
+    AlignItems, AlignSelf, BoxSizing, ComputedStyle, FlexDirection, FlexWrap, JustifyContent,
+    Length, Position, WhiteSpace,
 };
 
 use crate::block::{calculate_block_height, layout_box_contents, translate_box};
@@ -127,5 +127,10 @@ impl Item<'_> {
 
     fn edges_cross(&self, row: bool) -> f32 {
         self.outer_cross(row) - self.used_cross
+    }
+
+    /// Padding + border (no margin) on the main axis, in pixels.
+    fn edges_main(&self, row: bool) -> f32 {
+        helpers::edges_main(&self.edges, row)
     }
 }
