@@ -8,19 +8,19 @@
       "note": "Referencia mínima: debe verse siempre",
       "source": "https://example.com",
       "mode": "live",
-      "result": "PASS",
-      "display_items": 16,
-      "element_count": 11,
-      "body_text": "This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.Learn moreEste dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.Данный домен предназнач",
-      "status": 200,
+      "result": "ERROR",
+      "display_items": 0,
+      "element_count": 0,
+      "body_text": "",
+      "status": null,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1373.1,
+      "time_ms": 0.0,
       "issue": 0,
-      "error": "",
+      "error": "timeout al renderizar",
       "png": "real-sites/example.png",
-      "png_md5": "c7eeed185ab8dadf227a3b5892a4a0f5"
+      "png_md5": ""
     },
     {
       "id": "rust",
@@ -29,22 +29,22 @@
       "source": "https://www.rust-lang.org",
       "mode": "live",
       "result": "DEGRADADO",
-      "display_items": 393,
+      "display_items": 363,
       "element_count": 197,
       "body_text": "\n    \n      \n        \n          \n        \n      \n    \n      \n        Install\n        Learn\n        Playground\n        Tools\n        Governance\n        Funding\n        Community\n        Blog\n      \n    \n      \n        \n          Language\n          \n            English (en-US)\n            Español (es)\n            Français (fr)\n            Italiano (it)\n            日本語 (ja)\n            Português (pt-BR)\n            Русский (ru)\n            Türkçe (tr)\n            简体中文 (zh-CN)\n            正體中文 (zh-TW)\n         ",
       "status": 200,
       "warnings": [
-        "performance budget: total 8350 > 3s",
-        "performance budget: styles_pre_script 244 ms > 200ms",
-        "performance budget: images 731 ms > 500ms"
+        "performance budget: total 9255 > 3s",
+        "performance budget: styles_pre_script 603 ms > 200ms",
+        "performance budget: images 571 ms > 500ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 8519.3,
+      "time_ms": 9265.5,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
-      "png_md5": "cc8956645c9ad28d7a1459d2c4b44ed1"
+      "png_md5": "2ad8d9e1dfaf20653ca20831333e5fcc"
     },
     {
       "id": "wikipedia",
@@ -52,23 +52,19 @@
       "note": "Solapes conocidos en la UI Vector",
       "source": "https://es.wikipedia.org/wiki/Rust",
       "mode": "live",
-      "result": "DEGRADADO",
-      "display_items": 433,
+      "result": "PASS",
+      "display_items": 440,
       "element_count": 521,
       "body_text": "\nIr al contenido\n\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\n\t\n\t\n\nMenú principal\n\t\n\t\n\n\n\t\t\t\t\n\t\t\n\n\t\n\tMenú principal\n\tmover a la barra lateral\n\tocultar\n\n\n\t\n\n\t\n\t\tNavegación\n\t\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\tPortadaPortal de la comunidadActualidadCambios recientesPáginas nuevasPágina aleatoriaAyudaNotificar un errorPáginas especiales\n\t\t\n\t\t\n\t\n\n\n\t\n\n\n\t\t\t\t\n\n\t\n\n\n\t\t\n\t\t\t\n\n\t\n\t\n\t\t\n\t\t\n\t\n\n\n\t\t\n\t\t\n\t\t\t\n\n\t\n\nBuscar\n\t\n\t\n\t\t\n\t\t\t\n\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\t\n\t\t\t\t\n\t\t\t\tBuscar\n\t\t\t\n\t\t\n\t\n\n\n\t\t\t\n\t\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\n\t\n\t\t\n\t\t\n\t\t\t\n\t\t\t\n\t\t\n\t\t\n\t\n\n\n\t\n\t\t\n\n\t\n\t\n\nAparienci",
       "status": 200,
-      "warnings": [
-        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
-        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
-        "performance budget: styles_pre_script 253 ms > 200ms"
-      ],
+      "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1913.5,
+      "time_ms": 1277.8,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
-      "png_md5": "71d05c9ed503a5dce7a414aee50dc5c0"
+      "png_md5": "9340c5a6b5caf608d6fbf93d3989033c"
     },
     {
       "id": "hn",
@@ -77,18 +73,18 @@
       "source": "https://news.ycombinator.com",
       "mode": "live",
       "result": "PASS",
-      "display_items": 2788,
-      "element_count": 808,
-      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Jev is (probably) Qwen3.5-35B-A3B (modaic.dev)145 points by csoham 1 hour ago  | hide | 34 comments2.1Password Security Incident (1password.com)1063 points by lxhrstn 7 hours ago  | hide | 461 comments3.Much shorter version of GRH Lean verification from Anthropic (github.com/lsernau)212 points by nb-t 2 hours ago  | hide | 93 comments4.The New York Times tells photographers not to use the latest Photoshop (dpreview.com)149 points by rmason ",
+      "display_items": 2755,
+      "element_count": 805,
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Holy shit holy shit holy shit holy shit: The magnitude of what’s now happening (scottaaronson.blog)1483 points by Kotlopou 14 hours ago  | hide | 1294 comments2.1Password Security Incident (1password.com)1410 points by lxhrstn 15 hours ago  | hide | 601 comments3.Lions' Commentary on Unix: Why It Was Secretly Copied for 20 Years (fosscomics.com)90 points by joonehur 4 hours ago  | hide | 14 comments4.Moat: Your OpenRouter Replacement (comma",
       "status": 200,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1924.4,
+      "time_ms": 1484.4,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "6412969e25857256e4b5d9376697b192"
+      "png_md5": "7a09b2fc0a0282ca66d996ab0ef403b5"
     }
   ]
 }
