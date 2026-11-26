@@ -36,6 +36,7 @@ TEST_MODULES = (
     "tools.test_check_python_syntax",
     "tools.test_check_progress_consistency",
     "tools.test_check_wp_board",
+    "tools.test_check_wpt_artifacts",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -57,6 +58,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("python_syntax", (PY, "tools/check_python_syntax.py")),
     ("progress_consistency", (PY, "tools/check_progress_consistency.py")),
     ("wp_board", (PY, "tools/check_wp_board.py")),
+    ("wpt_artifacts", (PY, "tools/check_wpt_artifacts.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 

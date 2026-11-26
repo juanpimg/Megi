@@ -2370,7 +2370,7 @@ tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/check_no_compile_gates.py	100	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2385,6 +2385,7 @@ tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	r
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/check_wp_board.py	118	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
@@ -2420,6 +2421,7 @@ tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#au
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/test_check_wp_board.py	147	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/test_ci_gate.py	109	tool	F3	lead	2026-11-26	covered	CI-UMBRELLA-REGRESSION	read after remote CI fix merge
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
