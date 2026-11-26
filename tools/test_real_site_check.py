@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -177,6 +179,53 @@ class FailureReasonTests(unittest.TestCase):
         self.assertTrue(reasons, "a blank page must be reported as a hard failure")
         self.assertIn("PÁGINA EN BLANCO", reasons[0])
 
+    def test_every_degraded_signal_fails_the_command(self) -> None:
+        # #2442: DEGRADADO used to be report-only, so a broken site exited 0.
+        site = {"id": "x", "name": "x.example", "min_items": 1}
+        signals = (
+            ({"warnings": ["skipped image"]}, "warnings"),
+            ({"status": 503}, "status 503"),
+            ({"images_failed": 2}, "images_failed 2"),
+            ({"scripts_failed": 1}, "scripts_failed 1"),
+            ({"console_errors": 3}, "console_errors 3"),
+        )
+        for stats, expected in signals:
+            with self.subTest(signal=expected):
+                result = {
+                    "id": "x", "name": "x.example", "result": "DEGRADADO",
+                    "display_items": 5, **stats,
+                }
+                reasons = real_site_check.failure_reasons([site], [result])
+                self.assertTrue(reasons, f"{expected} must fail the command")
+                self.assertTrue(any(expected in reason for reason in reasons), reasons)
+
+    def test_clean_pass_site_has_no_failure_reasons(self) -> None:
+        site = {"id": "x", "name": "x.example", "min_items": 1}
+        result = {
+            "id": "x", "name": "x.example", "result": "PASS", "display_items": 5,
+            "status": 200, "warnings": [], "images_failed": 0,
+            "scripts_failed": 0, "console_errors": 0,
+        }
+        self.assertEqual(real_site_check.failure_reasons([site], [result]), [])
+
+    def test_main_exits_nonzero_for_degraded_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            manifest = Path(root) / "docs/status/real_sites.toml"
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(
+                '[[site]]\nid = "x"\nname = "X"\nsnapshot = "x.html"\n', encoding="utf-8"
+            )
+            fake = mock.Mock(
+                returncode=0,
+                stdout='{"display_items": 5, "warnings": [], "status": 200, "console_errors": 1}',
+                stderr="",
+            )
+            with mock.patch.object(real_site_check.subprocess, "run", return_value=fake):
+                with contextlib.redirect_stderr(io.StringIO()) as errors:
+                    rc = real_site_check.main(["--root", root])
+        self.assertEqual(rc, 1)
+        self.assertIn("console_errors 1", errors.getvalue())
+
 
 class RenderCommandTests(unittest.TestCase):
     def test_render_one_invokes_real_megi_render_package(self) -> None:
@@ -299,6 +348,19 @@ class ConsoleErrorTests(unittest.TestCase):
             "snap",
         )
         self.assertEqual(result["console_errors"], 2)
+
+    def test_result_carries_scripts_failed_for_the_gate(self) -> None:
+        result = real_site_check._result(
+            {"id": "x"},
+            "DEGRADADO",
+            {"display_items": 3, "scripts_failed": 2},
+            "",
+            Path("x.png"),
+            "snap",
+        )
+        self.assertEqual(result["scripts_failed"], 2)
+        site = {"id": "x", "name": "x.example", "min_items": 1}
+        self.assertTrue(real_site_check.failure_reasons([site], [result]))
 
     def test_result_tolerates_missing_console_errors(self) -> None:
         result = real_site_check._result(

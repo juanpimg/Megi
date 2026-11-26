@@ -163,27 +163,69 @@ def bar(percent: int, width: int = 20) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+# #2441: a bare sentence moved into `items` is documentation, not verification.
+# Accept a citation that can be inspected (a command or artifact in backticks) or an
+# explicit gate result; both are checkable when the progress manifest is reviewed.
+EVIDENCE_RE = re.compile(
+    r"`[^`]+`"
+    r"|\b(?:PASS|OK|verified|EXIT\s*=\s*0|sha256|md5|byte-idéntico)\b"
+    r"|\b\d+/\d+\b"
+)
+
+
+def as_criterion_list(value: object) -> list:
+    """Return a criterion list, rejecting malformed TOML values as empty."""
+    return value if isinstance(value, list) else []
+
+
+def has_evidence(item: object) -> bool:
+    """True when a criterion records a checkable citation or gate result."""
+    return isinstance(item, str) and bool(EVIDENCE_RE.search(item))
+
+
+def verified_criteria(phase: dict) -> list:
+    """Return only the criteria carrying checkable evidence, not bare prose."""
+    return [item for item in as_criterion_list(phase.get("items")) if has_evidence(item)]
+
+
+def criterion_counts(phase: dict) -> tuple[int, int]:
+    """(verified criteria, all criteria) for one phase."""
+    items = as_criterion_list(phase.get("items"))
+    pending = as_criterion_list(phase.get("pending"))
+    return len(verified_criteria(phase)), len(items) + len(pending)
+
+
+def overall_counts(phases: list[dict]) -> tuple[int, int]:
+    """(verified criteria, all criteria) across all phases."""
+    counts = [criterion_counts(phase) for phase in phases]
+    return sum(met for met, _total in counts), sum(total for _met, total in counts)
+
+
 def criteria_percent(phase: dict) -> int:
     """Percentage of a milestone's acceptance criteria that are verified.
 
-    The manifest stores no hand-written percentage: `items` are verified criteria and
-    `pending` are unverified ones, so the bar is a count, never an estimate.
+    Only criteria with a checkable citation or gate result count as verified;
+    documented-only text stays in the denominator so the bar cannot claim progress.
     """
-    met = len(phase.get("items", []))
-    total = met + len(phase.get("pending", []))
+    met, total = criterion_counts(phase)
     return 100 * met // total if total else 0
 
 
 def overall_percent(phases: list[dict]) -> int:
     """Verified acceptance criteria / all criteria across M0–M12 (no estimates)."""
-    met = sum(len(p.get("items", [])) for p in phases)
-    total = met + sum(len(p.get("pending", [])) for p in phases)
+    met, total = overall_counts(phases)
     return 100 * met // total if total else 0
 
 
 def milestone_counts(phases: list[dict]) -> tuple[int, int]:
     """(milestones closed, milestones in the roadmap)."""
-    closed = sum(1 for p in phases if not p.get("pending", []) and p.get("items", []))
+    closed = sum(
+        1
+        for phase in phases
+        if not as_criterion_list(phase.get("pending"))
+        and as_criterion_list(phase.get("items"))
+        and len(verified_criteria(phase)) == len(as_criterion_list(phase.get("items")))
+    )
     return closed, len(phases)
 
 

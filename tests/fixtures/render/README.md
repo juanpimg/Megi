@@ -1,7 +1,10 @@
 # Render pipeline fixtures
 
 Self-contained documents for the `crates/render` integration tests. No external
-network, no JavaScript.
+network is required: assets are local or served by loopback URLs. JavaScript is
+enabled by default (`ScriptingMode::Enabled`): the `browser_api.html`, `js_*.html`,
+`module_*.html` (with `modules/*.js`) and worker fixtures all execute scripts.
+`showcase/index.html` is an intentionally JavaScript-free page.
 
 | File | Purpose |
 |---|---|

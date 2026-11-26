@@ -460,8 +460,9 @@ class ProgressIntegrationTests(unittest.TestCase):
                 "css_syntax": "1 / 1",
             },
             "phases": [
-                {"id": "M0", "title": "basis", "items": ["a", "b"], "pending": ["c"]},
-                {"id": "M1", "title": "ui", "items": ["d"], "pending": ["e"]},
+                {"id": "M0", "title": "basis",
+                 "items": ["a — `gate-a` PASS", "b — `gate-b` PASS"], "pending": ["c"]},
+                {"id": "M1", "title": "ui", "items": ["d — `gate-d` PASS"], "pending": ["e"]},
             ],
             "areas": [],
             "next_up": [],

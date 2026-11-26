@@ -198,6 +198,7 @@ def _result(
         "warnings": list(stats.get("warnings") or []),
         "console_errors": _failure_count(stats.get("console_errors")),
         "images_failed": stats.get("images_failed", 0),
+        "scripts_failed": stats.get("scripts_failed", 0),
         "time_ms": _total_time_ms(stats),
         "issue": site.get("issue", 0),
         "error": error,
@@ -258,11 +259,13 @@ producidos por <code>render</code>. Para medir cobertura de capacidades, ver
 
 
 def failure_reasons(sites: list[dict], results: list[dict]) -> list[str]:
-    """Reasons why the check must fail a pipeline (issue #1485).
+    """Reasons why the check must fail a pipeline (issues #1485 and #2442).
 
     A blank page, a render error, or fewer than the manifest's `min_items` are hard
-    failures. A merely degraded site (image/script warnings) is reported but does not
-    fail, since that is an expected state for some snapshots.
+    failures. Every signal that `classify()` uses to mark a site DEGRADADO is also a
+    hard failure: warnings, HTTP status >= 400, failed images/scripts and console
+    errors. A DEGRADADO site that looked green only in the HTML report must never
+    leave the command with exit 0.
     """
     reasons: list[str] = []
     for site, item in zip(sites, results, strict=True):
@@ -270,6 +273,21 @@ def failure_reasons(sites: list[dict], results: list[dict]) -> list[str]:
         if item.get("result") in ("ERROR", "PÁGINA EN BLANCO"):
             reasons.append(f"{name}: {item.get('result')}: {item.get('error', '')}")
             continue
+        if item.get("result") == "DEGRADADO":
+            warnings = item.get("warnings") or []
+            if warnings:
+                reasons.append(f"{name}: DEGRADADO: warnings: {'; '.join(map(str, warnings))}")
+            status = _failure_count(item.get("status"))
+            if status >= 400:
+                reasons.append(f"{name}: DEGRADADO: status {status}")
+            for field, label in (
+                ("images_failed", "images_failed"),
+                ("scripts_failed", "scripts_failed"),
+                ("console_errors", "console_errors"),
+            ):
+                count = _failure_count(item.get(field))
+                if count > 0:
+                    reasons.append(f"{name}: DEGRADADO: {label} {count}")
         try:
             minimum = int(site.get("min_items", 0))
         except (TypeError, ValueError):
