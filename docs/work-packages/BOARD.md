@@ -55,10 +55,10 @@ _(empty)_
 - WP-DEPTH-m9-03
 - WP-DEPTH-m9-04
 - WP-SITE-example
-- WP-SITE-rust
-- WP-SITE-wikipedia
 
 ## done
 
 - WP-DEPTH-m3-02
 - WP-DEPTH-m4-01
+- WP-SITE-wikipedia
+- WP-SITE-rust
