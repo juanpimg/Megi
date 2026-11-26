@@ -64,6 +64,43 @@ class Test262ReportTests(unittest.TestCase):
             self.assertEqual(rc, 0, err)
             self.assertIn("up to date", out)
 
+    def test_real_failure_is_published_instead_of_raising(self) -> None:
+        # #2440: build_report must publish the honest distribution; the gate, not the
+        # report writer, decides whether a FAIL is acceptable.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case_path = root / "tests/test262" / CASE
+            case_path.parent.mkdir(parents=True)
+            source = b"assert.sameValue(1, 1);"
+            case_path.write_bytes(source)
+            manifest = {
+                "schema": test262_report.MANIFEST_SCHEMA,
+                "scope": SCOPE,
+                "source": "stub",
+                "cases": [{
+                    "path": CASE,
+                    "sha256": hashlib.sha256(source).hexdigest(),
+                    "bytes": len(source),
+                    "dir": "language/expressions/arithmetic",
+                }],
+            }
+            (root / test262_report.MANIFEST_REL).write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+            output = (
+                "--- Test262 language/expressions/arithmetic Suites "
+                "(tests/test262/language/expressions/arithmetic) ---\n"
+                f"  [FAIL] {CASE}\n"
+                "language/expressions/arithmetic Total: 0 / 1 tests passed\n"
+                "Test262 subset: 0 / 1 cases passed\n"
+            )
+            report = test262_report.build_report(root, output=output)
+        self.assertEqual(report["total"], 1)
+        self.assertEqual(report["counts"]["pass"], 0)
+        self.assertEqual(report["counts"]["fail"], 1)
+        self.assertIn("FAIL", report["headline"])
+        self.assertEqual(report["results"][0]["status"], "FAIL")
+
     def test_pin_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

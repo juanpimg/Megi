@@ -171,11 +171,15 @@ def build_report(root: Path, output: str | None = None) -> dict:
         output = completed.stdout + completed.stderr
         if completed.returncode != 0:
             raise ValueError(f"megi-test-harness --test262 exited {completed.returncode}")
-    names, passed, total = parse_summary(output)
+    names, _passed, total = parse_summary(output)
     by_path = {case["path"]: case for case in manifest["cases"]}
-    if total != len(by_path) or passed != total:
+    # #2440: the report publishes the honest distribution, including real FAILs.
+    # Only the case count must match the pinned manifest; `passed != total` is a
+    # legitimate result, enforced downstream by test262_gate.check_gate and the
+    # explicit zero allowlist, not by refusing to write the report.
+    if total != len(by_path):
         raise ValueError(
-            f"harness reported {passed}/{total} but the manifest pins {len(by_path)} cases"
+            f"harness reported {total} cases but the manifest pins {len(by_path)} cases"
         )
     if len({name for name, _ in names}) != len(names):
         raise ValueError("harness printed a duplicate case")
