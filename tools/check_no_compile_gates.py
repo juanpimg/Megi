@@ -62,6 +62,7 @@ TEST_MODULES = (
     "tools.test_check_wpt_manifest_files",
     "tools.test_check_changelog_version",
     "tools.test_check_wpt_report_md",
+    "tools.test_check_real_site_md5",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -109,6 +110,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("wpt_manifest_files", (PY, "tools/check_wpt_manifest_files.py")),
     ("changelog_version", (PY, "tools/check_changelog_version.py")),
     ("wpt_report_md", (PY, "tools/check_wpt_report_md.py")),
+    ("real_site_md5", (PY, "tools/check_real_site_md5.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
