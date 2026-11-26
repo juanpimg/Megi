@@ -13,6 +13,7 @@
 //! | `:read-only`/`:read-write` | form control + `readonly`/`data-megi-readonly` attribute |
 //! | `:required` | form control + `required` attribute |
 //! | `:placeholder-shown` | `input`/`textarea` + `placeholder` and empty value, or `data-megi-placeholder-shown` |
+//! | `:visited` | hyperlink with `data-megi-visited` (host history state) |
 //!
 //! The context is stored per thread while resolving/matching (so the existing selector API is
 //! unchanged); [`with_state`] scopes it, and [`matches_with_state`](crate::query::matches_with_state)
@@ -188,6 +189,19 @@ pub(crate) fn is_active(doc: &Document, node: NodeId) -> bool {
         Some(active) => active == node,
         None => has_attribute(doc, node, "data-megi-active"),
     }
+}
+
+/// `:visited` — Selectors 4 §3.6.2 / WHATWG HTML §15.3.2. Headless renders have no browsing
+/// history, so the host marks visited hyperlinks with `data-megi-visited` (the same model used
+/// for `data-megi-focused`). A non-hyperlink never matches, even when marked.
+pub(crate) fn is_visited(doc: &Document, node: NodeId) -> bool {
+    let is_link = doc.node(node).as_element().is_some_and(|el| {
+        el.attributes.iter().any(|attribute| {
+            attribute.local_name.eq_ignore_ascii_case("href")
+                || attribute.local_name.eq_ignore_ascii_case("xlink:href")
+        })
+    });
+    is_link && has_attribute(doc, node, "data-megi-visited")
 }
 
 /// `:checked`

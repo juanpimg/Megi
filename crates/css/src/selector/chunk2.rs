@@ -39,6 +39,7 @@ impl PseudoClass {
             Self::Required => crate::state::is_required(doc, node_id),
             Self::PlaceholderShown => crate::state::is_placeholder_shown(doc, node_id),
             Self::Modal => crate::state::is_modal(doc, node_id),
+            Self::Visited => crate::state::is_visited(doc, node_id),
             // Selectors Level 4 §3.6.1: `:link`/`:any-link` match hyperlinks, i.e. elements
             // carrying an href (SVG also accepts xlink:href).
             Self::Link => doc.node(node_id).as_element().is_some_and(|el| {

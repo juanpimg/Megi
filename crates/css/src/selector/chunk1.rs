@@ -303,7 +303,7 @@ pub fn parse_an_plus_b(s: &str) -> Option<AnPlusB> {
 /// Structural pseudo-classes are evaluated against the DOM tree; the functional
 /// `:is()`, `:where()`, `:not()` and `:has()` pseudo-classes recurse into nested selector
 /// lists. Pseudo-classes that depend on interaction or document state that this engine does
-/// not track yet (`:hover`, `:active`, `:focus`, `:visited`, `:link`, ...) and pseudo-elements
+/// not track yet (`:hover`, `:active`, `:focus`, `:local-link`, ...) and pseudo-elements
 /// (`::before`, `::after`, ...) are parsed as [`PseudoClass::Never`]: the selector stays
 /// valid but can never match, instead of over-matching every element.
 ///
@@ -360,6 +360,8 @@ pub enum PseudoClass {
     Modal,
     /// `:link` / `:any-link` — matches an element with an `href` attribute (Selectors 4 §3.6.1).
     Link,
+    /// `:visited` — host history state or `data-megi-visited` (Selectors 4 §3.6.2).
+    Visited,
     /// `:lang(<range>)` — nearest ancestor-or-self `lang`, hyphen-prefix match (#1523).
     Lang(String),
     /// `::backdrop` — pseudo-element behind a top-layer modal `<dialog>`.

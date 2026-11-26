@@ -225,6 +225,40 @@ pub(crate) mod tests_part2 {
     }
 
     #[test]
+    fn test_visited_pseudo_class_matches_marked_links() {
+        // Selectors 4 §3.6.2 / WHATWG HTML §15.3.2: `:visited` applies to links the host
+        // has in its history. Headless renders model that state with `data-megi-visited`,
+        // the same way `data-megi-focused` models `:focus`.
+        let mut doc = Document::new();
+        let visited = doc.create_element(
+            Namespace::Html,
+            "a",
+            vec![
+                Attribute::new("href", "https://example.test/visited"),
+                Attribute::new("data-megi-visited", ""),
+            ],
+        );
+        let plain = doc.create_element(
+            Namespace::Html,
+            "a",
+            vec![Attribute::new("href", "https://example.test/new")],
+        );
+        doc.append_child(doc.root(), visited);
+        doc.append_child(doc.root(), plain);
+
+        let selector = parse_selectors("a:visited");
+        assert_eq!(selector.selectors.len(), 1, "a:visited must parse");
+        assert!(
+            selector.matches(&doc, visited),
+            "a:visited must match a link marked data-megi-visited"
+        );
+        assert!(
+            !selector.matches(&doc, plain),
+            "a:visited must not match an unvisited link"
+        );
+    }
+
+    #[test]
     fn test_dynamic_pseudo_classes_never_match() {
         let mut doc = Document::new();
         let a = doc.create_element(

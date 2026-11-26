@@ -302,7 +302,7 @@ crates/css/src/grid/chunk3.rs	177	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/css/src/lib.rs	144	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/lib/chunk1.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/lib/chunk2.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/lib/chunk3.rs	366	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/lib/chunk3.rs	400	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/lib/chunk4.rs	353	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/lib/chunk5.rs	394	src	F2	m7-webdriver-bidi	2026-11-25	covered	line-height-normal-inheritance	re-read after main merge
 crates/css/src/lib/chunk6.rs	313	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -343,8 +343,8 @@ crates/css/src/properties/values/text.rs	449	src	F2	wave-max-mod	2026-11-19	cove
 crates/css/src/query.rs	370	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/rule.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/selector.rs	160	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/selector/chunk1.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/selector/chunk2.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/selector/chunk1.rs	371	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/selector/chunk2.rs	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/selector/chunk3.rs	329	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/selector/chunk4.rs	347	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/selector/chunk5.rs	392	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -353,7 +353,7 @@ crates/css/src/shorthand.rs	76	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/css/src/shorthand/chunk1.rs	348	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/shorthand/chunk2.rs	395	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/shorthand/chunk3.rs	221	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/state.rs	242	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/state.rs	256	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/token.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/tokenizer.rs	40	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/tokenizer/chunk1.rs	158	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1227,7 +1227,7 @@ crates/render/tests/bidi_stability_tests.rs	141	test	F1	chrome-occlusion-fix	202
 crates/render/tests/browser_api_tests.rs	231	test	F1	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/tests/canvas_tests.rs	155	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/css_state_tests.rs	166	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/document_cookie_tests.rs	113	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dom_observability_tests.rs	171	test	F1	jsfree-fix	2026-11-24	covered	CI-JSFREE-DOM-OBS	read line by line: CLI JSON observability tests
@@ -1251,6 +1251,7 @@ crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-P
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
+crates/render/tests/hn_arrow_tests.rs	63	test	F1	nav-glyph-fix	2026-11-26	covered	#1011	read in full: triangle background regression
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	64	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1863,6 +1864,7 @@ tests/fixtures/render/assets/blocks.gif	0	binary	-			exempt		not read line by li
 tests/fixtures/render/assets/bullet.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/corrupt.jpg	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/exif.jpg	0	binary	-			exempt		not read line by line: binary
+tests/fixtures/render/assets/hn_triangle.svg	1	fixture	F1	nav-glyph-fix	2026-11-26	covered	#1011	read in full: HN triangle.svg copy
 tests/fixtures/render/assets/js_mutation.js	4	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/pattern.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/assets/photo.jpg	0	binary	-			exempt		not read line by line: binary
@@ -1926,6 +1928,7 @@ tests/fixtures/render/grid_dense.html	9	fixture	F1	waveF1	2026-11-17	covered	#14
 tests/fixtures/render/grid_rows.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/grid_span.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/hero_cta.html	87	fixture	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
+tests/fixtures/render/hn_votearrow.html	14	fixture	F1	nav-glyph-fix	2026-11-26	covered	#1011	read in full: HN news.css arrow fixture
 tests/fixtures/render/image_formats.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/image_scaled.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/image_set.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -2010,6 +2013,7 @@ tests/fixtures/render/svg_intrinsic.html	7	fixture	F1	waveF1	2026-11-17	covered	
 tests/fixtures/render/svg_viewbox.html	7	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/sw_offline.html	27	fixture	F1	lead	2026-11-25	covered	M4#6 offline demo	
 tests/fixtures/render/text_transform.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/visited_links.html	13	fixture	F1	nav-glyph-fix	2026-11-26	covered	#1011	read in full: visited state fixture
 tests/fixtures/render/webfont-corrupt.html	15	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webfont-fallback.html	16	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webfont-multisource.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
