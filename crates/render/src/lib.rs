@@ -207,6 +207,7 @@ pub mod backgrounds;
 mod browser_host;
 pub mod cache;
 pub mod charset;
+mod decode;
 /// DevTools `Runtime.evaluate` bridges (only linked with the `js` feature).
 #[cfg(feature = "js")]
 mod devtools;
@@ -268,6 +269,7 @@ mod url;
 #[cfg(feature = "js")]
 pub use browser_host::computed_style_pairs;
 pub use cache::{RenderCache, RenderCacheStats};
+pub use decode::decode_image_with_svg;
 /// Isolated `Runtime.evaluate` bridge used by the DevTools endpoint (no page attached).
 #[cfg(feature = "js")]
 pub use devtools::evaluate_expression;
