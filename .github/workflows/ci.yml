@@ -64,6 +64,13 @@ jobs:
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
+              # Prose is inert, but test/tool inputs and generated state are not:
+              # a .md under tests/ feeds a suite, and docs/status/, docs/audit/
+              # and docs/work-packages/ hold generated artifacts. Changing any of
+              # them must run the full Rust matrix (#2405).
+              PROGRESS.md|docs/status/*|docs/audit/*|docs/work-packages/*|docs/images/*|\
+              tests/*|tools/*|fuzz/*|crates/*)
+                docs_only=false; break ;;
               docs/*|*.md) ;;
               *) docs_only=false; break ;;
             esac
@@ -571,8 +578,9 @@ jobs:
 
   # Umbrella job for branch protection: a single required check that aggregates
   # every gate above (#577). Branch protection can require just `check`.
-  # A gate skipped by the docs-only classifier is not a failure (#485): the
-  # lightweight gates still run, so `check` always reports a definitive result.
+  # A skip is tolerated only for the Rust jobs the docs-only classifier guards,
+  # and only when it actually reported docs_only=true (#2405); any other skip
+  # fails the umbrella instead of being silently reported as success.
   check:
     name: CI umbrella (all gates)
     runs-on: ubuntu-24.04
@@ -595,17 +603,48 @@ jobs:
     steps:
       - name: Verify all required gates succeeded
         run: |
-          results="${{ needs.changes.result }} ${{ needs.docs.result }} \
-          ${{ needs.quality.result }} ${{ needs.conformance.result }} \
-          ${{ needs.wpt.result }} ${{ needs.release.result }} ${{ needs.msrv.result }} \
-          ${{ needs.minimal.result }} ${{ needs.package.result }} \
-          ${{ needs.security.result }} ${{ needs.unsafe-audit.result }} \
-          ${{ needs.workflow-lint.result }} ${{ needs.secret-scan.result }} \
-          ${{ needs.docs-links.result }}"
-          for result in $results; do
-            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
-              echo "One or more required gates failed: $results" >&2
-              exit 1
+          # `skipped` is never success (#2405). Only the nine Rust jobs behind
+          # `if: needs.changes.outputs.docs_only != 'true'` may skip, and only
+          # when the classifier reported docs_only=true.
+          conditional="quality conformance wpt release msrv minimal package security unsafe-audit"
+          required="changes docs quality conformance wpt release msrv minimal package security unsafe-audit workflow-lint secret-scan docs-links"
+          results="changes:${{ needs.changes.result }} docs:${{ needs.docs.result }} \
+          quality:${{ needs.quality.result }} conformance:${{ needs.conformance.result }} \
+          wpt:${{ needs.wpt.result }} release:${{ needs.release.result }} \
+          msrv:${{ needs.msrv.result }} minimal:${{ needs.minimal.result }} \
+          package:${{ needs.package.result }} security:${{ needs.security.result }} \
+          unsafe-audit:${{ needs.unsafe-audit.result }} \
+          workflow-lint:${{ needs.workflow-lint.result }} \
+          secret-scan:${{ needs.secret-scan.result }} \
+          docs-links:${{ needs.docs-links.result }}"
+          failed=0
+          seen=""
+          skipped_ok=""
+          for entry in $results; do
+            gate="${entry%%:*}"
+            result="${entry#*:}"
+            seen="$seen $gate "
+            if [ "$result" = "success" ]; then
+              continue
             fi
+            case " $conditional " in
+              *" $gate "*)
+                if [ "${{ needs.changes.outputs.docs_only }}" = "true" ] && [ "$result" = "skipped" ]; then
+                  skipped_ok="$skipped_ok $gate"
+                  echo "Gate $gate skipped on docs-only PR"
+                  continue
+                fi ;;
+            esac
+            echo "Required gate $gate did not succeed: $result (docs_only=${{ needs.changes.outputs.docs_only }})" >&2
+            failed=1
           done
-          echo "All required gates succeeded."
+          for gate in $required; do
+            case "$seen" in
+              *" $gate "*) ;;
+              *) echo "Required gate $gate missing from umbrella results" >&2; failed=1 ;;
+            esac
+          done
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All required gates succeeded (expected docs-only skips:${skipped_ok:- none})."
