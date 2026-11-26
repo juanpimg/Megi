@@ -6,6 +6,36 @@
 //! `webp` target's lossy and lossless paths, and a duplicated version had already drifted
 //! (see issues #859 and #471).
 
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Derives a deterministic `SystemTime` from the first eight input bytes (#2427).
+///
+/// Wall-clock time made cookie expiry and cache freshness depend on when a fuzz case
+/// happened to run; seeds can now pin past and future instants by prefixing the input
+/// with a little-endian `u64` number of seconds since the Unix epoch.
+pub fn fuzz_system_time(data: &[u8]) -> SystemTime {
+    let mut seconds = [0u8; 8];
+    let copied = data.len().min(seconds.len());
+    seconds[..copied].copy_from_slice(&data[..copied]);
+    UNIX_EPOCH + Duration::from_secs(u64::from_le_bytes(seconds))
+}
+
+/// Pulls one chunk and turns a producer contract violation into a typed error (#2428).
+///
+/// The check lives here rather than in the harness so a misbehaving producer is rejected
+/// without a panic; the fuzz target can then assert the rejection explicitly.
+pub fn pull_chunk_checked(
+    producer: &mut dyn megi_net::BodyProducer,
+    max: usize,
+) -> Result<Option<Vec<u8>>, megi_net::FetchError> {
+    match producer.next_chunk(max)? {
+        Some(chunk) if max > 0 && chunk.len() > max => Err(megi_net::FetchError::RequestBody(
+            format!("producer returned {} bytes for max {max}", chunk.len()),
+        )),
+        chunk => Ok(chunk),
+    }
+}
+
 /// Wraps `payload` in a minimal `RIFF....WEBP` container whose single chunk id is `chunk`.
 ///
 /// The RIFF size field, the chunk size field and the mandatory even-length padding are all
@@ -111,12 +141,13 @@ pub fn net_surface_data_url(data: &[u8]) -> Option<megi_net::Url> {
     megi_net::Url::parse(&String::from_utf8_lossy(first)).ok()
 }
 
-/// Chunk returned by the harness-owned producer (#1762).
+/// Chunk returned by the harness-owned producer (#1762, #2428).
 ///
 /// Mode 2 exercises the `chunk == max` boundary by padding a short source to
-/// exactly `max`, instead of duplicating mode 0 and leaving the boundary untested.
+/// exactly `max`. Mode 3 deliberately returns `max + 1` bytes so the consumer's
+/// contract check (#2428) is reachable instead of being dead code.
 pub fn producer_chunk(source: &[u8], max: usize, mode: usize) -> Vec<u8> {
-    match mode % 3 {
+    match mode % 4 {
         0 => source[..source.len().min(max)].to_vec(),
         1 => {
             if source.len() > max {
@@ -125,12 +156,22 @@ pub fn producer_chunk(source: &[u8], max: usize, mode: usize) -> Vec<u8> {
                 source.to_vec()
             }
         }
-        _ => {
+        2 => {
             if source.len() >= max {
                 source[..max].to_vec()
             } else {
                 let mut out = source.to_vec();
                 out.resize(max, 0);
+                out
+            }
+        }
+        _ => {
+            let oversize = max.saturating_add(1);
+            if source.len() >= oversize {
+                source[..oversize].to_vec()
+            } else {
+                let mut out = source.to_vec();
+                out.resize(oversize, 0);
                 out
             }
         }
@@ -177,5 +218,31 @@ mod net_surface_tests {
         assert_eq!(producer_chunk(b"abc", 8, 1), b"abc");
         assert_eq!(producer_chunk(b"abc", 8, 2).len(), 8);
         assert_eq!(producer_chunk(b"abcdefghij", 4, 2).len(), 4);
+    }
+
+    #[test]
+    fn producer_chunk_mode_three_returns_an_oversize_chunk() {
+        // #2428: the consumer's contract check was unreachable before mode 3.
+        assert_eq!(producer_chunk(b"abcdefghij", 4, 3).len(), 5);
+        assert_eq!(producer_chunk(b"abc", 8, 3).len(), 9);
+    }
+
+    #[test]
+    fn pull_chunk_checked_rejects_oversize_without_panicking() {
+        // #2428: a misbehaving producer must become a typed error, not a panic.
+        let mut producer = |max: usize| Ok::<_, megi_net::FetchError>(Some(vec![0u8; max + 1]));
+        assert!(pull_chunk_checked(&mut producer, 8).is_err());
+        let mut well_behaved = |_max: usize| Ok::<_, megi_net::FetchError>(Some(vec![1u8; 2]));
+        assert_eq!(pull_chunk_checked(&mut well_behaved, 8).unwrap(), vec![1, 1]);
+    }
+
+    #[test]
+    fn fuzz_time_is_deterministic_and_spanning_epoch() {
+        // #2427: the same input always maps to the same instant, past or future.
+        let past = 1u64.to_le_bytes();
+        let future = 4_000_000_000u64.to_le_bytes();
+        assert_eq!(fuzz_system_time(&past), fuzz_system_time(&past));
+        assert!(fuzz_system_time(&past) < fuzz_system_time(&future));
+        assert_eq!(fuzz_system_time(&past), UNIX_EPOCH + Duration::from_secs(1));
     }
 }

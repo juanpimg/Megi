@@ -343,6 +343,8 @@ jobs:
           # leak/compat constraints under sanitizers; they remain covered by the ASan matrix.
           - target: html_parse
             seconds: 120
+          - target: text_boundary
+            seconds: 120
           - target: css_parse
             seconds: 120
           - target: selectors

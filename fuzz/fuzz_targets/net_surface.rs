@@ -8,10 +8,11 @@ use megi_net::{
     parse_cache_policy, parse_http_date, parse_set_cookie, proxy_authorization,
     proxy_authorization_for, referer_value, resolve_content_type, sniff,
 };
-use std::time::SystemTime;
 
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
+    // #2427: one input-derived instant for both cookie expiry and cache freshness.
+    let now = megi_fuzz::fuzz_system_time(data);
     // #1762: derive headers, URLs and policies from the input so the previously
     // constant calls actually explore their branches.
     let headers = megi_fuzz::net_surface_headers(data);
@@ -23,7 +24,7 @@ fuzz_target!(|data: &[u8]| {
         Ok(u) => u,
         Err(_) => return,
     };
-    let _ = parse_set_cookie(&text, &url, SystemTime::now());
+    let _ = parse_set_cookie(&text, &url, now);
 
     // MIME sniffing + content-type resolution.
     let _ = sniff(data);
@@ -33,7 +34,7 @@ fuzz_target!(|data: &[u8]| {
     let _ = decode_data_url(derived_url.as_ref().unwrap_or(&url));
 
     // Cache policy + HTTP date.
-    let _ = parse_cache_policy(&headers, SystemTime::now());
+    let _ = parse_cache_policy(&headers, now);
     let _ = parse_http_date(&text);
 
     // Range parsing.
