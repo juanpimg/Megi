@@ -25,6 +25,12 @@ class ParsingTests(unittest.TestCase):
             checker.extract_refs(text), {"tools/check_arch.py", "tools/visual_parity.py"}
         )
 
+    def test_extracts_shell_scripts(self) -> None:
+        self.assertEqual(
+            checker.extract_refs("./tools/dev.sh all && ./tools/bench.sh"),
+            {"tools/dev.sh", "tools/bench.sh"},
+        )
+
 
 class ValidateTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -60,6 +66,12 @@ class ValidateTests(unittest.TestCase):
         problems = checker.validate(self.root, ("docs/GUIDE.md",), self.ledger)
         self.assertIn("docs/GUIDE.md: tools/check_demo.py has no tools/test_check_demo.py", problems)
 
+    def test_shell_script_does_not_need_a_python_test_module(self) -> None:
+        (self.root / "tools/dev.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (self.root / "docs/GUIDE.md").write_text("use tools/dev.sh\n", encoding="utf-8")
+        self._ledger("tools/dev.sh", 1)
+        self.assertEqual(checker.validate(self.root, ("docs/GUIDE.md",), self.ledger), [])
+
     def test_missing_ledger_row_is_reported(self) -> None:
         self.ledger.write_text(HEADER, encoding="utf-8")
         problems = checker.validate(self.root, ("docs/GUIDE.md",), self.ledger)
@@ -75,14 +87,14 @@ class ValidateTests(unittest.TestCase):
         self._ledger("tools/check_demo.py", 1)
         (self.root / "docs/GUIDE.md").write_text("no tools here\n", encoding="utf-8")
         problems = checker.validate(self.root, ("docs/GUIDE.md",), self.ledger)
-        self.assertIn("docs/GUIDE.md: no tool references found", problems)
+        self.assertIn("no tool references found in the scanned documents", problems)
 
 
 class CliTests(unittest.TestCase):
     def test_cli_accepts_the_real_docs(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("documented tools OK (4 docs)", result.stdout)
+        self.assertIn("documented tools OK (6 docs)", result.stdout)
 
     def test_cli_reports_unreadable_doc(self) -> None:
         result = subprocess.run(

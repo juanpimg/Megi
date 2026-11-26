@@ -19,11 +19,13 @@ from pathlib import Path
 DEFAULT_DOCS = (
     "AGENTS.md",
     "CONTRIBUTING.md",
+    "docs/CONTRIBUTOR-ONBOARDING.md",
     "docs/DESLOP-AUDIT.md",
+    "docs/GETTING-STARTED.md",
     "docs/VISUAL-PARITY.md",
 )
 DEFAULT_LEDGER = Path("docs/audit/coverage.tsv")
-REFERENCE = re.compile(r"tools/[A-Za-z0-9_./-]+\.py")
+REFERENCE = re.compile(r"tools/[A-Za-z0-9_./-]+\.(?:py|sh)")
 
 
 def extract_refs(text: str) -> set[str]:
@@ -48,6 +50,7 @@ def validate(root: Path, docs: tuple[str, ...], ledger_path: Path) -> list[str]:
         ledger = read_ledger(ledger_path)
     except OSError as error:
         return [f"cannot read ledger: {error}"]
+    all_refs: set[str] = set()
     for doc in docs:
         path = root / doc
         try:
@@ -55,16 +58,16 @@ def validate(root: Path, docs: tuple[str, ...], ledger_path: Path) -> list[str]:
         except OSError as error:
             problems.append(f"{doc}: cannot read ({error})")
             continue
-        if not refs:
-            problems.append(f"{doc}: no tool references found")
+        all_refs.update(refs)
         for relative in sorted(refs):
             target = root / relative
             if not target.is_file():
                 problems.append(f"{doc}: {relative} does not exist")
                 continue
-            test = f"tools/test_{Path(relative).stem}.py"
-            if not (root / test).is_file():
-                problems.append(f"{doc}: {relative} has no {test}")
+            if relative.endswith(".py"):
+                test = f"tools/test_{Path(relative).stem}.py"
+                if not (root / test).is_file():
+                    problems.append(f"{doc}: {relative} has no {test}")
             row = ledger.get(relative)
             if row is None:
                 problems.append(f"{doc}: {relative} missing from ledger")
@@ -73,6 +76,8 @@ def validate(root: Path, docs: tuple[str, ...], ledger_path: Path) -> list[str]:
                 problems.append(f"{doc}: {relative} is {row.get('status')!r} in ledger")
             if row.get("lines") != str(count_lines(target)):
                 problems.append(f"{doc}: {relative} has a stale line count in ledger")
+    if not all_refs:
+        problems.append("no tool references found in the scanned documents")
     return problems
 
 
