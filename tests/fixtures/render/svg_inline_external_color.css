@@ -1,0 +1,3 @@
+/* Local fixture for CSS Color 4 §5 currentColor + CSS Variables 1 §3 var(). */
+html, body { margin: 0; padding: 0; background-color: #ffffff; }
+.host { --icon-color: #ff8800; color: var(--icon-color); }

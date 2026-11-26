@@ -56,6 +56,35 @@ pub(crate) fn run_resource_stage<'a>(
         canvas_surfaces,
     } = script;
 
+    // Build the cascade pool before serializing inline SVGs: it already contains `<link>`
+    // stylesheets, `@import`s and custom properties, which the `currentColor` pass consumes
+    // (CSS Color 4 §5, CSS Variables 1 §3). Style warnings are buffered so the original order
+    // (inline-SVG warnings first) is preserved.
+    let styles_start = Instant::now();
+    let mut style_warnings = Vec::new();
+    let post_sheet_sig = stylesheet_signature(&document);
+    let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
+        Some((collection, summary, fonts, stylesheet_signature_before))
+            if post_sheet_sig == stylesheet_signature_before =>
+        {
+            style_warnings.extend(pre_warnings);
+            (collection, summary, fonts)
+        }
+        _ => {
+            style_warnings.append(&mut pre_warnings);
+            let (collection, summary, fonts) = collect_styles(
+                &document,
+                &base_url,
+                &mut loader,
+                options,
+                &media_context.clone(),
+                csp.as_ref(),
+                &mut style_warnings,
+            )?;
+            (Arc::new(collection), summary, fonts)
+        }
+    };
+
     // Inline `<svg>` elements become synthetic `<img>` data URLs after scripts (so DOM
     // mutations are honored) and before style resolution/layout; the existing SVG image
     // pipeline then supplies intrinsic size, caps and warnings.
@@ -67,33 +96,14 @@ pub(crate) fn run_resource_stage<'a>(
     } else {
         // Only replace as many inline SVGs as the image loader will actually fetch, so a
         // document cannot pay serialization cost for placeholders (#670).
-        inline_svg::replace_inline_svgs(&mut document, options.max_images)
+        inline_svg::replace_inline_svgs(
+            &mut document,
+            options.max_images,
+            Some(&stylesheet_collection),
+        )
     };
     warnings.extend(inline_svg_report.warnings.iter().cloned());
-
-    let styles_start = Instant::now();
-    let post_sheet_sig = stylesheet_signature(&document);
-    let (stylesheet_collection, style_summary, font_faces) = match reusable_stylesheets {
-        Some((collection, summary, fonts, stylesheet_signature_before))
-            if post_sheet_sig == stylesheet_signature_before =>
-        {
-            warnings.extend(pre_warnings);
-            (collection, summary, fonts)
-        }
-        _ => {
-            warnings.append(&mut pre_warnings);
-            let (collection, summary, fonts) = collect_styles(
-                &document,
-                &base_url,
-                &mut loader,
-                options,
-                &media_context.clone(),
-                csp.as_ref(),
-                &mut warnings,
-            )?;
-            (Arc::new(collection), summary, fonts)
-        }
-    };
+    warnings.extend(style_warnings);
     let post_dom_sig = style_dom_signature(&document);
     let cached_hit = cached_post_styles
         .lock()

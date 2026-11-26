@@ -22,7 +22,8 @@
 //! - CSS-in-SVG, gradients/patterns, filters, `<text>` and animation are not rendered (svg
 //!   crate limitations); host CSS does not reach stand-alone SVG files. Inline SVGs are the
 //!   exception: [`crate::inline_svg`] injects the host's computed `color` into the root
-//!   `<svg>`, so `fill="currentColor"`/`stroke="currentColor"` use the inherited color.
+//!   `<svg>`, so `fill="currentColor"`/`stroke="currentColor"` use the inherited color. The
+//!   cascade pool from `<link>` stylesheets and `var(--x)` substitutions feeds that color.
 //!
 //! `background-image: url(*.svg)` is rasterized at the intrinsic size too and then stretched
 //! into the element's padding box by paint (the same rule as PNG backgrounds).

@@ -32,11 +32,13 @@
 //! * CSS selectors that target SVG-internal elements do not reach the rasterized image;
 //!   only the attributes copied to the synthetic `<img>` participate in CSS. The host's
 //!   computed `color` **is** propagated into the root `<svg>` (see [`current_color`]), so
-//!   `fill="currentColor"`/`stroke="currentColor"` paint with the inherited color.
+//!   `fill="currentColor"`/`stroke="currentColor"` paint with the inherited color. The
+//!   resource stage passes its cascade collection here, so colors from `<link>` stylesheets,
+//!   `@import`s and `var(--x)` substitutions are included.
 //! * In-SVG CSS/`<style>`, gradients/patterns, filters, `<text>`, animation and external
 //!   references remain unsupported (svg crate limitations); links/`<a>` inside the SVG are
-//!   lost (the synthetic image is not interactive). External host CSS via `<link>` cannot be
-//!   read at this stage, so inherited colors from linked stylesheets are not propagated.
+//!   lost (the synthetic image is not interactive). Rules targeting SVG-internal nodes still
+//!   do not reach the rasterized image; only the host's computed `color` crosses the boundary.
 //! * The rasterized intrinsic size may be fractional; it is rounded up by <1 CSS px.
 
 mod current_color;
@@ -84,14 +86,21 @@ const COPIED_ATTRIBUTES: [&str; 9] = [
     "aria-label",
 ];
 
-/// Replaces every top-level inline SVG of `document` with a synthetic `<img>` data URL.
 /// Replaces inline `<svg>` elements with synthetic `<img>` data URLs.
 ///
 /// `image_budget` is how many images the loader will actually fetch (`RenderOptions::max_images`),
 /// so replacements beyond it would be serialized and then dropped by the image stage (#670).
 /// The effective cap is `min(MAX_INLINE_SVGS, image_budget)`, and the elements beyond it are
 /// counted as `skipped` with one warning instead of being reported as replaced.
-pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> InlineSvgReport {
+///
+/// `styles` is the pipeline's cascade collection (linked sheets, `@import`s and custom
+/// properties). It feeds the inherited `color`; `None` keeps the standalone UA + `<style>`
+/// fallback for direct callers.
+pub fn replace_inline_svgs(
+    document: &mut Document,
+    image_budget: usize,
+    styles: Option<&megi_css::StyleCollection>,
+) -> InlineSvgReport {
     let mut report = InlineSvgReport {
         replaced: 0,
         skipped: 0,
@@ -102,7 +111,7 @@ pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> Inli
     let candidate_count = candidates.len();
     // Resolve host colors while the original SVG nodes are still in the tree (before
     // replacement) so the CSS cascade sees their real parents.
-    let inherited_colors = current_color::resolve(document, &candidates);
+    let inherited_colors = current_color::resolve(document, &candidates, styles);
     let cap = MAX_INLINE_SVGS.min(image_budget);
     let mut total_bytes = 0usize;
     let mut limit_warned = false;
