@@ -34,6 +34,8 @@ mod input;
 mod keyboard;
 #[cfg(feature = "window")]
 mod presentation;
+#[cfg(feature = "window")]
+mod shell_input;
 /// Pure rail geometry and state helpers, usable without a windowing backend.
 pub use settings::rail_state;
 #[cfg(feature = "window")]

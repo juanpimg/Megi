@@ -72,7 +72,7 @@ pub use rail::{
     layout_rail, paint_rail, rail_hit, rail_hover_hit, rail_tab_accessibility,
     strip_tab_accessibility,
 };
-pub use shell::{paint_shell, paint_window_frame};
+pub use shell::{paint_shell, paint_window_frame, shell_focus_order};
 pub use status_bar::{status_bar_rect, status_text};
 pub use tab_strip::{
     OverflowHit, OverflowLayout, OverflowMenu, TabHit, TabRect, TabStripLayout, layout_tabs,

@@ -279,6 +279,10 @@ pub struct ShellView<'a> {
     pub top_css: f32,
     /// Whether the sidebar column is painted.
     pub sidebar: bool,
+    /// Control under the pointer, used to tint its icon with the hover state.
+    pub hover: Option<ShellHit>,
+    /// Keyboard-focused control, used to tint its icon with the focus state.
+    pub focus: Option<ShellHit>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellLayout {
@@ -377,21 +381,34 @@ pub enum ShellHit {
     Activate(usize),
     /// Open a new tab.
     NewTab,
+    /// One of the navigation buttons in the unified top bar.
+    Nav(super::NavigationButton),
 }
 pub fn shell_hit(
     width: f32,
     height: f32,
-    _scale: f32,
+    scale: f32,
     view: &ShellView<'_>,
     x: f32,
     y: f32,
 ) -> Option<ShellHit> {
-    let layout = layout_shell(width, height, _scale, view);
-    if !view.sidebar || !super::drawing::contains(layout.sidebar, x, y) {
-        return None;
-    }
+    let layout = layout_shell(width, height, scale, view);
     if super::drawing::contains(layout.toggle, x, y) {
         return Some(ShellHit::ToggleSidebar);
+    }
+    // The shell paints navigation inside the single top bar, so hit-testing must
+    // use the very same rectangles (and disabled state) as the painter.
+    let nav = super::navigation_buttons_in_top_bar(width, layout.top.height, WINDOW_MARGIN);
+    if let Some(button) =
+        super::navigation_button_at(&nav, x, y, view.can_go_back, view.can_go_forward)
+    {
+        return Some(ShellHit::Nav(button));
+    }
+    if super::drawing::contains(layout.actions[2], x, y) {
+        return Some(ShellHit::NewTab);
+    }
+    if !view.sidebar || !super::drawing::contains(layout.sidebar, x, y) {
+        return None;
     }
     let content_w = (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0);
     let first_row = sidebar_history_top(layout.sidebar.y, content_w);

@@ -193,6 +193,8 @@ pub fn render_target_with_chrome_menu(
             active: 0,
             top_css: crate::chrome::CHROME_HEIGHT,
             sidebar: false,
+            hover: None,
+            focus: None,
         }),
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);

@@ -246,6 +246,10 @@ pub(super) struct WindowApp {
     pub(super) doc_title: Option<String>,
     /// Latest physical cursor position over the window.
     pub(super) cursor: Option<(f64, f64)>,
+    /// Shell control under the pointer, mirrored into `chrome::ShellView`.
+    pub(super) shell_hover: Option<crate::chrome::ShellHit>,
+    /// Keyboard-focused shell control, mirrored into `chrome::ShellView`.
+    pub(super) shell_focus: Option<crate::chrome::ShellHit>,
     /// Phase 2 shell chrome state: compact band, rail peek, reduced motion.
     pub(super) chrome_mode: super::chrome_mode::ChromeMode,
     /// Current keyboard modifiers (for Alt+←/→ and Ctrl+zoom/L).

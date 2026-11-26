@@ -172,7 +172,90 @@ fn shell_view<'a>(labels: &'a [String], url: &'a str, top: f32) -> ShellView<'a>
         active: 0,
         top_css: top,
         sidebar: true,
+        hover: None,
+        focus: None,
     }
+}
+
+#[test]
+fn shell_hi_dpi_controls_share_one_row() {
+    let labels = vec!["A".to_owned()];
+    let view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
+    let layout = layout_shell(1000.0, 700.0, 1.25, &view);
+    let cy = |r: Rect| r.y + r.height * 0.5;
+    assert!(
+        (cy(layout.dots[0]) - cy(layout.nav.back)).abs() <= 6.0,
+        "navigation must stay on the traffic-light row at hiDPI"
+    );
+    assert!(
+        (cy(layout.toggle) - cy(layout.actions[0])).abs() <= 6.0,
+        "toggle and right actions must stay on one row at hiDPI"
+    );
+}
+
+#[test]
+fn shell_narrow_sidebar_never_clips() {
+    let labels = vec!["A".to_owned()];
+    let view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
+    let layout = layout_shell(800.0, 600.0, 1.0, &view);
+    let cols = super::tokens::sidebar_columns(layout.sidebar.width - super::RAIL_CSS - 16.0, 52.0);
+    assert!(
+        cols <= 3,
+        "narrow sidebar must not request too many columns"
+    );
+    assert!(
+        layout.page.x >= layout.sidebar.x + layout.sidebar.width - 1.0,
+        "page must start at or after the sidebar edge"
+    );
+}
+
+#[test]
+fn shell_hit_rects_match_painted_controls() {
+    let labels = vec!["Alpha".to_owned(), "Beta".to_owned()];
+    let mut view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
+    view.can_go_back = true;
+    view.can_go_forward = true;
+    let layout = layout_shell(1000.0, 700.0, 1.0, &view);
+    let content_x = layout.sidebar.x + RAIL_CSS + 8.0;
+    let first_row = super::tokens::sidebar_history_top(
+        layout.sidebar.y,
+        (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0),
+    );
+    let center = |r: Rect| (r.x + r.width * 0.5, r.y + r.height * 0.5);
+    let cases = [
+        (ShellHit::ToggleSidebar, layout.toggle),
+        (ShellHit::Nav(NavigationButton::Back), layout.nav.back),
+        (ShellHit::Nav(NavigationButton::Forward), layout.nav.forward),
+        (ShellHit::Nav(NavigationButton::Reload), layout.nav.reload),
+        (ShellHit::NewTab, layout.actions[2]),
+        (
+            ShellHit::Activate(0),
+            Rect::new(content_x + 8.0, first_row + 5.0, 80.0, 20.0),
+        ),
+    ];
+    for (hit, rect) in cases {
+        let (x, y) = center(rect);
+        assert_eq!(
+            shell_hit(1000.0, 700.0, 1.0, &view, x, y),
+            Some(hit),
+            "hit rectangle for {hit:?} must match the painted control"
+        );
+    }
+}
+
+#[test]
+fn shell_tab_cycles_focus_over_top_bar_controls() {
+    let labels = vec!["Alpha".to_owned(), "Beta".to_owned()];
+    let view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
+    let order = shell_focus_order(&view);
+    assert_eq!(order.first(), Some(&ShellHit::ToggleSidebar));
+    assert_eq!(order[1], ShellHit::Nav(NavigationButton::Back));
+    assert_eq!(order[2], ShellHit::Nav(NavigationButton::Forward));
+    assert_eq!(order[3], ShellHit::Nav(NavigationButton::Reload));
+    assert_eq!(order[4], ShellHit::Activate(0));
+    assert_eq!(order[5], ShellHit::Activate(1));
+    assert_eq!(order.last(), Some(&ShellHit::NewTab));
+    assert_eq!(order.len(), 7);
 }
 
 #[test]

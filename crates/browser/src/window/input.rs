@@ -52,6 +52,11 @@ impl WindowApp {
         let state = self.chrome_mode.state(now);
         let css_x = (physical_x / self.metrics.scale) as f32;
         let css_y = (physical_y / self.metrics.scale) as f32;
+        let shell_hover = self.shell_hit_at(css_x, css_y);
+        if shell_hover != self.shell_hover {
+            self.shell_hover = shell_hover;
+            self.request_repaint();
+        }
         let hovering_edge = chrome::rail_hover_hit(css_x, css_y, state.band_css, state.inset_css);
         if self.chrome_mode.set_peek(hovering_edge, now) {
             self.request_repaint();
@@ -77,13 +82,18 @@ impl WindowApp {
                 menu.selected = index;
             }
         }
-        if changed {
+        if changed || shell_hover.is_some() {
             if let Some(window) = &self.window {
-                window.set_cursor(if self.hover_url.is_some() || self.hover_form.is_some() {
-                    winit::window::CursorIcon::Pointer
-                } else {
-                    winit::window::CursorIcon::Default
-                });
+                window.set_cursor(
+                    if self.hover_url.is_some()
+                        || self.hover_form.is_some()
+                        || shell_hover.is_some()
+                    {
+                        winit::window::CursorIcon::Pointer
+                    } else {
+                        winit::window::CursorIcon::Default
+                    },
+                );
             }
             self.request_repaint();
         }
@@ -400,26 +410,10 @@ impl WindowApp {
             self.request_repaint();
             return;
         }
-        // The dark shell puts navigation in the single top bar; hit-testing must
-        // use the same rectangles the painter uses.
-        let band_css = self.chrome_mode.state(std::time::Instant::now()).band_css;
-        let buttons = chrome::navigation_buttons_in_top_bar(
-            self.metrics.css_width as f32,
-            band_css,
-            chrome::WINDOW_MARGIN,
-        );
-        if let Some(button) = chrome::navigation_button_at(
-            &buttons,
-            x,
-            y,
-            self.nav.can_go_back(),
-            self.nav.can_go_forward(),
-        ) {
-            match button {
-                NavigationButton::Back => self.go_back(),
-                NavigationButton::Forward => self.go_forward(),
-                NavigationButton::Reload => self.reload(),
-            }
+        // The dark shell puts navigation, the sidebar toggle, new tab and the
+        // history rows in one component; one hit-test covers all of them.
+        if let Some(hit) = self.shell_hit_at(x, y) {
+            self.activate_shell_hit(hit);
             return;
         }
         if y >= chrome::TAB_STRIP_HEIGHT {

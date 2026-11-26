@@ -387,6 +387,8 @@ impl WindowApp {
                 active: chrome_active_tab,
                 top_css: chrome_band_css,
                 sidebar: shell_sidebar,
+                hover: self.shell_hover,
+                focus: self.shell_focus,
             }),
         };
         let download_status = self.download.status_text();
