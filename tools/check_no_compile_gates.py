@@ -27,6 +27,8 @@ TEST_MODULES = (
     "tools.test_check_deslop_doc",
     "tools.test_check_real_site_snapshots",
     "tools.test_check_doc_tool_refs",
+    "tools.test_test_inspector",
+    "tools.test_whatwg_spec",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),

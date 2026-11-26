@@ -82,7 +82,7 @@ class CliTests(unittest.TestCase):
     def test_cli_accepts_the_real_docs(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("documented tools OK (2 docs)", result.stdout)
+        self.assertIn("documented tools OK (4 docs)", result.stdout)
 
     def test_cli_reports_unreadable_doc(self) -> None:
         result = subprocess.run(

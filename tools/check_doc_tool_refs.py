@@ -16,7 +16,12 @@ import re
 import sys
 from pathlib import Path
 
-DEFAULT_DOCS = ("AGENTS.md", "docs/VISUAL-PARITY.md")
+DEFAULT_DOCS = (
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "docs/DESLOP-AUDIT.md",
+    "docs/VISUAL-PARITY.md",
+)
 DEFAULT_LEDGER = Path("docs/audit/coverage.tsv")
 REFERENCE = re.compile(r"tools/[A-Za-z0-9_./-]+\.py")
 

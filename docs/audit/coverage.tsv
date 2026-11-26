@@ -2363,11 +2363,11 @@ tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
 tools/check_deslop_doc.py	123	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: deslop doc/allowlist consistency checker
-tools/check_doc_tool_refs.py	92	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documented tool reference checker
+tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding doc_tool_refs gate
+tools/check_no_compile_gates.py	84	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2392,7 +2392,7 @@ tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-r
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
 tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for deslop doc checker
-tools/test_check_doc_tool_refs.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for tool reference checker
+tools/test_check_doc_tool_refs.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_no_compile_gates.py	74	tool	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding doc_tool_refs gate
@@ -2417,12 +2417,14 @@ tools/test_real_site_check.py	510	tool	F3	jp	2026-11-25	covered	#2290
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
 tools/test_test262_report.py	132	tool	F3	subagent	2026-11-26	covered		read new unit tests
+tools/test_test_inspector.py	37	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
 tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_visual_parity.py	107	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool
 tools/test_visual_parity_report.py	90	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for report generator
+tools/test_whatwg_spec.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
