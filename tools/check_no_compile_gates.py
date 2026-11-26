@@ -37,6 +37,12 @@ TEST_MODULES = (
     "tools.test_check_progress_consistency",
     "tools.test_check_wp_board",
     "tools.test_check_wpt_artifacts",
+    "tools.test_check_real_site_report",
+    "tools.test_check_conformance_freshness",
+    "tools.test_check_deslop_allowlist",
+    "tools.test_check_agent_index_refs",
+    "tools.test_check_workflow_scripts",
+    "tools.test_check_status_badges",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -59,6 +65,12 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("progress_consistency", (PY, "tools/check_progress_consistency.py")),
     ("wp_board", (PY, "tools/check_wp_board.py")),
     ("wpt_artifacts", (PY, "tools/check_wpt_artifacts.py")),
+    ("real_site_report", (PY, "tools/check_real_site_report.py")),
+    ("conformance_freshness", (PY, "tools/check_conformance_freshness.py")),
+    ("deslop_allowlist", (PY, "tools/check_deslop_allowlist.py")),
+    ("agent_index_refs", (PY, "tools/check_agent_index_refs.py")),
+    ("workflow_scripts", (PY, "tools/check_workflow_scripts.py")),
+    ("status_badges", (PY, "tools/check_status_badges.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 

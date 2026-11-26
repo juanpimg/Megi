@@ -103,6 +103,12 @@ Prohibiciones clave:
 Cero advertencias. Reporta cada comando con su código de salida. Nunca digas
 "verde" sin salida pegada.
 
+Si el disco impide ejecutar el harness de conformidad, no actualices
+`[gate].verified_commit` a mano: `python3 tools/check_conformance_freshness.py`
+informa (sin compilar) si el sello está obsoleto frente a cambios en
+`crates/{html,css,render,test_harness}` o `tests/{html5lib-tests,wpt}`.
+`update_coverage.py --check` seguirá fallando hasta que el gate se vuelva a medir.
+
 ## 7. Dependencias, métricas y entrega
 - Diseño de specs vivas (WHATWG/W3C/RFC); prohíbido inventar algoritmos.
 - Nueva dependencia externa: solo transporte/cripto/ventana/tipografía de bajo
