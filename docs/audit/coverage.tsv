@@ -1438,7 +1438,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/VISUAL-PARITY.md	99	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding docs checker
+docs/VISUAL-PARITY.md	101	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding ledger checker
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: POINTS buffer source documented as deliberate limit
@@ -2367,6 +2367,7 @@ tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wa
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
+tools/check_parity_ledger.py	96	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity artifact ledger checker
 tools/check_parity_schema.py	100	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: baseline schema and manifest validator
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
@@ -2389,6 +2390,7 @@ tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
+tools/test_check_parity_ledger.py	93	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for ledger checker
 tools/test_check_parity_schema.py	120	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for schema validator
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 tools/test_ci_gate.py	109	tool	F3	lead	2026-11-26	covered	CI-UMBRELLA-REGRESSION	read after remote CI fix merge
