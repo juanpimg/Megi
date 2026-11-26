@@ -18,12 +18,12 @@ Para construir un motor web robusto sin perderse en la complejidad de la web mod
 
 ### 1.2 Independencia Absoluta (Zero Engine Forks & Pure Safe Rust)
 - Megi **no es una bifurcación (*fork*)** ni un envoltorio de Blink (Chromium), WebKit (Safari), Gecko (Firefox), ni de los motores de layout de Servo o Blitz.
-- Los crates de parsing/layout fundamentales (`crates/core`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. La única excepción autorizada son las dependencias tipográficas de bajo nivel de `crates/fonts` (`fontdb`, `ttf-parser`, `rustybuzz`, `ab_glyph`), listadas en `docs/ARCHITECTURE.md` §3.1; el rasterizador y el codificador PNG de `crates/paint` son propios y no usan dependencias externas (decisión D3, §3.2).
+- Los crates de parsing/layout fundamentales (`crates/core`, `crates/html`, `crates/css`, `crates/layout`) se desarrollan exclusivamente con la **biblioteca estándar de Rust (`std`)**, sin librerías externas de parsing en crates.io. La única excepción autorizada son las dependencias tipográficas de bajo nivel de `crates/fonts` (`fontdb`, `ttf-parser`, `rustybuzz`, `ab_glyph`), listadas en `docs/ARCHITECTURE.md` §3.1; el rasterizador y el codificador PNG son propios de `crates/raster` (`paint` construye la display list y depende de `raster`, spec §2.3) y no usan dependencias externas (decisión D3, §3.2).
 
 ### 1.3 Auto-Testeo Continuo en Bucle Cerrado (Closed-Loop Testing)
 - Ninguna funcionalidad se considera completada sin una prueba de conformidad que la valide.
 - Trabajamos con las suites de prueba de referencia de la industria:
-  - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, ~1.900 de construcción del DOM y las suites oficiales de **serialización HTML** (`serializer/*.test`).
+  - **`html5lib-tests`**: Más de 7.000 pruebas de tokenizador, **3.904/3.904** de construcción del árbol (último gate publicado, sin allowlist) y las suites oficiales de **serialización HTML** (`serializer/*.test`).
   - **Web Platform Tests (WPT)**: Pruebas oficiales compartidas por todos los motores de navegación modernos (fixtures de CSS Syntax vendorizadas).
 - El arnés interno ([`crates/test_harness`](crates/test_harness)) permite ejecutar las pruebas con `cargo test` o `cargo run -p megi-test-harness -- --summary`, diagnosticar discrepancias y corregir el código iterativamente. El gate cubre **4 suites**: tokenizer **7.050/7.050** (allowlist vacía), **árbol 3.904/3.904 (100 %, sin allowlist; las 4 suites `scripted_*` ejecutan JS real vía WP-6.4)**, **serializador HTML 230/230** y **CSS Syntax 30/30** con fixtures WPT vendorizadas en `tests/wpt/css/css-syntax/` (reproducibles sin red). `--summary` actúa como **gate** (exit 0 si todos los fallos están en la allowlist documentada; `--strict` hace exit 1 ante cualquier fallo). El total vigente de tests se publica en [PROGRESS.md](PROGRESS.md) (regenerado por `tools/update_progress.py`).
 
@@ -74,7 +74,7 @@ crates/
 ├── js/            # Boa 0.22 + bindings DOM, providers Arc y event loop; estado en Context (sin TLS).
 ├── render/        # Pipeline URL → PNG con scripts, event loop, imágenes y fuentes.
 ├── webview/       # API embebible sin ventana (load/frame/eventos/hit-test). Depende de render.
-├── browser/       # Shell nativo: winit+softbuffer, chrome, pestañas, sesión. Solo depende de webview.
+├── browser/       # Shell nativo: winit+softbuffer, chrome, pestañas, sesión. Solo depende de webview y sandbox.
 ├── sandbox/       # Landlock/no_new_privs aplicados en el worker (Unsupported en macOS/Windows).
 ├── bench/         # Benchmarks reproducibles.
 └── test_harness/  # Gate de conformidad html5lib-tests/WPT.
@@ -96,8 +96,8 @@ La **hoja de ruta vigente** es la del roadmap aprobado (PR #2290): [`docs/superp
 3. El crate y módulo responsable.
 4. El criterio de aceptación verificable por test.
 
-### Áreas activas donde puedes aportar hoy (Fases 4–7 en curso; **hito ronda 11: árbol HTML5 3.904/3.904, 100 %**):
-- **Layout (`crates/layout`) — Fase 4 funcionalmente cerrada**:
+### Estado por áreas (hitos M0–M12; **hito histórico ronda 11: árbol HTML5 3.904/3.904, 100 %**):
+- **Layout (`crates/layout`) — trabajo acumulado (la etiqueta «Fase 4» es histórica)**:
   - **Ronda 17**: **Flexbox MVP** (`layout/flex.rs`: display flex/inline-flex, direction/justify/align/wrap/gap/grow-shrink-basis).
   - **Ronda 18**: **Grid MVP** (`layout/grid.rs`: display grid/inline-grid, tracks fixed/%/fr/auto/repeat, gaps, auto-placement row-major, justify/align items/self y auto-rows).
   - **Ronda 19**: **Grid avanzado** (placement explícito con líneas 1-based/negativas y `span N`, auto-placer que salta ocupadas y crece tracks implícitos, `minmax()`, `repeat(auto-fill|auto-fit)`, `order` estable; solapes explícitos/named lines/zonas/subgrid fuera de alcance).
@@ -183,7 +183,7 @@ cargo run -p megi-test-harness -- --summary --strict # exit 1 si hay fallos no a
 # Si tu CPU es más lenta que la de CI, escala los presupuestos de complejidad (CI usa 1.0)
 MEGI_PERF_BUDGET_SCALE=4 cargo test -p megi-html --test perf
 
-# Pipeline HTML → PNG (Fase 4) y validación de la imagen
+# Pipeline HTML → PNG (comando histórico de la antigua Fase 4; ver PROGRESS.md) y validación de la imagen
 cargo run --release -p megi-paint --example html_to_png -- tests/fixtures/phase4/basic.html /tmp/basic.png
 python3 tools/png_check.py /tmp/basic.png
 
@@ -193,7 +193,7 @@ python3 tools/png_check.py /tmp/basic.png
 ./tools/bench.sh --filter paint     # ronda 12: encoder PNG −30,5 % invariante
 ./tools/bench.sh --filter pipeline  # ronda 12: ~134-137 ms
 
-# Red, render y JS (Fases 5–6; tests offline)
+# Red, render y JS (comandos históricos de las antiguas Fases 5–6; tests offline)
 cargo test -p megi-net -p megi-render -p megi-image
 cargo test -p megi-js
 cargo test -p megi-js --no-default-features   # stub mínimo sin Boa
@@ -222,7 +222,7 @@ cargo run -p megi-render -- tests/fixtures/render/js_text.html /tmp/js_off.png -
 cargo run -p megi-render -- https://example.com/ /tmp/page.png --cookies --origin https://example.com --json   # red avanzada E2E
 cargo run -p megi-render -- tests/fixtures/render/showcase/index.html /tmp/showcase.png --width 1024 --height 768
 cargo run -p megi-browser -- tests/fixtures/render/showcase/index.html              # navegación: clic, Alt+←/→, b/n, r
-cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # Fase 7 headless
+cargo run -p megi-browser -- tests/fixtures/render/basic.html --screenshot /tmp/shot.png   # headless (antigua Fase 7; histórico)
 tools/megi.sh tests/fixtures/render/showcase/index.html                             # ventana usable (X11/Wayland)
 
 # Fuzzing (workspace aparte; nightly + ASan)
@@ -269,7 +269,7 @@ git commit --amend -s
 ```
 
 ### 5.3 Estilo de código (Rust)
-- Edición 2024, MSRV declarada en `Cargo.toml`/`rust-toolchain.toml` (no subir MSRV sin necesidad).
+- Edición 2024, MSRV (`rust-version = 1.91`) declarada solo en `Cargo.toml`; `rust-toolchain.toml` fija el toolchain de desarrollo 1.99.1 (no subir la MSRV sin necesidad).
 - Formato canónico: `cargo fmt --all`.
 - Lints: `cargo clippy --workspace --all-targets -- -D warnings`.
 - **`unsafe`**: evita código inseguro; si es imprescindible, cada bloque debe llevar `// SAFETY:` explicando invariantes, precondiciones y por qué es correcto. Respeta `#![forbid(unsafe_code)]` donde aplique.
