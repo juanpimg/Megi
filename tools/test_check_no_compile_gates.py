@@ -34,7 +34,7 @@ class GateDefinitionTests(unittest.TestCase):
                 "work_packages", "python_syntax", "progress_consistency", "wp_board",
                 "wpt_artifacts", "real_site_report", "conformance_freshness",
                 "deslop_allowlist", "agent_index_refs", "workflow_scripts",
-                "status_badges", "doc_images", "coverage_json", "real_site_html", "closed_work_packages", "toolchain_config", "workflow_metadata", "coverage_svg", "progress_svg", "conformance_badges", "coverage_html_areas", "fuzz_manifest", "fixture_links", "test262_artifacts", "milestone_index", "wp_schema_docs", "python_tests",
+                "status_badges", "doc_images", "coverage_json", "real_site_html", "closed_work_packages", "toolchain_config", "workflow_metadata", "coverage_svg", "progress_svg", "conformance_badges", "coverage_html_areas", "fuzz_manifest", "fixture_links", "test262_artifacts", "milestone_index", "wp_schema_docs", "wp_generators", "python_tests",
             },
         )
 
