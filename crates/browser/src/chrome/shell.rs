@@ -9,8 +9,10 @@ use megi_webview::layout::Rect;
 use megi_webview::paint::Pixmap;
 
 use super::drawing::{draw_text, fill_round, paint_chevron, paint_favicon, stroke_line};
+use super::navigation::paint_navigation_buttons_at;
 use super::tokens::{
-    HISTORY_ROW, HISTORY_TOP, SHELL, ShellLayout, ShellView, WINDOW_RADIUS, circle, fitted,
+    HISTORY_ROW, SHELL, ShellLayout, ShellView, WINDOW_RADIUS, circle, fitted, sidebar_columns,
+    sidebar_history_top,
 };
 use super::*;
 
@@ -235,6 +237,13 @@ pub fn paint_shell(pixmap: &mut Pixmap, scale: f32, layout: &ShellLayout, view: 
     let text = fitted(view.url, (layout.pill.width - 64.0).max(1.0), 14.0);
     let text_y = layout.pill.y + (layout.pill.height - 16.0) * 0.5;
     draw_text(pixmap, &text, text_x, text_y, scale, 14.0, SHELL.text);
+    paint_navigation_buttons_at(
+        pixmap,
+        scale,
+        &layout.nav,
+        view.can_go_back,
+        view.can_go_forward,
+    );
     paint_actions(pixmap, &layout.actions, scale);
     if view.sidebar {
         paint_sidebar(pixmap, scale, layout, view);
@@ -287,6 +296,12 @@ pub fn paint_window_frame(pixmap: &mut Pixmap, scale: f32, width: f32, height: f
     fill_round(pixmap, window, scale, WINDOW_RADIUS, SHELL.top);
 }
 
+/// Deterministic tile colour for a label without a decoded favicon.
+fn tile_color(label: &str) -> Color {
+    let key = crate::favicon::color_for(label);
+    Color::new(key[0], key[1], key[2], 0xFF)
+}
+
 fn paint_section(pixmap: &mut Pixmap, label: &str, x: f32, y: f32, width: f32, scale: f32) {
     draw_text(pixmap, label, x, y, scale, 13.0, SHELL.text);
     paint_chevron(
@@ -315,8 +330,9 @@ pub(crate) fn paint_sidebar(
         content_w,
         scale,
     );
-    for index in 0..4 {
-        let size = 38.0;
+    let workspace_count = sidebar_columns(content_w, 47.0);
+    for index in 0..workspace_count {
+        let size = 38.0_f32.min(content_w - index as f32 * 9.0);
         let x = content_x + index as f32 * (size + 9.0);
         let y = layout.sidebar.y + 42.0;
         let rect = Rect::new(x, y, size.min(content_w), size);
@@ -358,9 +374,10 @@ pub(crate) fn paint_sidebar(
         content_w,
         scale,
     );
+    let tile_columns = sidebar_columns(content_w, 52.0);
     for index in 0..8 {
-        let column = index % 4;
-        let row = index / 4;
+        let column = index % tile_columns;
+        let row = index / tile_columns;
         let x = content_x + column as f32 * 52.0;
         let y = fav_y + 12.0 + row as f32 * 52.0;
         let tile = Rect::new(x, y, 44.0, 44.0);
@@ -379,15 +396,18 @@ pub(crate) fn paint_sidebar(
                 SHELL.icon,
             );
         } else {
-            circle(
+            let color = tile_color(&format!("favicon:{index}"));
+            fill_round(
                 pixmap,
-                Rect::new(x + 17.0, y + 17.0, 10.0, 10.0),
-                SHELL.text_muted,
+                Rect::new(x + 6.0, y + 6.0, 32.0, 32.0),
                 scale,
+                8.0,
+                color,
             );
+            draw_text(pixmap, "M", x + 15.0, y + 14.0, scale, 14.0, SHELL.text);
         }
     }
-    let list_y = layout.sidebar.y + HISTORY_TOP;
+    let list_y = sidebar_history_top(layout.sidebar.y, content_w);
     pixmap.fill_rect(
         Rect::new(
             content_x * scale,
@@ -414,6 +434,14 @@ pub(crate) fn paint_sidebar(
         }
         if let Some(icon) = view.favicons.get(index).and_then(Option::as_ref) {
             paint_favicon(pixmap, icon, content_x, y + 8.0, scale);
+        } else {
+            fill_round(
+                pixmap,
+                Rect::new(content_x, y + 8.0, 16.0, 16.0),
+                scale,
+                3.0,
+                tile_color(label),
+            );
         }
         draw_text(
             pixmap,

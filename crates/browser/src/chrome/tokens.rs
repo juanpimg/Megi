@@ -201,8 +201,20 @@ pub const RAIL_CSS: f32 = 52.0;
 pub const WINDOW_MARGIN: f32 = 8.0;
 pub const WINDOW_RADIUS: f32 = 20.0;
 pub(crate) const SHELL: ShellPalette = ShellPalette::DARK;
-pub(crate) const HISTORY_TOP: f32 = 292.0;
 pub(crate) const HISTORY_ROW: f32 = 32.0;
+
+/// Number of columns of `pitch`-wide cells that fit in a sidebar content column.
+/// The shell is responsive: a narrow window shows fewer tiles instead of clipping.
+pub(crate) fn sidebar_columns(content_w: f32, pitch: f32) -> usize {
+    ((content_w + 9.0) / pitch).floor().clamp(1.0, 4.0) as usize
+}
+
+/// Y coordinate of the first history row, derived from the responsive tile rows.
+pub(crate) fn sidebar_history_top(sidebar_y: f32, content_w: f32) -> f32 {
+    let columns = sidebar_columns(content_w, 52.0);
+    let rows = 8_usize.div_ceil(columns);
+    sidebar_y + 168.0 + 12.0 + rows as f32 * 52.0 + 10.0
+}
 pub fn sidebar_width(width: f32) -> f32 {
     (width.max(1.0) * 0.22).clamp(96.0, SIDEBAR_MAX)
 }
@@ -214,6 +226,9 @@ pub struct ShellView<'a> {
     pub favicons: &'a [Option<crate::favicon::Favicon>],
     /// URL shown in the centred pill.
     pub url: &'a str,
+    /// Enabled state of the back/forward buttons in the unified top bar.
+    pub can_go_back: bool,
+    pub can_go_forward: bool,
     /// Index of the active tab.
     pub active: usize,
     /// Height of the top band in CSS pixels.
@@ -229,6 +244,8 @@ pub struct ShellLayout {
     pub top: Rect,
     /// Traffic-light centres.
     pub dots: [Rect; 3],
+    /// Back/forward/reload in the same top-bar row.
+    pub nav: super::NavigationButtons,
     /// Sidebar-toggle icon box.
     pub toggle: Rect,
     /// Centered address pill.
@@ -253,9 +270,8 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         (height - 2.0 * WINDOW_MARGIN).max(1.0),
     );
     let dot_size = if top >= 60.0 { 11.0 } else { 8.0 };
-    // The traffic lights sit in the upper strip; the legacy navigation buttons
-    // stay on the lower strip so their existing hit rectangles remain accurate.
-    let dot_y = if top >= 60.0 { 10.0 } else { 4.0 };
+    // Every top-bar control shares one row, centred vertically (UI-TARGET).
+    let dot_y = (top - dot_size) * 0.5;
     let dots = std::array::from_fn(|index| {
         Rect::new(
             WINDOW_MARGIN + 6.0 + index as f32 * (dot_size + 6.0),
@@ -265,7 +281,8 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         )
     });
     let toggle = Rect::new(WINDOW_MARGIN + 52.0, (dot_y - 3.0).max(2.0), 16.0, 16.0);
-    let nav_end = 4.0 + 3.0 * (super::NAV_BUTTON_SIZE + super::NAV_BUTTON_GAP);
+    let nav = super::navigation_buttons_in_top_bar(width, top, WINDOW_MARGIN);
+    let nav_end = nav.reload.x + nav.reload.width;
     let pill_width = (width * 0.48).clamp(120.0, (width - nav_end - 190.0).max(120.0));
     let pill_height = if top >= 60.0 { 34.0 } else { 26.0 };
     let pill = Rect::new(
@@ -299,6 +316,7 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         window,
         top: Rect::new(WINDOW_MARGIN, 0.0, width - 2.0 * WINDOW_MARGIN, top),
         dots,
+        nav,
         toggle,
         pill,
         actions,
@@ -331,7 +349,8 @@ pub fn shell_hit(
     if super::drawing::contains(layout.toggle, x, y) {
         return Some(ShellHit::ToggleSidebar);
     }
-    let first_row = layout.sidebar.y + HISTORY_TOP;
+    let content_w = (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0);
+    let first_row = sidebar_history_top(layout.sidebar.y, content_w);
     if y >= first_row {
         let row = ((y - first_row) / HISTORY_ROW) as usize;
         if row < view.labels.len() {

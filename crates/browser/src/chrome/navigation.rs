@@ -39,6 +39,22 @@ pub fn navigation_buttons(_width: f32) -> NavigationButtons {
     }
 }
 
+/// Navigation buttons laid out inside the dark shell's single top bar.
+///
+/// CSS Grid/Flexbox are not involved: the shell is a fixed, deterministic bar,
+/// so the controls share one row centred in `top_css` (docs/UI-TARGET.md).
+pub fn navigation_buttons_in_top_bar(_width: f32, top_css: f32, margin: f32) -> NavigationButtons {
+    let size = if top_css >= 60.0 { 26.0 } else { 20.0 };
+    let y = ((top_css - size) * 0.5).max(2.0);
+    let step = size + 4.0;
+    let x0 = margin + 96.0;
+    NavigationButtons {
+        back: Rect::new(x0, y, size, size),
+        forward: Rect::new(x0 + step, y, size, size),
+        reload: Rect::new(x0 + 2.0 * step, y, size, size),
+    }
+}
+
 /// Hit-tests the navigation buttons honouring their disabled state.
 pub fn navigation_button_at(
     buttons: &NavigationButtons,
@@ -65,7 +81,23 @@ pub fn navigation_buttons_width() -> f32 {
 }
 
 pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &ChromeView<'_>) {
-    let buttons = navigation_buttons(view.css_width);
+    paint_navigation_buttons_at(
+        pixmap,
+        scale,
+        &navigation_buttons(view.css_width),
+        view.can_go_back,
+        view.can_go_forward,
+    );
+}
+
+/// Paints navigation buttons at explicit rectangles (the shell top bar).
+pub(crate) fn paint_navigation_buttons_at(
+    pixmap: &mut Pixmap,
+    scale: f32,
+    buttons: &NavigationButtons,
+    can_go_back: bool,
+    can_go_forward: bool,
+) {
     // A subtle rounded surface reads as clickable; the glyphs are drawn geometry,
     // not text, so they stay crisp at every device scale.
     for rect in [buttons.back, buttons.forward, buttons.reload] {
@@ -76,7 +108,7 @@ pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &C
         buttons.back,
         scale,
         true,
-        if view.can_go_back {
+        if can_go_back {
             COLOR_ADDRESS_TEXT
         } else {
             COLOR_DISABLED
@@ -87,7 +119,7 @@ pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &C
         buttons.forward,
         scale,
         false,
-        if view.can_go_forward {
+        if can_go_forward {
             COLOR_ADDRESS_TEXT
         } else {
             COLOR_DISABLED

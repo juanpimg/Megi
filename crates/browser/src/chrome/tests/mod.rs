@@ -1,6 +1,7 @@
 //! Unit tests for the chrome module, organised by feature.
 
 use crate::chrome::*;
+use megi_webview::layout::Rect;
 use megi_webview::paint::Color;
 
 mod address_bar;
@@ -166,6 +167,8 @@ fn shell_view<'a>(labels: &'a [String], url: &'a str, top: f32) -> ShellView<'a>
         labels,
         favicons: &[],
         url,
+        can_go_back: false,
+        can_go_forward: false,
         active: 0,
         top_css: top,
         sidebar: true,
@@ -190,6 +193,34 @@ fn shell_layout_keeps_sidebar_and_inset_page_distinct() {
     );
     assert_eq!(layout.dots.len(), 3);
     assert_eq!(layout.actions.len(), 4);
+}
+
+#[test]
+fn shell_top_bar_controls_share_one_row() {
+    // UI-TARGET: traffic lights, sidebar toggle, back/forward/reload, the centred
+    // URL pill and the right actions all live on one macOS-style row.
+    let labels = vec!["Historia de España".to_owned()];
+    let view = shell_view(&labels, "https://es.wikipedia.org", CHROME_HEIGHT);
+    let layout = layout_shell(1000.0, 700.0, 1.0, &view);
+    let center = |r: Rect| r.y + r.height * 0.5;
+    let dot = center(layout.dots[0]);
+    assert!(
+        (center(layout.toggle) - dot).abs() <= 6.0,
+        "sidebar toggle must share the traffic-light row"
+    );
+    assert!(
+        (center(layout.nav.back) - dot).abs() <= 6.0,
+        "navigation was on a second strip: nav centre={} dot centre={dot}",
+        center(layout.nav.back)
+    );
+    assert!(
+        (center(layout.actions[0]) - dot).abs() <= 6.0,
+        "right actions must share the row"
+    );
+    assert!(
+        layout.nav.reload.x + layout.nav.reload.width < layout.pill.x,
+        "navigation must sit left of the centred URL pill"
+    );
 }
 
 #[test]
@@ -229,15 +260,18 @@ fn shell_paint_uses_measured_dark_surfaces_and_traffic_lights() {
 fn shell_hit_matches_sidebar_geometry() {
     let labels = vec!["Alpha".to_owned(), "Beta".to_owned()];
     let view = shell_view(&labels, "https://example.com", CHROME_HEIGHT);
-    let layout = layout_shell(640.0, 400.0, 1.0, &view);
+    let layout = layout_shell(640.0, 800.0, 1.0, &view);
     assert_eq!(
         shell_hit(
             640.0,
-            400.0,
+            800.0,
             1.0,
             &view,
             layout.sidebar.x + 120.0,
-            layout.sidebar.y + 292.0 + 5.0
+            super::tokens::sidebar_history_top(
+                layout.sidebar.y,
+                (layout.sidebar.width - RAIL_CSS - 16.0).max(1.0),
+            ) + 5.0
         ),
         Some(ShellHit::Activate(0)),
         "first history row is clickable"

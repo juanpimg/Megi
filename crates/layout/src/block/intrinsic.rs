@@ -169,7 +169,13 @@ pub(crate) fn collect_intrinsic_widths(
                     );
                     if is_flex_row {
                         flex_items += 1;
-                        inner_max += child_max;
+                        // CSS Sizing 3 §5: a flex row's max-content size is the
+                        // sum of its items' max-content contributions. The flex
+                        // base size of each item rounds the measured content
+                        // box up (CSS Flexbox 1 §9.2 step 3D), so round the
+                        // contribution the same way; otherwise the container
+                        // is a few pixels short and its last item wraps.
+                        inner_max += child_max.ceil();
                         inner_min = if flex_nowrap {
                             inner_min + child_min
                         } else {

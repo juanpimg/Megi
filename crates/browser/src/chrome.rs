@@ -63,7 +63,7 @@ pub use menus::{
 };
 pub use navigation::{
     NavigationButton, NavigationButtons, navigation_button_at, navigation_buttons,
-    navigation_buttons_width,
+    navigation_buttons_in_top_bar, navigation_buttons_width,
 };
 pub use rail::{
     RailHit, RailLayout, RailTabRect, RailView, ShellTabA11y, draw_rail, draw_rail_over_pixmap,
@@ -306,10 +306,8 @@ pub fn draw_chrome(
                 tokens::WINDOW_RADIUS,
             );
         }
+        // The shell paints navigation inside its single top bar.
         shell::paint_shell(&mut pixmap, scale, &layout, &shell);
-        if !view.compact {
-            paint_navigation_buttons(&mut pixmap, scale, view);
-        }
     } else {
         if !view.compact {
             paint_tab_strip(&mut pixmap, scale, view, css_width);
@@ -413,9 +411,6 @@ pub fn draw_chrome_over_pixmap(
         if shell.sidebar {
             drawing::mask_page_corner_pixmap(dest, scale, layout.page, tokens::WINDOW_RADIUS);
         }
-        if !view.compact {
-            paint_navigation_buttons(&mut band, scale, view);
-        }
     } else {
         if !view.compact {
             paint_tab_strip(&mut band, scale, view, css_width);
@@ -463,9 +458,11 @@ pub fn draw_chrome_over_pixmap(
         );
         painted += 1;
     }
-    // Opt-in vertical rail (Phase 1). `None` is a no-op, keeping the default
-    // headless `--chrome` bytes exactly as before.
-    painted += draw_rail_over_pixmap(dest, scale, view);
+    // Opt-in vertical rail (Phase 1). The dark shell paints its own sidebar; the
+    // legacy rail must not be composited over it (it would show stale tabs on top).
+    if view.shell.as_ref().is_none_or(|shell| !shell.sidebar) {
+        painted += draw_rail_over_pixmap(dest, scale, view);
+    }
     painted
 }
 

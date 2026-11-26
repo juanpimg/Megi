@@ -198,3 +198,33 @@ pub fn run_window_with_view_options(
         ))
     }
 }
+
+/// Titles of the tabs in the active workspace, in visible order.
+///
+/// The chrome strip and rail must not reveal or count tabs from other groups.
+pub(crate) fn workspace_chrome_titles(tabs: &crate::tabs::TabsState) -> Vec<String> {
+    tabs.visible_tabs()
+        .map(crate::tabs::Tab::display_title)
+        .collect()
+}
+
+/// Index of the active tab among the visible ones (not the global tab index).
+pub(crate) fn workspace_chrome_active(tabs: &crate::tabs::TabsState) -> usize {
+    tabs.visible_active_index()
+}
+
+/// Accessibility names for the visible tab strip.
+///
+/// With one workspace the names are unchanged. With several groups, each name
+/// carries the active workspace label so screen-reader users can name the group.
+pub(crate) fn workspace_a11y_titles(tabs: &crate::tabs::TabsState) -> Vec<String> {
+    let labels = workspace_chrome_titles(tabs);
+    if !tabs.has_multiple_workspaces() {
+        return labels;
+    }
+    let workspace = crate::tabs::Workspace::label(tabs.workspace());
+    labels
+        .into_iter()
+        .map(|title| format!("{workspace} — {title}"))
+        .collect()
+}

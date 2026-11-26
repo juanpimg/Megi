@@ -151,6 +151,9 @@ impl WindowApp {
         }
         let attributes = Window::default_attributes()
             .with_title(self.title.clone())
+            // The shell paints its own macOS-style traffic lights and top band;
+            // native decorations would add a second title bar on top (#UI-TARGET).
+            .with_decorations(false)
             .with_inner_size(LogicalSize::new(
                 f64::from(self.requested_width),
                 f64::from(self.requested_height),
