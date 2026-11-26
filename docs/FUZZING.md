@@ -59,7 +59,7 @@ fuzz/
 │   └── woff2_decode.rs       # WOFF2/@font-face decode/validation path
 ├── src/lib.rs          # shared helpers (`megi_fuzz`): RIFF/WebP envelope, lossy
 │                       #   char-boundary-safe text, length-prefixed part framing
-└── corpus/<target>/    # versioned seed inputs (small, hand-written where present; 176 files total)
+└── corpus/<target>/    # versioned seed inputs (small, hand-written where present; 180 files total)
 ```
 
 `fuzz/` deliberately has its own empty `[workspace]` table: it must not join the root
@@ -94,43 +94,50 @@ cargo +nightly fuzz build          # builds every [[bin]] target
 | `selectors` | `megi_css::parse_selectors`, matching/specificity, `query_selector`/`query_selector_all`, `try_*` variants, `matches_with_state`/`try_matches_with_state`, `megi_css::resolve_document_styles` | Selector matching is adversarial; small deterministic DOM from input. Document-order querying (`document.querySelector`) and the `StateContext` interaction layer are fuzzed too (#700). |
 | `net_url` | `megi_net::Url::parse`, URL helpers, percent-decode/join paths | URL strings arrive from untrusted markup; must never panic. Never opens sockets. |
 | `render_pipeline` | `megi_render::render_url` with inline `data:` HTML (parse→CSS→layout→paint→PNG) | Integration glue reached by real pages. Viewport (`32..=256`), cap profile (tight vs `RenderOptions::default`), `no_network` and scripting are input-derived; scripting only for documents ≤32 KiB (#842). |
-| `js_eval` | `megi_js::JsRuntime` eval, microtasks, tasks, event dispatch under `megi_js::Budget`, with a hostile host-provider bundle installed (fetch/storage/layout/viewport/media/history/location/computed-style/worker) | Untrusted JS plus attacker-shaped provider glue (#704): providers return typed errors, `status: 0`, conflicting `content-length`, CRLF header values, NUL storage keys, `NaN`/`±∞` layout rects and viewports, and a worker loader capped at two calls. Bounded loops/recursion/stack/timers/events turn hangs into typed budget errors. |
+| `js_eval` | `megi_js::JsRuntime` eval, microtasks, tasks, event dispatch under `megi_js::Budget`, with a hostile host-provider bundle installed (fetch/storage/layout/viewport/media/history/location/computed-style/worker) | Untrusted JS plus attacker-shaped provider glue (#704): providers return typed errors, `status: 0`, conflicting `content-length`, CRLF header values, NUL storage keys, `NaN`/`±∞` layout rects and viewports, and a worker loader capped at two calls. Bounded loops/recursion/stack/timers/events turn hangs into typed budget errors. Events reach real fixture elements and a listener oracle checks element dispatch (#2419). |
 | `svg_parse` | `megi_svg::render_svg_with_limits`, `megi_svg::intrinsic_size_with_limits` (XML parse + values + raster) | Untrusted inline/external SVG. Four `SvgOptions` (absent/zero/derived/`u32::MAX`) × two `Limits` profiles (128 px tight, 1024 px roomy) so the caps are exercised on both sides of the boundary (#705). |
 | `woff2_decode` | `megi_fonts::decode_web_font` / WOFF2 container handling | `@font-face` bytes are untrusted; bounded decode/validation path. |
 | `image_decode` | `detect_format`, `decode_with_limits` (tight + input-derived roomy profile), `decode`, `decode_scaled`, `decode_scaled_with_limits`, `decode_animated`, `decode_animated_with_limits`, `png::decode_png`, `exif::orientation` | Every public decode entry point, not just one capped call: default caps, scaled decode and the animated (ANIM/ANMF) path were unfuzzed before (#853). |
 | `exif_parse` | `megi_image::exif::orientation` | Dedicated APP1/TIFF orientation parser campaign. |
 | `hpack_decode` | `megi_net::h2::hpack`, `megi_net::h2::frame` parsing/validation helpers | Adversarial HTTP/2 HPACK blocks and frame streams (bounded). |
-| `http_head` | HTTP header/status-line parsing surfaces | Malformed request/response head bytes must be rejected or parsed without panics or unbounded allocation. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
+| `http_head` | HTTP header/status-line parsing surfaces | Malformed request/response head bytes must be rejected or parsed without panics or unbounded allocation. Scheduled for 300 s in the ASan matrix; not in the UBSan smoke matrix. |
 | `h2_push` | HTTP/2 PUSH_PROMISE/HEADERS/DATA parsing/reassembly helpers | Untrusted server-push/control/data frames under caps. `FrameReader`/`validate_frame` run against every legal max frame size (`64`, `DEFAULT_MAX_FRAME_SIZE`, `MAX_FRAME_SIZE`, `MAX_FRAME_SIZE_LIMIT`), and promised stream id `0` (protocol error) is exercised (#702). |
 | `body_stream` | `megi_net::{RequestBody, BodyProducer, FetchError}` streaming contract | Bounded pull-based producer/backpressure/error behavior (no socket). |
 | `webp` | WebP sniffing, RIFF/VP8/VP8L containers and VP8 lossy/lossless decoding | Single campaign merging the former `webp_vp8` and `webp_lossy` targets (#471) over the union of both corpora. RIFF inputs are decoded as-is and truncated (`/2`, `/4`, `/8`); non-container payloads are re-wrapped as `VP8 ` and `VP8L` with `megi_fuzz::riff_webp` (one shared envelope helper, #859) under a 2048 px, a 64 px and a bounded default-limit profile. |
 | `js_module` | `js` module/import-map resolve/load/eval APIs with budgets | Untrusted module/import-map inputs; bounded resolver/loader calls and no network/FS. Parts are **length-prefixed** (`[u16 LE len][bytes]…`) and truncated on char boundaries, so JSON strings and module sources keep embedded NULs/high bytes instead of being clipped (#701). |
-| `charset` | Character-encoding detection/label handling | Untrusted charset labels/byte sequences must resolve or reject without panics or unbounded work. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
-| `compression` | HTTP compression stream handling | Malformed compressed byte streams must not panic, loop, or allocate without bounds. Built in CI, but not currently in the scheduled ASan/UBSan matrix. |
+| `charset` | Character-encoding detection/label handling | Untrusted charset labels/byte sequences must resolve or reject without panics or unbounded work. Scheduled for 300 s in the ASan matrix; not in the UBSan smoke matrix. |
+| `compression` | HTTP compression stream handling | Malformed compressed byte streams must not panic, loop, or allocate without bounds. Scheduled for 300 s in the ASan matrix; not in the UBSan smoke matrix. |
 | `container_queries` | `css` parse/tokenize + `megi_css::container` size-query parse/evaluate | `@container`/`@layer` without DOM/layout. Exercises the implemented size-query surface only (`megi_css::container` does not yet parse or evaluate style/scroll-state queries, #1429). Container sizes are input-derived and include the degenerate set (`NaN`, `±∞`, negative, `0`, `f32::MAX`, missing axis). |
 | `dom_mutate` | `megi_core::Document` arena mutations + `validate_invariants()` | Exercises DOM insert/remove/reparent/text-coalesce invariants on arbitrary mutation sequences. |
-| `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input. |
+| `dom_tree` | DOM construction/mutation-oriented parse paths | Exercises DOM tree building/mutation surfaces from fuzzer input and asserts `validate_invariants()` after the bounded mutation stream (#2421). |
 | `font_decode` | `fonts` SFNT/WOFF2 table parsing & decoding | Exercises direct font decoding paths against malformed font tables. |
 | `fonts_shape` | Font/shaping input paths | Exercises font parsing/shaping-related surfaces. |
-| `layout_resolve` | `layout` `calc()` & constraint resolution paths | Exercises layout length/constraint resolution under adversarial inputs. |
+| `layout_resolve` | `megi_css::resolve_document_styles_with_viewport` + `megi_layout::layout_document` | Exercises layout length/constraint resolution under adversarial inputs, isolated from paint/raster/JS with a 64 KiB input cap and a 32..=256 viewport (#2420). |
 | `layout_tree` | Layout tree construction paths | Exercises layout-tree building from parser/style inputs. |
 | `net_surface` | `net` URL/header/cookie/range/HTTP parser surfaces | Exercises network header, cookie, range, and HTTP parsing boundaries. |
 | `paint_display_list` | Paint/display-list generation paths | Exercises display-list/paint command generation. |
+| `ipc_response` | `megi_browser::ipc::validate_response` over untrusted JSON | Untrusted renderer responses with fuzzer-derived baseline generations, including `u64::MAX` saturation, field-bound and stale-generation oracles (#2418). |
+| `ipc_wire` | Versioned/legacy IPC wire framing decoders | Adversarial framed headers and payload lengths. |
+| `net_file_url` | `file://` URL parsing and `FileGrantTable` containment | Untrusted file URLs must stay inside the granted roots. |
+| `cookie_parse` | RFC 6265 cookie parsing and jar storage | Malformed cookie headers under bounded storage. |
+| `css_animation` | `@keyframes`/transition declarations and animation runtime | Untrusted animation declarations and timing inputs. |
+| `svg_path` | SVG path-data grammar through rasterizer entry points | Malformed path strings under bounded raster limits. |
 
 All targets run on **public** APIs with release-like defaults; they look for panics, aborts
 (stack overflow), ASan/UBSan findings and target timeouts, not for semantic mismatches.
 
 ## Running locally
 
-Short smoke run (30 s per target):
+Short smoke run (30 s per target). The target list is derived from the `[[bin]]`
+entries in `fuzz/Cargo.toml`, so no harness is silently skipped (#2422):
 
 ```bash
 cd fuzz
-for t in \
-  html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
-  woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
-  webp js_module container_queries dom_tree fonts_shape \
-  layout_tree paint_display_list dom_mutate layout_resolve net_surface font_decode; do
+targets=$(awk '
+  /^\[/ { in_bin = ($0 == "[[bin]]") }
+  in_bin && /^name[[:space:]]*=/ { gsub(/["[:space:]]/, "", $3); print $3 }
+' Cargo.toml)
+for t in $targets; do
   extra=""
   case "$t" in js_eval|js_module) extra="-detect_leaks=0" ;; esac
   cargo +nightly fuzz run "$t" -- -max_total_time=30 -timeout=25 $extra
@@ -168,11 +175,11 @@ committing large growth).
 
   ```bash
   cd fuzz
-  for t in \
-    html_parse text_boundary css_parse selectors net_url render_pipeline js_eval svg_parse \
-    woff2_decode image_decode exif_parse hpack_decode h2_push body_stream \
-    webp js_module container_queries dom_tree fonts_shape \
-    layout_tree paint_display_list; do
+  targets=$(awk '
+    /^\[/ { in_bin = ($0 == "[[bin]]") }
+    in_bin && /^name[[:space:]]*=/ { gsub(/["[:space:]]/, "", $3); print $3 }
+  ' Cargo.toml)
+  for t in $targets; do
     cargo +nightly fuzz cmin "$t" || true
   done
   ```
@@ -252,12 +259,23 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
   representative targets (see Sanitizers above);
 - **PR job** (`build`): `cargo +nightly fuzz build` compiles all `[[bin]]` targets in
   `fuzz/` (fast harness-compile gate; no libFuzzer run);
-- on failure uploads `fuzz/artifacts/` and corpus snapshots as workflow artifacts (14 days).
+- **evidence on every run**: each matrix leg writes a job summary (status, budget, corpus
+  size and final libFuzzer stats) to `$GITHUB_STEP_SUMMARY` and uploads its log, artifacts
+  and corpus with `if: always()` (14-day retention), so a green run leaves evidence too
+  (#2423);
+- **corpus persistence**: `actions/cache/restore` restores the most recent nightly corpus
+  and an explicit `actions/cache/save` runs with `if: always()`, so a corpus grown during a
+  crashing run still seeds the next night (#2423);
+- **concurrency**: scheduled runs share a stable concurrency group with
+  `cancel-in-progress: false`, so a manual dispatch can no longer cancel the nightly
+  campaign (#2424); dispatched runs use their own per-run group. The weekly soak applies
+  the same policy.
 
 Notes:
-- 34 harnesses exist in `fuzz/fuzz_targets/` (34 `[[bin]]` targets) and 176 seed corpus files
-  are tracked under `fuzz/corpus/<target>/`. The scheduled workflow has 34 ASan matrix
-  entries (10 at 600 s, 24 at 300 s) plus 9 UBSan smoke entries (120 s each).
+- 34 harnesses exist in `fuzz/fuzz_targets/` (34 `[[bin]]` targets) and 180 seed corpus files
+  are tracked under `fuzz/corpus/<target>/` (the four extra `ipc_response` seeds cover
+  generation progression and `u64` saturation, #2418). The scheduled workflow has 34 ASan
+  matrix entries (10 at 600 s, 24 at 300 s) plus 9 UBSan smoke entries (120 s each).
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 
@@ -272,8 +290,10 @@ get that:
   requested wall-clock budget. Hosted runners cap a job at six hours, so the
   schedule asks for 5 h; `hours: 24` needs a self-hosted runner
   (`runs-on: [self-hosted, soak]`). The corpus is cached between runs
-  (`fuzz-corpus-soak-*`), so each week starts where the previous one stopped, and
-  logs plus crash artifacts are uploaded even when the campaign fails.
+  (`fuzz-corpus-soak-*`) with an explicit `if: always()` save per shard, so a
+  crashing campaign still seeds the next week; each shard publishes a job summary
+  and uploads logs plus crash artifacts even on success (#2423). Scheduled soaks
+  use a dedicated concurrency group and cannot be cancelled by a dispatch (#2424).
 * **Locally**: `tools/soak_fuzz.sh --hours 24` runs the same rotation on this
   machine. Useful flags: `--slice-seconds 529` (time per target per rotation, default
   529 — the 34-target rotation needs ≤ 529 s to fit the 5 h scheduled budget, #1833),
