@@ -407,9 +407,9 @@ crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	cover
 crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/db.rs	351	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: SANS_FALLBACKS now starts with system default Noto Sans; DejaVu kept as fallback
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/query.rs	333	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/fonts/src/db/shape.rs	403	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: font() system-ui path unchanged; stale golden comment removed
-crates/fonts/src/db/tests.rs	181	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: red/green test that sans-serif resolves to Noto Sans; bundled/quoted paths unchanged
+crates/fonts/src/db/query.rs	366	src	F2	lead+wiki-serif-parity	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE #wiki-serif-parity	Read merge bdda7be8 diff (chrome, CLI, DPR, fonts, flex/CSS, IFC, painting); named-only system serif fallback added
+crates/fonts/src/db/shape.rs	422	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: font() system-ui path unchanged; bundled-only non-empty DB serif fallback uses named system faces
+crates/fonts/src/db/tests.rs	248	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: serif generic + empty-DB NoFontAvailable regressions plus sans-serif/Noto Sans red-green tests
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
