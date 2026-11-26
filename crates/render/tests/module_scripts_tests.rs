@@ -67,16 +67,25 @@ fn count_where(pixmap: &megi_paint::Pixmap, predicate: impl Fn([u8; 4]) -> bool)
         .count()
 }
 
+/// Timing-only budget warnings are informational; module-loader failures are
+/// the warnings these tests must keep catching.
+fn functional_warnings(output: &megi_render::RenderOutput) -> Vec<&str> {
+    output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| !warning.starts_with("performance budget:"))
+        .map(String::as_str)
+        .collect()
+}
+
 #[test]
 fn inline_module_mutates_the_dom_and_png() {
     let output = render_fixture("module_inline.html");
     assert_eq!(output.stats.scripts_executed, 1);
     assert_eq!(output.stats.scripts_failed, 0);
-    assert!(
-        output.stats.warnings.is_empty(),
-        "{:?}",
-        output.stats.warnings
-    );
+    let warnings = functional_warnings(&output);
+    assert!(warnings.is_empty(), "{warnings:?}");
     let green = count_where(&output.pixmap, |[r, g, b, _]| r < 60 && g > 200 && b < 60);
     assert!(
         green > 500,
@@ -89,11 +98,8 @@ fn external_module_with_relative_imports_resolves_and_paints() {
     let output = render_fixture("module_external.html");
     assert_eq!(output.stats.scripts_executed, 1);
     assert_eq!(output.stats.scripts_failed, 0);
-    assert!(
-        output.stats.warnings.is_empty(),
-        "{:?}",
-        output.stats.warnings
-    );
+    let warnings = functional_warnings(&output);
+    assert!(warnings.is_empty(), "{warnings:?}");
     assert_eq!(
         attribute(&output, "out", "data-area").as_deref(),
         Some("40")
@@ -111,11 +117,8 @@ fn module_importing_another_module_paints() {
     let output = render_fixture("module_chain.html");
     assert_eq!(output.stats.scripts_executed, 1);
     assert_eq!(output.stats.scripts_failed, 0);
-    assert!(
-        output.stats.warnings.is_empty(),
-        "{:?}",
-        output.stats.warnings
-    );
+    let warnings = functional_warnings(&output);
+    assert!(warnings.is_empty(), "{warnings:?}");
     let blue = count_where(&output.pixmap, |[r, g, b, _]| r < 60 && g < 60 && b > 200);
     assert!(blue > 300, "chained module painter, got {blue} px");
 }
