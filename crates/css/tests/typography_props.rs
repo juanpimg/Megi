@@ -83,6 +83,26 @@ fn typography_properties_are_inherited() {
 }
 
 #[test]
+fn font_family_inherit_uses_parent_family() {
+    let (mut doc, body, _p) = setup();
+    let select = doc.create_element(Namespace::Html, "select", vec![]);
+    doc.append_child(body, select);
+    let styles = compute_styles(
+        &doc,
+        "body { font-family: \"Fira Sans\", Helvetica, Arial, sans-serif; } \
+         select { font-family: inherit; }",
+    );
+    assert_eq!(
+        styles[&body].font_family,
+        "\"Fira Sans\", Helvetica, Arial, sans-serif"
+    );
+    assert_eq!(
+        styles[&select].font_family, styles[&body].font_family,
+        "CSS Cascading 4 §7.3: font-family: inherit must take the parent's computed value"
+    );
+}
+
+#[test]
 fn typography_initial_values_are_neutral() {
     let initial = ComputedStyle::initial();
     assert_eq!(initial.text_transform, TextTransform::None);

@@ -67,10 +67,14 @@ impl ComputedStyle {
             parent.map_or(FontStyle::Normal, |p| p.font_style)
         };
 
-        let font_family = if let Some(decl) = find_declaration(&entries, "font-family") {
-            decl.raw_value.clone()
-        } else {
-            parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone())
+        // CSS Cascading 4 §7.3 / CSS Fonts 4 §4.1: an explicit `inherit` takes
+        // the parent's computed family list, not a literal family named "inherit".
+        let font_family = match find_declaration(&entries, "font-family") {
+            Some(decl) if decl.raw_value.trim().eq_ignore_ascii_case("inherit") => {
+                parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone())
+            }
+            Some(decl) => decl.raw_value.clone(),
+            None => parent.map_or_else(|| "sans-serif".to_string(), |p| p.font_family.clone()),
         };
 
         let direction = if let Some(decl) = find_declaration(&entries, "direction") {
@@ -134,26 +138,20 @@ impl ComputedStyle {
             parent.map_or(TextTransform::None, |p| p.text_transform)
         };
 
-        let inherited_spacing = |property: &str, parent_value: Option<Length>| {
-            if let Some(decl) = find_declaration(&entries, property) {
-                let value = decl.raw_value.trim();
-                if value.eq_ignore_ascii_case("normal") {
-                    Length::Px(0.0)
-                } else {
-                    match Length::parse(value, font_size, root_font_size) {
-                        // Computed values of spacing lengths are absolute: resolve a
-                        // percentage against the element font-size (CSS Text 3).
-                        Some(Length::Percent(pct)) => Length::Px(font_size * pct / 100.0),
-                        Some(length) => length,
-                        None => parent_value.unwrap_or(Length::Px(0.0)),
-                    }
-                }
-            } else {
-                parent_value.unwrap_or(Length::Px(0.0))
-            }
-        };
-        let word_spacing = inherited_spacing("word-spacing", parent.map(|p| p.word_spacing));
-        let letter_spacing = inherited_spacing("letter-spacing", parent.map(|p| p.letter_spacing));
+        let word_spacing = super::spacing::inherited(
+            &entries,
+            "word-spacing",
+            font_size,
+            root_font_size,
+            parent.map(|p| p.word_spacing),
+        );
+        let letter_spacing = super::spacing::inherited(
+            &entries,
+            "letter-spacing",
+            font_size,
+            root_font_size,
+            parent.map(|p| p.letter_spacing),
+        );
 
         let visibility = find_declaration(&entries, "visibility")
             .and_then(|d| Visibility::parse(&d.raw_value))
