@@ -29,12 +29,17 @@
 //!
 //! ## Documented simplifications
 //!
-//! * CSS selectors that target `svg`/SVG-internal elements do not reach the rasterized
-//!   image; only the attributes copied to the synthetic `<img>` participate in CSS.
+//! * CSS selectors that target SVG-internal elements do not reach the rasterized image;
+//!   only the attributes copied to the synthetic `<img>` participate in CSS. The host's
+//!   computed `color` **is** propagated into the root `<svg>` (see [`current_color`]), so
+//!   `fill="currentColor"`/`stroke="currentColor"` paint with the inherited color.
 //! * In-SVG CSS/`<style>`, gradients/patterns, filters, `<text>`, animation and external
 //!   references remain unsupported (svg crate limitations); links/`<a>` inside the SVG are
-//!   lost (the synthetic image is not interactive).
+//!   lost (the synthetic image is not interactive). External host CSS via `<link>` cannot be
+//!   read at this stage, so inherited colors from linked stylesheets are not propagated.
 //! * The rasterized intrinsic size may be fractional; it is rounded up by <1 CSS px.
+
+mod current_color;
 
 use megi_core::{Attribute, Document, Namespace, NodeId};
 
@@ -95,6 +100,9 @@ pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> Inli
     };
     let candidates = collect_inline_svgs(document);
     let candidate_count = candidates.len();
+    // Resolve host colors while the original SVG nodes are still in the tree (before
+    // replacement) so the CSS cascade sees their real parents.
+    let inherited_colors = current_color::resolve(document, &candidates);
     let cap = MAX_INLINE_SVGS.min(image_budget);
     let mut total_bytes = 0usize;
     let mut limit_warned = false;
@@ -129,7 +137,11 @@ pub fn replace_inline_svgs(document: &mut Document, image_budget: usize) -> Inli
             ));
             continue;
         }
-        let markup = svg_markup(document, node_id);
+        let markup = svg_markup(
+            document,
+            node_id,
+            inherited_colors.get(&node_id).map(String::as_str),
+        );
         if markup.len() > MAX_INLINE_SVG_BYTES {
             report.skipped += 1;
             report.warnings.push(format!(
@@ -222,8 +234,9 @@ fn inline_svg_depth(document: &Document, root_id: NodeId) -> usize {
     maximum
 }
 
-/// Serializes the inline SVG to standalone SVG markup (repairing `xmlns` declarations).
-fn svg_markup(document: &Document, node_id: NodeId) -> String {
+/// Serializes the inline SVG to standalone SVG markup (repairing `xmlns` declarations and
+/// injecting the inherited `color` when the author did not declare one on the SVG root).
+fn svg_markup(document: &Document, node_id: NodeId, inherited_color: Option<&str>) -> String {
     let serialized = megi_html::serialize_outer_html(document, node_id);
     let element = document.node(node_id).as_element();
     let has_xmlns = element.is_some_and(|el| {
@@ -239,8 +252,13 @@ fn svg_markup(document: &Document, node_id: NodeId) -> String {
     if !serialized.starts_with("<svg") {
         return serialized;
     }
-    let mut markup = String::with_capacity(serialized.len() + 96);
+    let mut markup = String::with_capacity(serialized.len() + 128);
     markup.push_str("<svg");
+    if let Some(color) = inherited_color {
+        markup.push_str(" color=\"");
+        markup.push_str(color);
+        markup.push('"');
+    }
     if !has_xmlns {
         markup.push_str(" xmlns=\"http://www.w3.org/2000/svg\"");
     }
