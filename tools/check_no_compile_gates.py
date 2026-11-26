@@ -45,6 +45,7 @@ TEST_MODULES = (
     "tools.test_check_status_badges",
     "tools.test_check_doc_images",
     "tools.test_check_coverage_json",
+    "tools.test_check_real_site_html",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -75,6 +76,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("status_badges", (PY, "tools/check_status_badges.py")),
     ("doc_images", (PY, "tools/check_doc_images.py")),
     ("coverage_json", (PY, "tools/check_coverage_json.py")),
+    ("real_site_html", (PY, "tools/check_real_site_html.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
