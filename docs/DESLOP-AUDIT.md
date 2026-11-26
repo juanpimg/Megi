@@ -42,10 +42,10 @@ El primer escaneo completo sobre `origin/main` produjo **219 hallazgos**:
 ### Delta verificado (2026-11-26)
 
 Sin compilar: `git show a868fb56:.deslop-please.allow` versus el archivo actual.
-El allowlist pasó de **219 a 215 entradas**: se eliminaron 8 (entre ellas los
+El allowlist pasó de **219 a 214 entradas**: se eliminaron 8 (entre ellas los
 `field-leak` de `Tokenizer::allow_cdata`, `ActiveBody::total_sent` y
 `Host::frame_node_next_handle`, arreglados moviendo la responsabilidad a métodos
-del tipo) y se añadieron 4 por módulos nuevos (`events::inline`, `rasterizer::mask`,
+del tipo) y se añadieron 3 por módulos nuevos (`events::inline`, `rasterizer::mask`,
 `cascade::chunk4`, y la versión actualizada de los ciclos de eventos/raster).
 `deslop-please` no estuvo disponible en el entorno de medición, así que este delta
 es de inventario del allowlist, no un rescan SCIP; para confirmarlo instala el

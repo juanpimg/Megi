@@ -189,7 +189,6 @@ shallow-module megi_browser::forms
 shallow-module megi_browser::worker
 shallow-module megi_core
 shallow-module megi_css::animation
-shallow-module megi_css::cascade::chunk4
 shallow-module megi_css::properties::values
 shallow-module megi_js::canvas
 shallow-module megi_js::host

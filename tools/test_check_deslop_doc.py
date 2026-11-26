@@ -95,7 +95,7 @@ class CliTests(unittest.TestCase):
     def test_cli_accepts_real_files(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("matches allowlist (215 entries)", result.stdout)
+        self.assertIn("matches allowlist (214 entries)", result.stdout)
 
     def test_cli_reports_unreadable_allowlist(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
