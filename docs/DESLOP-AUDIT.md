@@ -49,7 +49,9 @@ del tipo) y se añadieron 4 por módulos nuevos (`events::inline`, `rasterizer::
 `cascade::chunk4`, y la versión actualizada de los ciclos de eventos/raster).
 `deslop-please` no estuvo disponible en el entorno de medición, así que este delta
 es de inventario del allowlist, no un rescan SCIP; para confirmarlo instala el
-binario con `cargo binstall` y ejecuta el gate de arriba.
+binario con `cargo binstall` y ejecuta el gate de arriba. Las cifras de este
+documento se comprueban contra el allowlist con
+`python3 tools/check_deslop_doc.py`.
 
 `.deslop-please.allow` congela esa deuda. **No significa que esté resuelta**:
 cada entrada es trabajo pendiente. Un hallazgo nuevo no incluido en el archivo

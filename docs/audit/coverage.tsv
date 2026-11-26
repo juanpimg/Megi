@@ -1427,7 +1427,7 @@ docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/DESLOP-AUDIT.md	74	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after documenting the no-compile delta
+docs/DESLOP-AUDIT.md	76	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding doc checker
 docs/DPR-RASTER-BOUNDARY.md	79	docs	F3	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 docs/FUZZING.md	306	docs	F3	jp	2026-11-25	covered	#2290	documentation aligned
 docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -2362,6 +2362,7 @@ tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
+tools/check_deslop_doc.py	123	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: deslop doc/allowlist consistency checker
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
@@ -2387,6 +2388,7 @@ tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read aft
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
+tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for deslop doc checker
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
