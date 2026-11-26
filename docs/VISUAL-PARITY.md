@@ -37,7 +37,8 @@ valida contra el manifiesto de sitios y su esquema con
 `python3 tools/check_parity_schema.py`. La tabla de este documento se comprueba
 contra la baseline mediante `python3 tools/check_parity_docs.py`. El registro de
 todos estos artefactos en el ledger se comprueba con
-`python3 tools/check_parity_ledger.py`.
+`python3 tools/check_parity_ledger.py`, y que la lista de artefactos declarada
+esté completa con `python3 tools/check_parity_inventory.py`.
 
 Las capturas usadas para estas mediciones están bajo `/tmp/opencode/compare-out/`
 (temporales, no versionadas); la herramienta y su metodología sí están versionadas.

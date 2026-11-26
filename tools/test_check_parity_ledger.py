@@ -77,7 +77,7 @@ class CliTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("covered in audit ledger (15 files)", result.stdout)
+        self.assertIn("covered in audit ledger (17 files)", result.stdout)
 
     def test_cli_reports_a_bad_path(self) -> None:
         result = subprocess.run(
