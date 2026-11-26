@@ -1420,7 +1420,7 @@ crates/webview/tests/embed.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 deny.toml	43	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#2247	re-read
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
-docs/AGENT-INDEX.md	100	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
+docs/AGENT-INDEX.md	103	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 docs/ARCHITECTURE.md	237	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
@@ -1438,6 +1438,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/UI-TARGET.md	37	docs	F3			pending		
 docs/VISUAL-PARITY.md	102	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
@@ -1523,6 +1524,7 @@ docs/images/images-e2e.png	0	binary	-			exempt		not read line by line: binary
 docs/images/phase4-basic.png	0	binary	-			exempt		not read line by line: binary
 docs/images/render-fixture.png	0	binary	-			exempt		not read line by line: binary
 docs/images/showcase.png	0	binary	-			exempt		not read line by line: binary
+docs/images/ui-target.jpg	0	binary	-			exempt		not read line by line: binary
 docs/status/COVERAGE.md	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-conformance.svg	0	generated	-			exempt		not read line by line: generated
 docs/status/badge-coverage.svg	0	generated	-			exempt		not read line by line: generated

@@ -9,6 +9,9 @@
 3. `docs/superpowers/plans/2026-11-24-megi-ambition-master-plan.md` — índice de planes, dependencias y barras de cierre.
 4. El plan del hito que toques (tabla abajo).
 5. El WP asignado en `docs/work-packages/BOARD.md` y su esquema en `docs/work-packages/SCHEMA.md`.
+6. Si tocas la UI del shell (chrome, rail, window): `docs/UI-TARGET.md` y su imagen
+   `docs/images/ui-target.jpg` son la referencia visual obligatoria (UI oscura
+   inspirada en Zen Browser).
 
 ## Hitos M0–M12
 
