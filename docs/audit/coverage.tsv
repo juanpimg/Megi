@@ -1325,6 +1325,7 @@ crates/render/tests/webfont_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/wiki_tabs_tests.rs	137	test	F1	wiki-tabs-fix	2026-11-26	covered		Read in full: geometry/PNG regression for Vector wiki toolbar
 crates/render/tests/worker_tests.rs	50	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/sandbox/Cargo.toml	16	manifest	F3	integration	2026-11-25	covered	#2295	read during sandbox merge reconciliation
 crates/sandbox/src/lib.rs	139	src	F2	lead	2026-11-25	covered	CI-UNIX-PROBE-ABI8	Capability-gated AF_UNIX probe for pre-V8 Landlock kernels
@@ -2055,6 +2056,8 @@ tests/fixtures/render/webp.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1
 tests/fixtures/render/webp_lossy.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/webp_real.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/white_space.html	17	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/wiki_tabs.html	93	fixture	F1	wiki-tabs-fix	2026-11-26	covered		Read in full: Vector header/toolbar CSS subset fixture
+tests/fixtures/render/wiki_tabs.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/word_spacing.html	14	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/worker_error.js	1	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/worker_sum.js	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
