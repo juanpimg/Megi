@@ -36,7 +36,7 @@ Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subte
 Megi es pre-alpha y hay trabajo atómico y verificable en la [cola de work packages](docs/work-packages/BOARD.md):
 
 - [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) — índice operativo: hitos M0–M12, planes y orden de lectura.
-- [`docs/work-packages/BOARD.md`](docs/work-packages/BOARD.md) — 47 WPs generados desde artefactos reales (criterios pendientes y sitios degradados), priorizados por impacto×frecuencia y marcados `light`/`heavy` según el disco que requieren.
+- [`docs/work-packages/BOARD.md`](docs/work-packages/BOARD.md) — 48 WPs en cola generados desde artefactos reales (criterios pendientes y sitios degradados), priorizados por impacto×frecuencia y marcados `light`/`heavy` según el disco que requieren; 4 WPs ya cerrados (`done`).
 - [Esquema del WP](docs/work-packages/SCHEMA.md) — campos obligatorios, criterio de aceptación y comando de verificación de cada tarea.
 - [Guía de contribución](CONTRIBUTING.md) — convenciones, DCO, TDD y gates obligatorios.
 - [Prompt para agentes de IA](docs/AI-QUICKSTART.md) — arranque rápido para Claude Code, Codex, OpenCode u otro harness.
@@ -102,7 +102,7 @@ cargo run --release -p megi-test-harness -- --summary --strict
 ### 3. Pipeline de Render a Imagen
 
 ```bash
-# Renderizar un documento HTML local a PNG mediante el pipeline de Fase 5
+# Renderizar un documento HTML local a PNG mediante el pipeline vigente de render
 cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/render.png --width 800 --height 600
 ```
 
@@ -110,7 +110,7 @@ cargo run --release -p megi-render -- tests/fixtures/render/basic.html /tmp/rend
 
 ##  Arquitectura del Workspace
 
-El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 18 crates especializados:
+El proyecto está diseñado como un Grafo Acíclico Dirigido (DAG) desacoplado en 18 crates especializados (el diagrama omite las herramientas `bench`/`test_harness`, listadas en la tabla):
 
 ```mermaid
 graph TD
@@ -128,12 +128,11 @@ graph TD
     render --> svg["crates/svg (Parser & Rasterizer)"]
     
     webview["crates/webview (API embebible)"] --> render
-    browser["crates/browser (UI & Ventana)"] --> webview
+    browser["crates/browser (UI & Ventana)"] --> webview & sandbox["crates/sandbox (Aislamiento del renderer)"]
     html --> dom["crates/core (Arena de Nodos)"]
     layout --> dom
     paint --> image
 ```
-
 | Crate | Responsabilidad | Concurrencia / Seguridad |
 |---|---|:---:|
 | [`crates/core`](crates/core) | Arena de nodos DOM contigua con `NodeId` generacional libre de ciclos. | `#![forbid(unsafe_code)]` |
@@ -151,6 +150,7 @@ graph TD
 | [`crates/js`](crates/js) | Motor JS ECMAScript basado en Boa, bindings DOM y Web Workers. | `#![forbid(unsafe_code)]` |
 | [`crates/render`](crates/render) | Orquestador del pipeline completo de renderizado web de extremo a extremo. | `#![forbid(unsafe_code)]` |
 | [`crates/browser`](crates/browser) | Aplicación de escritorio nativa con pestañas, address bar y hotkeys. | `#![forbid(unsafe_code)]` |
+| [`crates/sandbox`](crates/sandbox) | Aislamiento del proceso renderer (Landlock), hoja del DAG sin dependencias del motor. | `#![forbid(unsafe_code)]` |
 | [`crates/bench`](crates/bench) | Arnés de benchmarks reproducibles para medir latencias del pipeline. | `#![forbid(unsafe_code)]` |
 | [`crates/test_harness`](crates/test_harness) | Runner de verificación oficial frente a suites de conformidad WPT. | `#![forbid(unsafe_code)]` |
 
