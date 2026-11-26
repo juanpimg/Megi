@@ -846,8 +846,8 @@ crates/layout/src/block/width.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/flex.rs	142	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
-crates/layout/src/flex/helpers.rs	402	src	F2	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
-crates/layout/src/flex/layout.rs	498	src	F2	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
+crates/layout/src/flex/helpers.rs	444	src	F2	rust-nav-caret-fix	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
+crates/layout/src/flex/layout.rs	500	src	F2	rust-nav-caret-fix	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
 crates/layout/src/flex/minimum.rs	53	src	F2	lead	2026-11-26	covered	RENDER-FORMS-FLEX-SVG	read and verified during integration
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1635,6 +1635,11 @@ docs/work-packages/queue/WP-DEPTH-m9-02.toml	13	docs	F3	wp-engine	2026-11-24	cov
 docs/work-packages/queue/WP-DEPTH-m9-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
+docs/work-packages/queue/WP-USER-ui-favicon.toml	13	docs	F3	rust-nav-caret-fix	2026-11-26	covered		
+docs/work-packages/queue/WP-USER-ui-gate.toml	13	docs	F3	rust-nav-caret-fix	2026-11-26	covered		
+docs/work-packages/queue/WP-USER-ui-icons.toml	13	docs	F3	rust-nav-caret-fix	2026-11-26	covered		
+docs/work-packages/queue/WP-USER-ui-shell.toml	13	docs	F3	rust-nav-caret-fix	2026-11-26	covered		
+docs/work-packages/queue/WP-USER-ui-titles.toml	13	docs	F3	rust-nav-caret-fix	2026-11-26	covered		
 docs/work-packages/state.json	10	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
 fuzz/Cargo.toml	266	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	three new fuzz bins reviewed
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt

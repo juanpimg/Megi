@@ -389,6 +389,48 @@ pub(super) fn cross_offset(align: AlignSelf, line_cross: f32, outer_cross: f32) 
     }
 }
 
+/// Data for re-laying out a row flex item's absolutely positioned descendants
+/// once its cross size is final (CSS 2.2 §9.6/§10.3.7). A row item is first
+/// measured against a zero-height containing block, so `top: 50%` on
+/// `.select::after` resolves to zero and escapes the item border. Pure data:
+/// no layout calls, so this helper stays out of the layout module cycle.
+pub(super) fn out_of_flow_data(
+    child: &LayoutBox,
+) -> (Vec<(usize, f32, f32)>, crate::block::PositioningContext) {
+    let cb = child.dimensions.content;
+    let static_positions: Vec<(usize, f32, f32)> = child
+        .children
+        .iter()
+        .enumerate()
+        .filter(|(_, node)| {
+            node.style
+                .as_ref()
+                .is_some_and(|style| style.position == Position::Absolute)
+        })
+        .map(|(index, node)| {
+            let (margin_left, margin_top) = node.style.as_ref().map_or((0.0, 0.0), |style| {
+                (
+                    crate::calc::length(
+                        style.margin.left,
+                        style.calc_lengths.margin_left,
+                        cb.width,
+                    ),
+                    crate::calc::length(style.margin.top, style.calc_lengths.margin_top, cb.width),
+                )
+            });
+            (index, cb.x + margin_left, cb.y + margin_top)
+        })
+        .collect();
+    let padding_box = child.dimensions.padding_box();
+    let pos = crate::block::PositioningContext {
+        abs_cb: padding_box,
+        abs_cb_height: Some(padding_box.height),
+        viewport: padding_box,
+        wrap_long_words: false,
+    };
+    (static_positions, pos)
+}
+
 pub(super) fn first_line_baseline(layout_box: &LayoutBox) -> Option<f32> {
     if matches!(layout_box.box_type, BoxType::LineBox) {
         return Some(layout_box.dimensions.content.y + layout_box.baseline);

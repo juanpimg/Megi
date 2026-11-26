@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rust-lang.org nav and language select regression fixture</title>
+<style>
+/* Reproduces the relevant rust-lang.org Tachyons/UA rules at 1024x768. */
+html { font-size: 62.5%; }
+@media (min-width: 30em) { html { font-size: 75%; } }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 1.5rem; line-height: 1.6; }
+.flex { display: flex; }
+.flex-row { flex-direction: row; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-none { flex: none; }
+.flex-auto { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.items-center { align-items: center; }
+.self-start { align-self: flex-start; }
+.justify-end { justify-content: flex-end; }
+.w-100 { width: 100%; }
+.list { list-style: none; }
+.tc { text-align: center; }
+.pv2 { padding-top: .5rem; padding-bottom: .5rem; }
+.ph2 { padding-left: .5rem; padding-right: .5rem; }
+.ph3 { padding-left: 1rem; padding-right: 1rem; }
+.ph4 { padding-left: 2rem; padding-right: 2rem; }
+.pb3 { padding-bottom: 1rem; }
+@media (min-width: 30em) {
+  .ph4-ns { padding-left: 2rem; padding-right: 2rem; }
+  .w-auto-ns { width: auto; }
+}
+@media (min-width: 60em) {
+  .w-auto-l { width: auto; }
+  .justify-end-l { justify-content: flex-end; }
+  .tl-l { text-align: left; }
+}
+nav { padding: 0 1rem 1rem; }
+ul.nav { margin: 0; padding-left: 2rem; padding-right: 2rem; }
+ul.nav a { color: #2a3439; text-decoration: underline; }
+.select { display: inline-block; position: relative; }
+.select select {
+  appearance: none;
+  font-size: 1.25rem;
+  border: 1px solid #2a3439;
+  background-color: white;
+  padding: 2px 6px;
+  color: #2a3439;
+  box-sizing: border-box;
+}
+.select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 0;
+  height: 0;
+  margin-top: -2px;
+  border-top: 5px solid #2a3439;
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+}
+</style>
+</head>
+<body>
+<nav class="flex flex-row items-center flex-wrap ph3 pb3">
+  <div class="brand flex-auto w-100 w-auto-l self-start tc tl-l">Brand</div>
+  <ul class="nav list w-100 w-auto-l flex flex-none flex-row flex-wrap justify-end-l items-center pv2 ph4-ns">
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Install</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Learn</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Playground</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Tools</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Governance</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Funding</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#">Community</a></li>
+    <li class="tc pv2 ph2 ph4-ns"><a href="#"><span id="blog">Blog</span></a></li>
+  </ul>
+  <div class="w-100 w-auto-l flex-none flex justify-end pv2"><div class="select">
+    <select id="language-nav">
+      <option>English (en-US)</option>
+      <option>Espa&ntilde;ol (es)</option>
+    </select>
+  </div></div>
+</nav>
+</body>
+</html>
