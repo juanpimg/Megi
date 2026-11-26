@@ -66,7 +66,11 @@ class CliTests(unittest.TestCase):
     def test_real_run_passes_all_gates(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("47/48 compile-free gates passed", result.stdout)
+        # Derive the denominator from the live gate registry: adding a gate must
+        # not turn a green run into a stale hardcoded assertion. `total/total`
+        # plus the FAIL check proves every registered gate passed.
+        total = len(runner.GATES)
+        self.assertIn(f"{total}/{total} compile-free gates passed", result.stdout)
         self.assertNotIn("FAIL", result.stdout)
 
     def test_runner_has_no_cargo_in_its_own_source(self) -> None:
