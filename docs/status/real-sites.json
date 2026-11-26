@@ -1,6 +1,6 @@
 {
   "mode": "live",
-  "generated_at": "2026-11-25",
+  "generated_at": "2026-11-26",
   "results": [
     {
       "id": "example",
@@ -16,7 +16,7 @@
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1285.6,
+      "time_ms": 1373.1,
       "issue": 0,
       "error": "",
       "png": "real-sites/example.png",
@@ -29,20 +29,22 @@
       "source": "https://www.rust-lang.org",
       "mode": "live",
       "result": "DEGRADADO",
-      "display_items": 392,
+      "display_items": 393,
       "element_count": 197,
       "body_text": "\n    \n      \n        \n          \n        \n      \n    \n      \n        Install\n        Learn\n        Playground\n        Tools\n        Governance\n        Funding\n        Community\n        Blog\n      \n    \n      \n        \n          Language\n          \n            English (en-US)\n            Español (es)\n            Français (fr)\n            Italiano (it)\n            日本語 (ja)\n            Português (pt-BR)\n            Русский (ru)\n            Türkçe (tr)\n            简体中文 (zh-CN)\n            正體中文 (zh-TW)\n         ",
       "status": 200,
       "warnings": [
-        "performance budget: total 7902 > 3s"
+        "performance budget: total 8350 > 3s",
+        "performance budget: styles_pre_script 244 ms > 200ms",
+        "performance budget: images 731 ms > 500ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 7922.2,
+      "time_ms": 8519.3,
       "issue": 0,
       "error": "",
       "png": "real-sites/rust.png",
-      "png_md5": "b01fc0cb1fdc0ac44fa595f0f2f144e8"
+      "png_md5": "cc8956645c9ad28d7a1459d2c4b44ed1"
     },
     {
       "id": "wikipedia",
@@ -57,11 +59,12 @@
       "status": 200,
       "warnings": [
         "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"M8 1a7 7 0 015.605 11.191l5.102 5.102-1.414 1.414-5.102-5.102A7 7 0 118 1m0 2a5 5 0 100 10A5 5 0 008 3\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
-        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)"
+        "skipping background image data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"20\\\" height=\\\"20\\\" viewBox=\\\"0 0 20 20\\\" fill=\\\"%23000\\\"><path d=\\\"m16.7 8-6 6H9.3l-6-6 1.4-1.4 5.3 5.3 5.3-5.3z\\\"/></svg>: SVG render failed (malformed XML: attribute \"xmlns\" is not quoted)",
+        "performance budget: styles_pre_script 253 ms > 200ms"
       ],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1426.3,
+      "time_ms": 1913.5,
       "issue": 1013,
       "error": "",
       "png": "real-sites/wikipedia.png",
@@ -74,18 +77,18 @@
       "source": "https://news.ycombinator.com",
       "mode": "live",
       "result": "PASS",
-      "display_items": 2778,
-      "element_count": 801,
-      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.1Password Security Incident (1password.com)1030 points by lxhrstn 6 hours ago  | hide | 439 comments2.Much shorter version of GRH Lean verification from Anthropic (github.com/lsernau)186 points by nb-t 2 hours ago  | hide | 83 comments3.Jev is (probably) Qwen3.5-35B-A3B (modaic.dev)83 points by csoham 53 minutes ago  | hide | 5 comments4.The New York Times tells photographers not to use the latest Photoshop (dpreview.com)124 points by rmaso",
+      "display_items": 2788,
+      "element_count": 808,
+      "body_text": "Hacker Newsnew | past | comments | ask | show | jobs | submitlogin1.Jev is (probably) Qwen3.5-35B-A3B (modaic.dev)145 points by csoham 1 hour ago  | hide | 34 comments2.1Password Security Incident (1password.com)1063 points by lxhrstn 7 hours ago  | hide | 461 comments3.Much shorter version of GRH Lean verification from Anthropic (github.com/lsernau)212 points by nb-t 2 hours ago  | hide | 93 comments4.The New York Times tells photographers not to use the latest Photoshop (dpreview.com)149 points by rmason ",
       "status": 200,
       "warnings": [],
       "console_errors": 0,
       "images_failed": 0,
-      "time_ms": 1733.8,
+      "time_ms": 1924.4,
       "issue": 1011,
       "error": "",
       "png": "real-sites/hn.png",
-      "png_md5": "9e22a224b82a87da5e09839c431a9202"
+      "png_md5": "6412969e25857256e4b5d9376697b192"
     }
   ]
 }

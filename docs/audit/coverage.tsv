@@ -840,9 +840,9 @@ crates/layout/src/block/sizing.rs	389	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/layout/src/block/width.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/flex.rs	131	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
-crates/layout/src/flex/helpers.rs	305	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/flex/layout.rs	438	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
+crates/layout/src/flex.rs	136	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
+crates/layout/src/flex/helpers.rs	366	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
+crates/layout/src/flex/layout.rs	459	src	F2	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/names.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1241,6 +1241,7 @@ crates/render/tests/forms/main.rs	6	test	F1	lead	2026-11-25	covered	SELECT-PARIT
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	64	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1904,6 +1905,7 @@ tests/fixtures/render/grid_content.html	12	fixture	F1	waveF1	2026-11-17	covered	
 tests/fixtures/render/grid_dense.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/grid_rows.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/grid_span.html	11	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/hero_cta.html	87	fixture	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 tests/fixtures/render/image_formats.html	9	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/image_scaled.html	10	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/image_set.html	20	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	

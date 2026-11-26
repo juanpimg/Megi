@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hero cta regression fixture</title>
+<style>
+html { font-size: 62.5%; }
+@media (min-width: 30em) { html { font-size: 75%; } }
+.border-box, a, article, aside, div, header, html, main, nav, ol, p, section, table, td, ul { box-sizing: border-box; }
+body { display: flex; flex-direction: column; font-size: 1.5rem; line-height: 1.6; }
+body > main { flex: 1; display: flex; flex-direction: column; }
+.flex { display: flex; }
+.flex-column { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.flex-auto { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.flex-none { flex: none; }
+.flex-wrap { flex-wrap: wrap; }
+.w-100 { width: 100%; }
+.w-auto { width: auto; }
+.w-30 { width: 30%; }
+.w-70 { width: 70%; }
+.center { margin-left: auto; margin-right: auto; }
+.ph2 { padding-left: .5rem; padding-right: .5rem; }
+.ph3 { padding-left: 1rem; padding-right: 1rem; }
+.ph4 { padding-left: 2rem; padding-right: 2rem; }
+.pl3 { padding-left: 1rem; }
+.pr3 { padding-right: 1rem; }
+.pb3 { padding-bottom: 1rem; }
+.mt3 { margin-top: 1rem; }
+.mb6 { margin-bottom: 4rem; }
+.mt4 { margin-top: 2rem; }
+.mt0 { margin-top: 0; }
+.mb0 { margin-bottom: 0; }
+.tc { text-align: center; }
+.list { list-style: none; }
+.button { display: inline-block; width: 100%; min-height: 38px; padding: 8px 30px; text-align: center; text-transform: uppercase; border: 1px solid; box-sizing: border-box; white-space: nowrap; }
+header .button.button-download { color: black; background-color: #ffc832; border-color: #ffc832; width: 100%; padding: 20px; height: auto; font-size: 2.25rem; margin-top: 20px; }
+header h1 { font-size: 8rem; line-height: 1.2; }
+header h2 { font-size: 4.2rem; line-height: 1.25; }
+@media screen and (min-width: 60em) {
+  .flex-row-l { flex-direction: row; }
+  .w-auto-l { width: auto; }
+  .w-70-l { width: 70%; }
+  .w-30-l { width: 30%; }
+  .pl0-l, .pr0-l { padding: 0; }
+  .mw8-l { max-width: 64rem; }
+  .mw9-l { max-width: 96rem; }
+  .justify-end-l { justify-content: flex-end; }
+  .tl-l { text-align: left; }
+  .db-ns { display: block; }
+}
+@media (min-width: 30em) {
+  .mw8-m { max-width: 64rem; }
+  .f1-ns { font-size: 2rem; }
+  .f2-l { font-size: 2.25rem; }
+  .pl3-ns { padding-left: 1rem; }
+  .pr3-ns { padding-right: 1rem; }
+  .ph4-ns { padding-left: 2rem; padding-right: 2rem; }
+  .pv-0-l { padding-top: 0; padding-bottom: 0; }
+}
+</style>
+</head>
+<body>
+<nav class="flex flex-row justify-center justify-end-l items-center flex-wrap ph2 pl3-ns pr3-ns pb3">
+  <div class="brand flex-auto w-100 w-auto-l self-start tc tl-l">Brand</div>
+  <ul class="nav list w-100 w-auto-l flex flex-none flex-row flex-wrap justify-center justify-end-l items-center pv2 ph0 ph4-ns">
+    <li class="tc pv2 ph2 ph4-ns">Install</li><li class="tc pv2 ph2 ph4-ns">Learn</li>
+    <li class="tc pv2 ph2 ph4-ns">Playground</li><li class="tc pv2 ph2 ph4-ns">Tools</li>
+    <li class="tc pv2 ph2 ph4-ns">Governance</li><li class="tc pv2 ph2 ph4-ns">Funding</li>
+    <li class="tc pv2 ph2 ph4-ns">Community</li><li class="tc pv2 ph2 ph4-ns">Blog</li>
+  </ul>
+  <div class="w-100 w-auto-l flex-none flex justify-center pv4 pv-0-l languages">English (en-US)</div>
+</nav>
+<main><header class="mt3 mb6 w-100 mw-none ph3 mw8-m mw9-l center">
+  <div class="flex flex-column flex-row-l">
+    <div class="w-70-l mw8-l">
+      <h1>Rust</h1>
+      <h2 class="mt4 mb0 f2 f1-ns">A language empowering everyone <br class="dn db-ns"> to build reliable and efficient software.</h2>
+    </div>
+    <div class="w-30-l flex-column pl0-l pr0-l pl3 pr3">
+      <a class="button button-download ph4 mt0 w-100" href="/learn/get-started">Get Started</a>
+      <p class="tc f3 f2-l mt3"><a href="#" class="download-link">Version 1.100.0</a></p>
+    </div>
+  </div>
+</header></main>
+</body>
+</html>

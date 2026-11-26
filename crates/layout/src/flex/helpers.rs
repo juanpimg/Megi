@@ -51,6 +51,15 @@ pub(super) fn resolve_edges(style: &ComputedStyle, cb_width: f32) -> Edges {
     }
 }
 
+/// Padding + border (no margin) of an `Edges` value on the main axis.
+pub(super) fn edges_main(edges: &Edges, row: bool) -> f32 {
+    if row {
+        edges.padding.left + edges.padding.right + edges.border.left + edges.border.right
+    } else {
+        edges.padding.top + edges.padding.bottom + edges.border.top + edges.border.bottom
+    }
+}
+
 pub(super) fn definite_length(
     value: Length,
     calc: Option<megi_css::calc::CalcValue>,
@@ -70,22 +79,36 @@ pub(super) fn is_reverse(direction: FlexDirection) -> bool {
     )
 }
 
-pub(super) fn clamp_main(style: &ComputedStyle, value: f32, row: bool, reference: f32) -> f32 {
+pub(super) fn clamp_main(
+    style: &ComputedStyle,
+    value: f32,
+    row: bool,
+    reference: f32,
+    main_edges: f32,
+) -> f32 {
     let mut size = value.max(0.0);
+    // CSS UI 3 §4 / CSS 2.2 §10.2: min/max apply to the box chosen by
+    // `box-sizing`. Flex sizes are tracked as content boxes, so a border-box
+    // constraint has to lose the item's padding and border first.
+    let constraint_edges = if style.box_sizing == BoxSizing::BorderBox {
+        main_edges
+    } else {
+        0.0
+    };
     if row {
         if let Some(min) = definite_length(
             style.min_width,
             style.calc_lengths.min_width,
             Some(reference),
         ) {
-            size = size.max(min);
+            size = size.max((min - constraint_edges).max(0.0));
         }
         if let Some(max) = definite_length(
             style.max_width,
             style.calc_lengths.max_width,
             Some(reference),
         ) {
-            size = size.min(max.max(0.0));
+            size = size.min((max - constraint_edges).max(0.0));
         }
     } else {
         if let Some(min) = definite_length(
@@ -93,14 +116,14 @@ pub(super) fn clamp_main(style: &ComputedStyle, value: f32, row: bool, reference
             style.calc_lengths.min_height,
             Some(reference),
         ) {
-            size = size.max(min);
+            size = size.max((min - constraint_edges).max(0.0));
         }
         if let Some(max) = definite_length(
             style.max_height,
             style.calc_lengths.max_height,
             Some(reference),
         ) {
-            size = size.min(max.max(0.0));
+            size = size.min((max - constraint_edges).max(0.0));
         }
     }
     size
@@ -112,9 +135,21 @@ pub(super) fn flex_base_main(
     row: bool,
     container_main: Option<f32>,
     container_width: f32,
+    main_edges: f32,
 ) -> f32 {
+    // CSS Flexible Box Layout Module Level 1 §4: a definite flex basis or
+    // preferred size expresses the item's hypothetical main size, which is a
+    // border box under `box-sizing: border-box`.
+    let to_content = |value: f32| {
+        if style.box_sizing == BoxSizing::BorderBox {
+            (value - main_edges).max(0.0)
+        } else {
+            value
+        }
+    };
+    let reference = container_main.unwrap_or(container_width);
     if let Some(basis) = definite_length(style.flex_basis, None, container_main) {
-        return clamp_main(style, basis, row, container_main.unwrap_or(container_width));
+        return clamp_main(style, to_content(basis), row, reference, main_edges);
     }
     let definite = if row {
         definite_length(style.width, style.calc_lengths.width, Some(container_width))
@@ -123,9 +158,10 @@ pub(super) fn flex_base_main(
     };
     clamp_main(
         style,
-        definite.unwrap_or(0.0),
+        definite.map_or(0.0, to_content),
         row,
-        container_main.unwrap_or(container_width),
+        reference,
+        main_edges,
     )
 }
 
@@ -135,6 +171,7 @@ pub(super) fn explicit_cross(
     row: bool,
     container_height: Option<f32>,
     container_width: f32,
+    cross_edges: f32,
 ) -> Option<f32> {
     let value = if row { style.height } else { style.width };
     let calc = if row {
@@ -148,29 +185,36 @@ pub(super) fn explicit_cross(
         Some(container_width)
     };
     let raw = crate::calc::length_optional(value, calc, reference)?;
+    // CSS UI 3 §4: a specified cross size is a border box when `box-sizing` is
+    // `border-box`; flex geometry stores content boxes, so strip the edges.
+    let constraint_edges = if style.box_sizing == BoxSizing::BorderBox {
+        cross_edges
+    } else {
+        0.0
+    };
+    let mut size = (raw - constraint_edges).max(0.0);
     // Apply min/max clamping on the cross axis.
-    let mut size = raw.max(0.0);
     if row {
         if let Some(min) =
             crate::calc::length_optional(style.min_height, style.calc_lengths.min_height, reference)
         {
-            size = size.max(min);
+            size = size.max((min - constraint_edges).max(0.0));
         }
         if let Some(max) =
             crate::calc::length_optional(style.max_height, style.calc_lengths.max_height, reference)
         {
-            size = size.min(max.max(0.0));
+            size = size.min((max - constraint_edges).max(0.0));
         }
     } else {
         if let Some(min) =
             crate::calc::length_optional(style.min_width, style.calc_lengths.min_width, reference)
         {
-            size = size.max(min);
+            size = size.max((min - constraint_edges).max(0.0));
         }
         if let Some(max) =
             crate::calc::length_optional(style.max_width, style.calc_lengths.max_width, reference)
         {
-            size = size.min(max.max(0.0));
+            size = size.min((max - constraint_edges).max(0.0));
         }
     }
     Some(size)
@@ -197,7 +241,13 @@ pub(super) fn resolve_flexible_lengths(
             for index in line {
                 let item = &mut items[*index];
                 item.used_main += free * item.flex_grow / grow_sum;
-                item.used_main = clamp_main(&item.style, item.used_main, row, reference);
+                item.used_main = clamp_main(
+                    &item.style,
+                    item.used_main,
+                    row,
+                    reference,
+                    item.edges_main(row),
+                );
             }
         }
     } else if free < 0.0 {
@@ -229,7 +279,13 @@ pub(super) fn resolve_flexible_lengths(
                 let index = line[pos];
                 let factor = items[index].flex_shrink * items[index].base_main;
                 let target = original_used[pos] - deficit * factor / weight;
-                let clamped = clamp_main(&items[index].style, target, row, reference);
+                let clamped = clamp_main(
+                    &items[index].style,
+                    target,
+                    row,
+                    reference,
+                    items[index].edges_main(row),
+                );
                 if clamped > target + 1e-4 {
                     items[index].used_main = clamped;
                     newly_frozen.push(pos);
@@ -240,8 +296,13 @@ pub(super) fn resolve_flexible_lengths(
                     let index = line[pos];
                     let factor = items[index].flex_shrink * items[index].base_main;
                     let target = original_used[pos] - deficit * factor / weight;
-                    items[index].used_main =
-                        clamp_main(&items[index].style, target, row, reference);
+                    items[index].used_main = clamp_main(
+                        &items[index].style,
+                        target,
+                        row,
+                        reference,
+                        items[index].edges_main(row),
+                    );
                 }
                 break;
             }

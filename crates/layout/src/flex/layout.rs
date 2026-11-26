@@ -1,8 +1,9 @@
 use super::*;
 
 use super::helpers::{
-    clamp_main, cross_offset, explicit_cross, first_line_baseline, flex_base_main, is_reverse,
-    is_row, justify_offsets, resolve, resolve_align_self, resolve_edges, resolve_flexible_lengths,
+    clamp_main, cross_offset, edges_main, explicit_cross, first_line_baseline, flex_base_main,
+    is_reverse, is_row, justify_offsets, resolve, resolve_align_self, resolve_edges,
+    resolve_flexible_lengths,
 };
 
 /// Lays out the children of a flex container.
@@ -65,7 +66,14 @@ pub(crate) fn layout_flex_children(
         if matches!(child_style.position, Position::Absolute | Position::Fixed) || child.is_float {
             continue;
         }
-        let base_from_style = flex_base_main(&child_style, row, container_main, container_width);
+        let edges = resolve_edges(&child_style, container_width);
+        let base_from_style = flex_base_main(
+            &child_style,
+            row,
+            container_main,
+            container_width,
+            edges_main(&edges, row),
+        );
         // `flex-basis: auto` with an auto `width` (row axis): approximate the
         // content-based base size with the engine's shrink-to-fit measurement.
         let auto_main = if row {
@@ -86,9 +94,9 @@ pub(crate) fn layout_flex_children(
                 child.dimensions.content.width,
                 row,
                 container_width,
+                edges_main(&edges, row),
             );
         }
-        let edges = resolve_edges(&child_style, container_width);
         items.push(Item {
             child,
             flex_grow: child_style.flex_grow.max(0.0),
@@ -385,8 +393,14 @@ fn layout_item_at(
             + edges.padding.right
             + edges.border.left
             + edges.border.right;
-        let cross = explicit_cross(&item.style, false, definite_height, container_width)
-            .unwrap_or_else(|| (container_width - cross_edges).max(0.0));
+        let cross = explicit_cross(
+            &item.style,
+            false,
+            definite_height,
+            container_width,
+            edges_main(&edges, true),
+        )
+        .unwrap_or_else(|| (container_width - cross_edges).max(0.0));
         (cross.max(0.0), item.used_main.max(0.0))
     };
     let child = &mut *item.child;
@@ -410,8 +424,14 @@ fn layout_item_at(
     pos.wrap_long_words = !matches!(item.style.white_space, WhiteSpace::Nowrap | WhiteSpace::Pre);
     layout_box_contents(child, definite_height, false, measurer, pos);
     if row {
-        item.used_cross = explicit_cross(&item.style, true, definite_height, container_width)
-            .unwrap_or(child.dimensions.content.height);
+        item.used_cross = explicit_cross(
+            &item.style,
+            true,
+            definite_height,
+            container_width,
+            edges_main(&edges, false),
+        )
+        .unwrap_or(child.dimensions.content.height);
         child.dimensions.content.height = item.used_cross.max(0.0);
     } else {
         item.used_cross = child.dimensions.content.width;
@@ -425,6 +445,7 @@ fn layout_item_at(
                 child.dimensions.content.height,
                 false,
                 container_width,
+                edges_main(&edges, false),
             );
         }
         // `layout_box_contents` recomputed the item's height from its content; when the
