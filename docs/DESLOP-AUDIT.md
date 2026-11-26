@@ -9,8 +9,9 @@ DAG with `tools/check_arch.py`.
 ## Cómo ejecutarlo
 
 ```bash
-# Instalación (o cargo binstall deslop-please)
-cargo install deslop-please
+# Instalación sin compilar: binario precompilado
+cargo binstall deslop-please
+# (cargo install deslop-please compila; evítalo si el disco está justo)
 
 # Requiere el componente rust-analyzer del toolchain pinnado:
 rustup component add rust-analyzer --toolchain "$(cat rust-toolchain.toml | ...)"
@@ -37,6 +38,18 @@ El primer escaneo completo sobre `origin/main` produjo **219 hallazgos**:
 | `shallow-module` | 15 |
 | `wide-directory` | 15 |
 | `long-file` | 0 |
+
+### Delta verificado (2026-11-26)
+
+Sin compilar: `git show a868fb56:.deslop-please.allow` versus el archivo actual.
+El allowlist pasó de **219 a 215 entradas**: se eliminaron 8 (entre ellas los
+`field-leak` de `Tokenizer::allow_cdata`, `ActiveBody::total_sent` y
+`Host::frame_node_next_handle`, arreglados moviendo la responsabilidad a métodos
+del tipo) y se añadieron 4 por módulos nuevos (`events::inline`, `rasterizer::mask`,
+`cascade::chunk4`, y la versión actualizada de los ciclos de eventos/raster).
+`deslop-please` no estuvo disponible en el entorno de medición, así que este delta
+es de inventario del allowlist, no un rescan SCIP; para confirmarlo instala el
+binario con `cargo binstall` y ejecuta el gate de arriba.
 
 `.deslop-please.allow` congela esa deuda. **No significa que esté resuelta**:
 cada entrada es trabajo pendiente. Un hallazgo nuevo no incluido en el archivo

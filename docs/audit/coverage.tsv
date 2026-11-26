@@ -1427,7 +1427,7 @@ docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
 docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/DESLOP-AUDIT.md	61	docs	F3	opencode-agent	2026-11-25	covered	#audit	read line by line
+docs/DESLOP-AUDIT.md	74	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after documenting the no-compile delta
 docs/DPR-RASTER-BOUNDARY.md	79	docs	F3	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 docs/FUZZING.md	306	docs	F3	jp	2026-11-25	covered	#2290	documentation aligned
 docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
