@@ -4,7 +4,7 @@
 
 **Goal:** Llevar Megi a un navegador 100 % utilizable en producción mediante hitos de capacidad encadenados y un motor de work packages que mantiene ocupados a los agentes de IA de forma continua.
 
-**Architecture:** Trece hitos (M0–M12) organizados por dependencias lógicas, sin fechas. Cada hito se cierra con una barra de aceptación medible. Nueve planes de subsistema producen software verificable de forma independiente. El motor de WPs regenera la cola de trabajo a partir de siete fuentes automáticas.
+**Architecture:** Trece hitos (M0–M12) organizados por dependencias lógicas, sin fechas. Cada hito se cierra con una barra de aceptación medible. Diez planes de subsistema en el «Mapa de planes» (15 planes ejecutables en `docs/superpowers/plans/`) producen software verificable de forma independiente. El motor de WPs regenera la cola de trabajo a partir de siete fuentes automáticas.
 
 **Tech Stack:** Rust 1.91 / 17+ crates / Boa 0.22; Python 3.11 stdlib; GitHub Actions; cosign; Landlock/rustix; wasmi; quinn/h3; symphonia; software WebGL; DevTools protocol.
 
@@ -109,4 +109,4 @@ El motor de WPs corre EN PARALELO desde el primer día y nunca se detiene.
 - **Sin calendarización**: no hay meses ni fechas en los hitos; solo dependencias lógicas. Correcto.
 - **Sin topes funcionales**: 25.000 subtests pasa a ser piso, no techo; anti-objetivos v1 pasan a hitos M5–M8, y M10–M12 cubren WebGPU/WebXR/WebRTC, extensiones, sync, mobile, integración nativa y la decisión legal sobre DRM. Correcto.
 - **Consistencia**: los mismos nombres de tipos y barras se usan en los planes de subsistema. Correcto.
-- **Proporción**: el master es un índice; los detalles están en los nueve planes. Correcto.
+- **Proporción**: el master es un índice; los detalles están en los diez planes del Mapa (15 ejecutables en total). Correcto.
