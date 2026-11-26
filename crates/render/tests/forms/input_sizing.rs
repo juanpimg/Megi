@@ -188,7 +188,9 @@ fn select_author_size_is_kept() {
 
 /// Goldens: the local fixture exercises all three sizing paths at once.
 /// Before the fix: md5 43dcaab4302036b717a3c9dd840e05ac (all size-driven
-/// fields stuck at ~160px). After: md5 ae3af433ef4781da045fb86a1ed8f128.
+/// fields stuck at ~160px). Sizing fix: md5 ae3af433ef4781da045fb86a1ed8f128.
+/// Native control text pipeline adds glyphs to the same fixture; restamped
+/// md5 4a53f55a74ebab8442a51eb21517de0f (geometry assertions unchanged).
 #[test]
 fn fixture_png_is_byte_identical_to_golden() {
     let out = render_with_viewport(include_str!("fixtures/input_sizing.html"), 800, 260);

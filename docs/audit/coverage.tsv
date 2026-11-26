@@ -362,7 +362,7 @@ crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk1.rs	410	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
-crates/css/src/user_agent/chunk2.rs	256	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
+crates/css/src/user_agent/chunk2.rs	266	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	365	test	F1	lead	2026-11-26	covered	REMOTE-CSS-CALC-MERGE	read during CI tools gate fix
@@ -875,9 +875,9 @@ crates/layout/src/table/legacy/columns.rs	126	src	F2	wave-max-mod	2026-11-19	cov
 crates/layout/src/table/structure.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/text.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/tree_builder.rs	94	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/tree_builder/box_for_node.rs	419	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/layout/src/tree_builder/box_for_node.rs	431	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/layout/src/tree_builder/cache.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/tree_builder/element_boxes.rs	166	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/layout/src/tree_builder/element_boxes.rs	212	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/layout/src/tree_builder/fixups.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/adversarial_harness/box_splitting.rs	244	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/adversarial_harness/common.rs	21	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1082,7 +1082,8 @@ crates/paint/src/painter/backgrounds.rs	389	src	F2	wave-max-mod	2026-11-25	cover
 crates/paint/src/painter/blocks.rs	195	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-25	covered	#2296	removed global counter reset; budget created with per-pass resources
 crates/paint/src/painter/effects.rs	211	src	F2	wave-max-mod	2026-11-25	covered	#2296	global counter removed; re-read after change
-crates/paint/src/painter/forms.rs	123	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/paint/src/painter/forms.rs	127	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
+crates/paint/src/painter/forms/input.rs	103	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/paint/src/painter/hit_regions.rs	60	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter/images.rs	127	src	F2	wave-max-mod	2026-11-25	covered	#2296	re-read after object-fit:none clip fix
 crates/paint/src/painter/inline.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1248,11 +1249,19 @@ crates/render/tests/fetch_tests.rs	92	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/form_post_tests.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/forms/control_tree.rs	109	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/fixtures/input_sizing.html	21	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/render/tests/forms/fixtures/input_value_paint.html	46	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
+crates/render/tests/forms/golden/input_pipeline.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/golden/input_pipeline_before.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/forms/golden/input_sizing.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/forms/golden/input_sizing_before.png	0	binary	-			exempt		not read line by line: binary
-crates/render/tests/forms/input_sizing.rs	205	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
-crates/render/tests/forms/main.rs	7	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/render/tests/forms/golden/input_value_paint.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/golden/input_value_paint_before.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/input_pipeline.rs	185	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
+crates/render/tests/forms/input_sizing.rs	207	test	F1	lead	2026-11-26	covered	INPUT-VALUE-PIPELINE	golden restamped after native input text pipeline
+crates/render/tests/forms/input_value.rs	223	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
+crates/render/tests/forms/main.rs	10	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
