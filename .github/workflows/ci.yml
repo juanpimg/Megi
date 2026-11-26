@@ -87,9 +87,10 @@ jobs:
         with:
           python-version: '3.11'
       # whatwg_spec.py (imported by the tools tests below) needs lxml to parse the
-      # cached WHATWG spec pages; setup-python does not install it.
+      # cached WHATWG spec pages; visual_parity.py needs Pillow for pixel diffs.
+      # setup-python does not install either.
       - name: Install Python test dependencies
-        run: python3 -m pip install lxml
+        run: python3 -m pip install lxml pillow
       - name: Status freshness (PROGRESS.md + docs/status)
         run: python3 tools/update_progress.py --check --no-gate
       - name: Coverage freshness (capability manifest + artifacts)
