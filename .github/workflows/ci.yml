@@ -112,6 +112,15 @@ jobs:
           tools.test_update_coverage
           tools.test_png_check
           tools.test_real_site_check
+          tools.test_check_agents_constraints
+          tools.test_check_changelog_version
+          tools.test_check_milestone_index
+          tools.test_check_real_site_md5
+          tools.test_check_wp_generator_functions
+          tools.test_check_wp_generators
+          tools.test_check_wp_schema_docs
+          tools.test_check_wpt_manifest_files
+          tools.test_check_wpt_report_md
           tools.test_check_arch
           tools.test_soak_fuzz
           tools.test_bench_compare

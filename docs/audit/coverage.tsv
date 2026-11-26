@@ -10,7 +10,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	600	ci	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: registered 13 discovered tools test modules in the explicit docs-job unittest list
+.github/workflows/ci.yml	609	ci	F3	lead	2026-11-26	covered	REMOTE-GATES-49	re-read CI unittest list: registered all discovered tools test modules
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -2392,6 +2392,7 @@ tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_agent_index_refs.py	65	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/check_agents_constraints.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full file; compile-free gate registered in check_no_compile_gates.py
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
 tools/check_changelog_version.py	60	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-45	read full file after changelog gate merge; ledger/gate reconciliation
 tools/check_closed_work_packages.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
@@ -2410,7 +2411,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	154	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
+tools/check_no_compile_gates.py	156	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	re-read full file after remote agents-constraints gate merge (49 gates)
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2456,6 +2457,7 @@ tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read aft
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_agent_index_refs.py	83	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/test_check_agents_constraints.py	83	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full unit tests for the new agents constraints gate
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
 tools/test_check_changelog_version.py	88	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-45	read full file after changelog gate merge; ledger/gate reconciliation
 tools/test_check_closed_work_packages.py	68	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
@@ -2473,7 +2475,7 @@ tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/test_check_no_compile_gates.py	82	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates); gate count assertion derived from live registry
+tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	re-read full file after remote agents-constraints gate merge (49 gates); gate count assertion updated to 49/49
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
 tools/test_check_parity_inventory.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for inventory checker

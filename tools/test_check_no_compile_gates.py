@@ -66,7 +66,7 @@ class CliTests(unittest.TestCase):
     def test_real_run_passes_all_gates(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("48/49 compile-free gates passed", result.stdout)
+        self.assertIn("49/49 compile-free gates passed", result.stdout)
         self.assertNotIn("FAIL", result.stdout)
 
     def test_runner_has_no_cargo_in_its_own_source(self) -> None:
