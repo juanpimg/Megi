@@ -23,7 +23,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .gitignore	65	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	136	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
-CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
+CHANGELOG.md	1774	docs	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: changelog version gate extension
 CONTRIBUTING.md	337	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
 Cargo.toml	80	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
@@ -2383,6 +2383,7 @@ tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_agent_index_refs.py	65	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
+tools/check_changelog_version.py	60	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: changelog version gate extension
 tools/check_closed_work_packages.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_conformance_badges.py	61	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/check_conformance_freshness.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
@@ -2399,7 +2400,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: milestone index gate extension
-tools/check_no_compile_gates.py	146	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT fixture manifest gate extension
+tools/check_no_compile_gates.py	148	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: changelog version gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2443,6 +2444,7 @@ tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-r
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_agent_index_refs.py	83	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
+tools/test_check_changelog_version.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: changelog version gate extension
 tools/test_check_closed_work_packages.py	68	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_conformance_badges.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/test_check_conformance_freshness.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
