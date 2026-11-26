@@ -2368,12 +2368,13 @@ tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	94	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
+tools/check_no_compile_gates.py	96	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: progress consistency gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
 tools/check_parity_ledger.py	98	tool	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding two artifacts
 tools/check_parity_schema.py	100	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: baseline schema and manifest validator
+tools/check_progress_consistency.py	131	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: progress consistency gate extension
 tools/check_python_syntax.py	47	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
 tools/check_real_site_manifest.py	79	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/check_real_site_snapshots.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site snapshot validator
@@ -2407,6 +2408,7 @@ tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#p
 tools/test_check_parity_inventory.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for inventory checker
 tools/test_check_parity_ledger.py	93	tool	F3	opencode-agent	2026-11-26	covered	#parity	re-read after updating expected count
 tools/test_check_parity_schema.py	120	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for schema validator
+tools/test_check_progress_consistency.py	119	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: progress consistency gate extension
 tools/test_check_python_syntax.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
 tools/test_check_real_site_manifest.py	80	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/test_check_real_site_snapshots.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for snapshot validator
