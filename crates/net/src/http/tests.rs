@@ -80,10 +80,19 @@ mod write_timeout_tests {
         };
         let stream = connect_tcp("127.0.0.1", port, &custom).expect("connect");
         assert_eq!(stream.read_timeout().unwrap(), Some(Duration::from_secs(9)));
-        assert_eq!(
-            stream.write_timeout().unwrap(),
-            Some(Duration::from_millis(150)),
-            "explicit write_timeout must be applied independently of read/connect timeouts (#1635)"
+        // Socket timeouts are rounded up to the OS clock granularity, so an
+        // exact comparison is flaky (observed 152 ms for a 150 ms request).
+        let write_timeout = stream
+            .write_timeout()
+            .unwrap()
+            .expect("explicit write timeout is set");
+        assert!(
+            (Duration::from_millis(140)..=Duration::from_millis(250)).contains(&write_timeout),
+            "explicit write_timeout must be applied independently of read/connect timeouts (#1635): {write_timeout:?}"
+        );
+        assert!(
+            write_timeout < custom.read_timeout,
+            "write timeout must not inherit the longer read timeout (#1635)"
         );
 
         let fallback = FetchOptions {

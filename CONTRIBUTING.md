@@ -302,6 +302,16 @@ cargo run -p megi-test-harness -- --summary   # gate de conformidad: PASS
 
 Cuando aplique: `cargo doc --workspace --no-deps`, regenerar `PROGRESS.md`/`docs/status/*` con `python3 tools/update_progress.py --write` si cambian métricas/fases, y comprobar goldens/benchmarks afectados.
 
+### 6.1 Fallos de entorno: GC del fork de Cargo
+
+El fork de Cargo instalado (`huacnlee/cargo` 0.103.0-1) tiene GC automático configurable en `~/.cargo/config.toml`. En corridas largas (`cargo test --workspace`, `cargo test -p megi-render --no-fail-fast`) aparecieron `could not execute process .../out/<test-bin> (never executed) / No such file or directory` y picos de tiempo (p. ej. `images` 669 ms > 500 ms): los binarios recién compilados desaparecían durante la corrida. **No lo confundas con una regresión**: antes de investigar el código, repite el subconjunto con el GC desactivado:
+
+```bash
+cargo --config build.gc.enabled=false test -p megi-render --test image_scaled_tests --test js_geometry_tests
+```
+
+Ese diagnóstico terminó con EXIT 0 (2/2 y 4/4), pero al repetir el crate completo con GC desactivado el `--lib` pasó (78 tests) y los binarios de integración volvieron a desaparecer: otro proceso del sistema también puede eliminarlos. `cargo test --workspace` exige vigilar el disco (con GC desactivado agotó el espacio al enlazar, EXIT 101 con 74 M libres; con GC activo el propio GC recuperó 6 G). Repite siempre con `--config build.gc.enabled=false` antes de atribuir un `never executed` al código.
+
 ---
 
 ## 7. Proceso de Pull Request (PR)
