@@ -1,12 +1,14 @@
 //! Native painting for the form controls this engine draws itself.
 //!
-//! WHATWG HTML §13.2.6 (`select`) / §15.4 (UA stylesheet): a select is an
-//! atomic control whose content is the selected option's label plus a
-//! disclosure arrow. The layout tree carries the label as a generated text
-//! child; this module emits it and the arrow into the display list so the
-//! generic replaced-element grey placeholder is never used for `<select>`.
+//! WHATWG HTML §13.2.6 (`select`) / §4.10.5 (text/search input) / §15.4 (UA
+//! stylesheet): these are atomic controls whose native content is carried by
+//! a generated text child in the layout tree. This module emits that text and
+//! the select disclosure arrow into the display list so the generic
+//! replaced-element grey placeholder is never used for native controls.
 
 use super::*;
+
+mod input;
 
 /// Space reserved inside the content box for the disclosure arrow (px).
 const ARROW_GUTTER: f32 = 18.0;
@@ -20,7 +22,9 @@ pub(super) fn paint_replaced_element(
     resources: &PaintResources<'_>,
     alpha_scale: f32,
 ) {
-    if let Some(label) = select_label(layout_box) {
+    if let Some(control) = input::control_text(layout_box) {
+        input::paint_input(layout_box, control, list, resources, alpha_scale);
+    } else if let Some(label) = select_label(layout_box) {
         paint_select(layout_box, label, list, resources, alpha_scale);
     } else {
         images::paint_replaced_element(layout_box, node_id, list, resources, alpha_scale);

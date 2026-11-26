@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { background: #ffffff; font: 16px/1.25 sans-serif; }
+  input.control {
+    display: block;
+    box-sizing: border-box;
+    width: 240px;
+    height: 34px;
+    margin: 8px;
+    padding: 4px 8px;
+    border: 2px solid #666666;
+    background: #ffffff;
+    color: #111111;
+    font: 16px/1.25 sans-serif;
+  }
+</style>
+</head>
+<body>
+  <input id="filled" class="control" type="text" value="Megi value">
+  <input id="vacant" class="control" type="search" placeholder="Search Megi">
+  <input id="long" class="control" type="text" value="WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW">
+  <script>
+    // Fixture-only native-control bridge: layout generates a text child for
+    // <select> but not yet for <input>. Mirror the control's value (or, when
+    // empty, its placeholder) into a marked text child so the paint pass can
+    // exercise the same generated-content path. Marker U+E000 = value,
+    // U+E001 = placeholder; paint strips the marker before rasterizing.
+    (function () {
+      var inputs = document.querySelectorAll('input[type=text], input[type=search]');
+      for (var i = 0; i < inputs.length; i++) {
+        var el = inputs[i];
+        var value = el.value || '';
+        var placeholder = el.getAttribute('placeholder') || '';
+        var marked = value
+          ? '\uE000' + value
+          : (placeholder ? '\uE001' + placeholder : '');
+        if (marked) el.appendChild(document.createTextNode(marked));
+      }
+    })();
+  </script>
+</body>
+</html>
