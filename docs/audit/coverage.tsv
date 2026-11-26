@@ -2400,7 +2400,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: milestone index gate extension
-tools/check_no_compile_gates.py	152	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site md5 gate extension
+tools/check_no_compile_gates.py	154	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package generator functions gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2424,6 +2424,7 @@ tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_workflow_metadata.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_workflow_scripts.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_wp_board.py	118	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/check_wp_generator_functions.py	58	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package generator functions gate extension
 tools/check_wp_generators.py	63	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package generator gate extension
 tools/check_wp_schema_docs.py	65	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package schema docs gate extension
 tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
@@ -2486,6 +2487,7 @@ tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#
 tools/test_check_workflow_metadata.py	71	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_workflow_scripts.py	94	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_wp_board.py	147	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/test_check_wp_generator_functions.py	73	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package generator functions gate extension
 tools/test_check_wp_generators.py	92	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package generator gate extension
 tools/test_check_wp_schema_docs.py	86	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package schema docs gate extension
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
