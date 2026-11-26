@@ -2368,7 +2368,7 @@ tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
+tools/check_no_compile_gates.py	90	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2377,6 +2377,7 @@ tools/check_parity_schema.py	100	tool	F3	opencode-agent	2026-11-26	covered	#pari
 tools/check_real_site_manifest.py	79	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/check_real_site_snapshots.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site snapshot validator
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
+tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2407,6 +2408,7 @@ tools/test_check_parity_schema.py	120	tool	F3	opencode-agent	2026-11-26	covered	
 tools/test_check_real_site_manifest.py	80	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/test_check_real_site_snapshots.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for snapshot validator
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
+tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/test_ci_gate.py	109	tool	F3	lead	2026-11-26	covered	CI-UMBRELLA-REGRESSION	read after remote CI fix merge
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
