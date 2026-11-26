@@ -148,6 +148,22 @@ pub struct ComputedGrid {
     pub align_content: GridContentDistribution,
 }
 
+/// Splits the `grid-template` shorthand at its first top-level `/`.
+/// Parentheses/brackets are respected so `minmax()`/`repeat()` bodies are never
+/// mistaken for the separator (CSS Grid §7.4).
+fn split_grid_template(raw: &str) -> (&str, &str) {
+    let mut depth = 0usize;
+    for (index, byte) in raw.bytes().enumerate() {
+        match byte {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
+            b'/' if depth == 0 => return (raw[..index].trim(), raw[index + 1..].trim()),
+            _ => {}
+        }
+    }
+    (raw.trim(), "")
+}
+
 /// Computes the grid values from the cascaded declarations.
 pub(crate) fn compute_grid(
     entries: &[(&str, &Declaration)],
@@ -159,6 +175,17 @@ pub(crate) fn compute_grid(
         justify_self: AlignSelf::Auto,
         ..ComputedGrid::default()
     };
+    // CSS Grid Layout §7.4: `grid-template` is a shorthand for
+    // `grid-template-rows` / `grid-template-columns` (and resets the areas).
+    // Longhands declared alongside it win, matching the convention used below
+    // for the placement shorthands. Wikipedia Vector 2022's
+    // `.mw-page-container-inner` relies on this shorthand for its two columns.
+    if let Some(value) = find_declaration(entries, "grid-template") {
+        let (rows, columns) = split_grid_template(&value.raw_value);
+        grid.template_rows = parse_template(rows, font_size, root_font_size);
+        grid.template_columns = parse_template(columns, font_size, root_font_size);
+        grid.template_areas = None;
+    }
     if let Some(value) = find_declaration(entries, "grid-template-columns") {
         grid.template_columns = parse_template(&value.raw_value, font_size, root_font_size);
     }
@@ -282,7 +309,11 @@ pub(crate) fn parse_template_areas(raw: &str) -> Option<GridTemplateAreas> {
                     if cell == "." {
                         None
                     } else {
-                        Some(cell.to_owned())
+                        // CSS Grid §7.3 area names are `<custom-ident>`s; the
+                        // engine folds `<grid-line>` idents to lower case when
+                        // parsing `grid-area` (see parse_grid_line), so fold
+                        // area names the same way for lookup to match.
+                        Some(cell.to_ascii_lowercase())
                     }
                 })
                 .collect();

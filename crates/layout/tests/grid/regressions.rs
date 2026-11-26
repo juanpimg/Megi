@@ -104,6 +104,57 @@ fn test_minmax_fixed_min_fr_row_does_not_double_count_minimum() {
     );
 }
 
+fn style_from_inline_css(css: &str) -> ComputedStyle {
+    let declarations = megi_css::parse_inline_declarations(css);
+    let mut cascaded = std::collections::HashMap::new();
+    for declaration in &declarations {
+        cascaded.insert(declaration.name.clone(), declaration);
+    }
+    ComputedStyle::compute(&cascaded, None, None)
+}
+
+#[test]
+fn test_grid_template_shorthand_areas_keep_article_beside_tall_sidebar() {
+    // CSS Grid Layout §7.4: `grid-template` is a shorthand for the row/column
+    // tracks and the named areas. Wikipedia Vector 2022's
+    // `.mw-page-container-inner` uses exactly this shape; when the shorthand is
+    // dropped the container has a single implicit column and the article is
+    // stacked *below* the ~440px sidebar instead of beside it.
+    let container = style_from_inline_css(
+        "display: grid; width: 1000px; column-gap: 24px; \
+         grid-template: min-content 1fr min-content / 100px minmax(0,1fr); \
+         grid-template-areas: 'siteNotice siteNotice' 'columnStart pageContent' 'footer footer';",
+    );
+    let notice = style_from_inline_css("display: block; grid-area: siteNotice;");
+    let sidebar = style_from_inline_css("display: block; grid-area: columnStart; height: 440px;");
+    let article = style_from_inline_css("display: block; grid-area: pageContent; height: 30px;");
+    let footer = style_from_inline_css("display: block; grid-area: footer;");
+
+    let (mut doc, mut styles, html) = setup();
+    let container_id = add_element(&mut doc, html, &mut styles, container);
+    add_element(&mut doc, container_id, &mut styles, notice);
+    let sidebar_id = add_element(&mut doc, container_id, &mut styles, sidebar);
+    let article_id = add_element(&mut doc, container_id, &mut styles, article);
+    add_element(&mut doc, container_id, &mut styles, footer);
+    let root =
+        layout_document(&doc, &styles, Rect::new(0.0, 0.0, 1000.0, 700.0)).expect("layout result");
+
+    let sidebar = find_box(&root, sidebar_id);
+    let article = find_box(&root, article_id);
+    assert!(
+        (article.dimensions.content.y - sidebar.dimensions.content.y).abs() < 1.0,
+        "the h1/article must share the row with the tall TOC sidebar (CSS Grid §7.4/§7.3): \
+         article y={}, sidebar y={}",
+        article.dimensions.content.y,
+        sidebar.dimensions.content.y,
+    );
+    assert!(
+        article.dimensions.content.x >= 100.0,
+        "article must start after the 100px sidebar column, got x={}",
+        article.dimensions.content.x,
+    );
+}
+
 #[test]
 fn test_minmax_percentage_min_row_with_indefinite_height_uses_zero_floor() {
     // CSS Grid Layout §7.2.1 / §11.5 (#2185): percentage track minimums on rows when
