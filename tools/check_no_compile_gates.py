@@ -65,6 +65,7 @@ TEST_MODULES = (
     "tools.test_check_real_site_md5",
     "tools.test_check_wp_generator_functions",
     "tools.test_check_agents_constraints",
+    "tools.test_check_window_ui",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -115,6 +116,11 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("real_site_md5", (PY, "tools/check_real_site_md5.py")),
     ("wp_generator_functions", (PY, "tools/check_wp_generator_functions.py")),
     ("agents_constraints", (PY, "tools/check_agents_constraints.py")),
+    # The real `--check` needs Chromium references and Megi captures that are
+    # not versioned yet (#2290): wiring it here would fail on absent data and
+    # fabricating either side is forbidden. Until then this named gate runs the
+    # synthetic contract tests of the checker itself.
+    ("window_ui", (PY, "-m", "unittest", "tools.test_check_window_ui")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 

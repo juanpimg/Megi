@@ -106,6 +106,11 @@ class ToolsTestListTests(unittest.TestCase):
         # local discover run (#1402, M8#1 addendum).
         self.assertIn("tools.test_update_bench_baseline", CI.read_text(encoding="utf-8"))
 
+    def test_window_ui_gate_tests_run_in_ci(self):
+        # The visual-parity gate's contract tests must protect merges even though
+        # the real `--check` cannot run in CI until Chromium references exist.
+        self.assertIn("tools.test_check_window_ui", CI.read_text(encoding="utf-8"))
+
     def test_every_tools_test_module_is_registered_in_ci(self):
         # Every `tools/test_*.py` module that is a real test (i.e. not the
         # `test_inspector` CLI, excluded in the workflow comment at ci.yml:107)

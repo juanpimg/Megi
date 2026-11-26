@@ -24,7 +24,7 @@
 - Cobertura 76/76 **autorreferencial** — `docs/status/coverage.json`.
 - Paridad visual vs Chrome: 0,92 % example, 4,88 % Wikipedia, 10,78 % rust, 17,39 % HN — `docs/VISUAL-PARITY.md`.
 - 34 targets de fuzz y 176 semillas, **sin ejecuciones publicadas**; sandbox `enforced` sólo en Linux.
-- 49 gates Python en verde (`python3 tools/check_no_compile_gates.py`); `update_coverage` depende de un sello de conformidad fresco.
+- 50 gates Python en verde (`python3 tools/check_no_compile_gates.py`); `update_coverage` depende de un sello de conformidad fresco.
 
 **Plan activo de auditoría línea por línea**: `docs/superpowers/plans/2026-11-26-line-by-line-audit-plan.md`.
 **Auditoría completada en dos pasadas**: 18 crates / 270.986 líneas + tools/fuzz/CI/tests/docs; 141 hallazgos, 140 issues (#2315–#2454). Índice y cómo continuar: `docs/audit/LINE_BY_LINE-RESULTS.md`.
