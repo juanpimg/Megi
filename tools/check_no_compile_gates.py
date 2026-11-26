@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""Run every compile-free gate used by the visual-parity and audit work.
+
+No Rust compilation: only Python stdlib tools, Pillow-based checkers and
+``unittest`` modules. Intended for environments with limited disk space.
+
+Usage:
+    python3 tools/check_no_compile_gates.py [--root /path/to/repo]
+"""
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+PY = sys.executable
+BASELINE = "tests/fixtures/visual-parity/baseline.json"
+TEST_MODULES = (
+    "tools.test_visual_parity",
+    "tools.test_visual_parity_report",
+    "tools.test_check_parity_baseline",
+    "tools.test_check_parity_schema",
+    "tools.test_check_parity_docs",
+    "tools.test_check_parity_ledger",
+    "tools.test_check_parity_inventory",
+    "tools.test_check_deslop_doc",
+)
+GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("check_arch", (PY, "tools/check_arch.py")),
+    ("check_docs_links", (PY, "tools/check_docs_links.py")),
+    ("audit_coverage", (PY, "tools/audit_coverage.py", "--check", "--strict")),
+    ("update_coverage", (PY, "tools/update_coverage.py", "--check")),
+    ("parity_schema", (PY, "tools/check_parity_schema.py")),
+    ("parity_baseline", (PY, "tools/check_parity_baseline.py", BASELINE)),
+    ("parity_docs", (PY, "tools/check_parity_docs.py")),
+    ("parity_inventory", (PY, "tools/check_parity_inventory.py")),
+    ("parity_ledger", (PY, "tools/check_parity_ledger.py")),
+    ("deslop_doc", (PY, "tools/check_deslop_doc.py")),
+    ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
+)
+
+
+def run_gates(root: Path, gates=GATES, run=subprocess.run) -> list[dict]:
+    """Execute each gate and return name/exit-code/output records."""
+    results: list[dict] = []
+    for name, command in gates:
+        completed = run(list(command), cwd=root, capture_output=True, text=True)
+        results.append(
+            {
+                "name": name,
+                "code": completed.returncode,
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+            }
+        )
+    return results
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
+    args = parser.parse_args(argv)
+    results = run_gates(args.root.resolve())
+    for item in results:
+        status = "PASS" if item["code"] == 0 else "FAIL"
+        print(f"{status} {item['name']} (exit {item['code']})")
+        if item["code"] != 0:
+            detail = (item["stderr"] or item["stdout"]).strip().splitlines()
+            for line in detail[-6:]:
+                print(f"    {line}")
+    failures = sum(1 for item in results if item["code"] != 0)
+    print(f"{len(results) - failures}/{len(results)} compile-free gates passed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

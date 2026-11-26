@@ -125,3 +125,6 @@ Cero advertencias. Reporta cada comando con su código de salida. Nunca digas
   [`docs/DESLOP-AUDIT.md`](docs/DESLOP-AUDIT.md).
 - Si el arreglo cruza crates, requiere PR de arquitectura y actualización del
   DAG (§3); no lo agrupes con otros cambios.
+- Con el disco justo, `python3 tools/check_no_compile_gates.py` ejecuta todos
+  los gates puros Python (arquitectura, docs, ledger, paridad y tests), sin
+  invocar `cargo`.
