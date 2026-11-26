@@ -60,6 +60,21 @@ pub(super) fn edges_main(edges: &Edges, row: bool) -> f32 {
     }
 }
 
+/// Margin + padding + border of an `Edges` value on the main axis.
+///
+/// `calculate_shrink_to_fit_width` returns an *edges-inclusive* intrinsic
+/// contribution (CSS 2.2 §10.3.5). A flex item's base size is its content box
+/// (Flexbox 1 §5.3.3), so those edges must be removed before `outer_main()`
+/// adds them back; otherwise horizontal padding and margin are counted twice.
+pub(super) fn edges_main_with_margin(edges: &Edges, row: bool) -> f32 {
+    let margin = if row {
+        edges.margin.left + edges.margin.right
+    } else {
+        edges.margin.top + edges.margin.bottom
+    };
+    edges_main(edges, row) + margin
+}
+
 pub(super) fn definite_length(
     value: Length,
     calc: Option<megi_css::calc::CalcValue>,
