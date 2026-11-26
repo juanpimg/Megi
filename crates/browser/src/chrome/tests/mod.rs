@@ -9,6 +9,7 @@ mod dropdown;
 mod menus;
 mod paint;
 mod rail;
+mod shell;
 mod tabs;
 mod tokens;
 
@@ -40,7 +41,8 @@ fn view<'a>(
         ime_preedit: "",
         compact: false,
         rail: None,
-    }
+    shell: None,
+}
 }
 
 fn buffer(width: u32, height: u32) -> Vec<u32> {

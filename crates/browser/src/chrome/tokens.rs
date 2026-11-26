@@ -82,6 +82,61 @@ impl Default for Palette {
     }
 }
 
+/// Dark shell palette for the reference UI (`docs/UI-TARGET.md`).
+///
+/// These tokens are the measured surfaces of the macOS-style shell: charcoal
+/// top bar, near-black sidebar, gray address pill and the three traffic lights.
+/// Kept separate from [`Palette`] so legacy chrome pixels are untouched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShellPalette {
+    /// Light desktop backdrop visible around the rounded window.
+    pub backdrop: Color,
+    /// Top bar surface (`#3a3a3c` in the reference).
+    pub top: Color,
+    /// Sidebar content surface (`#25272b`).
+    pub sidebar: Color,
+    /// Narrow icon-only rail inside the sidebar.
+    pub rail: Color,
+    /// Raised rows and circular workspace buttons (`#35373b`).
+    pub surface: Color,
+    /// Address pill (`#4a4a4c`).
+    pub pill: Color,
+    /// Primary shell text.
+    pub text: Color,
+    /// Secondary shell text.
+    pub text_muted: Color,
+    /// Icon stroke color.
+    pub icon: Color,
+    /// Lock glyph inside the address pill.
+    pub lock: Color,
+    /// Close/minimise/maximise dots.
+    pub traffic: [Color; 3],
+    /// Soft window/page shadow.
+    pub shadow: Color,
+}
+
+impl ShellPalette {
+    /// Measured dark palette. See `docs/UI-TARGET.md` for the source image.
+    pub const DARK: Self = Self {
+        backdrop: Color::new(0xE8, 0xEC, 0xF2, 0xFF),
+        top: Color::new(0x3A, 0x3A, 0x3C, 0xFF),
+        sidebar: Color::new(0x25, 0x27, 0x2B, 0xFF),
+        rail: Color::new(0x1F, 0x21, 0x25, 0xFF),
+        surface: Color::new(0x35, 0x37, 0x3B, 0xFF),
+        pill: Color::new(0x4A, 0x4A, 0x4C, 0xFF),
+        text: Color::new(0xF5, 0xF5, 0xF7, 0xFF),
+        text_muted: Color::new(0xA1, 0xA1, 0xA6, 0xFF),
+        icon: Color::new(0xD6, 0xD6, 0xDB, 0xFF),
+        lock: Color::new(0xBC, 0xBC, 0xC2, 0xFF),
+        traffic: [
+            Color::new(0xFF, 0x5F, 0x57, 0xFF),
+            Color::new(0xFE, 0xBC, 0x2E, 0xFF),
+            Color::new(0x28, 0xC8, 0x40, 0xFF),
+        ],
+        shadow: Color::new(0x00, 0x00, 0x00, 0x33),
+    };
+}
+
 /// Corner radii of chrome surfaces, in CSS pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Radius {

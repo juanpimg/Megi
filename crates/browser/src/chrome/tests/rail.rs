@@ -226,6 +226,7 @@ fn rail_wiring_headless_default_unchanged_and_explicit_rail_is_opt_in() {
             ime_preedit: "",
             compact: false,
             rail,
+            shell: None,
         }
     }
     let address = AddressBar::new();

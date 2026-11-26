@@ -184,6 +184,14 @@ pub fn render_target_with_chrome_menu(
         ime_preedit: "",
         compact: false,
         rail: None,
+        shell: Some(crate::chrome::ShellView {
+            labels: &tabs,
+            favicons: &favicons,
+            url: input,
+            active: 0,
+            top_css: crate::chrome::CHROME_HEIGHT,
+            sidebar: false,
+        }),
     };
     crate::chrome::draw_chrome(&mut dest, width, height, 1.0, &view);
     output.pixmap.pixels = dest
