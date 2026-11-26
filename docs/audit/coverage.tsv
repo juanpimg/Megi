@@ -1587,7 +1587,7 @@ docs/superpowers/plans/2026-11-24-work-package-engine-plan.md	166	docs	F3	docs-c
 docs/superpowers/plans/2026-11-24-wpt-harness-plan.md	351	docs	F3	docs-cleanup	2026-11-24	covered	#2290	roadmap documents v2 re-read during update
 docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md	326	docs	F3	plan-author	2026-11-26	covered	UI-TARGET	Read the full plan document before marking
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
-docs/work-packages/BOARD.md	64	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
+docs/work-packages/BOARD.md	69	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	53	docs	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read after remote merge; 51 -> 53 lines
 docs/work-packages/closed.toml	20	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase

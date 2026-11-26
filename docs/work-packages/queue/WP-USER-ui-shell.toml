@@ -1,0 +1,13 @@
+id = "WP-USER-ui-shell"
+source = "user"
+file = "crates/browser/src/chrome/shell.rs"
+expected = "barra superior unificada con iconos, estados y foco; hit-testing alineado; sidebar responsive sin recortes"
+actual = "la chrome usa glifos dibujados a mano; no hay hover/foco; el sidebar se recorta en ventanas estrechas"
+spec = "docs/UI-TARGET.md / docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md Task 2"
+acceptance = "tests hiDpi_controls_share_one_row, narrow_sidebar_never_clips, hit_rects_match_painted_controls y tab_cycles_focus_over_top_bar_controls en verde; golden compacto re-sellado con md5 antiguo/nuevo; captura real de Wayland leida"
+verify_cmd = "cargo test -p megi-browser --lib shell_"
+metric = "user_issues"
+milestone = "M9"
+impact = 9
+frequency = 9
+profile = "heavy"

@@ -1,0 +1,13 @@
+id = "WP-USER-ui-favicon"
+source = "user"
+file = "crates/browser/src/favicon.rs"
+expected = "favicons SVG rasterizados a traves de la fachada de webview, sin nuevas dependencias ni edges en el DAG"
+actual = "decode_icon usa megi_webview::image::decode, que no soporta SVG; Wikipedia cae al punto de color"
+spec = "docs/UI-TARGET.md / docs/superpowers/plans/2026-11-26-ui-quality-unblock-plan.md Task 3"
+acceptance = "megi_render::decode_image_with_svg expuesto via megi_webview::render; svg_favicon_decodes_to_rgba, non_svg_favicon_still_decodes y oversized_svg_favicon_is_rejected en verde"
+verify_cmd = "cargo test -p megi-browser --test favicon_svg"
+metric = "user_issues"
+milestone = "M9"
+impact = 8
+frequency = 8
+profile = "heavy"
