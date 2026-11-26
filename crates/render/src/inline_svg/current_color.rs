@@ -6,10 +6,12 @@
 //! resolves the host `color` once per document and returns a presentation-attribute value
 //! that [`super::svg_markup`] injects into the serialized root `<svg>`.
 //!
-//! The cascade uses `megi_css`'s public API: the UA stylesheet plus author `<style>` elements
-//! and inline `style=""` declarations (both handled by the standard cascade). External CSS
-//! from `<link>` is not available at this stage—no resource loader is passed here—so it stays
-//! a documented limitation.
+//! The cascade uses `megi_css`'s public API. When the pipeline supplies its already-built
+//! [`megi_css::StyleCollection`], that pool includes linked stylesheets and `@import`s (fetched
+//! once by the resource loader, with the usual CSP/budget checks); otherwise this module falls
+//! back to the UA stylesheet plus author `<style>` elements. CSS Variables 1 §3 substitutions
+//! (`color: var(--icon-color)`) are already applied by the cascade, and CSS Color 4 §5 defines
+//! the resulting computed `color` as the value of `currentColor`.
 
 use std::collections::HashMap;
 
@@ -23,12 +25,24 @@ const MAX_STYLE_ELEMENTS: usize = 128;
 
 /// Maps each inline SVG to the inherited `color` value to inject as a presentation attribute.
 ///
+/// `collection` is the pipeline's cascade pool when available: it already contains external
+/// stylesheets (`<link>`/`@import`) and inline declarations. Passing `None` keeps the
+/// standalone fallback (UA stylesheet + `<style>` elements) for direct callers.
+///
 /// Returns an empty map when the document has no usable computed colors, in which case the
 /// SVG rasterizer keeps its default (black) and behavior is unchanged.
-pub(super) fn resolve(document: &Document, svg_ids: &[NodeId]) -> HashMap<NodeId, String> {
-    let mut inherited = HashMap::new();
+pub(super) fn resolve(
+    document: &Document,
+    svg_ids: &[NodeId],
+    collection: Option<&megi_css::StyleCollection>,
+) -> HashMap<NodeId, String> {
+    let inherited = HashMap::new();
     if svg_ids.is_empty() {
         return inherited;
+    }
+
+    if let Some(collection) = collection {
+        return resolve_from_collection(document, svg_ids, collection);
     }
 
     let mut author_css = String::new();
@@ -59,12 +73,21 @@ pub(super) fn resolve(document: &Document, svg_ids: &[NodeId]) -> HashMap<NodeId
         }
     }
 
-    let mut collection = megi_css::create_user_agent_style_collection();
+    let mut fallback = megi_css::create_user_agent_style_collection();
     if !author_css.is_empty() {
-        collection.add_css(&author_css, Origin::Author);
+        fallback.add_css(&author_css, Origin::Author);
     }
-    let (styles, _) = megi_css::resolve_document_styles_from_collection(document, &collection);
+    resolve_from_collection(document, svg_ids, &fallback)
+}
 
+/// Shared extraction of computed host colors from any ready cascade collection.
+fn resolve_from_collection(
+    document: &Document,
+    svg_ids: &[NodeId],
+    collection: &megi_css::StyleCollection,
+) -> HashMap<NodeId, String> {
+    let (styles, _) = megi_css::resolve_document_styles_from_collection(document, collection);
+    let mut inherited = HashMap::new();
     for &svg_id in svg_ids {
         // CSS `color` inherits from the parent box; the computed style already includes it.
         let Some(parent) = document.node(svg_id).parent else {

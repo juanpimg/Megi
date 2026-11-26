@@ -125,6 +125,20 @@ fn inline_svg_mdn_style_icon_uses_inherited_stroke_color() {
 }
 
 #[test]
+fn inline_svg_currentcolor_inherits_external_css_var() {
+    // CSS Color 4 §5: currentColor is the element's computed `color`. CSS Variables 1 §3:
+    // `var()` is substituted at computed-value time, so an external stylesheet defining
+    // --icon-color and setting `color: var(--icon-color)` must color the rasterized icon.
+    let output = render_fixture("svg_inline_external_color.html");
+    assert_eq!(output.stats.inline_svgs, 1);
+    assert!(
+        count_color(&output.pixmap, ORANGE) > 200,
+        "external CSS var(--icon-color) must reach currentColor, got {} orange px",
+        count_color(&output.pixmap, ORANGE)
+    );
+}
+
+#[test]
 fn inline_svg_viewbox_honours_css_size() {
     let output = render_fixture("svg_inline_viewbox.html");
     assert_eq!(output.stats.inline_svgs, 1);
