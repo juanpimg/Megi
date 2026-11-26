@@ -24,7 +24,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	136	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
-CONTRIBUTING.md	327	docs	F3	jp	2026-11-25	covered	#2290	
+CONTRIBUTING.md	337	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
 Cargo.toml	80	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
@@ -986,7 +986,7 @@ crates/net/src/http/redirect.rs	36	src	F2	wave-max-mod	2026-11-19	covered	#maxim
 crates/net/src/http/request.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/response.rs	198	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/streaming.rs	424	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http/tests.rs	160	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/http/tests.rs	169	src	F2	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
 crates/net/src/http/tls.rs	96	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/transport.rs	284	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/integrity.rs	230	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -2374,7 +2374,9 @@ tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_agent_index_refs.py	65	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
+tools/check_closed_work_packages.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_conformance_freshness.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/check_coverage_json.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_deslop_allowlist.py	67	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_deslop_doc.py	123	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: deslop doc/allowlist consistency checker
 tools/check_doc_images.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documentation image gate extension
@@ -2382,7 +2384,7 @@ tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	114	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documentation image gate extension
+tools/check_no_compile_gates.py	124	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2390,6 +2392,7 @@ tools/check_parity_ledger.py	98	tool	F3	opencode-agent	2026-11-26	covered	#parit
 tools/check_parity_schema.py	100	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: baseline schema and manifest validator
 tools/check_progress_consistency.py	131	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: progress consistency gate extension
 tools/check_python_syntax.py	47	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
+tools/check_real_site_html.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_real_site_manifest.py	79	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/check_real_site_report.py	85	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_real_site_snapshots.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site snapshot validator
@@ -2397,7 +2400,9 @@ tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from mai
 tools/check_status_badges.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
+tools/check_toolchain_config.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
+tools/check_workflow_metadata.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_workflow_scripts.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_wp_board.py	118	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
 tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
@@ -2418,7 +2423,9 @@ tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-r
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_agent_index_refs.py	83	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
+tools/test_check_closed_work_packages.py	68	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_conformance_freshness.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/test_check_coverage_json.py	99	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_deslop_allowlist.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for deslop doc checker
 tools/test_check_doc_images.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documentation image gate extension
@@ -2433,6 +2440,7 @@ tools/test_check_parity_ledger.py	93	tool	F3	opencode-agent	2026-11-26	covered	#
 tools/test_check_parity_schema.py	120	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for schema validator
 tools/test_check_progress_consistency.py	119	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: progress consistency gate extension
 tools/test_check_python_syntax.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
+tools/test_check_real_site_html.py	99	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_real_site_manifest.py	80	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
 tools/test_check_real_site_report.py	122	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_real_site_snapshots.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for snapshot validator
@@ -2440,7 +2448,9 @@ tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file fr
 tools/test_check_status_badges.py	80	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: status JSON gate extension
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
+tools/test_check_toolchain_config.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
+tools/test_check_workflow_metadata.py	71	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_workflow_scripts.py	94	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_wp_board.py	147	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
