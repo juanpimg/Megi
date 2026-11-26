@@ -255,11 +255,20 @@ input, textarea, select, button {
     max-width: 100%;
 }
 
+/* WHATWG HTML §4.10.5.1.2: the `size` attribute sizes a text control in
+   average character advances. A UA `width:10em` here discarded that intrinsic
+   width (google.com's `size=57` field collapsed to ~160px, issue #2247). */
 input[type=text], input[type=search], input[type=email], input[type=password],
 input[type=number], input[type=file], input[type=date] {
-    width: 10em;
     min-width: 5em;
     height: 1.6em;
+}
+
+/* An explicit `size` is the author's intrinsic width hint (HTML §4.10.5.1.2).
+   The generic `max-width:100%` above resolves against a narrow inline formatting
+   context (CSS 2.2 §10.3.2) and collapses such a control to a few pixels. */
+input[size] {
+    max-width: none;
 }
 
 textarea {

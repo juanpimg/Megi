@@ -362,7 +362,7 @@ crates/css/src/tokenizer/chunk3.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/user_agent/chunk1.rs	401	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/css/src/user_agent/chunk1.rs	410	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
 crates/css/src/user_agent/chunk2.rs	256	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
@@ -1246,7 +1246,11 @@ crates/render/tests/fetch_tests.rs	92	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/form_post_tests.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/forms/main.rs	6	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/render/tests/forms/fixtures/input_sizing.html	21	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/render/tests/forms/golden/input_sizing.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/golden/input_sizing_before.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/input_sizing.rs	205	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/render/tests/forms/main.rs	7	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
