@@ -67,6 +67,7 @@ fn worker_render_dispatches_host_popstate_before_the_final_frame() {
             input: url.clone(),
             css_width: 200,
             css_height: 120,
+            raster_scale: 1.0,
             base_override: None,
             scripting: true,
             find_query: None,

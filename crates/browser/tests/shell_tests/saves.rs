@@ -82,6 +82,7 @@ fn worker_frame_png_bytes_match_the_render_screenshot() {
         input: input.clone(),
         css_width: 320,
         css_height: 240,
+        raster_scale: 1.0,
         base_override: None,
         scripting: true,
         find_query: None,

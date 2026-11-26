@@ -462,6 +462,9 @@ pub mod hit_test;
 pub use hit_test::{
     HitKind, HitLink, HitRegion, RegionCollector, find_link_at, hit_test, hit_test_all,
 };
+/// Owned CSS→raster geometry transform (DPR boundary).
+pub mod scale;
+pub use scale::{MAX_RASTER_SCALE, MIN_RASTER_SCALE, RasterScale};
 
 pub use megi_image::RgbaImage;
 

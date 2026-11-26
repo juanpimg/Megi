@@ -110,8 +110,9 @@ pub fn present_region_at(
     dest_width: u32,
     dest_height: u32,
 ) -> bool {
+    // Legacy path: the frame itself defines the source width (scale 1).
     let css_viewport_width = frame.map_or(0, |(_, width, _)| width);
-    present_region_with_insets(
+    present_region_with_insets_scaled(
         frame,
         scroll_y,
         css_viewport_height,
@@ -121,6 +122,7 @@ pub fn present_region_at(
         dest,
         dest_width,
         dest_height,
+        1.0,
     )
 }
 
@@ -145,6 +147,65 @@ pub fn present_region_with_insets(
     dest_width: u32,
     dest_height: u32,
 ) -> bool {
+    present_region_with_insets_scaled(
+        frame,
+        scroll_y,
+        css_viewport_height,
+        css_viewport_width,
+        dest_x_offset,
+        dest_y_offset,
+        dest,
+        dest_width,
+        dest_height,
+        1.0,
+    )
+}
+
+/// Presents a **physical-resolution** frame while `scroll_y` and
+/// `css_viewport_height` remain CSS pixels. `raster_scale` converts CSS rows to
+/// raster rows; the source columns come from the frame itself, so a window
+/// whose buffer matches the frame becomes a 1:1 blit.
+#[allow(clippy::too_many_arguments)]
+pub fn present_region_at_scaled(
+    frame: Option<(&[u32], u32, u32)>,
+    scroll_y: u32,
+    css_viewport_height: u32,
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    raster_scale: f64,
+) -> bool {
+    // `u32::MAX` makes the source width resolve to the frame width: a physical
+    // frame presented into a same-sized physical window is a 1:1 blit.
+    present_region_with_insets_scaled(
+        frame,
+        scroll_y,
+        css_viewport_height,
+        u32::MAX,
+        0,
+        0,
+        dest,
+        dest_width,
+        dest_height,
+        raster_scale,
+    )
+}
+
+/// Like [`present_region_at_scaled`], with a CSS-width page inset (vertical rail).
+/// The page samples `css_viewport_width * raster_scale` source columns.
+#[allow(clippy::too_many_arguments)]
+pub fn present_region_with_insets_scaled(
+    frame: Option<(&[u32], u32, u32)>,
+    scroll_y: u32,
+    css_viewport_height: u32,
+    css_viewport_width: u32,
+    dest_x_offset: u32,
+    dest_y_offset: u32,
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    raster_scale: f64,
+) -> bool {
     let expected = match (dest_width as usize).checked_mul(dest_height as usize) {
         Some(expected) => expected,
         None => return false,
@@ -163,8 +224,17 @@ pub fn present_region_with_insets(
         fill_white(dest);
         return false;
     }
+    // Defensive: a hostile/host scale must not poison the row arithmetic.
+    let scale = if raster_scale.is_finite() && raster_scale > 0.0 {
+        raster_scale
+    } else {
+        1.0
+    };
     let css_viewport_height = css_viewport_height.max(1);
-    let src_width = u64::from(css_viewport_width.max(1).min(frame_width));
+    // CSS columns → source columns; at scale 1 this is the legacy width.
+    let src_width = ((f64::from(css_viewport_width) * scale).round() as u64)
+        .max(1)
+        .min(u64::from(frame_width));
     let frame_width = frame_width as usize;
     let frame_height = frame_height as usize;
     let y_offset = (dest_y_offset as usize).min(dest_height as usize);
@@ -179,19 +249,26 @@ pub fn present_region_with_insets(
     }
     for dest_row in y_offset..dest_height as usize {
         let page_row = dest_row - y_offset;
-        let css_row = u64::from(scroll_y)
-            + (page_row as u64 * u64::from(css_viewport_height)) / page_dest_height as u64;
+        // Keep the legacy integer-division result at scale 1 (goldens), but
+        // retain the fractional CSS row for high-DPI upscaling: integer
+        // division alone collapses every row when css_viewport_height <
+        // page_dest_height (physical window > CSS viewport).
+        let css_row = f64::from(scroll_y)
+            + (page_row as f64 * f64::from(css_viewport_height)) / page_dest_height as f64;
         let dest_offset = dest_row * dest_width as usize;
         let Some(dest_row_slice) = dest.get_mut(dest_offset..dest_offset + dest_width as usize)
         else {
             return false;
         };
-        if css_row >= frame_height as u64 {
+        // CSS scroll/viewport → physical raster row. This is the only place
+        // where the CSS/raster boundary is crossed during presentation.
+        let src_row = (css_row * scale).floor() as u64;
+        if src_row >= frame_height as u64 {
             dest_row_slice.fill(WHITE_0RGB);
             continue;
         }
         dest_row_slice[..x_offset].fill(WHITE_0RGB);
-        let source_offset = (css_row as usize) * frame_width;
+        let source_offset = (src_row as usize) * frame_width;
         for (page_column, pixel) in dest_row_slice[x_offset..].iter_mut().enumerate() {
             let css_column = (page_column as u64 * src_width) / page_dest_width;
             *pixel = pixels[source_offset + css_column.min(frame_width as u64 - 1) as usize];
@@ -201,273 +278,4 @@ pub fn present_region_with_insets(
 }
 
 #[cfg(test)]
-mod unit_tests {
-    use super::*;
-    use crate::convert::WHITE_0RGB;
-
-    const RED: u32 = 0x00FF_0000;
-    const GREEN: u32 = 0x0000_FF00;
-    const BLUE: u32 = 0x0000_00FF;
-    const YELLOW: u32 = 0x00FF_FF00;
-
-    fn four_row_frame() -> Vec<u32> {
-        // 2x4 frame: row 0 red, row 1 green, row 2 blue, row 3 yellow.
-        vec![RED, RED, GREEN, GREEN, BLUE, BLUE, YELLOW, YELLOW]
-    }
-
-    #[test]
-    fn viewport_slice_selects_the_scrolled_rows() {
-        let frame = four_row_frame();
-        let slice = viewport_slice(&frame, 2, 4, 1, 2, 2);
-        assert_eq!(slice, vec![GREEN, GREEN, BLUE, BLUE]);
-        let top = viewport_slice(&frame, 2, 4, 0, 2, 1);
-        assert_eq!(top, vec![RED, RED]);
-        let bottom = viewport_slice(&frame, 2, 4, 3, 2, 1);
-        assert_eq!(bottom, vec![YELLOW, YELLOW]);
-    }
-
-    #[test]
-    fn viewport_slice_pads_out_of_range_rows_with_white() {
-        let frame = four_row_frame();
-        let slice = viewport_slice(&frame, 2, 4, 3, 2, 3);
-        assert_eq!(
-            slice,
-            vec![
-                YELLOW, YELLOW, WHITE_0RGB, WHITE_0RGB, WHITE_0RGB, WHITE_0RGB
-            ]
-        );
-        assert!(viewport_slice(&frame, 2, 4, 0, 0, 2).is_empty());
-    }
-
-    #[test]
-    fn present_region_is_identity_at_scale_one() {
-        let frame = four_row_frame();
-        let mut dest = vec![0u32; 4];
-        assert!(present_region(Some((&frame, 2, 4)), 1, 2, &mut dest, 2, 2));
-        assert_eq!(dest, vec![GREEN, GREEN, BLUE, BLUE]);
-    }
-
-    #[test]
-    fn present_region_scales_nearest_neighbour_for_hidpi() {
-        // 2x2 CSS frame: top row red, bottom row blue; scale 2 => 4x4 physical.
-        let frame = vec![RED, RED, BLUE, BLUE];
-        let mut dest = vec![0u32; 16];
-        assert!(present_region(Some((&frame, 2, 2)), 0, 2, &mut dest, 4, 4));
-        assert_eq!(&dest[0..4], &[RED, RED, RED, RED]);
-        assert_eq!(&dest[4..8], &[RED, RED, RED, RED]);
-        assert_eq!(&dest[8..12], &[BLUE, BLUE, BLUE, BLUE]);
-        assert_eq!(&dest[12..16], &[BLUE, BLUE, BLUE, BLUE]);
-    }
-
-    #[test]
-    fn present_region_applies_scroll_before_scaling() {
-        // 2x4 CSS frame; scroll 1 CSS row and scale 2 => rows green/blue.
-        let frame = four_row_frame();
-        let mut dest = vec![0u32; 8]; // 2x4 physical
-        assert!(present_region(Some((&frame, 2, 4)), 1, 2, &mut dest, 2, 4));
-        assert_eq!(
-            dest,
-            vec![GREEN, GREEN, GREEN, GREEN, BLUE, BLUE, BLUE, BLUE]
-        );
-    }
-
-    #[test]
-    fn present_region_falls_back_to_white() {
-        let mut dest = vec![RED; 4];
-        assert!(!present_region(None, 0, 2, &mut dest, 2, 2));
-        assert!(dest.iter().all(|&pixel| pixel == WHITE_0RGB));
-
-        let tiny = [RED];
-        assert!(!present_region(Some((&tiny, 2, 2)), 0, 2, &mut dest, 2, 2));
-        assert!(dest.iter().all(|&pixel| pixel == WHITE_0RGB));
-
-        // Destination length mismatch is a hard error.
-        let frame = four_row_frame();
-        let mut short = vec![0u32; 3];
-        assert!(!present_region(
-            Some((&frame, 2, 4)),
-            0,
-            2,
-            &mut short,
-            2,
-            2
-        ));
-    }
-
-    #[test]
-    fn chrome_band_pixels_scales_and_clamps_to_the_window() {
-        // F7-CHROME-OVERLAY / #1012: the page must start below the chrome band at scroll_y=0.
-        // The band scales with HiDPI and is clamped so the page always keeps at least 1 row.
-        use crate::chrome::CHROME_HEIGHT;
-        assert_eq!(chrome_band_pixels(1.0, 800), CHROME_HEIGHT as u32);
-        assert_eq!(chrome_band_pixels(2.0, 800), (CHROME_HEIGHT * 2.0) as u32);
-        assert_eq!(
-            chrome_band_pixels(1.0, 30),
-            29,
-            "band clamped, page keeps 1 row"
-        );
-        assert_eq!(
-            chrome_band_pixels(1.0, 1),
-            0,
-            "zero-height band for a 1px window"
-        );
-        assert_eq!(
-            chrome_band_pixels(1.0, 0),
-            0,
-            "no band for a zero-height window"
-        );
-    }
-
-    #[test]
-    fn present_region_at_offsets_page_below_chrome_band() {
-        let frame = vec![RED, RED, GREEN, GREEN];
-        let mut dest = vec![0u32; 2 * 4];
-        assert!(present_region_at(
-            Some((&frame, 2, 2)),
-            0,
-            2,
-            2,
-            &mut dest,
-            2,
-            4
-        ));
-        assert_eq!(
-            dest,
-            vec![
-                WHITE_0RGB, WHITE_0RGB, WHITE_0RGB, WHITE_0RGB, RED, RED, GREEN, GREEN
-            ]
-        );
-    }
-
-    #[test]
-    fn present_region_with_insets_scales_into_the_remaining_columns() {
-        // 4x2 CSS frame with four distinct columns; two physical inset columns on the left.
-        const C0: u32 = 0x00_00_00_01;
-        const C1: u32 = 0x00_00_00_02;
-        const C2: u32 = 0x00_00_00_03;
-        const C3: u32 = 0x00_00_00_04;
-        let frame = [C0, C1, C2, C3, C0, C1, C2, C3];
-        let mut dest = vec![0u32; 8 * 4];
-        assert!(present_region_with_insets(
-            Some((&frame, 4, 2)),
-            0,
-            2,
-            4,
-            2,
-            0,
-            &mut dest,
-            8,
-            4
-        ));
-        for row in dest.as_chunks::<8>().0 {
-            assert_eq!(row, &[WHITE_0RGB, WHITE_0RGB, C0, C0, C1, C2, C2, C3]);
-        }
-    }
-
-    #[test]
-    fn present_region_with_insets_uses_the_css_viewport_width_for_sampling() {
-        // Same frame/inset, but the visible page is only 2 CSS columns wide: samples
-        // are spread over 2 columns instead of the frame's 4.
-        const C0: u32 = 0x00_00_00_01;
-        const C1: u32 = 0x00_00_00_02;
-        const C2: u32 = 0x00_00_00_03;
-        const C3: u32 = 0x00_00_00_04;
-        let frame = [C0, C1, C2, C3, C0, C1, C2, C3];
-        let mut dest = vec![0u32; 8 * 2];
-        assert!(present_region_with_insets(
-            Some((&frame, 4, 2)),
-            0,
-            2,
-            2,
-            2,
-            0,
-            &mut dest,
-            8,
-            2
-        ));
-        for row in dest.as_chunks::<8>().0 {
-            assert_eq!(row, &[WHITE_0RGB, WHITE_0RGB, C0, C0, C0, C1, C1, C1]);
-        }
-    }
-
-    #[test]
-    fn present_region_with_insets_leaves_a_full_inset_entirely_white() {
-        const C0: u32 = 0x00_00_00_01;
-        let frame = [C0, C0, C0, C0, C0, C0, C0, C0];
-        let mut dest = vec![RED; 8 * 2];
-        for x_offset in [8, 20] {
-            dest.fill(RED);
-            assert!(present_region_with_insets(
-                Some((&frame, 4, 2)),
-                0,
-                2,
-                4,
-                x_offset,
-                0,
-                &mut dest,
-                8,
-                2
-            ));
-            assert!(
-                dest.iter().all(|&pixel| pixel == WHITE_0RGB),
-                "x_offset {x_offset} leaves no page columns"
-            );
-        }
-    }
-
-    #[test]
-    fn present_region_with_insets_matches_present_region_at_without_insets() {
-        // With no horizontal inset and the full frame width, the new path must be
-        // byte-for-byte the old one for every scroll/chrome-band combination.
-        let frame = four_row_frame();
-        for scroll_y in [0, 1] {
-            for dest_y_offset in [0, 1] {
-                let mut via_at = vec![0u32; 4 * 6];
-                let mut via_insets = vec![0u32; 4 * 6];
-                assert!(present_region_at(
-                    Some((&frame, 2, 4)),
-                    scroll_y,
-                    2,
-                    dest_y_offset,
-                    &mut via_at,
-                    4,
-                    6
-                ));
-                assert!(present_region_with_insets(
-                    Some((&frame, 2, 4)),
-                    scroll_y,
-                    2,
-                    2,
-                    0,
-                    dest_y_offset,
-                    &mut via_insets,
-                    4,
-                    6
-                ));
-                assert_eq!(
-                    via_insets, via_at,
-                    "scroll {scroll_y}, chrome band {dest_y_offset}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn chrome_rail_pixels_scales_and_clamps_to_the_window() {
-        use crate::chrome::{RAIL_COLLAPSED_WIDTH, RAIL_EXPANDED_WIDTH};
-        assert_eq!(chrome_rail_pixels(1.0, 800), RAIL_EXPANDED_WIDTH as u32);
-        assert_eq!(
-            chrome_rail_pixels(2.0, 800),
-            (RAIL_EXPANDED_WIDTH * 2.0) as u32
-        );
-        assert_eq!(
-            chrome_rail_pixels(1.0, 5),
-            4,
-            "page keeps 1 physical column"
-        );
-        assert_eq!(chrome_rail_pixels(1.0, 1), 0);
-        assert_eq!(chrome_rail_pixels(1.0, 0), 0);
-        assert_eq!(chrome_rail_pixels_for(1.0, RAIL_COLLAPSED_WIDTH, 800), 12);
-        assert_eq!(chrome_rail_pixels_for(1.0, -4.0, 800), 0);
-    }
-}
+mod unit_tests;

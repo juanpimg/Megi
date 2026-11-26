@@ -88,6 +88,7 @@ fn pending_timers_enable_auto_refresh_and_renders_are_deterministic() {
         input,
         css_width: 200,
         css_height: 100,
+        raster_scale: 1.0,
         base_override: None,
         scripting: true,
         find_query: None,

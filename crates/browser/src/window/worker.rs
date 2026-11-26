@@ -16,6 +16,12 @@ pub(super) fn render_options_for_scale(
 }
 
 impl WindowApp {
+    /// Raster scale taken from winit's device `scale_factor` (**not** page zoom:
+    /// zoom already changes the CSS viewport and is applied by presentation).
+    pub(super) fn raster_scale(&self) -> f32 {
+        crate::scale::sanitize_scale(self.scale_factor) as f32
+    }
+
     /// Builds a render worker using this window's cloned options and event proxy.
     fn new_worker(&self) -> Worker {
         let render_options = render_options_for_scale(&self.render_options, self.scale_factor);
@@ -33,6 +39,10 @@ impl WindowApp {
     /// Queues a render to the per-site process pool (ADR-004 phase 3). Responses arrive
     /// asynchronously through the pool's reader threads and are drained like worker messages.
     fn send_process_render(&mut self, request: RenderRequest) -> bool {
+        let options = crate::ipc::IpcRenderOptions::from_render_options(
+            &render_options_for_scale(&self.render_options, self.scale_factor),
+        )
+        .with_raster_scale(request.raster_scale);
         let wire = crate::ipc::IpcRenderRequest {
             generation: request.generation,
             input: request.input.clone(),
@@ -41,10 +51,7 @@ impl WindowApp {
             base_override: request.base_override.clone(),
             scripting: request.scripting,
             find_query: request.find_query.clone(),
-            options: crate::ipc::IpcRenderOptions::from_render_options(&render_options_for_scale(
-                &self.render_options,
-                self.scale_factor,
-            )),
+            options,
         };
         let pool = self.process_pool.get_or_insert_with(|| {
             crate::ipc::ProcessRenderPool::new(crate::ipc::MAX_PROCESS_RENDERERS)
@@ -114,12 +121,15 @@ impl WindowApp {
         };
         let page_height = self.page_viewport_height();
         let page_width = self.page_viewport_width();
+        let raster_scale = self.raster_scale();
         let request = if self.find.query().is_empty() {
             self.store
                 .begin_request(&render_input, page_width, page_height)
+                .with_raster_scale(raster_scale)
         } else {
             self.store
                 .begin_find_request(&render_input, page_width, page_height, self.find.query())
+                .with_raster_scale(raster_scale)
         };
         self.render_pending = true;
         self.send_render(request);
@@ -295,13 +305,16 @@ impl WindowApp {
             } else {
                 vec!["popstate"]
             };
-            let request = self.store.begin_history_event_request(
-                &snapshot,
-                self.page_viewport_width(),
-                self.metrics.css_height,
-                base.as_deref(),
-                &events,
-            );
+            let request = self
+                .store
+                .begin_history_event_request(
+                    &snapshot,
+                    self.page_viewport_width(),
+                    self.metrics.css_height,
+                    base.as_deref(),
+                    &events,
+                )
+                .with_raster_scale(self.raster_scale());
             self.send_render(request);
             self.input = url.as_str();
             self.update_title();

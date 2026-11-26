@@ -8,6 +8,7 @@ fn worker_frame_exposes_image_regions_for_the_context_menu() {
             .to_string(),
         css_width: 120,
         css_height: 80,
+        raster_scale: 1.0,
         base_override: None,
         scripting: true,
         find_query: None,

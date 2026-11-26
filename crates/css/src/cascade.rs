@@ -119,14 +119,7 @@ pub(crate) use chunk3::resolve_pseudo_cascaded_with_candidates;
 mod chunk4;
 #[allow(unused_imports)]
 pub use chunk4::MAX_INLINE_STYLE_BYTES;
-#[allow(unused_imports)]
-pub use chunk4::apply_animations_to_pseudo_styles;
-#[allow(unused_imports)]
-pub use chunk4::apply_animations_to_styles;
-#[allow(unused_imports)]
-pub use chunk4::apply_transitions_to_pseudo_styles;
-#[allow(unused_imports)]
-pub use chunk4::apply_transitions_to_styles;
+mod chunk6;
 #[allow(unused_imports)]
 pub(crate) use chunk4::floor_char_boundary_utf8;
 #[allow(unused_imports)]
@@ -151,6 +144,14 @@ pub use chunk4::resolve_document_styles_with_pseudos;
 pub use chunk4::resolve_document_styles_with_viewport;
 #[allow(unused_imports)]
 pub(crate) use chunk4::style_cache_key;
+#[allow(unused_imports)]
+pub use chunk6::apply_animations_to_pseudo_styles;
+#[allow(unused_imports)]
+pub use chunk6::apply_animations_to_styles;
+#[allow(unused_imports)]
+pub use chunk6::apply_transitions_to_pseudo_styles;
+#[allow(unused_imports)]
+pub use chunk6::apply_transitions_to_styles;
 mod chunk5;
 #[cfg(test)]
 #[allow(unused_imports)]

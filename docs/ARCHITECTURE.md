@@ -214,6 +214,14 @@ sigue siendo el único dueño del estado, pero `canvas.rs`, `canvas_paths.rs` y
 auditado sin cambiar el DAG de crates. Detalle y alternativas en
 [`CANVAS-OPS-BOUNDARY.md`](CANVAS-OPS-BOUNDARY.md).
 
+**Decisión ACEPTADA (ADR-007, 2026-11-25)**: el límite DPR separa geometría CSS de
+píxeles físicos. `RenderOptions`/`RenderRequest` transportan `raster_scale`
+(width del `scale_factor` de winit, `1.0` en headless); `megi_display::RasterScale`
+aplica una transformación **owned** a una copia de la display list y `render`
+rasteriza a tamaño físico, mientras hit regions, scroll y puntero siguen en CSS.
+El frame del shell es físico y `present.rs` hace blit 1:1. No cambia el DAG;
+detalle, consecuencias y límites en [`DPR-RASTER-BOUNDARY.md`](DPR-RASTER-BOUNDARY.md).
+
 ### 3.2 Política de Codificación PNG (decisión D3, Fase 4)
 
 La auditoría de Fase 4 detectó que la salida de imagen era únicamente PPM. Se evaluaron tres opciones para producir PNG:

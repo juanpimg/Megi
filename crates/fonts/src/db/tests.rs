@@ -72,10 +72,20 @@ mod system_ui_tests {
             .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("system-ui must resolve against the system font DB");
         let ui = db.build_font(ui_id).expect("system-ui face must build");
+        // The system default UI family is host-specific (Noto Sans on CI,
+        // other defaults on developer machines): assert the invariant, not a
+        // hardcoded name.
+        let system = system_fallback_db();
+        let system_ui_id = system
+            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("system fallback DB resolves system-ui");
+        let system_ui = system
+            .build_font(system_ui_id)
+            .expect("system-ui face must build");
         assert_eq!(
             ui.family_name(),
-            "Noto Sans",
-            "system-ui must resolve to the system default UI font, got {}",
+            system_ui.family_name(),
+            "system-ui must resolve to the host's default UI font, got {}",
             ui.family_name()
         );
 
@@ -83,10 +93,19 @@ mod system_ui_tests {
             .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("sans-serif must resolve against the system font DB");
         let sans = db.build_font(sans_id).expect("sans-serif face must build");
+        // A fresh database proves the earlier system-ui query did not mutate
+        // the sans-serif fallback (#parity); both are valid on every host.
+        let fresh = FontDatabase::from_system();
+        let fresh_sans_id = fresh
+            .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("fresh sans-serif resolution");
+        let fresh_sans = fresh
+            .build_font(fresh_sans_id)
+            .expect("fresh sans-serif face must build");
         assert_eq!(
             sans.family_name(),
-            "Noto Sans",
-            "sans-serif must use the system default face, got {}",
+            fresh_sans.family_name(),
+            "sans-serif must keep its existing fallbacks, got {}",
             sans.family_name()
         );
     }
@@ -104,10 +123,17 @@ mod system_ui_tests {
             .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("sans-serif must resolve against the system font DB");
         let face = db.build_font(sans).expect("sans-serif face must build");
+        // The platform default family is host-specific (Noto Sans on some CI
+        // images, DejaVu Sans or another alias elsewhere): assert that the
+        // generic aliases system-ui rather than hardcoding a family name.
+        let ui = db
+            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("system-ui must resolve against the system font DB");
+        let ui_face = db.build_font(ui).expect("system-ui face must build");
         assert_eq!(
             face.family_name(),
-            "Noto Sans",
-            "sans-serif must use the system default face (fontconfig alias), got {}",
+            ui_face.family_name(),
+            "sans-serif must use the host default face (fontconfig alias), got {}",
             face.family_name()
         );
     }
@@ -128,13 +154,24 @@ mod system_ui_tests {
             .expect("quoted system-ui falls back to the default face");
         assert_eq!(literal.family_name(), "DejaVu Sans");
 
-        if system_fallback_db().is_empty() {
+        let system = system_fallback_db();
+        if system.is_empty() {
             return; // fontless CI container: bundled fallback is the best we can do
         }
         let ui = db
             .font(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("system-ui resolves through the system DB");
-        assert_eq!(ui.family_name(), "Noto Sans");
+        let system_ui_id = system
+            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
+            .expect("system fallback DB resolves system-ui");
+        let system_ui = system
+            .build_font(system_ui_id)
+            .expect("system-ui face must build");
+        assert_eq!(
+            ui.family_name(),
+            system_ui.family_name(),
+            "bundled DB must delegate system-ui to the host's system DB"
+        );
     }
 
     /// CSS Fonts 4 §3.1 family lists are ordered: a face available earlier in

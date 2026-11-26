@@ -3,7 +3,7 @@ use super::*;
 pub const RENDER_DEBOUNCE: Duration = Duration::from_millis(120);
 
 /// A full-page render request, tagged with a monotonically increasing generation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RenderRequest {
     /// Monotonic generation; used to drop stale results.
     pub generation: u64,
@@ -13,6 +13,11 @@ pub struct RenderRequest {
     pub css_width: u32,
     /// CSS viewport height (`physical / scale`, clamped to the render cap).
     pub css_height: u32,
+    /// Physical device pixels per CSS pixel for the raster pass (default `1.0`).
+    ///
+    /// The CSS viewport above is unchanged; this only scales the display list and
+    /// the resulting frame. The window sets it from the winit `scale_factor`.
+    pub raster_scale: f32,
     /// When set, relative resources resolve against this URL (used when `input` is a
     /// patched-DOM `data:` snapshot rendered for form editing).
     pub base_override: Option<String>,
@@ -30,14 +35,26 @@ pub struct RenderRequest {
     pub form_post: Option<(String, Vec<u8>)>,
 }
 
-/// A finished page frame in CSS resolution (`0RGB`, row-major).
+impl RenderRequest {
+    /// Sets the raster scale (the browser window derives it from winit's
+    /// `scale_factor`). CSS viewport geometry and hit regions stay untouched.
+    pub fn with_raster_scale(mut self, raster_scale: f32) -> Self {
+        self.raster_scale = raster_scale;
+        self
+    }
+}
+
+/// A finished page frame in physical-device-pixel resolution (`0RGB`, row-major).
+///
+/// `width`/`height` are raster dimensions (`css_width/height * raster_scale`);
+/// `content_height`, link/form/find rectangles and hit regions remain in CSS px.
 #[derive(Clone, Debug)]
 pub struct RenderFrame {
     /// Generation of the request that produced this frame.
     pub generation: u64,
-    /// Frame width in CSS pixels (the CSS viewport width).
+    /// Frame width in physical pixels (CSS viewport width × raster scale).
     pub width: u32,
-    /// Frame height in CSS pixels (whole page, capped at [`scroll::MAX_CONTENT_HEIGHT`]).
+    /// Frame height in physical pixels (whole page × raster scale).
     pub height: u32,
     /// `width * height` pixels in `0RGB` format.
     pub pixels: Vec<u32>,
@@ -46,6 +63,8 @@ pub struct RenderFrame {
     /// memory trade-off: one extra compressed copy per frame (documented).
     pub png_bytes: Vec<u8>,
     /// Scrollable page height in CSS pixels (clamped to the render cap).
+    ///
+    /// Never scaled: pointer, scroll and hit-region math stay in CSS coordinates.
     pub content_height: u32,
     /// Whether the page was taller than [`scroll::MAX_CONTENT_HEIGHT`] and got clipped.
     pub capped: bool,
