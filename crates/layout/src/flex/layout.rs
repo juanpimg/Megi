@@ -1,9 +1,9 @@
 use super::*;
 
 use super::helpers::{
-    clamp_main, cross_offset, edges_main, explicit_cross, first_line_baseline, flex_base_main,
-    is_reverse, is_row, justify_offsets, resolve, resolve_align_self, resolve_edges,
-    resolve_flexible_lengths,
+    clamp_main, cross_offset, edges_main, edges_main_with_margin, explicit_cross,
+    first_line_baseline, flex_base_main, is_reverse, is_row, justify_offsets, resolve,
+    resolve_align_self, resolve_edges, resolve_flexible_lengths,
 };
 
 /// Lays out the children of a flex container.
@@ -101,9 +101,16 @@ pub(crate) fn layout_flex_children(
                 container_width,
                 measurer,
             );
+            // The shrink-to-fit helper returns the intrinsic contribution with
+            // this box's own edges included; flex base sizes are content-box
+            // sizes, and `outer_main()` adds the edges back below.
+            let own_edges = edges_main_with_margin(&edges, row);
+            // Round up: a subpixel-short base size would rewrap text that the
+            // intrinsic measurement says fits on one line.
+            let measured = (child.dimensions.content.width - own_edges).max(0.0).ceil();
             base_main = clamp_main(
                 &child_style,
-                child.dimensions.content.width,
+                measured,
                 row,
                 container_width,
                 edges_main(&edges, row),
