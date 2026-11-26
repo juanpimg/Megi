@@ -315,12 +315,13 @@ crates/css/src/parser/chunk2.rs	363	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/css/src/parser/chunk3.rs	152	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties.rs	157	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/calc.rs	263	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/computed.rs	21	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/computed.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/computed/chunk1.rs	295	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/computed/chunk2.rs	351	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/computed/chunk3.rs	500	src	F2	fix-rem	2026-11-20	covered	#1884	re-read after rem line-height fix
+crates/css/src/properties/computed/chunk3.rs	498	src	F2	fix-rem	2026-11-20	covered	#1884	re-read after rem line-height fix
 crates/css/src/properties/computed/chunk4.rs	321	src	F2	m7-webdriver-bidi	2026-11-25	covered	line-height-normal-inheritance	re-read after main merge
 crates/css/src/properties/computed/chunk5.rs	299	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/computed/spacing.rs	28	src	F2	lead	2026-11-26	covered	RUST-FONT-INHERIT	read before covering extracted spacing helper
 crates/css/src/properties/mask.rs	78	src	F2	lead	2026-11-25	covered	CSS-MASK-IMAGE	Read computed mask-image parser; 4 css tests green
 crates/css/src/properties/parse.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk1.rs	355	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -396,7 +397,7 @@ crates/css/tests/steps_before_flag.rs	78	test	F1	autonomous-round9	2026-11-19	co
 crates/css/tests/supports_conditions.rs	69	test	F1	lead	2026-11-25	covered	CSS-SUPPORTS-CASCADE	Read 69-line integration tests; 6 tests green
 crates/css/tests/text_overflow.rs	166	test	F1	juanpimg	2026-11-20	covered	#1929	text-overflow test files from PR 2053 merged into main
 crates/css/tests/transform.rs	281	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/tests/typography_props.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/tests/typography_props.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/Cargo.toml	17	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/hit_test.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/display/src/lib.rs	472	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
