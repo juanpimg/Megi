@@ -84,6 +84,50 @@ impl Default for Palette {
     }
 }
 
+/// Integer `color-mix` of `overlay` over `base` (CSS Color 5 §5, rounded percent).
+const fn mix_channel(base: u8, overlay: u8, percent: u16) -> u8 {
+    let percent = if percent > 100 { 100 } else { percent };
+    let value = (base as u16 * (100 - percent) + overlay as u16 * percent + 50) / 100;
+    // A convex combination of two u8 values is at most 255, so this cast cannot
+    // truncate; it keeps the token usable in const contexts.
+    value as u8
+}
+
+const fn mix(base: Color, overlay: Color, percent: u16) -> Color {
+    Color::new(
+        mix_channel(base.r, overlay.r, percent),
+        mix_channel(base.g, overlay.g, percent),
+        mix_channel(base.b, overlay.b, percent),
+        0xFF,
+    )
+}
+
+/// Semantic states for interactive chrome (CSS UI States `:hover`, `:focus-visible`,
+/// `:active` and `:disabled`).
+///
+/// Every state derives from [`Palette::DEFAULT`] so one accent still drives the
+/// whole chrome. `focus` is lightened until it clears WCAG 2.2 §1.4.3 (4.5:1)
+/// against the dark shell top bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StatePalette {
+    /// Pointer-over affordance: text tinted with 8% accent.
+    pub hover: Color,
+    /// Keyboard focus ring, bright enough for WCAG 2.2 §1.4.3 on `SHELL.top`.
+    pub focus: Color,
+    /// Pressed affordance: accent darkened toward the raised tab surface.
+    pub pressed: Color,
+    /// Non-interactive affordance, reusing the legacy disabled token.
+    pub disabled: Color,
+}
+
+/// Concrete state colors derived from [`Palette::DEFAULT`].
+pub const STATE: StatePalette = StatePalette {
+    hover: mix(Palette::DEFAULT.text, Palette::DEFAULT.accent, 8),
+    focus: mix(Palette::DEFAULT.accent, Color::WHITE, 25),
+    pressed: mix(Palette::DEFAULT.accent, Palette::DEFAULT.tab_active, 30),
+    disabled: Palette::DEFAULT.disabled,
+};
+
 /// Dark shell palette for the reference UI (`docs/UI-TARGET.md`).
 ///
 /// These tokens are the measured surfaces of the macOS-style shell: charcoal

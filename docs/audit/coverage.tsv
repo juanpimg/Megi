@@ -64,11 +64,12 @@ crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#193
 crates/browser/src/a11y_backend.rs	490	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/a11y_backend_orphan_tests.rs	105	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
 crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#upstream	re-read
-crates/browser/src/chrome.rs	474	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome.rs	476	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar_paint.rs	306	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/drawing.rs	341	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/dropdown.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/icons.rs	255	src	F2	jp	2026-11-26	covered	#2290	
 crates/browser/src/chrome/menus.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/native_widget_overlay.rs	192	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/chrome/native_widgets.rs	240	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -86,7 +87,7 @@ crates/browser/src/chrome/tests/paint.rs	472	src	F2	lead	2026-11-26	covered	HERO
 crates/browser/src/chrome/tests/rail.rs	287	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/chrome/tests/tabs.rs	109	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/tokens.rs	122	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/tokens.rs	386	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/tokens.rs	430	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli/args.rs	219	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/cli/finish.rs	252	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -212,6 +213,7 @@ crates/browser/src/worker/tests_extra.rs	200	src	F2	wave-max-mod	2026-11-19	cove
 crates/browser/src/worker/types.rs	143	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/unit_tests.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/tests/chrome_icons.rs	90	test	F1	jp	2026-11-26	covered	#2290	
 crates/browser/tests/devtools_protocol.rs	337	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
 crates/browser/tests/dpr_raster_tests.rs	47	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/browser/tests/favicon_svg.rs	24	test	F1	lead	2026-11-26	covered	UI-FAVICON-LINEBYLINE	read after remote UI favicon and audit index merge

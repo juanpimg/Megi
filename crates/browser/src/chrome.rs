@@ -20,6 +20,7 @@ mod address_bar;
 mod address_bar_paint;
 mod drawing;
 mod dropdown;
+mod icons;
 mod menus;
 mod native_widgets;
 mod navigation;
@@ -56,6 +57,7 @@ pub use dropdown::{
     DropdownItem, DropdownList, DropdownState, dropdown_items, dropdown_layout,
     dropdown_layout_items,
 };
+pub use icons::{Icon, IconAtlas};
 pub use menus::{
     ContextMenu, ContextMenuItem, ContextMenuLayout, HistoryMenuLayout, MenuAction,
     context_menu_hit, context_menu_layout, draw_downloads_panel, draw_save_as_dialog,
@@ -76,7 +78,7 @@ pub use tab_strip::{
     OverflowHit, OverflowLayout, OverflowMenu, TabHit, TabRect, TabStripLayout, layout_tabs,
     overflow_menu_hit, overflow_menu_layout, tab_strip_hit, truncate_title,
 };
-pub use tokens::{HEIGHT_COMPACT, Palette, Radius, ShellPalette, Spacing};
+pub use tokens::{HEIGHT_COMPACT, Palette, Radius, STATE, ShellPalette, Spacing, StatePalette};
 pub use tokens::{
     RAIL_CSS, SIDEBAR_MAX, ShellHit, ShellLayout, ShellView, WINDOW_MARGIN, layout_shell,
     shell_hit, sidebar_width,
