@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Rust - Wikipedia, la enciclopedia libre</title>
+<style>
+/* Vector 2022 declarations that drive the header and the page toolbar. */
+body { margin: 0; font-family: sans-serif; font-size: 16px; color: #202122; }
+.vector-header-container .mw-header {
+  width: 100%; min-height: 3.125rem; padding: 8px 1.5rem; box-sizing: border-box;
+}
+.mw-header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.mw-header .vector-header-start { gap: 20px; }
+.vector-header-start, .mw-header .vector-header-end { display: flex; align-items: center; }
+.mw-header .vector-header-end { flex-grow: 1; justify-content: flex-end; }
+.vector-user-links .mw-list-item, .vector-user-links .vector-dropdown-label { margin: 0 4px; }
+.vector-user-links-main { display: flex; align-items: center; }
+.vector-user-links-main .vector-menu-content { display: flex; }
+.vector-user-links-main .vector-menu-content-list {
+  display: flex; align-items: center; font-size: 0.875rem;
+}
+.vector-menu-content-list { list-style: none; margin: 0; padding: 0; }
+.mw-list-item a, .vector-dropdown-content .mw-list-item a {
+  display: flex; align-items: center; padding: 6px 0;
+}
+.mw-list-item a:visited { color: #36c; }
+.vector-page-toolbar-container {
+  display: flex; flex-flow: row; justify-content: space-between;
+  font-size: 0.875rem; box-shadow: 0 1px #c8ccd1; margin-bottom: 1px;
+}
+.vector-menu-tabs .vector-menu-content { width: 100%; }
+.vector-menu-tabs .vector-menu-content-list {
+  display: flex; align-items: center; justify-content: flex-end;
+}
+.vector-menu-tabs .mw-list-item { white-space: nowrap; margin-bottom: 0; }
+.vector-menu-tabs .mw-list-item.vector-tab-noicon { margin: 0 8px; }
+.vector-menu-tabs .mw-list-item.vector-tab-noicon a {
+  display: inline-flex; align-items: center; min-height: 32px;
+}
+.vector-menu-tabs .mw-list-item.selected a { color: #202122; }
+.vector-menu-tabs .mw-list-item.selected a::after {
+  background-color: #202122;
+}
+</style>
+</head>
+<body>
+<div class="vector-header-container">
+  <header class="mw-header">
+    <div class="vector-header-start"><b>WIKIPEDIA</b></div>
+    <div class="vector-header-end">
+      <nav class="vector-user-links vector-user-links-wide" aria-label="Herramientas personales">
+        <div class="vector-user-links-main">
+          <div id="p-vector-user-menu-overflow" class="vector-menu mw-portlet">
+            <div class="vector-menu-content">
+              <ul class="vector-menu-content-list">
+                <li id="pt-sitesupport-2" class="mw-list-item vector-menu-item--collapsible"><a href="#donate"><span>Donaciones</span></a></li>
+                <li id="pt-createaccount-2" class="mw-list-item vector-menu-item--collapsible"><a href="#create"><span>Crear una cuenta</span></a></li>
+                <li id="pt-login-2" class="mw-list-item vector-menu-item--collapsible"><a href="#login"><span>Acceder</span></a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </header>
+</div>
+<div class="vector-page-toolbar">
+  <div class="vector-page-toolbar-container">
+    <div id="left-navigation">
+      <div id="p-associated-pages" class="vector-menu vector-menu-tabs mw-portlet">
+        <div class="vector-menu-content">
+          <ul class="vector-menu-content-list">
+            <li id="ca-nstab-main" class="selected mw-list-item vector-tab-noicon"><a href="/wiki/Rust"><span>Artículo</span></a></li>
+            <li id="ca-talk" class="mw-list-item vector-tab-noicon"><a href="/wiki/Discusión:Rust"><span>Discusión</span></a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div id="right-navigation" class="vector-collapsible">
+      <div id="p-views" class="vector-menu vector-menu-tabs mw-portlet mw-portlet-views">
+        <div class="vector-menu-content">
+          <ul class="vector-menu-content-list">
+            <li id="ca-view" class="selected mw-list-item vector-tab-noicon"><a href="/wiki/Rust"><span>Leer</span></a></li>
+            <li id="ca-edit" class="mw-list-item vector-tab-noicon"><a href="/w/index.php?title=Rust&amp;action=edit"><span>Editar</span></a></li>
+            <li id="ca-history" class="mw-list-item vector-tab-noicon"><a href="/w/index.php?title=Rust&amp;action=history"><span>Ver historial</span></a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
