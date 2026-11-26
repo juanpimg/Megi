@@ -136,6 +136,9 @@ jobs:
           tools.test_fuzz_targets
           tools.test_gitleaks_config
           tools.test_release_workflow
+          tools.test_check_agent_index_refs
+          tools.test_check_conformance_freshness
+          tools.test_check_deslop_allowlist
           tools.test_check_deslop_doc
           tools.test_check_doc_tool_refs
           tools.test_check_no_compile_gates
@@ -144,8 +147,18 @@ jobs:
           tools.test_check_parity_inventory
           tools.test_check_parity_ledger
           tools.test_check_parity_schema
+          tools.test_check_progress_consistency
+          tools.test_check_python_syntax
+          tools.test_check_real_site_manifest
+          tools.test_check_real_site_report
           tools.test_check_real_site_snapshots
+          tools.test_check_status_badges
+          tools.test_check_status_json
           tools.test_check_tool_test_coverage
+          tools.test_check_work_packages
+          tools.test_check_workflow_scripts
+          tools.test_check_wp_board
+          tools.test_check_wpt_artifacts
           tools.test_test262_report
           tools.test_test_inspector
           tools.test_visual_parity
