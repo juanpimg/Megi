@@ -72,7 +72,17 @@ pub(crate) mod tests {
             );
         }
         let input = style(&styles, input);
-        assert!(matches!(input.width, Length::Px(width) if width > 100.0));
+        // WHATWG HTML §4.10.5.1.2: the UA sheet must not force `width:10em` on
+        // text controls, so the `size` attribute can drive intrinsic width
+        // (issue #2247). It keeps a 5em floor so the box stays visible; with
+        // the authored 20px font that resolves to exactly 100px. Assert both
+        // the absence of the stale UA width and the exact inherited floor.
+        assert_eq!(input.width, Length::Auto, "no UA-forced text input width");
+        assert_eq!(
+            input.min_width,
+            Length::Px(100.0),
+            "5em inherited minimum at 20px"
+        );
         let textarea = style(&styles, textarea);
         assert!(matches!(textarea.width, Length::Px(width) if width > 100.0));
         assert!(matches!(textarea.height, Length::Px(height) if height > 20.0));
