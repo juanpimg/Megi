@@ -363,7 +363,7 @@ crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk1.rs	401	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
-crates/css/src/user_agent/chunk2.rs	243	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/css/src/user_agent/chunk2.rs	256	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	365	test	F1	lead	2026-11-26	covered	REMOTE-CSS-CALC-MERGE	read during CI tools gate fix
@@ -410,11 +410,11 @@ crates/fonts/assets/DejaVuSans-Bold.ttf	0	binary	-			exempt		not read line by li
 crates/fonts/assets/DejaVuSans.ttf	0	binary	-			exempt		not read line by line: binary
 crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db.rs	351	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: SANS_FALLBACKS now starts with system default Noto Sans; DejaVu kept as fallback
-crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/fonts/src/db.rs	363	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
+crates/fonts/src/db/load.rs	356	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
 crates/fonts/src/db/query.rs	366	src	F2	lead+wiki-serif-parity	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE #wiki-serif-parity	Read merge bdda7be8 diff (chrome, CLI, DPR, fonts, flex/CSS, IFC, painting); named-only system serif fallback added
 crates/fonts/src/db/shape.rs	422	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: font() system-ui path unchanged; bundled-only non-empty DB serif fallback uses named system faces
-crates/fonts/src/db/tests.rs	285	src	F2	sansfont-parity+wiki-serif-parity	2026-11-26	covered	#parity #wiki-serif-parity	Re-read: serif generic + empty-DB NoFontAvailable regressions plus sans-serif/Noto Sans red-green tests
+crates/fonts/src/db/tests.rs	322	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/font.rs	410	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/lib.rs	83	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1438,7 +1438,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/UI-TARGET.md	37	docs	F3	opencode-agent	2026-11-26	covered	#ui	read line by line: shell visual reference from project owner
+docs/UI-TARGET.md	54	docs	F3	opencode-agent	2026-11-26	covered	#ui	read line by line: shell visual reference from project owner
 docs/VISUAL-PARITY.md	102	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified

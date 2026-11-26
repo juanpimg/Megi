@@ -35,3 +35,20 @@ Inspiración declarada: [Zen Browser](https://github.com/zen-browser/desktop).
    explícito en el commit (AGENTS.md §5).
 5. Verifica con `cargo run --release -p megi-browser -- <url> --screenshot ... --chrome`
    y compara contra esta imagen; pega md5 y descripción visual en el informe.
+
+## Referencia de código: Zen Browser
+
+Fuente autorizada por el dueño: <https://github.com/zen-browser/desktop>
+(clon superficial local durante el análisis en `/tmp/opencode/zen-ref`). **No vendorizar
+su código ni añadirlo como dependencia**: sólo tomar ideas de diseño.
+
+| Archivo | Idea aplicable a Megi |
+|---|---|
+| `src/zen/common/styles/zen-sidebar.css` | El sidebar es una superficie elevada: `border-radius` interior + `box-shadow` + `overflow:hidden`, no una columna plana. |
+| `src/zen/common/styles/zen-tokens.css` | `--zen-big-shadow: rgba(0,0,0,0.24) 0px 3px 8px`; radio interior = `max(5px, (radio externo - separación/2) * squircle)`. |
+| `src/zen/common/styles/zen-theme.css` | Barra de herramientas de 38 px (42 en macOS); fondos translúcidos con `color-mix(textcolor 8–15%, transparent)`; hovers `currentColor 5–10%`; pestaña activa con escala sutil; sidebar expandido/colapsado con rail de iconos. |
+| `src/zen/tabs/zen-tabs/vertical-tabs.css` | Pestañas verticales, secciones por workspace, rail izquierdo, pestaña activa muy redondeada. |
+| `src/zen/compact-mode/` | El modo compacto reduce padding y tamaño de fuente sin cambiar la estructura. |
+
+Traducción a Megi: usar los tokens existentes de `Palette`/`Radius` para superficies
+elevadas y sombras, no copiar CSS de Firefox; mantener el pintado puro con `Pixmap`.
