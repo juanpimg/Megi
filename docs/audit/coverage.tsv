@@ -1429,7 +1429,7 @@ docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#224
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	103	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
-docs/ARCHITECTURE.md	237	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+docs/ARCHITECTURE.md	237	docs	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read during remote gate reconciliation
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
@@ -1577,7 +1577,7 @@ docs/superpowers/plans/2026-11-25-zen-inspired-ui-plan.md	329	docs	F3	lead	2026-
 docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-cleanup	2026-11-24	covered	#2290	design doc v2 reviewed during roadmap update
 docs/work-packages/BOARD.md	64	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
-docs/work-packages/SCHEMA.md	51	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
+docs/work-packages/SCHEMA.md	53	docs	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read after remote merge; 51 -> 53 lines
 docs/work-packages/closed.toml	20	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
 docs/work-packages/depth-inventory.toml	487	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -2398,7 +2398,8 @@ tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wa
 tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 50-line compile-free gate; validates fixture links
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	138	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
+tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
+tools/check_no_compile_gates.py	142	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read after remote merge; 138 -> 142 lines; new gates registered
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2421,6 +2422,7 @@ tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit
 tools/check_workflow_metadata.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_workflow_scripts.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_wp_board.py	118	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/check_wp_schema_docs.py	65	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2453,6 +2455,7 @@ tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290
 tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 70-line unit tests for fixture link gate
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
+tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/test_check_no_compile_gates.py	82	tool	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: gate count derived from runner.GATES instead of a hardcoded 39/40
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
@@ -2476,6 +2479,7 @@ tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#
 tools/test_check_workflow_metadata.py	71	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_workflow_scripts.py	94	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_wp_board.py	147	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package board gate extension
+tools/test_check_wp_schema_docs.py	86	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/test_ci_gate.py	145	tool	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: factored discovery/registration helpers, added duplicate and guard-detection regressions
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
