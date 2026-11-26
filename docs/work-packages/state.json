@@ -5,6 +5,11 @@
     "WP-DEPTH-m3-02",
     "WP-DEPTH-m4-01",
     "WP-SITE-wikipedia",
-    "WP-SITE-rust"
+    "WP-SITE-rust",
+    "WP-USER-ui-icons",
+    "WP-USER-ui-shell",
+    "WP-USER-ui-favicon",
+    "WP-USER-ui-titles",
+    "WP-USER-ui-gate"
   ]
 }

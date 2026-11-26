@@ -18,3 +18,28 @@ id = "WP-SITE-rust"
 metric = "sites_passed 1->3: rust-lang.org PASS (styles_pre_script 110->78ms A/B, budget cleared)"
 commit = "2146c289"
 
+["WP-USER-ui-icons"]
+id = "WP-USER-ui-icons"
+metric = "UI quality block integrated"
+commit = "1b6b28bd"
+
+["WP-USER-ui-shell"]
+id = "WP-USER-ui-shell"
+metric = "UI quality block integrated"
+commit = "1b6b28bd"
+
+["WP-USER-ui-favicon"]
+id = "WP-USER-ui-favicon"
+metric = "UI quality block integrated"
+commit = "1b6b28bd"
+
+["WP-USER-ui-titles"]
+id = "WP-USER-ui-titles"
+metric = "UI quality block integrated"
+commit = "1b6b28bd"
+
+["WP-USER-ui-gate"]
+id = "WP-USER-ui-gate"
+metric = "UI quality block integrated"
+commit = "1b6b28bd"
+
