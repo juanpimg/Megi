@@ -59,6 +59,7 @@ TEST_MODULES = (
     "tools.test_check_milestone_index",
     "tools.test_check_wp_schema_docs",
     "tools.test_check_wp_generators",
+    "tools.test_check_wpt_manifest_files",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -103,6 +104,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("milestone_index", (PY, "tools/check_milestone_index.py")),
     ("wp_schema_docs", (PY, "tools/check_wp_schema_docs.py")),
     ("wp_generators", (PY, "tools/check_wp_generators.py")),
+    ("wpt_manifest_files", (PY, "tools/check_wpt_manifest_files.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
