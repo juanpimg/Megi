@@ -362,7 +362,7 @@ crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk1.rs	410	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
-crates/css/src/user_agent/chunk2.rs	266	src	F2	site-repro	2026-11-26	covered	FONTS-GENERIC-PIN	read and verified in fonts WP
+crates/css/src/user_agent/chunk2.rs	269	src	F2	lead	2026-11-26	covered	REMOTE-GATES-46	re-read after min-width assertion change; test verified (1 passed)
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	365	test	F1	lead	2026-11-26	covered	REMOTE-CSS-CALC-MERGE	read during CI tools gate fix
@@ -2409,7 +2409,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	148	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-45	read full file after changelog gate merge; ledger/gate reconciliation
+tools/check_no_compile_gates.py	150	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	re-read after WPT report md gate registered
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2436,6 +2436,7 @@ tools/check_wp_generators.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-43	
 tools/check_wp_schema_docs.py	65	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/check_wpt_manifest_files.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
+tools/check_wpt_report_md.py	55	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; compile-free gate registered
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
@@ -2496,6 +2497,7 @@ tools/test_check_wp_generators.py	92	tool	F3	lead	2026-11-26	covered	REMOTE-GATE
 tools/test_check_wp_schema_docs.py	86	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/test_check_wpt_manifest_files.py	103	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
+tools/test_check_wpt_report_md.py	85	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; unittest module registered
 tools/test_ci_gate.py	145	tool	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: factored discovery/registration helpers, added duplicate and guard-detection regressions
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
