@@ -52,6 +52,7 @@ TEST_MODULES = (
     "tools.test_check_coverage_svg",
     "tools.test_check_progress_svg",
     "tools.test_check_conformance_badges",
+    "tools.test_check_coverage_html_areas",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -89,6 +90,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("coverage_svg", (PY, "tools/check_coverage_svg.py")),
     ("progress_svg", (PY, "tools/check_progress_svg.py")),
     ("conformance_badges", (PY, "tools/check_conformance_badges.py")),
+    ("coverage_html_areas", (PY, "tools/check_coverage_html_areas.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
