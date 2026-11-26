@@ -24,6 +24,18 @@ fn render(name: &str, max_image_dim: Option<u32>) -> megi_render::RenderOutput {
         .unwrap_or_else(|error| panic!("render {name}: {error}"))
 }
 
+/// Performance-budget warnings are timing-dependent and must not fail a
+/// functional image-decoding test; keep asserting on real render warnings.
+fn functional_warnings(output: &megi_render::RenderOutput) -> Vec<&str> {
+    output
+        .stats
+        .warnings
+        .iter()
+        .filter(|warning| !warning.starts_with("performance budget:"))
+        .map(String::as_str)
+        .collect()
+}
+
 #[test]
 fn scaled_image_decode_keeps_the_painted_result() {
     let full = render("image_scaled.html", None);
@@ -31,11 +43,8 @@ fn scaled_image_decode_keeps_the_painted_result() {
     for output in [&full, &scaled] {
         assert_eq!(output.stats.images_loaded, 1);
         assert_eq!(output.stats.images_failed, 0);
-        assert!(
-            output.stats.warnings.is_empty(),
-            "unexpected warnings: {:?}",
-            output.stats.warnings
-        );
+        let warnings = functional_warnings(output);
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
     }
     // The image is painted at (0,0) 128x96 on a white page; both decodes must match
     // within nearest-vs-full bilinear resampling noise on a smooth gradient.
@@ -60,5 +69,9 @@ fn scaled_image_decode_keeps_the_painted_result() {
 fn full_decode_is_the_default() {
     let output = render("image_scaled.html", None);
     assert_eq!(output.stats.images_loaded, 1);
-    assert!(output.stats.warnings.is_empty());
+    assert!(
+        functional_warnings(&output).is_empty(),
+        "unexpected warnings: {:?}",
+        functional_warnings(&output)
+    );
 }

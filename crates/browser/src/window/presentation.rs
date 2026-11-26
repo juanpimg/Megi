@@ -169,6 +169,7 @@ impl WindowApp {
             .rail_view()
             .map(|view| (view.active, view.hover, view.expanded, view.width_css));
         let page_viewport_width = self.page_viewport_width();
+        let shell_sidebar = self.rail_open;
         let chrome_scale_f64 = self.metrics.scale;
         let chrome_fallback = self.current_url_text();
         let chrome_address = self.address.clone();
@@ -361,6 +362,14 @@ impl WindowApp {
             ime_preedit,
             rail,
             compact: chrome_band_css == chrome::HEIGHT_COMPACT,
+            shell: Some(chrome::ShellView {
+                labels: &chrome_titles,
+                favicons: &favicons,
+                url: &chrome_fallback,
+                active: chrome_active_tab,
+                top_css: chrome_band_css,
+                sidebar: shell_sidebar,
+            }),
         };
         let download_status = self.download.status_text();
         // #1724: surface document-field IME preedit in the status bar; the address bar

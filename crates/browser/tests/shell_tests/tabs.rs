@@ -93,7 +93,7 @@ fn cli_tabs_flag_builds_multiple_tabs_and_documents_headless_policy() {
 }
 
 #[test]
-fn chrome_overlay_paints_tab_strip_and_address_bar() {
+fn chrome_overlay_paints_dark_shell_surfaces() {
     let plain =
         megi_browser::render_target("data:text/html,<h1>chrome</h1>", 640, 400).expect("plain");
     let chromed = megi_browser::headless::render_target_with_chrome(
@@ -109,8 +109,10 @@ fn chrome_overlay_paints_tab_strip_and_address_bar() {
         chromed.dimensions(),
         "chrome is an overlay"
     );
-    let tab_strip = megi_browser::chrome::COLOR_TAB_STRIP;
-    let address = megi_browser::chrome::COLOR_ADDRESS_BG;
+    // The reference shell replaced the legacy tab strip/address band with a dark
+    // top bar and sidebar; assert those measured surfaces instead (UI-TARGET.md).
+    let tab_strip = megi_browser::chrome::ShellPalette::DARK.top;
+    let address = megi_browser::chrome::ShellPalette::DARK.sidebar;
     let count = |output: &megi_webview::render::RenderOutput, color: megi_webview::paint::Color| {
         output
             .pixmap
@@ -124,10 +126,13 @@ fn chrome_overlay_paints_tab_strip_and_address_bar() {
     assert!(count(&chromed, address) > 1000, "address bar painted");
     // This fixture has no content in the sampled row: the chrome band no longer
     // covers page content, so the row below it is plain page background.
-    let offset = ((megi_browser::chrome::CHROME_HEIGHT as u32 + 10) * 640) as usize;
+    // The dark shell insets the page beside the sidebar; compare a row inside that
+    // inset page, past the rounded window margin, where content is unaffected.
+    let inset = (megi_browser::chrome::sidebar_width(640.0).ceil() as usize) + 40;
+    let offset = ((megi_browser::chrome::CHROME_HEIGHT as u32 + 10) * 640) as usize + inset;
     assert_eq!(
-        plain.pixmap.pixels[offset..offset + 100],
-        chromed.pixmap.pixels[offset..offset + 100]
+        plain.pixmap.pixels[offset..offset + 60],
+        chromed.pixmap.pixels[offset..offset + 60]
     );
 }
 
@@ -272,6 +277,7 @@ fn chrome_geometry_scales_with_the_device_scale() {
         ime_preedit: "",
         compact: false,
         rail: None,
+        shell: None,
     };
     let mut dest = vec![0x00FF_FFFFu32; 640 * 400];
     let painted = megi_browser::chrome::draw_chrome(&mut dest, 640, 400, 2.0, &view);
@@ -343,6 +349,7 @@ fn single_workspace_chrome_render_is_byte_identical_to_legacy_inputs() {
             ime_preedit: "",
             compact: false,
             rail: None,
+            shell: None,
         }
     }
     let legacy = view(&legacy_titles, tabs.active_index(), &address);

@@ -27,17 +27,23 @@ pub(super) fn render_target_with_chrome_mode(
     find_query: Option<&str>,
     compact: bool,
 ) -> Result<megi_webview::render::RenderOutput, ShellError> {
-    // Real browsers shrink the viewport by the chrome band: the page is laid out in
-    // `page_height` and composited below the band instead of being painted under it.
+    // Real browsers shrink the viewport by the chrome band and the sidebar column:
+    // the page is laid out in that reduced viewport and composited into the frame.
     let band_css = crate::chrome::band_css_height(compact);
     let band_rows = (band_css.ceil() as u32).min(height);
-    let page_height = height.saturating_sub(band_rows).max(1);
+    let sidebar_cols =
+        (crate::chrome::sidebar_width(width as f32).ceil() as u32).min(width.saturating_sub(1));
+    let page_width = width.saturating_sub(sidebar_cols).max(1);
+    let bottom_margin = (crate::chrome::WINDOW_MARGIN.ceil() as u32).min(height);
+    let page_height = height
+        .saturating_sub(band_rows.saturating_add(bottom_margin))
+        .max(1);
 
     // Chrome/find paint the pixmap after the pipeline, so skip the eager page PNG and
     // encode once at the end (R201).
     let mut base = options.clone();
     base.encode_png = false;
-    let mut output = render_target_with_options(input, width, page_height, &base)?;
+    let mut output = render_target_with_options(input, page_width, page_height, &base)?;
     if let Some(query) = find_query {
         let rects = crate::find::highlight_rects(&output.layout, query);
         // Highlights are painted in page coordinates before the blit; copying the
@@ -75,22 +81,32 @@ pub(super) fn render_target_with_chrome_mode(
         ime_preedit: "",
         compact,
         rail: None,
+        shell: Some(crate::chrome::ShellView {
+            labels: &tabs,
+            favicons: &favicons,
+            url: input,
+            active: 0,
+            top_css: band_css,
+            sidebar: true,
+        }),
     };
-    // Blit the reduced page into a full-size white canvas below the band, then
-    // paint only the chrome band: the simple `--chrome` view has no dropdown,
-    // status or menu overlays, so the direct RGBA compositor skips the
-    // full-framebuffer `0RGB` round-trip and the whole-frame draw (R196).
+    // Blit the reduced page into a full-size canvas beside the sidebar and below the
+    // band, then paint the shell layer. The simple `--chrome` view has no dropdown,
+    // status or menu overlays, so the RGBA compositor skips the full 0RGB round-trip.
     let page = &output.pixmap;
     let mut canvas = megi_webview::paint::Pixmap::new_with_background(
         width,
         height,
         megi_webview::paint::Color::WHITE,
     );
-    let columns = page.width.min(canvas.width) as usize;
-    let rows = page.height.min(canvas.height.saturating_sub(band_rows)) as usize;
+    crate::chrome::paint_window_frame(&mut canvas, 1.0, width as f32, height as f32);
+    let columns = page.width.min(canvas.width.saturating_sub(sidebar_cols)) as usize;
+    let rows = page
+        .height
+        .min(canvas.height.saturating_sub(band_rows + bottom_margin)) as usize;
     for row in 0..rows {
         let src = row * page.width as usize;
-        let dst = (band_rows as usize + row) * canvas.width as usize;
+        let dst = (band_rows as usize + row) * canvas.width as usize + sidebar_cols as usize;
         canvas.pixels[dst..dst + columns].copy_from_slice(&page.pixels[src..src + columns]);
     }
     output.pixmap = canvas;
