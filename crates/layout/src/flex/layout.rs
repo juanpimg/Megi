@@ -377,6 +377,8 @@ pub(crate) fn layout_flex_children(
                 target_x - child.dimensions.padding.left - child.dimensions.border.left - current_x;
             let dy =
                 target_y - child.dimensions.padding.top - child.dimensions.border.top - current_y;
+            let (sp, pos) = helpers::out_of_flow_data(child);
+            crate::block::layout_out_of_flow_children(child, pos, &sp, measurer);
             translate_box(child, dx, dy);
         }
     }
