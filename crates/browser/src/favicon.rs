@@ -2,13 +2,14 @@
 //!
 //! The shell looks for `<link rel="...icon...">` in the rendered document, resolves it
 //! against the document URL, and (for `http(s)`/`file:`) fetches the bytes with the
-//! renderer's fetch options (64 KiB cap). The icon is decoded with the `image` crate and
-//! nearest-neighbour resized to 16x16; any failure (missing link, network error, corrupt
-//! or unsupported image) falls back to a deterministic color derived from the origin.
+//! renderer's fetch options (64 KiB cap). The icon is decoded through the webview render
+//! facade — raster formats as-is, SVG sniffs rasterized to 16x16 — and nearest-neighbour
+//! resized to 16x16; any failure (missing link, network error, corrupt or unsupported
+//! image) falls back to a deterministic color derived from the origin.
 //!
-//! Limits: only the first icon link is used (no `sizes`/`type` selection, no SVG favicon
-//! rasterization), the fallback dot is a plain square, and network favicons are only
-//! fetched when networking is enabled for the render.
+//! Limits: only the first icon link is used (no `sizes`/`type` selection), the fallback
+//! dot is a plain square, and network favicons are only fetched when networking is
+//! enabled for the render.
 
 use megi_webview::core::Document;
 
@@ -177,9 +178,9 @@ pub fn color_for(key: &str) -> [u8; 3] {
     [r, g, b]
 }
 
-/// Decodes image bytes and nearest-neighbour resizes them to 16x16 RGBA8.
+/// Decodes raster or SVG image bytes and nearest-neighbour resizes them to 16x16 RGBA8.
 pub fn decode_icon(bytes: &[u8]) -> Option<[u8; (ICON_SIZE * ICON_SIZE * 4) as usize]> {
-    let image = megi_webview::image::decode(bytes).ok()?;
+    let image = megi_webview::render::decode_image_with_svg(bytes, ICON_SIZE)?;
     if image.width == 0 || image.height == 0 {
         return None;
     }

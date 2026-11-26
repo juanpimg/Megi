@@ -60,7 +60,7 @@ pub(crate) fn looks_like_svg(content_type: &str, bytes: &[u8]) -> bool {
 }
 
 /// Content sniffing for SVG (after an optional UTF-8 BOM and leading ASCII whitespace).
-fn sniff_svg(bytes: &[u8]) -> bool {
+pub(crate) fn sniff_svg(bytes: &[u8]) -> bool {
     let rest = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let start = rest
         .iter()

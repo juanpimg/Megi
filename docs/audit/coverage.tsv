@@ -106,7 +106,7 @@ crates/browser/src/download/progress.rs	94	src	F2	wave-max-mod	2026-11-19	covere
 crates/browser/src/download/save.rs	211	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/download/tests.rs	330	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/error.rs	42	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/favicon.rs	414	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/favicon.rs	415	src	F2	jp	2026-11-26	covered	#2290	Re-read after decode_icon switched to webview render facade
 crates/browser/src/find.rs	35	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/find/overlay.rs	157	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/find/search.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -214,6 +214,7 @@ crates/browser/src/worker/unit_tests.rs	249	src	F2	wave-max-mod	2026-11-19	cover
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/devtools_protocol.rs	337	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
 crates/browser/tests/dpr_raster_tests.rs	47	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
+crates/browser/tests/favicon_svg.rs	24	test	F1	jp	2026-11-26	covered	#2290	WP-USER-ui-favicon: read full file; three RED/GREEN tests for SVG, PNG and oversized input
 crates/browser/tests/file_grant_tests.rs	119	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/fixtures/links.html	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/ipc_semantic_tests.rs	135	test	F1	recon-security	2026-11-24	covered	WP-M0-F0-COOKIE-IPC	8 semantic tests for both IPC directions
@@ -1184,6 +1185,7 @@ crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/render/src/charset.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset/charset_gbk.rs	51	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/render/src/charset/tests.rs	234	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
+crates/render/src/decode.rs	60	src	F2	jp	2026-11-26	covered	#2290	WP-USER-ui-favicon: read full file; 1 MiB cap, SVG sniff/raster and fallback decoder
 crates/render/src/devtools.rs	52	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: isolated and page-bound Runtime.evaluate bridges
 crates/render/src/dom_summary.rs	155	src	F2	opencode-agent	2026-11-24	covered	#2269	read line by line: bounded body-scoped DOM summary
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1196,7 +1198,7 @@ crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	304	src	F2	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
 crates/render/src/inline_svg/current_color.rs	157	src	F2	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
-crates/render/src/lib.rs	295	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/render/src/lib.rs	297	src	F2	jp	2026-11-26	covered	#2290	Re-read module/re-export additions for decode_image_with_svg
 crates/render/src/main.rs	495	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -1223,7 +1225,7 @@ crates/render/src/scripts/tests.rs	494	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/render/src/scripts/types.rs	497	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/svg_assets.rs	206	src	F2	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
+crates/render/src/svg_assets.rs	206	src	F2	jp	2026-11-26	covered	#2290	Re-read pub(crate) sniff_svg visibility change
 crates/render/src/webfonts.rs	378	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/ws_bridge.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
