@@ -1183,15 +1183,15 @@ crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn	re-read after warm-pool image batch fix (kept dedup audit)
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	277	src	F2	integrate-hn-images	2026-11-25	covered	WP-5.11,WP-SITE-hn	re-read after zero-area spacer exemption for synthetic inline SVG
-crates/render/src/lib.rs	292	src	F2	lead	2026-11-25	covered	M7-dom-css-js-feature	re-read after gating computed-style re-export behind js feature
-crates/render/src/main.rs	480	src	F2	opencode-agent	2026-11-24	covered	#2269	re-read after dom_summary extraction
+crates/render/src/lib.rs	294	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
+crates/render/src/main.rs	495	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/render/src/pipeline/final_stage.rs	350	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/imports.rs	448	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/options.rs	409	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/options.rs	415	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/pipeline/output.rs	231	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/pipeline/resources.rs	266	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/pipeline/resources.rs	267	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/pipeline/script.rs	455	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: bridges moved to devtools module (size cap)
 crates/render/src/pipeline/state.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/state_stylesheet_text.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1211,7 +1211,7 @@ crates/render/src/scripts/types.rs	493	src	F2	wave-max-mod	2026-11-19	covered	#m
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/webfonts.rs	324	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/webfonts.rs	379	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/ws_bridge.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/background_layers_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

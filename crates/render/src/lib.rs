@@ -171,7 +171,9 @@
 //!   by **both** layout ([`megi_layout::FontTextMeasurer`]) and paint
 //!   ([`megi_raster::rasterize_display_list_with_font_database`]). Caps: 128 fonts, 8 MiB each,
 //!   32 MiB total; failures are non-fatal warnings and `stats.fonts_loaded/failed/bytes`
-//!   plus `timings.fonts` are reported (`--json` includes them).
+//!   plus `timings.fonts` are reported (`--json` includes them). Opt-in
+//!   [`RenderOptions::system_fonts`] (`--system-fonts`) also loads installed system faces so
+//!   generic families match Chrome (`sans-serif` → Noto Sans); the default stays bundled-only.
 //! - **`@import` support (WP-5.8)**: imported stylesheets are fetched recursively with the
 //!   shared resource loader, resolved against the importing sheet's URL, deduplicated by
 //!   URL, cycle-safe, depth-limited (`RenderOptions::max_import_depth`, default 8) and

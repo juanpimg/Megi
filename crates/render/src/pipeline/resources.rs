@@ -129,7 +129,7 @@ pub(crate) fn run_resource_stage<'a>(
     let styles_time = styles_start.elapsed();
 
     let fonts_start = Instant::now();
-    let loaded_webfonts = webfonts::load_webfonts_with_csp(
+    let loaded_webfonts = webfonts::load_webfonts_with_system_fonts(
         &font_faces,
         &mut loader,
         options.no_network,
@@ -139,6 +139,7 @@ pub(crate) fn run_resource_stage<'a>(
             max_total_web_font_bytes: options.max_total_web_font_bytes,
         },
         csp.as_ref().map(|policy| (policy, &base_url)),
+        options.system_fonts,
         &mut warnings,
     );
     let fonts_time = fonts_start.elapsed();
