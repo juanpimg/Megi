@@ -277,14 +277,14 @@ crates/css/src/calc.rs	195	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/css/src/calc/mixed_tests.rs	56	src	F2	juanpimg	2026-11-20	covered	#1928	unit tests for mixed calc evaluation, split from calc.rs
 crates/css/src/calc/parser.rs	346	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
 crates/css/src/calc/tests.rs	96	src	F2	wave3-css	2026-11-21	covered	#1669,#1739,#1835	re-read
-crates/css/src/cascade.rs	158	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
+crates/css/src/cascade.rs	175	src	F2	juanpimg	2026-11-26	covered	#rem-root	Read full diff: document_element_id() resolves rem against <html> computed style (CSS Values 4 5.1)
 crates/css/src/cascade/chunk1.rs	473	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk2.rs	403	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk2/supports.rs	195	src	F2	lead	2026-11-25	covered	CSS-SUPPORTS-CASCADE	Read 195-line evaluator; TDD 6 tests green
 crates/css/src/cascade/chunk3.rs	490	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/src/cascade/chunk4.rs	251	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
-crates/css/src/cascade/chunk4/document.rs	147	src	F2	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
-crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-24	covered	style-cache-alias	TDD regression test
+crates/css/src/cascade/chunk4/document.rs	149	src	F2	juanpimg	2026-11-26	covered	#rem-root	Read full diff: root_element binding and root_style/pseudo_root_style use <html> element style
+crates/css/src/cascade/chunk5.rs	456	src	F2	juanpimg	2026-11-26	covered	#rem-root	Read full diff: two test helpers use document_element_id() for root_style
 crates/css/src/cascade/chunk6.rs	118	src	F2	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/css/src/color.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/color/chunk1.rs	418	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -366,7 +366,7 @@ crates/css/src/user_agent/chunk1.rs	401	src	F2	lead	2026-11-25	covered	SELECT-PA
 crates/css/src/user_agent/chunk2.rs	243	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
-crates/css/tests/calc_lengths.rs	346	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/tests/calc_lengths.rs	365	test	F1	juanpimg	2026-11-26	covered	#rem-root	Read full diff: RED/GREEN regression test 2rem=24px with html font-size 75%
 crates/css/tests/cascade_core.rs	259	test	F1	subagent	2026-11-25	covered	presentational-hints	read after presentational-hint changes
 crates/css/tests/cascade_layers.rs	251	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/color4/common.rs	17	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
