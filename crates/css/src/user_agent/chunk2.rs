@@ -50,13 +50,26 @@ pub(crate) mod tests {
         let input = append(&mut doc, form, "input", &[("type", "text")]);
         let textarea = append(&mut doc, form, "textarea", &[]);
         let select = append(&mut doc, form, "select", &[]);
-        let styles = crate::cascade::resolve_document_styles(&doc, None);
+        // CSS Fonts 4 §3.1 / CSS Cascading 4 §6.2: `font-size` and
+        // `font-family` are inherited, and the UA sheet must not force a
+        // widget font on text controls. An authored body font makes the
+        // inheritance observable instead of merely checking every size > 0.
+        let author = "body { font-size: 20px; font-family: serif; }";
+        let styles = crate::cascade::resolve_document_styles(&doc, Some(author));
 
         for id in [input, textarea, select] {
             let control = style(&styles, id);
             assert_eq!(control.display, Display::InlineBlock, "{id:?}");
             assert!(has_visible_border(control), "{id:?} needs a border");
             assert_eq!(control.background_color, Color::WHITE, "{id:?}");
+            assert_eq!(
+                control.font_size, 20.0,
+                "{id:?} must inherit the authored font-size"
+            );
+            assert_eq!(
+                control.font_family, "serif",
+                "{id:?} must inherit the authored font-family"
+            );
         }
         let input = style(&styles, input);
         assert!(matches!(input.width, Length::Px(width) if width > 100.0));

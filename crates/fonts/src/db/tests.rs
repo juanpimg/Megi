@@ -60,59 +60,94 @@ mod quoted_family_tests {
 mod system_ui_tests {
     use super::*;
 
-    /// CSS Fonts 4 §3.1: both `system-ui` and `sans-serif` name the platform's
-    /// default font on Linux fontconfig, i.e. Noto Sans (#parity).
+    /// CSS Fonts 4 §5.2: fontdb rewrites its coarse generic family names from
+    /// fontconfig aliases during `load_system_fonts()`. On CachyOS that selects
+    /// "Nimbus Sans Narrow" for sans-serif and "Standard Symbols PS" for serif,
+    /// so a CSS list with no installed named family paints a symbol face. Pin
+    /// the generics to documented deterministic families after the host scan;
+    /// host fonts stay available for named families and per-glyph fallback.
+    #[test]
+    fn system_load_pins_coarse_generics_to_deterministic_families() {
+        let db = FontDatabase::from_system();
+        if db.is_empty() {
+            return; // fontless CI container: nothing to pin
+        }
+        assert_eq!(
+            db.db.family_name(&Family::SansSerif),
+            "DejaVu Sans",
+            "fontconfig must not override the deterministic sans-serif face"
+        );
+        assert_eq!(
+            db.db.family_name(&Family::Serif),
+            "DejaVu Serif",
+            "fontconfig must not map serif to a symbol font"
+        );
+        assert_eq!(
+            db.db.family_name(&Family::Monospace),
+            "DejaVu Sans Mono",
+            "fontconfig must not override the deterministic monospace face"
+        );
+    }
+
+    /// CSS Fonts 4 §3.1 / §5.2: both platform generics must select the first
+    /// installed family from the documented named fallback list. Comparing two
+    /// host databases proves nothing; pin the expected family explicitly so a
+    /// fontconfig alias such as "Nimbus Sans Narrow" cannot pass unnoticed.
     #[test]
     fn system_ui_and_sans_serif_use_the_system_default() {
         let db = FontDatabase::from_system();
         if db.is_empty() {
             return; // fontless CI container: constructor must simply not panic
         }
-        let ui_id = db
-            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
-            .expect("system-ui must resolve against the system font DB");
-        let ui = db.build_font(ui_id).expect("system-ui face must build");
-        // The system default UI family is host-specific (Noto Sans on CI,
-        // other defaults on developer machines): assert the invariant, not a
-        // hardcoded name.
-        let system = system_fallback_db();
-        let system_ui_id = system
-            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
-            .expect("system fallback DB resolves system-ui");
-        let system_ui = system
-            .build_font(system_ui_id)
-            .expect("system-ui face must build");
+        let family_for = |families: &[&str]| -> String {
+            let id = db
+                .query_face(families, 400, FontStyle::Normal, Stretch::Normal)
+                .expect("generic must resolve against the system font DB");
+            db.build_font(id)
+                .expect("face must build")
+                .family_name()
+                .to_owned()
+        };
+        let first_named = |names: &[&str]| -> Option<String> {
+            names.iter().find_map(|name| {
+                let id = db.query_face(&[name], 400, FontStyle::Normal, Stretch::Normal)?;
+                db.build_font(id)
+                    .ok()
+                    .map(|font| font.family_name().to_owned())
+            })
+        };
+        let ui = family_for(&["system-ui"]);
+        let sans = family_for(&["sans-serif"]);
         assert_eq!(
-            ui.family_name(),
-            system_ui.family_name(),
-            "system-ui must resolve to the host's default UI font, got {}",
-            ui.family_name()
+            ui,
+            first_named(SYSTEM_UI_FALLBACKS).expect("a documented UI family must be installed"),
+            "system-ui must use the first named fallback"
         );
-
-        let sans_id = db
-            .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
-            .expect("sans-serif must resolve against the system font DB");
-        let sans = db.build_font(sans_id).expect("sans-serif face must build");
-        // A fresh database proves the earlier system-ui query did not mutate
-        // the sans-serif fallback (#parity); both are valid on every host.
+        assert_eq!(
+            sans,
+            first_named(SANS_FALLBACKS).expect("a documented sans family must be installed"),
+            "sans-serif must use the first named fallback"
+        );
+        assert_eq!(ui, sans, "both generics name the platform default face");
+        assert!(
+            SANS_FALLBACKS.contains(&sans.as_str()),
+            "a fontconfig alias leaked into sans-serif: {sans}"
+        );
+        // A fresh database must agree: earlier queries must not mutate fallbacks.
         let fresh = FontDatabase::from_system();
-        let fresh_sans_id = fresh
+        let fresh_id = fresh
             .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("fresh sans-serif resolution");
         let fresh_sans = fresh
-            .build_font(fresh_sans_id)
+            .build_font(fresh_id)
             .expect("fresh sans-serif face must build");
-        assert_eq!(
-            sans.family_name(),
-            fresh_sans.family_name(),
-            "sans-serif must keep its existing fallbacks, got {}",
-            sans.family_name()
-        );
+        assert_eq!(sans, fresh_sans.family_name(), "resolution is stable");
     }
 
-    /// CSS Fonts 4 §3.1 / fontconfig: on Linux `sans-serif` is aliased to the
-    /// platform default (Noto Sans here), just like Chrome. A system-backed DB
-    /// must therefore resolve the generic to Noto Sans rather than DejaVu.
+    /// CSS Fonts 4 §3.1: `sans-serif` names the platform default — Noto Sans
+    /// when installed, otherwise the next documented fallback (DejaVu Sans).
+    /// Never compare the database with itself: assert the ordered fallback so a
+    /// host alias cannot silently change real-site typography (#fonts-parity).
     #[test]
     fn sans_serif_uses_system_default_noto_sans() {
         let db = FontDatabase::from_system();
@@ -123,17 +158,19 @@ mod system_ui_tests {
             .query_face(&["sans-serif"], 400, FontStyle::Normal, Stretch::Normal)
             .expect("sans-serif must resolve against the system font DB");
         let face = db.build_font(sans).expect("sans-serif face must build");
-        // The platform default family is host-specific (Noto Sans on some CI
-        // images, DejaVu Sans or another alias elsewhere): assert that the
-        // generic aliases system-ui rather than hardcoding a family name.
-        let ui = db
-            .query_face(&["system-ui"], 400, FontStyle::Normal, Stretch::Normal)
-            .expect("system-ui must resolve against the system font DB");
-        let ui_face = db.build_font(ui).expect("system-ui face must build");
+        let expected = SANS_FALLBACKS
+            .iter()
+            .find_map(|name| {
+                let id = db.query_face(&[name], 400, FontStyle::Normal, Stretch::Normal)?;
+                db.build_font(id)
+                    .ok()
+                    .map(|font| font.family_name().to_owned())
+            })
+            .expect("a documented sans-serif fallback must be installed");
         assert_eq!(
             face.family_name(),
-            ui_face.family_name(),
-            "sans-serif must use the host default face (fontconfig alias), got {}",
+            expected,
+            "sans-serif must use the first documented default family, got {}",
             face.family_name()
         );
     }

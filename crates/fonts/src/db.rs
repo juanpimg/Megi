@@ -81,6 +81,18 @@ const MONO_FALLBACKS: &[&str] = &[
 const CURSIVE_FALLBACKS: &[&str] = &["Comic Sans MS", "DejaVu Sans"];
 const FANTASY_FALLBACKS: &[&str] = &["Impact", "DejaVu Sans"];
 
+/// Deterministic names for fontdb's coarse generic families. fontdb 0.24
+/// rewrites these from fontconfig aliases inside `load_system_fonts()`; on
+/// CachyOS that maps `sans-serif` to "Nimbus Sans Narrow" and `serif` to
+/// "Standard Symbols PS", so a CSS list with no installed named family paints
+/// a symbol/narrow face (CSS Fonts 4 §5.2). Pinning them keeps generic
+/// resolution host-independent while host faces remain available by name.
+const GENERIC_SANS_FAMILY: &str = "DejaVu Sans";
+const GENERIC_SERIF_FAMILY: &str = "DejaVu Serif";
+const GENERIC_MONOSPACE_FAMILY: &str = "DejaVu Sans Mono";
+const GENERIC_CURSIVE_FAMILY: &str = "Comic Sans MS";
+const GENERIC_FANTASY_FAMILY: &str = "Impact";
+
 /// Maximum number of same-weight faces added to the per-glyph fallback chain
 /// when the requested family list has a single entry.
 const MAX_EXTRA_FALLBACKS: usize = 8;

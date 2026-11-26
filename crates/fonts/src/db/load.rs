@@ -2,6 +2,19 @@
 
 use super::*;
 
+/// Re-assert the deterministic coarse generic names. fontdb's
+/// `load_system_fonts()` reads fontconfig aliases and overwrites them with
+/// host-specific faces ("Nimbus Sans Narrow", "Standard Symbols PS" on
+/// CachyOS); CSS Fonts 4 §5.2 requires a browser's own documented fallback
+/// instead. Call on construction and after every host font scan.
+pub(super) fn pin_generic_families(db: &mut Database) {
+    db.set_sans_serif_family(GENERIC_SANS_FAMILY);
+    db.set_serif_family(GENERIC_SERIF_FAMILY);
+    db.set_monospace_family(GENERIC_MONOSPACE_FAMILY);
+    db.set_cursive_family(GENERIC_CURSIVE_FAMILY);
+    db.set_fantasy_family(GENERIC_FANTASY_FAMILY);
+}
+
 impl FontDatabase {
     /// Deterministic digest of all loaded faces (identities plus face bytes). Used by the
     /// render layout cache to avoid reusing metrics computed with different fonts (#1218).
@@ -67,8 +80,10 @@ impl FontDatabase {
 
     /// Creates an empty database (no system fonts, no loaded bytes).
     pub fn new() -> Self {
+        let mut db = Database::new();
+        pin_generic_families(&mut db);
         Self {
-            db: Database::new(),
+            db,
             cache: Mutex::new(HashMap::new()),
             fallback_cache: Mutex::new(HashMap::new()),
             order: Vec::new(),
@@ -97,6 +112,9 @@ impl FontDatabase {
             return;
         }
         self.db.load_system_fonts();
+        // fontdb applies fontconfig aliases during the scan; restore Megi's
+        // documented generic families so the host cannot change CSS rendering.
+        pin_generic_families(&mut self.db);
         self.system_loaded = true;
         self.refresh_order();
         self.fallback_cache_lock().clear();
