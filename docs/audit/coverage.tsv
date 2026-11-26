@@ -366,7 +366,7 @@ crates/css/src/tokenizer/chunk3.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/user_agent/chunk1.rs	410	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/css/src/user_agent/chunk1.rs	440	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
 crates/css/src/user_agent/chunk2.rs	269	src	F2	lead	2026-11-26	covered	REMOTE-GATES-46	re-read after min-width assertion change; test verified (1 passed)
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
@@ -1271,11 +1271,13 @@ crates/render/tests/forms/input_value.rs	223	test	F1	input-value-paint-fix	2026-
 crates/render/tests/forms/main.rs	10	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/golden/hn_chrome_reference.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/golden/rust_nav.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/render/tests/hn_arrow_tests.rs	69	test	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
 crates/render/tests/hn_title_mojibake_tests.rs	115	test	F1	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	read and verified in HN title regression
+crates/render/tests/hn_visual_parity_tests.rs	66	test	F1	hn-mae-fix	2026-11-26	covered	#2290	HN visual parity regression: MAE<=18 vs versioned Chromium golden
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
