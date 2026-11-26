@@ -1,0 +1,66 @@
+{
+  "example": {
+    "size": [
+      1024,
+      768
+    ],
+    "threshold": 16,
+    "changed_pixels": 7207,
+    "changed_pct": 0.92,
+    "mean_abs_diff": 1.246,
+    "diff_bbox": [
+      305,
+      214,
+      718,
+      281
+    ]
+  },
+  "rust": {
+    "size": [
+      1024,
+      768
+    ],
+    "threshold": 16,
+    "changed_pixels": 94556,
+    "changed_pct": 12.02,
+    "mean_abs_diff": 11.802,
+    "diff_bbox": [
+      8,
+      8,
+      1015,
+      768
+    ]
+  },
+  "hn": {
+    "size": [
+      1024,
+      768
+    ],
+    "threshold": 16,
+    "changed_pixels": 157061,
+    "changed_pct": 19.97,
+    "mean_abs_diff": 20.909,
+    "diff_bbox": [
+      84,
+      8,
+      940,
+      768
+    ]
+  },
+  "wikipedia": {
+    "size": [
+      1024,
+      768
+    ],
+    "threshold": 16,
+    "changed_pixels": 41795,
+    "changed_pct": 5.31,
+    "mean_abs_diff": 5.256,
+    "diff_bbox": [
+      8,
+      10,
+      318,
+      768
+    ]
+  }
+}

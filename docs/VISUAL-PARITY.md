@@ -28,6 +28,12 @@ Es una medición de render, no una métrica de conformidad WPT.
    (`python3-pil`), no compilan Rust; sus tests son
    `python3 -m unittest tools.test_visual_parity tools.test_visual_parity_report`.
 
+Las cifras de la tabla anterior están versionadas como baseline en
+`tests/fixtures/visual-parity/baseline.json`. Para detectar regresiones sin
+compilar:
+`python3 tools/check_parity_baseline.py report.json` (tolerancia por defecto:
++0,5 puntos porcentuales y +1,0 de diferencia media).
+
 Las capturas usadas para estas mediciones están bajo `/tmp/opencode/compare-out/`
 (temporales, no versionadas); la herramienta y su metodología sí están versionadas.
 
