@@ -1438,6 +1438,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/VISUAL-PARITY.md	84	docs	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: visual parity methodology and measured metrics
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: POINTS buffer source documented as deliberate limit
