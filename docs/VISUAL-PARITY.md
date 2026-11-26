@@ -34,7 +34,8 @@ compilar:
 `python3 tools/check_parity_baseline.py report.json` (tolerancia por defecto:
 +0,5 puntos porcentuales y +1,0 de diferencia media). La propia baseline se
 valida contra el manifiesto de sitios y su esquema con
-`python3 tools/check_parity_schema.py`.
+`python3 tools/check_parity_schema.py`. La tabla de este documento se comprueba
+contra la baseline mediante `python3 tools/check_parity_docs.py`.
 
 Las capturas usadas para estas mediciones están bajo `/tmp/opencode/compare-out/`
 (temporales, no versionadas); la herramienta y su metodología sí están versionadas.
