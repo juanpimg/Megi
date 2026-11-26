@@ -64,35 +64,35 @@ crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#193
 crates/browser/src/a11y_backend.rs	490	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/a11y_backend_orphan_tests.rs	105	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
 crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#upstream	re-read
-crates/browser/src/chrome.rs	490	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/chrome.rs	500	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/address_bar_paint.rs	283	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/address_bar_paint.rs	306	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/downloads_panel.rs	83	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/chrome/drawing.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/drawing.rs	293	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/dropdown.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/history_menu.rs	104	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/menus.rs	208	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/native_widget_overlay.rs	192	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/chrome/native_widgets.rs	240	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/chrome/navigation.rs	90	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/rail.rs	433	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/chrome/navigation.rs	97	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/rail.rs	431	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/chrome/status_bar.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tab_strip.rs	428	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/tab_strip.rs	438	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/address_bar.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tests/compact.rs	111	src	F2	lead	2026-11-25	covered	UI-ZEN-PHASE2	re-read after stash restore onto current main
+crates/browser/src/chrome/tests/compact.rs	103	src	F2	lead	2026-11-25	covered	UI-ZEN-PHASE2	re-read after stash restore onto current main
 crates/browser/src/chrome/tests/dropdown.rs	107	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/menus.rs	157	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/mod.rs	159	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
-crates/browser/src/chrome/tests/paint.rs	375	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
+crates/browser/src/chrome/tests/paint.rs	472	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/chrome/tests/rail.rs	286	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
-crates/browser/src/chrome/tests/tabs.rs	103	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tests/tokens.rs	94	src	F2	jp	2026-11-25	covered	#2290	Phase 0 token parity tests
-crates/browser/src/chrome/tokens.rs	137	src	F2	jp	2026-11-25	covered	#2290	Phase 0 shell design tokens; byte-identical aliases verified by tests
+crates/browser/src/chrome/tests/tabs.rs	109	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/browser/src/chrome/tests/tokens.rs	122	src	F2	jp	2026-11-25	covered	#2290	Phase 0 token parity tests
+crates/browser/src/chrome/tokens.rs	140	src	F2	jp	2026-11-25	covered	#2290	Phase 0 shell design tokens; byte-identical aliases verified by tests
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/cli/args.rs	208	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read updated --print-to-pdf help text
-crates/browser/src/cli/finish.rs	248	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: normalize_input settings guard
-crates/browser/src/cli/parse.rs	193	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: both new flags parsed and validated
-crates/browser/src/cli/tests.rs	364	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Re-read: headless PDF mode and flag conflict tests
+crates/browser/src/cli/args.rs	219	src	F2	feat-pdf-text	2026-11-25	covered	M5-PDF-TEXT	Re-read updated --print-to-pdf help text
+crates/browser/src/cli/finish.rs	252	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: normalize_input settings guard
+crates/browser/src/cli/parse.rs	195	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF/M7-foundation	Re-read: both new flags parsed and validated
+crates/browser/src/cli/tests.rs	399	src	F2	integration	2026-11-25	covered	M5-PRINT-PDF	Re-read: headless PDF mode and flag conflict tests
 crates/browser/src/convert.rs	92	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/devtools.rs	165	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: loopback discovery and page-attached RPC transport
 crates/browser/src/devtools/network.rs	99	src	F2	roadmap-next	2026-11-25	covered	WP-DEPTH-m7-devtools-network	Read during DevTools Network integration review
@@ -142,12 +142,12 @@ crates/browser/src/ipc/session.rs	237	src	F2	issue-2308	2026-11-25	covered	#2308
 crates/browser/src/ipc/tests.rs	483	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/validated.rs	223	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
 crates/browser/src/ipc/worker_stream.rs	168	src	F2	issue-2308	2026-11-25	covered	#2308	re-read during validated envelope wiring
-crates/browser/src/lib.rs	385	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings re-exports
+crates/browser/src/lib.rs	386	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings re-exports
 crates/browser/src/links.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/collect.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/geometry.rs	130	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/links/tests.rs	300	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/main.rs	343	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: attach render output after screenshot render
+crates/browser/src/main.rs	348	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: attach render output after screenshot render
 crates/browser/src/navigation.rs	438	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/pages.rs	32	src	F2	subagent-settings	2026-11-25	covered	#2290	Re-read: settings module wiring
 crates/browser/src/pages/about.rs	145	src	F2	about-pages	2026-11-25	covered	M7-ABOUT-PAGES	Honest about: diagnostics pages rendered by the engine
@@ -184,26 +184,26 @@ crates/browser/src/webdriver.rs	316	src	F2	m7-webdriver-bidi	2026-11-25	covered	
 crates/browser/src/webdriver/browsing_context.rs	168	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
 crates/browser/src/webdriver/input.rs	179	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
 crates/browser/src/webdriver/script.rs	106	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
-crates/browser/src/window.rs	177	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
+crates/browser/src/window.rs	200	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read new shell_settings module declaration
 crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
 crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/window/events.rs	428	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
+crates/browser/src/window/events.rs	431	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/form_controls.rs	443	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
-crates/browser/src/window/frontend.rs	257	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
+crates/browser/src/window/frontend.rs	262	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read ChromeMode compact/motion/rail setters
 crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/window/presentation.rs	482	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
-crates/browser/src/window/settings/chrome_mode.rs	152	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
+crates/browser/src/window/settings/chrome_mode.rs	157	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
 crates/browser/src/window/settings/mod.rs	46	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
 crates/browser/src/window/settings/rail_state.rs	117	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
 crates/browser/src/window/shortcuts.rs	250	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
-crates/browser/src/window/tests/chrome_mode.rs	95	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
+crates/browser/src/window/tests/chrome_mode.rs	128	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings-toggle setter test
 crates/browser/src/window/tests/mod.rs	486	src	F2	integration	2026-11-25	covered	#2295	read after rebase
-crates/browser/src/window/tests/rail.rs	123	src	F2	integration	2026-11-25	covered	#2290	read after rebase
+crates/browser/src/window/tests/rail.rs	138	src	F2	integration	2026-11-25	covered	#2290	read after rebase
 crates/browser/src/window/ui.rs	456	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/window/worker.rs	459	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings URL data regeneration from state
+crates/browser/src/window/worker.rs	485	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read settings URL data regeneration from state
 crates/browser/src/worker.rs	53	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/pool.rs	474	src	F2	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
 crates/browser/src/worker/render.rs	417	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -232,7 +232,7 @@ crates/browser/tests/shell_tests/options.rs	186	test	F1	wave-max-mod	2026-11-19	
 crates/browser/tests/shell_tests/pages.rs	178	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/rail_tests.rs	83	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/tests/shell_tests/saves.rs	140	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/tabs.rs	427	test	F1	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
+crates/browser/tests/shell_tests/tabs.rs	435	test	F1	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/tests/shell_tests/worker.rs	215	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/spawn_hardening_tests.rs	57	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
 crates/browser/tests/watchdog_tests.rs	66	test	F1	hardening	2026-11-24	covered	WP-M0-M3-ISOLATION-T3T5T9	
@@ -360,7 +360,7 @@ crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/user_agent/chunk1.rs	401	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
-crates/css/src/user_agent/chunk2.rs	241	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/user_agent/chunk2.rs	243	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/css/tests/calc_lengths.rs	346	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -407,7 +407,7 @@ crates/fonts/assets/LICENSE-DejaVu.txt	187	docs	F3	wave-max-mod	2026-11-19	cover
 crates/fonts/examples/report.rs	68	example	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/fonts/src/db.rs	351	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: SANS_FALLBACKS now starts with system default Noto Sans; DejaVu kept as fallback
 crates/fonts/src/db/load.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/fonts/src/db/query.rs	321	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: sans-serif expansion keeps Family::SansSerif; comment reflects bundled-only DB
+crates/fonts/src/db/query.rs	333	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: sans-serif expansion keeps Family::SansSerif; comment reflects bundled-only DB
 crates/fonts/src/db/shape.rs	403	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: font() system-ui path unchanged; stale golden comment removed
 crates/fonts/src/db/tests.rs	181	src	F2	sansfont-parity	2026-11-26	covered	#parity	Re-read: red/green test that sans-serif resolves to Noto Sans; bundled/quoted paths unchanged
 crates/fonts/src/error.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -849,15 +849,17 @@ crates/layout/src/grid/names.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/layout/src/grid/placement.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/position.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/tracks.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline.rs	50	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/inline.rs	54	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/baseline.rs	71	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/bidi.rs	180	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/format_line.rs	482	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline/ifc.rs	147	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
+crates/layout/src/inline/ifc.rs	180	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
 crates/layout/src/inline/inline_boxes.rs	368	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/inline/line_breaking.rs	414	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
 crates/layout/src/inline/text.rs	245	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/inline/tokens.rs	500	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/inline/token.rs	73	src	F2	integration	2026-11-26	covered	#wiki-visual	read after visual-flags integration; shared inline token leaf module
+crates/layout/src/inline/tokenize_text.rs	318	src	F2	integration	2026-11-26	covered	#wiki-visual	read after visual-flags integration; text-node tokenizer split
+crates/layout/src/inline/tokens.rs	141	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/lib.rs	404	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/table.rs	175	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/table/advanced.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1167,7 +1169,7 @@ crates/render/src/backgrounds/collect.rs	87	src	F2	wave-max-mod	2026-11-19	cover
 crates/render/src/backgrounds/load.rs	237	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/backgrounds/types.rs	86	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/browser_host.rs	478	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: computed_style_pairs public for CSSOM serialisation
+crates/render/src/browser_host.rs	479	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: computed_style_pairs public for CSSOM serialisation
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/charset/charset_gbk.rs	51	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
@@ -1183,7 +1185,7 @@ crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn	re-read after warm-pool image batch fix (kept dedup audit)
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	277	src	F2	integrate-hn-images	2026-11-25	covered	WP-5.11,WP-SITE-hn	re-read after zero-area spacer exemption for synthetic inline SVG
-crates/render/src/lib.rs	294	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
+crates/render/src/lib.rs	295	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/main.rs	495	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
 crates/render/src/pipeline/budget.rs	133	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
@@ -1192,7 +1194,7 @@ crates/render/src/pipeline/imports.rs	448	src	F2	wave-max-mod	2026-11-19	covered
 crates/render/src/pipeline/options.rs	415	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/pipeline/output.rs	231	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/resources.rs	267	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
-crates/render/src/pipeline/script.rs	455	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: bridges moved to devtools module (size cap)
+crates/render/src/pipeline/script.rs	458	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: bridges moved to devtools module (size cap)
 crates/render/src/pipeline/state.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/state_stylesheet_text.rs	77	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/pipeline/styles.rs	466	src	F2	fix-1884	2026-11-20	covered	#1884	re-read after inline-block/img positioning fixes; golden regenerated
@@ -1205,18 +1207,18 @@ crates/render/src/scripts/execution.rs	240	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/scripts/lifecycle.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/modules.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/scripts/network.rs	441	src	F2	cors-preflight	2026-11-25	covered	#2296	re-read after adding CORS preflight to fetch/XHR provider
-crates/render/src/scripts/providers.rs	294	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
+crates/render/src/scripts/providers.rs	295	src	F2	wave2	2026-11-19	covered	#1963 via PR #1990	Re-read provider wiring
 crates/render/src/scripts/tests.rs	494	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/scripts/types.rs	493	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/scripts/types.rs	497	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/shadow_dom.rs	85	src	F2	juanpimg	2026-11-24	covered	#2285	upstream declarative shadow DOM expansion
 crates/render/src/stylesheets.rs	411	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/svg_assets.rs	203	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/webfonts.rs	379	src	F2	systemfonts-flag	2026-11-26	covered	#parity	Re-read: opt-in --system-fonts Chrome parity mode; default stays bundled-only
 crates/render/src/ws_bridge.rs	369	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/animations.rs	397	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/background_layers_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/background_layers_tests.rs	136	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/backgrounds_tests.rs	365	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/browser_api_tests.rs	220	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/browser_api_tests.rs	231	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/canvas_tests.rs	155	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/csp_tests.rs	312	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/css_state_tests.rs	133	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1274,7 +1276,7 @@ crates/render/tests/pipeline_tests/limits.rs	102	test	F1	wave-max-mod	2026-11-19
 crates/render/tests/pipeline_tests/main.rs	11	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/output.rs	152	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/pipeline_tests/urls.rs	75	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/pseudo_elements_tests.rs	148	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/pseudo_elements_tests.rs	224	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/referrer_policy_tests.rs	355	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/render_cache.rs	48	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/replaced_max_width_tests.rs	86	test	F1	integration	2026-11-24	covered	#2294,#2295	read during final integration
