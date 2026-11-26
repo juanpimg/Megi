@@ -36,7 +36,7 @@ Afirmaciones antiguas (Q1–Q4, «anti-objetivos», «12 meses», topes de subte
 Megi es pre-alpha y hay trabajo atómico y verificable en la [cola de work packages](docs/work-packages/BOARD.md):
 
 - [`docs/AGENT-INDEX.md`](docs/AGENT-INDEX.md) — índice operativo: hitos M0–M12, planes y orden de lectura.
-- [`docs/work-packages/BOARD.md`](docs/work-packages/BOARD.md) — 48 WPs en cola generados desde artefactos reales (criterios pendientes y sitios degradados), priorizados por impacto×frecuencia y marcados `light`/`heavy` según el disco que requieren; 4 WPs ya cerrados (`done`).
+- [`docs/work-packages/BOARD.md`](docs/work-packages/BOARD.md) — 43 WPs en cola generados desde artefactos reales (criterios pendientes y sitios degradados), priorizados por impacto×frecuencia y marcados `light`/`heavy` según el disco que requieren; 9 WPs ya cerrados (`done`).
 - [Esquema del WP](docs/work-packages/SCHEMA.md) — campos obligatorios, criterio de aceptación y comando de verificación de cada tarea.
 - [Guía de contribución](CONTRIBUTING.md) — convenciones, DCO, TDD y gates obligatorios.
 - [Prompt para agentes de IA](docs/AI-QUICKSTART.md) — arranque rápido para Claude Code, Codex, OpenCode u otro harness.

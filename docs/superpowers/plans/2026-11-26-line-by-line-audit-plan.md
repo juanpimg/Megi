@@ -8,7 +8,7 @@
 ## 1. Objetivo
 
 Auditar **todo el código del motor** (270.986 líneas Rust en `crates/` y 273.621 `.rs`
-en el snapshot auditado; el snapshot actual publica 273.985 líneas en `PROGRESS.md:7`) línea por línea, convertir cada hallazgo
+en el snapshot auditado; el snapshot actual publica 274.464 líneas en `PROGRESS.md:7`) línea por línea, convertir cada hallazgo
 en un work package verificable y cerrar las brechas que separan a Megi de un
 navegador capaz de renderizar cualquier página de Internet con paridad frente a
 Chrome/Ladybird.
@@ -23,7 +23,7 @@ barra de producción de spec §2 esté sin cumplir. El propio spec lo dice en `:
 |---|---|---|
 | Hitos cerrados | **6/13** (M0, M1, M2, M3, M7, M12) | `PROGRESS.md:7-25` |
 | Criterios verificados | **47/64 (73 %)** | `PROGRESS.md:7` |
-| Tests | **3.709** | `PROGRESS.md:7` |
+| Tests | **3.718** | `PROGRESS.md:7` |
 | Gate html5lib | PASS 7.050/7.050 + 3.904/3.904 + 230/230 + CSS 30/30 | `PROGRESS.md:201-203` |
 | WPT adoptado | **596/596 en 18 fixtures, 6 dirs**; 103 fixtures `skip` del manifiesto; ≈0,03 % del árbol de referencia (~2,18 M) | `docs/status/wpt.md:5-17`; `tests/wpt/MANIFEST.json`; spec §1/:11 |
 | Test262 | **13 casos locales**, no el árbol tc39 | `docs/status/test262.json:5-16` |
