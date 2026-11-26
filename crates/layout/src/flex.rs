@@ -40,7 +40,7 @@ use std::sync::Arc;
 
 use megi_css::{
     AlignItems, AlignSelf, BoxSizing, ComputedStyle, FlexDirection, FlexWrap, JustifyContent,
-    Length, Position, WhiteSpace,
+    Length, Overflow, Position, WhiteSpace,
 };
 
 use crate::block::{calculate_block_height, layout_box_contents, translate_box};
@@ -50,6 +50,7 @@ use megi_core::geometry::{EdgeSizes, Rect};
 
 mod helpers;
 mod layout;
+mod minimum;
 
 pub(crate) use layout::layout_flex_children;
 /// Resolved box-model edges of one flex item.
@@ -71,6 +72,11 @@ struct Item<'a> {
     base_main: f32,
     /// Used main size (content box) after grow/shrink.
     used_main: f32,
+    /// Min-content main size (content box) of the item's contents, uncapped.
+    /// CSS Flexbox 1 §4.5: content-based automatic minimum size.
+    min_content_main: f32,
+    /// Automatic minimum main size after capping it to the line's free space.
+    auto_min_main: f32,
     /// Used cross size (content box) after measure/stretch.
     used_cross: f32,
     /// Index of the line this item belongs to.

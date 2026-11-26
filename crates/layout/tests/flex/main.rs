@@ -107,6 +107,7 @@ impl Case {
 }
 
 mod alignment;
+mod min_auto;
 mod placement;
 
 #[test]
