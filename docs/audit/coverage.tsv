@@ -875,9 +875,9 @@ crates/layout/src/table/legacy/columns.rs	126	src	F2	wave-max-mod	2026-11-19	cov
 crates/layout/src/table/structure.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/text.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/tree_builder.rs	94	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/tree_builder/box_for_node.rs	419	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/layout/src/tree_builder/box_for_node.rs	431	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native select control merge review
 crates/layout/src/tree_builder/cache.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/tree_builder/element_boxes.rs	166	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/layout/src/tree_builder/element_boxes.rs	212	src	F2	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native select control merge review
 crates/layout/src/tree_builder/fixups.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/adversarial_harness/box_splitting.rs	244	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/adversarial_harness/common.rs	21	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1247,11 +1247,15 @@ crates/render/tests/fetch_tests.rs	92	test	F1	wave-max-mod	2026-11-19	covered	#m
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/fixture_smoke.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/form_post_tests.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/forms/control_tree.rs	109	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	
 crates/render/tests/forms/fixtures/input_value_paint.html	46	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PAINT	read three-control visual fixture
+crates/render/tests/forms/golden/input_pipeline.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/golden/input_pipeline_before.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/forms/golden/input_value_paint.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/forms/golden/input_value_paint_before.png	0	binary	-			exempt		not read line by line: binary
+crates/render/tests/forms/input_pipeline.rs	185	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	
 crates/render/tests/forms/input_value.rs	223	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PAINT	read new value/placeholder/clip/golden tests
-crates/render/tests/forms/main.rs	7	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PAINT	re-read module list
+crates/render/tests/forms/main.rs	9	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	re-read module list
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

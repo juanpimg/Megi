@@ -7,7 +7,9 @@ use super::fixups::{
 
 #[path = "element_boxes.rs"]
 mod element_boxes;
-use element_boxes::{build_pseudo_box, is_html_br, select_control_content, select_label_box};
+use element_boxes::{
+    build_pseudo_box, generated_text_box, input_control_text, is_html_br, select_control_content,
+};
 
 /// Recursively builds a layout box for a DOM node.
 #[allow(clippy::too_many_arguments)]
@@ -58,6 +60,9 @@ pub(super) fn build_box_for_node(
                 std::borrow::Cow::Borrowed(tag)
             };
             let select_content = (tag == "select").then(|| select_control_content(doc, node_id));
+            let input_text = (tag == "input")
+                .then(|| input_control_text(doc, node_id))
+                .flatten();
             let is_replaced_tag = matches!(
                 tag.as_ref(),
                 "img"
@@ -307,13 +312,20 @@ pub(super) fn build_box_for_node(
                 _ => raw_children,
             };
 
-            // A replaced `<select>` keeps its atomic sizing, but its native label is
-            // carried as a single generated text child for the paint pass. The
-            // `<option>` boxes are not laid out: the control paints its own content.
-            let select_text_box = select_content
+            // Replaced controls keep their atomic sizing, but their native text is
+            // carried as a single generated text child for the paint pass: a
+            // `<select>` label, or a marked `<input>` value/placeholder (HTML §4.10.5).
+            // Other DOM children are not laid out; the control paints its own content.
+            let generated_box = select_content
                 .as_ref()
                 .filter(|_| matches!(box_type, BoxType::Replaced(_)))
-                .map(|(label, _)| select_label_box(label, &child_style, &own_style, style_cache));
+                .map(|(label, _)| generated_text_box(label, &child_style, &own_style, style_cache))
+                .or_else(|| {
+                    input_text
+                        .as_ref()
+                        .filter(|_| matches!(box_type, BoxType::Replaced(_)))
+                        .map(|text| generated_text_box(text, &child_style, &own_style, style_cache))
+                });
             let mut layout_box = LayoutBox::with_shared_style(box_type.clone(), Some(own_style));
             // Data contract consumed by `paint` (stacking/clip metadata).
             layout_box.position = style.position;
@@ -325,7 +337,7 @@ pub(super) fn build_box_for_node(
             layout_box.opacity = style.opacity;
             layout_box.is_float = style.float != Float::None;
             layout_box.float_side = style.float;
-            layout_box.children = select_text_box.map_or(children, |text_box| vec![text_box]);
+            layout_box.children = generated_box.map_or(children, |text_box| vec![text_box]);
             // Stacking-context flag (CSS 2.2 Appendix E), computed once at build time so
             // the document-wide finalize pass is only needed for `overflow` clipping.
             layout_box.establishes_stacking_context = style.opacity.is_nan()
