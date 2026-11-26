@@ -177,6 +177,7 @@ jobs:
           tools.test_check_test262_artifacts
           tools.test_check_tool_test_coverage
           tools.test_check_toolchain_config
+          tools.test_check_window_ui
           tools.test_check_work_packages
           tools.test_check_workflow_metadata
           tools.test_check_workflow_scripts

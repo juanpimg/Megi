@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# Capture the real interactive window; a compositor without support is non-fatal.
-set -euo pipefail
+# Best-effort capture of the real composited window using spectacle.
+# A compositor that refuses background capture is NOT an error: print the
+# reason and exit 0, because no real image and no measurement is claimed.
+#
+# Usage: tools/capture_real_window.sh [output.png]
+set -uo pipefail
 
-out="${1:-/tmp/opencode/ui-real-window.png}"
-log="/var/tmp/capture-real-window.log"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+out="${1:-$REPO_ROOT/target/ui-captures/real-window.png}"
+mkdir -p "$(dirname "$out")"
 
 if ! command -v spectacle >/dev/null 2>&1; then
-  printf 'spectacle not found: compositor capture unavailable, no image at %s\n' "$out"
-  exit 0
+    echo "capture_real_window: spectacle is not installed; real window capture skipped" >&2
+    exit 0
 fi
-mkdir -p -- "$(dirname -- "$out")"
 
-rc=0
-timeout 30s spectacle --background --output "$out" >"$log" 2>&1 || rc=$?
-if [[ "$rc" -ne 0 || ! -s "$out" ]]; then
-  printf 'spectacle did not capture the window (exit %s, file %s): compositor may not support background capture; see %s\n' \
-    "$rc" "$out" "$log"
-  exit 0
+if reason="$(spectacle --background --output "$out" 2>&1)"; then
+    echo "capture_real_window: wrote $out"
+    if [[ -f "$out" ]] && command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$out"
+    fi
+else
+    echo "capture_real_window: spectacle failed (compositor or window may not support background capture): $reason" >&2
+    echo "capture_real_window: real window capture skipped; no PNG or measurement claimed" >&2
 fi
-printf 'captured real window: %s\n' "$out"
+exit 0

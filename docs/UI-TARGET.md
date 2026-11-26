@@ -36,6 +36,39 @@ Inspiración declarada: [Zen Browser](https://github.com/zen-browser/desktop).
 5. Verifica con `cargo run --release -p megi-browser -- <url> --screenshot ... --chrome`
    y compara contra esta imagen; pega md5 y descripción visual en el informe.
 
+## Verificación automática
+
+El gate sin compilación `tools/check_window_ui.py` mide la paridad del shell con
+`MAE = media(|ΔR|+|ΔG|+|ΔB|)/3` sobre dos PNG del mismo tamaño.
+
+| Sitio | Referencia Chromium esperada | Umbral MAE |
+|---|---|---:|
+| Hacker News | `tests/fixtures/chrome/ui/hn.png` | 18 |
+| Rust | `tests/fixtures/chrome/ui/rust.png` | 14 |
+| Wikipedia | `tests/fixtures/chrome/ui/wikipedia.png` | 22 |
+
+- Comparación manual: `python3 tools/check_window_ui.py --compare A.png B.png --max-mae 18`
+  imprime `MAE=…`; EXIT 0 si es ≤ N, EXIT 1 si es > N o si el tamaño, el formato
+  o los archivos no son válidos (el mensaje indica el motivo).
+- Conjunto completo: `python3 tools/check_window_ui.py --check [--captures DIR]`.
+  Por defecto las capturas se leen de `target/ui-captures/{hn,rust,wikipedia}.png`
+  y se producen con `tools/capture_window_ui.sh`, que usa el binario release
+  `megi --screenshot --width 1000 --height 700` con `nice`/`ionice` y sin
+  `--chrome`. `tools/capture_real_window.sh` intenta una captura de ventana real
+  con `spectacle --background --output`; si el compositor no la soporta, imprime
+  el motivo y termina con EXIT 0 sin afirmar que se obtuvo una imagen.
+- **Pendiente, sin cifras medidas.** En este estado no hay referencias Chromium
+  versionadas en `tests/fixtures/chrome/ui/` ni capturas reales de Megi
+  generadas: `--check` falla con un mensaje claro por cada archivo ausente y
+  **no se registra ningún MAE real**. No se han creado referencias sintéticas en
+  esa ruta: los tests de `tools/test_check_window_ui.py` construyen imágenes
+  sintéticas en memoria/`tempfile`, marcadas explícitamente como sintéticas, y no
+  se presentan como capturas de Chromium ni como mediciones de paridad.
+- `tools/check_no_compile_gates.py` registra el gate `window_ui`, que mientras
+  no existan referencias y capturas reales ejecuta los tests sintéticos del
+  comparador. No se activa `--check` en ese gate hasta que las capturas reales
+  estén disponibles; activarlo antes sólo produciría un fallo por datos ausentes.
+
 ## Referencia de código: Zen Browser
 
 Fuente autorizada por el dueño: <https://github.com/zen-browser/desktop>
