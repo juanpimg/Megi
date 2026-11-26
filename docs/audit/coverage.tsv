@@ -325,7 +325,7 @@ crates/css/src/properties/parse/chunk1.rs	355	src	F2	wave-max-mod	2026-11-19	cov
 crates/css/src/properties/parse/chunk2.rs	381	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk3.rs	372	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/parse/chunk4.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/parse/chunk5.rs	277	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/parse/chunk5.rs	344	src	F2	wiki-header	2026-11-26	covered	#maximal-modularity	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/css/src/properties/values.rs	41	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/background.rs	376	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/border.rs	213	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -333,7 +333,7 @@ crates/css/src/properties/values/color.rs	354	src	F2	wave-max-mod	2026-11-19	cov
 crates/css/src/properties/values/content.rs	279	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/effect.rs	106	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/gradient.rs	133	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/properties/values/layout.rs	232	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/css/src/properties/values/layout.rs	252	src	F2	wiki-header	2026-11-26	covered	#maximal-modularity	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/css/src/properties/values/length.rs	128	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/misc.rs	80	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/properties/values/text.rs	449	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -842,7 +842,7 @@ crates/layout/src/box_tree.rs	319	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/layout/src/calc.rs	73	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/flex.rs	131	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
 crates/layout/src/flex/helpers.rs	305	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/flex/layout.rs	438	src	F2	overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP	read during long-word flex wrapping review
+crates/layout/src/flex/layout.rs	443	src	F2	wiki-header+overflow-wrap-fix	2026-11-26	covered	LAYOUT-WRAP+wiki-header	re-read after Wikipedia header and long-word flex wrapping fixes (both ledger sets kept)
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/names.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -870,7 +870,7 @@ crates/layout/src/table/legacy/columns.rs	126	src	F2	wave-max-mod	2026-11-19	cov
 crates/layout/src/table/structure.rs	147	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/text.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/tree_builder.rs	94	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/tree_builder/box_for_node.rs	419	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
+crates/layout/src/tree_builder/box_for_node.rs	419	src	F2	wiki-header	2026-11-26	covered	SELECT-PARITY+wiki-header	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/layout/src/tree_builder/cache.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/tree_builder/element_boxes.rs	166	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/layout/src/tree_builder/fixups.rs	170	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -895,7 +895,7 @@ crates/layout/tests/container_queries.rs	179	test	F1	wave-max-mod	2026-11-19	cov
 crates/layout/tests/deep_tree.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/dialog.rs	97	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/flex/alignment.rs	209	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/flex/main.rs	109	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/flex/main.rs	134	test	F1	wiki-header	2026-11-26	covered	#maximal-modularity	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/layout/tests/flex/placement.rs	245	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/float_budget.rs	168	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/floats.rs	499	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -923,7 +923,7 @@ crates/layout/tests/overflow/main.rs	175	test	F1	overflow-wrap-fix	2026-11-26	co
 crates/layout/tests/positioning.rs	360	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/proptest_layout.rs	287	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/pseudo_elements.rs	183	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/replaced.rs	343	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/replaced.rs	381	test	F1	wiki-header	2026-11-26	covered	#maximal-modularity	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/layout/tests/tables/basic.rs	265	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/tables/collapse.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/tables/common.rs	209	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1073,7 +1073,7 @@ crates/paint/src/background/tests.rs	251	src	F2	wave-max-mod	2026-11-19	covered	
 crates/paint/src/lib.rs	255	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/src/painter.rs	354	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/paint/src/painter/backgrounds.rs	389	src	F2	wave-max-mod	2026-11-25	covered	#2296	re-read after background-clip colour rect fix; legacy path preserved
-crates/paint/src/painter/blocks.rs	185	src	F2	juanpimg	2026-11-20	covered	#1884	inline-block background paint
+crates/paint/src/painter/blocks.rs	195	src	F2	wiki-header	2026-11-26	covered	#1884	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/paint/src/painter/display_list.rs	177	src	F2	wave-max-mod	2026-11-25	covered	#2296	removed global counter reset; budget created with per-pass resources
 crates/paint/src/painter/effects.rs	211	src	F2	wave-max-mod	2026-11-25	covered	#2296	global counter removed; re-read after change
 crates/paint/src/painter/forms.rs	123	src	F2	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
@@ -1107,7 +1107,7 @@ crates/paint/tests/gradients/common.rs	116	test	F1	wave-max-mod	2026-11-19	cover
 crates/paint/tests/gradients/conic.rs	244	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/gradients/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/hit_testing.rs	353	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/paint/tests/images.rs	220	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/paint/tests/images.rs	241	test	F1	wiki-header	2026-11-26	covered	#maximal-modularity	re-read after Wikipedia header real-site fixes (rebased onto newest main)
 crates/paint/tests/offscreen_budget.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/png_format.rs	214	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/paint/tests/png_regions.rs	202	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
