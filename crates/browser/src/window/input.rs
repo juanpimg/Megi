@@ -406,6 +406,7 @@ impl WindowApp {
         let buttons = chrome::navigation_buttons_in_top_bar(
             self.metrics.css_width as f32,
             band_css,
+            chrome::WINDOW_MARGIN,
         );
         if let Some(button) = chrome::navigation_button_at(
             &buttons,

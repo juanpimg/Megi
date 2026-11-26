@@ -43,11 +43,11 @@ pub fn navigation_buttons(_width: f32) -> NavigationButtons {
 ///
 /// CSS Grid/Flexbox are not involved: the shell is a fixed, deterministic bar,
 /// so the controls share one row centred in `top_css` (docs/UI-TARGET.md).
-pub fn navigation_buttons_in_top_bar(_width: f32, top_css: f32) -> NavigationButtons {
+pub fn navigation_buttons_in_top_bar(_width: f32, top_css: f32, margin: f32) -> NavigationButtons {
     let size = if top_css >= 60.0 { 26.0 } else { 20.0 };
     let y = ((top_css - size) * 0.5).max(2.0);
     let step = size + 4.0;
-    let x0 = crate::chrome::WINDOW_MARGIN + 96.0;
+    let x0 = margin + 96.0;
     NavigationButtons {
         back: Rect::new(x0, y, size, size),
         forward: Rect::new(x0 + step, y, size, size),

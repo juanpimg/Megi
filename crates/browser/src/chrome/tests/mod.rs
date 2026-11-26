@@ -195,7 +195,6 @@ fn shell_layout_keeps_sidebar_and_inset_page_distinct() {
     assert_eq!(layout.actions.len(), 4);
 }
 
-
 #[test]
 fn shell_top_bar_controls_share_one_row() {
     // UI-TARGET: traffic lights, sidebar toggle, back/forward/reload, the centred

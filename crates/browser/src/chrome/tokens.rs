@@ -281,7 +281,7 @@ pub fn layout_shell(width: f32, height: f32, _scale: f32, view: &ShellView<'_>) 
         )
     });
     let toggle = Rect::new(WINDOW_MARGIN + 52.0, (dot_y - 3.0).max(2.0), 16.0, 16.0);
-    let nav = super::navigation_buttons_in_top_bar(width, top);
+    let nav = super::navigation_buttons_in_top_bar(width, top, WINDOW_MARGIN);
     let nav_end = nav.reload.x + nav.reload.width;
     let pill_width = (width * 0.48).clamp(120.0, (width - nav_end - 190.0).max(120.0));
     let pill_height = if top >= 60.0 { 34.0 } else { 26.0 };

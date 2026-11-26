@@ -64,7 +64,7 @@ crates/browser/src/a11y_at_bus.rs	143	src	F2	columns-fix	2026-11-21	covered	#193
 crates/browser/src/a11y_backend.rs	490	src	F2	juanpimg	2026-11-20	covered	#2024	read build_tree_update action logic before marking
 crates/browser/src/a11y_backend_orphan_tests.rs	105	src	F2	input-size-fix	2026-11-24	covered	#2247	re-read
 crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#upstream	re-read
-crates/browser/src/chrome.rs	479	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome.rs	474	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read unified top-bar diff and hit-test wiring
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar_paint.rs	306	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/drawing.rs	341	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -72,21 +72,21 @@ crates/browser/src/chrome/dropdown.rs	405	src	F2	wave-max-mod	2026-11-19	covered
 crates/browser/src/chrome/menus.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/native_widget_overlay.rs	192	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/chrome/native_widgets.rs	240	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/chrome/navigation.rs	97	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/navigation.rs	129	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read cycle-break and rustfmt diff
 crates/browser/src/chrome/rail.rs	431	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/shell.rs	473	src	F2	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 453-line dark shell paint module; integrated chrome.rs draw_chrome branches
+crates/browser/src/chrome/shell.rs	481	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read unified top-bar diff and hit-test wiring
 crates/browser/src/chrome/status_bar.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tab_strip.rs	438	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/address_bar.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/compact.rs	103	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/dropdown.rs	107	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/menus.rs	157	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tests/mod.rs	252	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
+crates/browser/src/chrome/tests/mod.rs	283	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read cycle-break and rustfmt diff
 crates/browser/src/chrome/tests/paint.rs	472	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/rail.rs	287	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/chrome/tests/tabs.rs	109	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/tokens.rs	122	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/tokens.rs	380	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/tokens.rs	386	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read cycle-break and rustfmt diff
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli/args.rs	219	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/cli/finish.rs	252	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -122,8 +122,8 @@ crates/browser/src/forms/model.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/browser/src/forms/submit.rs	174	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/tests.rs	499	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/forms/widget.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/headless.rs	429	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
-crates/browser/src/headless/chrome_compact.rs	143	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
+crates/browser/src/headless.rs	431	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read unified top-bar diff and hit-test wiring
+crates/browser/src/headless/chrome_compact.rs	145	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read unified top-bar diff and hit-test wiring
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/i18n.rs	264	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read En/Es: phase-note replaced by toggle-note
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -191,9 +191,9 @@ crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	
 crates/browser/src/window/events.rs	431	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/form_controls.rs	447	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
 crates/browser/src/window/frontend.rs	265	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/window/input.rs	454	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/input.rs	461	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read cycle-break and rustfmt diff
 crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
-crates/browser/src/window/presentation.rs	488	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
+crates/browser/src/window/presentation.rs	490	src	F2	ui-topbar	2026-11-26	covered	UI-TARGET	Read unified top-bar diff and hit-test wiring
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/settings/chrome_mode.rs	157	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/settings/mod.rs	46	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
