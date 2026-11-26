@@ -73,7 +73,7 @@ pub(crate) mod tests {
                 all,
             );
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
-            let root_style = styles.get(&doc.root());
+            let root_style = document_element_id(doc).and_then(|element| styles.get(&element));
             let computed = ComputedStyle::compute(&cascaded, parent_style, root_style);
             styles.insert(node_id, computed);
         }
@@ -97,7 +97,7 @@ pub(crate) mod tests {
                 &candidates,
             );
             let parent_style = doc.node(node_id).parent.and_then(|p| styles.get(&p));
-            let root_style = styles.get(&doc.root());
+            let root_style = document_element_id(doc).and_then(|element| styles.get(&element));
             let computed = ComputedStyle::compute(&cascaded, parent_style, root_style);
             styles.insert(node_id, computed);
         }
