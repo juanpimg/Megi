@@ -24,7 +24,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
 AGENTS.md	136	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
-CONTRIBUTING.md	327	docs	F3	jp	2026-11-25	covered	#2290	
+CONTRIBUTING.md	337	docs	F3	jp	2026-11-26	covered	#2290	cargo GC environment note added near verification sections
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
 Cargo.toml	80	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 LICENSE	12	fixture	F1	lead	2026-11-17	covered		not code: license text
