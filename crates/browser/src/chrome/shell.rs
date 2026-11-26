@@ -6,12 +6,9 @@
 //! build from real tabs/workspaces/history; nothing here invents user data.
 
 use megi_webview::layout::Rect;
-use megi_webview::paint::{Color, Pixmap};
+use megi_webview::paint::Pixmap;
 
-use super::drawing::{
-    draw_text, fill_round, measure_text_width, paint_chevron, paint_favicon, stroke_line,
-};
-use super::tokens::ShellPalette;
+use super::drawing::{draw_text, fill_round, paint_chevron, paint_favicon, stroke_line};
 use super::tokens::{
     HISTORY_ROW, HISTORY_TOP, SHELL, ShellLayout, ShellView, WINDOW_RADIUS, circle, fitted,
 };

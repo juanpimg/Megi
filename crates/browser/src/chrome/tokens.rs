@@ -4,10 +4,7 @@
 //! using `crate::chrome::*` paths. The defaults encode the 2026-11-25 visual
 //! refresh: brighter text, a taller calmer band and roomier hit targets.
 
-use super::drawing::contains;
 use super::drawing::{fill_round, measure_text_width};
-use super::{NAV_BUTTON_GAP, NAV_BUTTON_SIZE};
-use crate::favicon::Favicon;
 use megi_webview::layout::Rect;
 use megi_webview::paint::{Color, Pixmap};
 

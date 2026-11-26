@@ -3,7 +3,6 @@
 use megi_webview::layout::Rect;
 use megi_webview::paint::Pixmap;
 
-use super::drawing::*;
 use super::*;
 
 /// Action of a context-menu row.
