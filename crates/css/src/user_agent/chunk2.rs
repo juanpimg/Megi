@@ -72,9 +72,19 @@ pub(crate) mod tests {
             );
         }
         let input = style(&styles, input);
-        assert!(matches!(input.width, Length::Px(width) if width > 100.0));
+        // The UA sheet uses `min-width: 5em`; with the authored 20px body font
+        // that is exactly 100px, so a non-collapsed control may equal it (#2247).
+        assert!(
+            matches!(input.min_width, Length::Px(width) if width >= 100.0),
+            "input min-width: {:?}",
+            input.min_width
+        );
         let textarea = style(&styles, textarea);
-        assert!(matches!(textarea.width, Length::Px(width) if width > 100.0));
+        assert!(
+            matches!(textarea.width, Length::Px(width) if width > 100.0),
+            "textarea width: {:?}",
+            textarea.width
+        );
         assert!(matches!(textarea.height, Length::Px(height) if height > 20.0));
         // A native <select> must not clip its selected label or disclosure
         // arrow: the UA sheet intentionally keeps `overflow: visible`.
