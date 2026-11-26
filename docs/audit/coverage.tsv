@@ -2398,7 +2398,8 @@ tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wa
 tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 50-line compile-free gate; validates fixture links
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	138	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
+tools/check_milestone_index.py	55	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: milestone index gate extension
+tools/check_no_compile_gates.py	140	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: milestone index gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2453,6 +2454,7 @@ tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290
 tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 70-line unit tests for fixture link gate
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
+tools/test_check_milestone_index.py	75	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: milestone index gate extension
 tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
