@@ -2382,8 +2382,9 @@ tools/check_doc_images.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	re
 tools/check_doc_tool_refs.py	97	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290	
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
+tools/check_fuzz_manifest.py	58	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
-tools/check_no_compile_gates.py	132	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: coverage HTML area gate extension
+tools/check_no_compile_gates.py	134	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2434,6 +2435,7 @@ tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#au
 tools/test_check_doc_images.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: documentation image gate extension
 tools/test_check_doc_tool_refs.py	98	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
+tools/test_check_fuzz_manifest.py	78	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: fuzz manifest gate extension
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
