@@ -30,6 +30,7 @@ TEST_MODULES = (
     "tools.test_test_inspector",
     "tools.test_whatwg_spec",
     "tools.test_check_tool_test_coverage",
+    "tools.test_check_real_site_manifest",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -45,6 +46,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("real_site_snapshots", (PY, "tools/check_real_site_snapshots.py")),
     ("doc_tool_refs", (PY, "tools/check_doc_tool_refs.py")),
     ("tool_test_coverage", (PY, "tools/check_tool_test_coverage.py")),
+    ("real_site_manifest", (PY, "tools/check_real_site_manifest.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 
