@@ -165,7 +165,6 @@ pub fn present_region_with_insets(
 /// `css_viewport_height` remain CSS pixels. `raster_scale` converts CSS rows to
 /// raster rows; the source columns come from the frame itself, so a window
 /// whose buffer matches the frame becomes a 1:1 blit.
-#[allow(clippy::too_many_arguments)]
 pub fn present_region_at_scaled(
     frame: Option<(&[u32], u32, u32)>,
     scroll_y: u32,
@@ -175,15 +174,42 @@ pub fn present_region_at_scaled(
     dest_height: u32,
     raster_scale: f64,
 ) -> bool {
-    // `u32::MAX` makes the source width resolve to the frame width: a physical
-    // frame presented into a same-sized physical window is a 1:1 blit.
+    present_region_at_scaled_offset(
+        frame,
+        scroll_y,
+        css_viewport_height,
+        0,
+        dest,
+        dest_width,
+        dest_height,
+        raster_scale,
+    )
+}
+
+/// Like [`present_region_at_scaled`], but reserves the first `dest_y_offset`
+/// physical rows for browser chrome (F7-CHROME-OVERLAY / #1012). The page is
+/// mapped into the remaining rows; the reserved rows are filled with white.
+///
+/// `u32::MAX` makes the source width resolve to the frame width: a physical
+/// frame presented into a same-sized physical window is a 1:1 blit.
+#[allow(clippy::too_many_arguments)]
+pub fn present_region_at_scaled_offset(
+    frame: Option<(&[u32], u32, u32)>,
+    scroll_y: u32,
+    css_viewport_height: u32,
+    dest_y_offset: u32,
+    dest: &mut [u32],
+    dest_width: u32,
+    dest_height: u32,
+    raster_scale: f64,
+) -> bool {
     present_region_with_insets_scaled(
         frame,
         scroll_y,
         css_viewport_height,
         u32::MAX,
         0,
-        0,
+        dest_y_offset,
         dest,
         dest_width,
         dest_height,

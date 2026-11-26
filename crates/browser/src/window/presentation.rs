@@ -280,10 +280,12 @@ impl WindowApp {
         let presented = if rail_px == 0 {
             // The source width comes from the frame itself: a physical frame in
             // a same-sized window buffer is a 1:1 blit at any device scale.
-            present::present_region_at_scaled(
+            // Reserve the physical chrome rows at the top even with no rail.
+            present::present_region_at_scaled_offset(
                 frame,
                 self.scroll.offset(),
                 page_viewport_height,
+                chrome_px,
                 &mut buffer,
                 width,
                 height,

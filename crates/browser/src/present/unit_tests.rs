@@ -183,6 +183,71 @@ fn present_region_at_offsets_page_below_chrome_band() {
 }
 
 #[test]
+fn present_region_at_scaled_offset_starts_the_physical_page_below_the_band() {
+    // The frame is already at physical resolution (raster_scale 1.25), so the
+    // page must begin exactly `dest_y_offset` physical rows down, with the
+    // reserved rows left white for the chrome band.
+    const W: u32 = 200;
+    const H: u32 = 200;
+    const OFFSET: u32 = 8;
+    let frame: Vec<u32> = (0..H).flat_map(|row| vec![row; W as usize]).collect();
+    let mut dest = vec![0u32; (W * H) as usize];
+    assert!(present_region_at_scaled_offset(
+        Some((&frame, W, H)),
+        0,
+        100,
+        OFFSET,
+        &mut dest,
+        W,
+        H,
+        1.25
+    ));
+    for row in 0..OFFSET {
+        assert!(
+            dest[row as usize * W as usize..(row as usize + 1) * W as usize]
+                .iter()
+                .all(|&pixel| pixel == WHITE_0RGB),
+            "physical row {row} is reserved for chrome"
+        );
+    }
+    let page_rows = (H - OFFSET) as f64;
+    for row in [OFFSET, OFFSET + 1, OFFSET + 2, OFFSET + 3, OFFSET + 10] {
+        let page_row = row - OFFSET;
+        let expected = (f64::from(page_row) * 100.0 / page_rows * 1.25).floor() as u32;
+        assert_eq!(
+            dest[row as usize * W as usize],
+            expected,
+            "physical row {row} samples physical raster row {expected}"
+        );
+    }
+    // The legacy entry point is byte-identical to the offset variant with 0.
+    let mut legacy = vec![0u32; (W * H) as usize];
+    assert!(present_region_at_scaled(
+        Some((&frame, W, H)),
+        0,
+        100,
+        &mut legacy,
+        W,
+        H,
+        1.25
+    ));
+    assert_eq!(legacy, {
+        let mut zero = vec![0u32; (W * H) as usize];
+        assert!(present_region_at_scaled_offset(
+            Some((&frame, W, H)),
+            0,
+            100,
+            0,
+            &mut zero,
+            W,
+            H,
+            1.25
+        ));
+        zero
+    });
+}
+
+#[test]
 fn present_region_with_insets_scales_into_the_remaining_columns() {
     // 4x2 CSS frame with four distinct columns; two physical inset columns on the left.
     const C0: u32 = 0x00_00_00_01;

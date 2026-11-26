@@ -117,6 +117,38 @@ fn chrome_compact_band_is_explicit_and_default_stays_byte_identical() {
 }
 
 #[test]
+fn headless_chrome_reserves_the_band_and_composites_the_page_below_it() {
+    // The top-most page row carries an unmistakable colour. A real browser
+    // shrinks the viewport by the chrome band, so that row must appear just
+    // below the band, not be painted over by the chrome.
+    let input = megi_browser::cli::normalize_input(
+        "data:text/html,<style>html,body{margin:0;padding:0}</style>\
+         <div style=\"height:40px;background:rgb(255,102,0)\"></div>",
+    )
+    .expect("data URL");
+    let options = megi_webview::render::RenderOptions::default();
+    let plain = megi_browser::render_target(&input, 320, 240).expect("plain render");
+    let is_orange =
+        |pixel: &megi_webview::paint::Color| pixel.r == 255 && pixel.g == 102 && pixel.b == 0;
+    assert!(
+        is_orange(&plain.pixmap.pixels[4 * 320 + 160]),
+        "fixture marker must sit at the very top of the un-chromed page"
+    );
+    let chromed =
+        megi_browser::headless::render_target_with_chrome(&input, 320, 240, &options, None)
+            .expect("chrome render");
+    let band_rows = (megi_browser::chrome::CHROME_HEIGHT.ceil() as u32).min(240);
+    assert_eq!(chromed.dimensions(), (320, 240));
+    let pixel =
+        |x: usize, y: usize| -> megi_webview::paint::Color { chromed.pixmap.pixels[y * 320 + x] };
+    assert!(!is_orange(&pixel(160, 0)), "band rows belong to chrome");
+    assert!(
+        is_orange(&pixel(160, band_rows as usize + 4)),
+        "the marker must be visible below the chrome band, not hidden under it"
+    );
+}
+
+#[test]
 fn chrome_and_find_outputs_are_encoded_exactly_once() {
     let fixture =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/render/basic.html");

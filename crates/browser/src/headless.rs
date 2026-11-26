@@ -116,12 +116,13 @@ mod chrome_compact;
 
 pub use chrome_compact::{render_target_with_chrome_compact, screenshot_with_chrome_compact};
 
-/// Renders `input` and paints the shell chrome (tab strip + address bar) over the page.
+/// Renders `input` with the shell chrome (tab strip + address bar) above the page.
 ///
-/// Headless equivalent of the window overlay: the chrome occupies the top
-/// [`crate::chrome::CHROME_HEIGHT`] CSS pixels and the page keeps its full viewport
-/// (documented overlay trade-off). Used by `--screenshot --chrome` for tests; the PNG
-/// returned by [`render_target`] stays chrome-free so page goldens are unaffected.
+/// Headless equivalent of the window layout: the page is laid out in the viewport
+/// left by the top [`crate::chrome::CHROME_HEIGHT`] CSS pixels and composited below
+/// the band, so nothing is clipped or hidden underneath the chrome. Used by
+/// `--screenshot --chrome` for tests; the PNG returned by [`render_target`] stays
+/// chrome-free so page goldens are unaffected.
 pub fn render_target_with_chrome(
     input: &str,
     width: u32,

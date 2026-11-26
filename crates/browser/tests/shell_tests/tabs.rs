@@ -122,7 +122,8 @@ fn chrome_overlay_paints_tab_strip_and_address_bar() {
     assert_eq!(count(&plain, tab_strip), 0, "plain renders have no chrome");
     assert!(count(&chromed, tab_strip) > 1000, "tab strip painted");
     assert!(count(&chromed, address) > 1000, "address bar painted");
-    // The page below the chrome is unchanged (overlay only occludes the top band).
+    // This fixture has no content in the sampled row: the chrome band no longer
+    // covers page content, so the row below it is plain page background.
     let offset = ((megi_browser::chrome::CHROME_HEIGHT as u32 + 10) * 640) as usize;
     assert_eq!(
         plain.pixmap.pixels[offset..offset + 100],

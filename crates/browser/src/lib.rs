@@ -105,8 +105,9 @@
 //!   `Enter` navigates via `Url::join`, `Esc` cancels), plus the floating
 //!   `<select>` dropdown (options anchored under the control, capped height, hover/active
 //!   rows, click/Enter updates `selected` in the DOM snapshot and re-renders). The page
-//!   viewport is not reduced: the chrome occludes the top `CHROME_HEIGHT` CSS pixels
-//!   (documented overlay trade-off). Headless screenshots include it only with `--chrome`.
+//!   viewport excludes the chrome band: the page is laid out in the space below the
+//!   top `CHROME_HEIGHT` CSS pixels and painted there, so the first rows are never
+//!   clipped by the chrome. Headless screenshots include it only with `--chrome`.
 //! - **Tabs (R120)**: `Ctrl+T` opens a blank tab, `Ctrl+W` closes the active one (the last
 //!   tab is reset to New Tab instead of closing the window), `Ctrl+Tab`/`Ctrl+Shift+Tab`
 //!   cycle and `Alt+1..9` activates a tab by position. Each [`Tab`] keeps its own history,
