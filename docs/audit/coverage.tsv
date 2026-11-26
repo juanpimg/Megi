@@ -2409,7 +2409,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	150	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	re-read after WPT report md gate registered
+tools/check_no_compile_gates.py	152	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-47	re-read after real-site md5 gate registered; 152 lines
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2420,6 +2420,7 @@ tools/check_progress_svg.py	62	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOT
 tools/check_python_syntax.py	47	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
 tools/check_real_site_html.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_real_site_manifest.py	79	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
+tools/check_real_site_md5.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-47	read full 63-line compile-free gate; validates real-site HTML md5 annotations
 tools/check_real_site_report.py	85	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_real_site_snapshots.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site snapshot validator
 tools/check_sbom.py	51	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
@@ -2470,7 +2471,7 @@ tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/test_check_no_compile_gates.py	82	tool	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: gate count derived from runner.GATES instead of a hardcoded 39/40
+tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-47	re-read 78-line gate definition tests after real-site md5 registration
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
 tools/test_check_parity_inventory.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for inventory checker
@@ -2481,6 +2482,7 @@ tools/test_check_progress_svg.py	85	tool	F3	lead	2026-11-26	covered	AGENT-GATES-
 tools/test_check_python_syntax.py	64	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: python syntax gate extension
 tools/test_check_real_site_html.py	99	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_real_site_manifest.py	80	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: real-site manifest gate extension
+tools/test_check_real_site_md5.py	78	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-47	read full 78-line unittest module; covers md5/alt/CLI checks
 tools/test_check_real_site_report.py	122	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_real_site_snapshots.py	82	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for snapshot validator
 tools/test_check_sbom.py	101	tool	F3	juanpimg	2026-11-20	covered	N/A	new file from main merge (SBOM/release + worker pool)
