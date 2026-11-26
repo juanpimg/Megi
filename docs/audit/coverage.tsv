@@ -805,7 +805,7 @@ crates/js/tests/fetch_tests.rs	363	test	F1	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/tests/fixtures/jquery-3.5.1.min.js	1	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/form_tests.rs	295	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/gap_apis.rs	11	test	F1	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/tests/gap_apis/dom.rs	189	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/gap_apis/dom.rs	209	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/gap_apis/helpers.rs	10	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/gap_apis/misc.rs	393	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/host_reentrancy_new.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1329,6 +1329,7 @@ crates/render/tests/text_overflow_tests.rs	124	test	F1	juanpimg	2026-11-20	cover
 crates/render/tests/tla_tests.rs	49	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webfont_status_tests.rs	50	test	F1	juanpimg	2026-11-24	covered	#2244	Integration test: HTTP 404 webfont body must be rejected with a status warning before WOFF2 decoding
 crates/render/tests/webfont_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/webgl_tests.rs	36	test	F1	a2-reporting	2026-11-26	covered	#2437	golden byte comparison added
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1891,7 +1892,7 @@ tests/fixtures/real-sites/wikipedia.html	680	fixture	F1	waveF1	2026-11-17	covere
 tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/OpenSans-Regular-latin-corrupt.woff2	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/README.md	139	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/README.md	142	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	JS-enabled header corrected (#2439)
 tests/fixtures/render/animation_time.html	5	fixture	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tests/fixtures/render/aspect_ratio.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/bg_photo.jpg	0	binary	-			exempt		not read line by line: binary
@@ -2433,7 +2434,7 @@ tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 50-line compile-free gate; validates fixture links
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
-tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
+tools/check_milestone.py	138	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/check_no_compile_gates.py	162	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
@@ -2470,13 +2471,13 @@ tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/progress_render.py	458	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
-tools/progress_stats.py	280	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/real_site_check.py	362	tool	F3	jp	2026-11-25	covered	#2290	
+tools/progress_render.py	457	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
+tools/progress_stats.py	322	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/real_site_check.py	380	tool	F3	jp	2026-11-25	covered	#2290	degraded signals now fail (#2442)
 tools/render_fixture.sh	130	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test262_gate.py	208	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
-tools/test262_report.py	303	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
+tools/test262_report.py	307	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test262_stats.py	26	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read after main merge
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
@@ -2498,7 +2499,7 @@ tools/test_check_doc_tool_refs.py	110	tool	F3	lead	2026-11-26	covered	REMOTE-GAT
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 70-line unit tests for fixture link gate
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
-tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
+tools/test_check_milestone.py	260	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/test_check_no_compile_gates.py	78	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
@@ -2541,13 +2542,13 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	510	tool	F3	jp	2026-11-25	covered	#2290	
+tools/test_real_site_check.py	572	tool	F3	jp	2026-11-25	covered	#2290	degraded-signal regression tests (#2442)
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
-tools/test_test262_report.py	132	tool	F3	subagent	2026-11-26	covered		read new unit tests
+tools/test_test262_report.py	169	tool	F3	subagent	2026-11-26	covered		read new unit tests
 tools/test_test_inspector.py	37	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_update_coverage.py	776	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_visual_parity.py	107	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool
