@@ -2388,7 +2388,7 @@ tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
 tools/test_fuzz_targets.py	63	tool	F3	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	target count test reviewed
-tools/test_gitleaks_config.py	80	tool	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP	pins WPT exemption to one exact path and generic-api-key rule
+tools/test_gitleaks_config.py	126	tool	F3	gitleaks-ci-fix	2026-11-26	covered	CI-GITLEAKS-FP	pins WPT, Test262 and WebDriver BiDi exemptions to exact paths and generic-api-key rule
 tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read

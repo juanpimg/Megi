@@ -15,6 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / ".gitleaks.toml"
 WPT_PATH = r"^docs/status/wpt\.json$"
+TEST262_PATH = r"^docs/status/test262\.json$"
+BIDI_PATH = r"^crates/browser/tests/webdriver_bidi\.rs$"
 
 
 class GitleaksConfigTests(unittest.TestCase):
@@ -29,6 +31,14 @@ class GitleaksConfigTests(unittest.TestCase):
             entry
             for entry in self.allowlists
             if any("wpt.json" in str(path).replace("\\", "") for path in entry.get("paths", []))
+        ]
+
+    def allowlists_for_path(self, path: str) -> list[dict[str, object]]:
+        needle = path.replace("\\", "")
+        return [
+            entry
+            for entry in self.allowlists
+            if any(needle in str(candidate).replace("\\", "") for candidate in entry.get("paths", []))
         ]
 
     def test_exactly_one_wpt_exemption(self) -> None:
@@ -63,6 +73,42 @@ class GitleaksConfigTests(unittest.TestCase):
         self.assertNotIn("commits", entry, "commit-wide exemptions are not allowed")
         for path in entry.get("paths", []):
             self.assertNotIn(".*", str(path), "path regex must not degrade to .*")
+
+    def test_test262_canonical_key_exemption_is_path_and_rule_scoped(self) -> None:
+        entries = self.allowlists_for_path(TEST262_PATH)
+        self.assertEqual(len(entries), 1, "expected one Test262 exemption")
+        entry = entries[0]
+        self.assertEqual(entry.get("paths"), [TEST262_PATH])
+        self.assertEqual(entry.get("rules"), ["generic-api-key"])
+        self.assertNotIn("commits", entry, "commit-wide exemptions are not allowed")
+        self.assertNotIn("regexTarget", entry, "regexTarget broadening is not allowed")
+        for path in entry.get("paths", []):
+            self.assertNotIn(".*", str(path), "path regex must not degrade to .*")
+
+    def test_test262_exemption_documents_the_reason(self) -> None:
+        entries = self.allowlists_for_path(TEST262_PATH)
+        self.assertEqual(len(entries), 1, "expected one Test262 exemption")
+        description = str(entries[0].get("description", "")).lower()
+        for word in ("test262", "canonical", "identifiers"):
+            self.assertIn(word, description)
+
+    def test_webdriver_bidi_rfc_key_exemption_is_path_and_rule_scoped(self) -> None:
+        entries = self.allowlists_for_path(BIDI_PATH)
+        self.assertEqual(len(entries), 1, "expected one WebDriver BiDi RFC key exemption")
+        entry = entries[0]
+        self.assertEqual(entry.get("paths"), [BIDI_PATH])
+        self.assertEqual(entry.get("rules"), ["generic-api-key"])
+        self.assertNotIn("commits", entry, "commit-wide exemptions are not allowed")
+        self.assertNotIn("regexTarget", entry, "regexTarget broadening is not allowed")
+        for path in entry.get("paths", []):
+            self.assertNotIn(".*", str(path), "path regex must not degrade to .*")
+
+    def test_webdriver_bidi_exemption_documents_the_reason(self) -> None:
+        entries = self.allowlists_for_path(BIDI_PATH)
+        self.assertEqual(len(entries), 1, "expected one WebDriver BiDi RFC key exemption")
+        description = str(entries[0].get("description", "")).lower()
+        for word in ("rfc 6455", "test vector"):
+            self.assertIn(word, description)
 
     def test_every_allowlist_names_explicit_rules_and_targets(self) -> None:
         for entry in self.allowlists:
