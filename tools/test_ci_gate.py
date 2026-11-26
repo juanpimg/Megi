@@ -7,6 +7,36 @@ ROOT = Path(__file__).resolve().parent.parent
 CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 
+def discovered_test_modules(root: Path = ROOT) -> list[str]:
+    """Every tools/test_*.py module that is a real unittest module.
+
+    ``test_inspector.py`` is the inspector CLI, not a test (see the comment
+    above the explicit list in ci.yml); every other file is a test module.
+    """
+    return sorted(
+        f"tools.{path.stem}"
+        for path in (root / "tools").glob("test_*.py")
+        if path.stem != "test_inspector"
+    )
+
+
+def registered_ci_test_modules(ci: Path = CI) -> list[str]:
+    """Read the explicit ``python3 -m unittest`` module list from the docs job."""
+    registered: list[str] = []
+    collecting = False
+    for raw in ci.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line == "python3 -m unittest":
+            collecting = True
+            continue
+        if not collecting:
+            continue
+        if not line.startswith("tools.test_"):
+            break
+        registered.append(line)
+    return registered
+
+
 class CargoTreeGateTests(unittest.TestCase):
     def test_js_free_gate_does_not_mask_cargo_tree_failure(self):
         # The Light WebView build must not use `! cargo tree ... | grep`: without
@@ -83,26 +113,32 @@ class ToolsTestListTests(unittest.TestCase):
         # job (#1402). A module left out passes locally but never protects a
         # merge. Comparing the whole set makes any future module that is added
         # without registering it fail here.
-        discovered = sorted(
-            f"tools.{path.stem}"
-            for path in (ROOT / "tools").glob("test_*.py")
-            if path.stem != "test_inspector"
-        )
+        discovered = discovered_test_modules()
         self.assertNotEqual(discovered, [], "no tools test modules discovered")
-
-        registered: list[str] = []
-        collecting = False
-        for raw in CI.read_text(encoding="utf-8").splitlines():
-            line = raw.strip()
-            if line == "python3 -m unittest":
-                collecting = True
-                continue
-            if not collecting:
-                continue
-            if not line.startswith("tools.test_"):
-                break
-            registered.append(line)
+        registered = registered_ci_test_modules()
         self.assertEqual(sorted(registered), discovered)
+
+    def test_ci_test_module_list_has_no_duplicates(self):
+        # A duplicated entry hides a missing one: the set comparison in
+        # test_every_tools_test_module_is_registered_in_ci would still pass
+        # while the run is not the exact discovered set.
+        registered = registered_ci_test_modules()
+        self.assertEqual(len(registered), len(set(registered)))
+
+    def test_guard_detects_an_unregistered_test_module(self):
+        # Behavioural proof of the guard: a new test_*.py that is not in the
+        # explicit list must show up in discovery and stay absent from the
+        # registered list, so the equality assertion above fails in CI.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tools").mkdir()
+            (root / "tools" / "test_brand_new_module.py").write_text("", encoding="utf-8")
+            ci = root / "ci.yml"
+            ci.write_text("python3 -m unittest\n  tools.test_existing\n", encoding="utf-8")
+            self.assertIn("tools.test_brand_new_module", discovered_test_modules(root))
+            self.assertNotIn("tools.test_brand_new_module", registered_ci_test_modules(ci))
 
 
 if __name__ == "__main__":
