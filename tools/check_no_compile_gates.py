@@ -25,6 +25,7 @@ TEST_MODULES = (
     "tools.test_check_parity_ledger",
     "tools.test_check_parity_inventory",
     "tools.test_check_deslop_doc",
+    "tools.test_check_real_site_snapshots",
 )
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
@@ -37,6 +38,7 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("parity_inventory", (PY, "tools/check_parity_inventory.py")),
     ("parity_ledger", (PY, "tools/check_parity_ledger.py")),
     ("deslop_doc", (PY, "tools/check_deslop_doc.py")),
+    ("real_site_snapshots", (PY, "tools/check_real_site_snapshots.py")),
     ("python_tests", (PY, "-m", "unittest", *TEST_MODULES)),
 )
 

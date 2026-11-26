@@ -29,7 +29,7 @@ class GateDefinitionTests(unittest.TestCase):
             {
                 "check_arch", "check_docs_links", "audit_coverage", "update_coverage",
                 "parity_schema", "parity_baseline", "parity_docs", "parity_inventory",
-                "parity_ledger", "deslop_doc", "python_tests",
+                "parity_ledger", "deslop_doc", "real_site_snapshots", "python_tests",
             },
         )
 
@@ -61,7 +61,7 @@ class CliTests(unittest.TestCase):
     def test_real_run_passes_all_gates(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("11/11 compile-free gates passed", result.stdout)
+        self.assertIn("12/12 compile-free gates passed", result.stdout)
         self.assertNotIn("FAIL", result.stdout)
 
     def test_runner_has_no_cargo_in_its_own_source(self) -> None:
