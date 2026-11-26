@@ -1438,7 +1438,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/VISUAL-PARITY.md	87	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after referencing the versioned tool
+docs/VISUAL-PARITY.md	90	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding report tool
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: POINTS buffer source documented as deliberate limit
@@ -2403,6 +2403,7 @@ tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read af
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_visual_parity.py	107	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool
+tools/test_visual_parity_report.py	90	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for report generator
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
@@ -2415,6 +2416,7 @@ tools/update_progress.py	348	tool	F3	jp	2026-11-25	covered	#2290	re-read after n
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/vendor_wpt.py	472	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/visual_parity.py	93	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: PNG parity comparison tool
+tools/visual_parity_report.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: Markdown/JSON parity report generator
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	479	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix

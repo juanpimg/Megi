@@ -22,8 +22,11 @@ Es una medición de render, no una métrica de conformidad WPT.
    --json`: un píxel cuenta como *cambiado* si `max(|ΔR|,|ΔG|,|ΔB|) > 16`;
    además se registra la diferencia media absoluta de los tres canales y el
    bounding box de las diferencias. `--side salida.png` escribe una imagen
-   lado a lado. La herramienta solo necesita Pillow (`python3-pil`), no compila
-   Rust; sus tests son `python3 -m unittest tools.test_visual_parity`.
+   lado a lado. Para un directorio con varias parejas,
+   `python3 tools/visual_parity_report.py DIR --json salida.json --markdown salida.md`
+   genera el informe completo. Ambas herramientas solo necesitan Pillow
+   (`python3-pil`), no compilan Rust; sus tests son
+   `python3 -m unittest tools.test_visual_parity tools.test_visual_parity_report`.
 
 Las capturas usadas para estas mediciones están bajo `/tmp/opencode/compare-out/`
 (temporales, no versionadas); la herramienta y su metodología sí están versionadas.
