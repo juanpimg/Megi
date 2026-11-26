@@ -1429,7 +1429,7 @@ docs/A11Y-LIVE-VERIFICATION.md	54	docs	F3	input-size-fix	2026-11-24	covered	#224
 docs/ACCESSIBILITY-STRATEGY.md	33	docs	F3	juanpimg	2026-11-20	covered	upstream fdefa6d/a4bc465 (#1893 WOFF1, #2020 ADR-002); verified in #2021	pre-existing upstream file, re-read before marking
 docs/AGENT-INDEX.md	103	docs	F3	lead	2026-11-25	covered	#2290 UI plan index review	created/re-read during exhaustive obsolete-doc audit
 docs/AI-QUICKSTART.md	86	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
-docs/ARCHITECTURE.md	237	docs	F3	conformance-allowlist	2026-11-25	covered	WP-WPT-ORDER	re-read after parse-error source-order fix and allowlist removal
+docs/ARCHITECTURE.md	237	docs	F3	jp	2026-11-26	covered	#2290	re-read after correcting conservative vs real-site script budget defaults
 docs/AVIF-STRATEGY.md	32	docs	F3	esm-merge	2026-11-24	covered	#upstream	re-read
 docs/BROTLI-STRATEGY.md	32	docs	F3	juanpimg	2026-11-20	covered	#2032 ADR-003	upstream architecture doc, read before marking
 docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR note read before marking
