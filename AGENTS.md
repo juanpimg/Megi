@@ -113,6 +113,11 @@ informa (sin compilar) si el sello está obsoleto frente a cambios en
 - Diseño de specs vivas (WHATWG/W3C/RFC); prohíbido inventar algoritmos.
 - Nueva dependencia externa: solo transporte/cripto/ventana/tipografía de bajo
   nivel, previa lectura de `docs/ARCHITECTURE.md` §3.1 y aprobación.
+- Dependencias de entorno para herramientas Python (no crates del motor):
+  `python3-lxml` para `tools/whatwg_spec.py` (sólo los subcomandos que parsean
+  HTML; `--help` y `--fetch` funcionan sin él), `python3-pil` para
+  `tools/visual_parity.py`. Falta `lxml` se informa en tiempo de uso con un
+  mensaje claro, nunca con `sys.exit()` en tiempo de import (#2454).
 - Si cambia el inventario de archivos: `tools/audit_coverage.py --generate` y
   marcar filas como covered SOLO tras leerlas. Ledger en 0 pendientes.
 - Commits atómicos, Conventional Commits en inglés, DCO (`git commit -s`).

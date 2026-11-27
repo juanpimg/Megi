@@ -10,6 +10,7 @@ WHATWG DOM Standard (https://dom.spec.whatwg.org/), and W3C CSS Syntax Module Le
 
 from __future__ import annotations
 
+import hashlib
 import argparse
 import json
 import re
@@ -18,11 +19,20 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-try:
-    import lxml.html
-except ImportError:
-    print("Missing dependency: lxml. Install with: pip install lxml", file=sys.stderr)
-    sys.exit(1)
+def _lxml_html():
+    """#2454: import lxml only for commands that parse HTML, never at import time.
+
+    This keeps `--help`, `--fetch` and test discovery working in environments
+    without the system package `python3-lxml` (see AGENTS.md §7).
+    """
+    try:
+        import lxml.html
+    except ImportError as error:
+        raise RuntimeError(
+            "lxml is required for this command; install python3-lxml "
+            "(or `pip install lxml`) and retry"
+        ) from error
+    return lxml.html
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = REPO_ROOT / ".cache" / "specs"
@@ -51,6 +61,26 @@ import time
 MAX_SPEC_BYTES = 50 * 1024 * 1024  # 50 MiB cap
 DEFAULT_CACHE_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
+
+def _hash_sidecar(target: Path) -> Path:
+    """#2454: companion file holding the SHA-256 of a cached spec."""
+    return target.with_name(f".{target.name}.sha256")
+
+
+def _valid_cached(target: Path) -> bool:
+    """#2454: size alone accepts truncated or same-size corrupted HTML."""
+    if not target.is_file() or target.stat().st_size == 0:
+        return False
+    data = target.read_bytes()
+    if len(data) > MAX_SPEC_BYTES:
+        return False
+    sidecar = _hash_sidecar(target)
+    if not sidecar.is_file():
+        return False  # legacy cache entries must be re-fetched once
+    expected = sidecar.read_text(encoding="utf-8").strip()
+    return expected == hashlib.sha256(data).hexdigest()
+
+
 def ensure_cached(
     filename: str,
     force: bool = False,
@@ -61,7 +91,7 @@ def ensure_cached(
         raise ValueError(f"Unknown spec target '{filename}'. Known targets: {known}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / filename
-    if target.exists() and target.stat().st_size > 0 and not force:
+    if not force and _valid_cached(target):
         age = time.time() - target.stat().st_mtime
         if ttl_seconds <= 0 or age < ttl_seconds:
             return target
@@ -98,13 +128,24 @@ def ensure_cached(
             tmp_path = Path(tf.name)
             tf.write(data)
             tf.flush()
+            digest = hashlib.sha256(data).hexdigest()
         os.replace(tmp_path, target)
+        # #2454: write the hash sidecar atomically next to the cache entry so
+        # a valid cached copy can be recognised without trusting its size.
+        sidecar = _hash_sidecar(target)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=CACHE_DIR,
+            prefix=f".{filename}.sha256.", suffix=".tmp", delete=False,
+        ) as sf:
+            sidecar_tmp = Path(sf.name)
+            sf.write(f"{digest}\n")
+        os.replace(sidecar_tmp, sidecar)
     finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
-    # Revalidate the cached file before returning it.
-    if not target.exists() or target.stat().st_size == 0 or target.stat().st_size > MAX_SPEC_BYTES:
-        raise ValueError(f"Cached spec {target} failed size validation")
+    # Revalidate the cached file (size + hash) before returning it.
+    if not _valid_cached(target):
+        raise ValueError(f"Cached spec {target} failed size/hash validation")
     return target
 
 
@@ -117,10 +158,11 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
-def parse_headings(html_path: Path) -> List[Tuple[str, str, str, lxml.html.HtmlElement]]:
+def parse_headings(html_path: Path) -> List[Tuple[str, str, str, "object"]]:
     """Returns list of (secno, anchor_id, title_text, heading_element)."""
+    lxml_html = _lxml_html()
     raw = html_path.read_text(encoding="utf-8", errors="replace")
-    doc = lxml.html.fromstring(raw)
+    doc = lxml_html.fromstring(raw)
     results = []
     for h in doc.xpath("//h2 | //h3 | //h4 | //h5 | //h6"):
         anchor_id = h.get("id") or ""
@@ -153,7 +195,7 @@ def cmd_toc(args: argparse.Namespace) -> int:
     return 0
 
 
-def extract_section_text(heading_el: lxml.html.HtmlElement) -> str:
+def extract_section_text(heading_el: "object") -> str:
     tag_level = int(heading_el.tag[1])
     lines = []
     header_text = " ".join(heading_el.text_content().split()).rstrip("¶").strip()
@@ -194,7 +236,7 @@ def cmd_section(args: argparse.Namespace) -> int:
     headings = parse_headings(path)
     query = args.query.strip().lstrip("#").lower()
 
-    matched: Optional[lxml.html.HtmlElement] = None
+    matched: Optional[object] = None
     # 1. Exact match on secno or anchor_id
     for secno, anchor_id, title, h in headings:
         if secno.lower() == query or anchor_id.lower() == query:
@@ -217,8 +259,9 @@ def cmd_section(args: argparse.Namespace) -> int:
 
 def cmd_errors(args: argparse.Namespace) -> int:
     path = ensure_cached("parsing.html")
+    lxml_html = _lxml_html()
     raw = path.read_text(encoding="utf-8", errors="replace")
-    doc = lxml.html.fromstring(raw)
+    doc = lxml_html.fromstring(raw)
     codes = []
     for dt in doc.xpath('//dfn[starts-with(@id, "parse-error-")]'):
         code = dt.text_content().strip()
