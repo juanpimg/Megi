@@ -10,12 +10,12 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	611	ci	F3	ci-final-fix	2026-11-26	covered	CI-PILLOW	re-read Docs job: install lxml and Pillow for tools visual_parity tests
+.github/workflows/ci.yml	650	ci	F3	ci-final-fix	2026-11-26	covered	CI-PILLOW	re-read Docs job: install lxml and Pillow for tools visual_parity tests
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/fuzz-nightly.yml	387	ci	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
-.github/workflows/fuzz-soak.yml	113	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
+.github/workflows/fuzz-nightly.yml	444	ci	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
+.github/workflows/fuzz-soak.yml	136	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/issue-title-labeler.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/labeler.yml	18	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/release.yml	267	ci	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	verify job + keyless cosign signing reviewed
@@ -67,27 +67,27 @@ crates/browser/src/a11y_live_tests.rs	78	src	F2	nav-merge	2026-11-24	covered	#up
 crates/browser/src/chrome.rs	476	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/address_bar.rs	427	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/address_bar_paint.rs	306	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/drawing.rs	341	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/drawing.rs	305	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/dropdown.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/icons.rs	255	src	F2	jp	2026-11-26	covered	#2290	
 crates/browser/src/chrome/menus.rs	451	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/native_widget_overlay.rs	192	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/chrome/native_widgets.rs	240	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
-crates/browser/src/chrome/navigation.rs	129	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/navigation.rs	150	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/rail.rs	431	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/shell.rs	481	src	F2	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 453-line dark shell paint module; integrated chrome.rs draw_chrome branches
+crates/browser/src/chrome/shell.rs	371	src	F2	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 453-line dark shell paint module; integrated chrome.rs draw_chrome branches
 crates/browser/src/chrome/status_bar.rs	37	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tab_strip.rs	438	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/address_bar.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/compact.rs	103	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/dropdown.rs	107	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/chrome/tests/menus.rs	157	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/chrome/tests/mod.rs	283	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
+crates/browser/src/chrome/tests/mod.rs	366	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/chrome/tests/paint.rs	472	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/rail.rs	287	src	F2	jp	2026-11-25	covered	#2290	Phase 1 visual rail: read layout, hit-testing, paint and legacy-pixel parity paths
 crates/browser/src/chrome/tests/tabs.rs	109	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/chrome/tests/tokens.rs	122	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/chrome/tokens.rs	430	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/chrome/tokens.rs	447	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/cli.rs	22	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/cli/args.rs	219	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/cli/finish.rs	252	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
@@ -123,8 +123,8 @@ crates/browser/src/forms/model.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/browser/src/forms/submit.rs	174	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/forms/tests.rs	499	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
 crates/browser/src/forms/widget.rs	52	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/src/headless.rs	431	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
-crates/browser/src/headless/chrome_compact.rs	145	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
+crates/browser/src/headless.rs	433	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
+crates/browser/src/headless/chrome_compact.rs	147	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
 crates/browser/src/history.rs	391	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/i18n.rs	264	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read En/Es: phase-note replaced by toggle-note
 crates/browser/src/images.rs	182	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -185,20 +185,21 @@ crates/browser/src/webdriver.rs	316	src	F2	m7-webdriver-bidi	2026-11-25	covered	
 crates/browser/src/webdriver/browsing_context.rs	168	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
 crates/browser/src/webdriver/input.rs	179	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
 crates/browser/src/webdriver/script.rs	106	src	F2	m7-webdriver-bidi	2026-11-25	covered	M7/WebDriverBiDi	
-crates/browser/src/window.rs	230	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/window.rs	232	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/accessibility.rs	293	src	F2	juanpimg	2026-11-20	covered	upstream #a11y winit adapter	read before marking; merged from main
-crates/browser/src/window/desktop.rs	346	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
+crates/browser/src/window/desktop.rs	350	src	F2	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/src/window/downloads.rs	136	src	F2	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/browser/src/window/events.rs	431	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/form_controls.rs	447	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	Re-read form-patch settings toggle path
-crates/browser/src/window/frontend.rs	265	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
-crates/browser/src/window/input.rs	461	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
-crates/browser/src/window/keyboard.rs	448	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
-crates/browser/src/window/presentation.rs	490	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
+crates/browser/src/window/frontend.rs	267	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
+crates/browser/src/window/input.rs	455	src	F2	jp	2026-11-25	covered	#2290	Re-read after Fase 1b compile fixes
+crates/browser/src/window/keyboard.rs	453	src	F2	juanpimg	2026-11-24	covered	#1722	IME composing flag lifecycle + KeyboardInput guard
+crates/browser/src/window/presentation.rs	492	src	F2	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
 crates/browser/src/window/save_as.rs	273	src	F2	juanpimg	2026-11-20	covered	N/A	visual Save-as dialog from main commit d7af9f8
 crates/browser/src/window/settings/chrome_mode.rs	157	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/settings/mod.rs	46	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
 crates/browser/src/window/settings/rail_state.rs	117	src	F2	lead	2026-11-25	covered	UI-PHASE3-SETTINGS-MERGE	read during profiler integration after settings module split
+crates/browser/src/window/shell_input.rs	80	src	F2	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe/WebGL scale merge review
 crates/browser/src/window/shortcuts.rs	250	src	F2	jp	2026-11-25	covered	#2290	Phase 0 centralised shell shortcut registry; parity tests
 crates/browser/src/window/tests/chrome_mode.rs	128	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/browser/src/window/tests/mod.rs	486	src	F2	integration	2026-11-25	covered	#2295	read after rebase
@@ -366,7 +367,7 @@ crates/css/src/tokenizer/chunk3.rs	9	src	F2	wave-max-mod	2026-11-19	covered	#max
 crates/css/src/transform.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/transform_origin.rs	97	src	F2	juanpimg	2026-11-20	covered	#1933,#1934	CSS transform-origin module from PR 2052
 crates/css/src/user_agent.rs	28	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/css/src/user_agent/chunk1.rs	410	src	F2	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
+crates/css/src/user_agent/chunk1.rs	440	src	F2	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/css/src/user_agent/chunk2.rs	269	src	F2	lead	2026-11-26	covered	REMOTE-GATES-46	re-read after min-width assertion change; test verified (1 passed)
 crates/css/tests/background_clip_prefixed.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/tests/border_spacing_panic.rs	29	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
@@ -682,7 +683,7 @@ crates/js/src/canvas/ops.rs	201	src	F2	arch-agent	2026-11-25	covered	ADR-006	Rea
 crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/state.rs	328	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/canvas/tests.rs	172	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
-crates/js/src/canvas/webgl.rs	469	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: buffer flags, attrib capture/delete, POINTS reads buffer with vertices fallback
+crates/js/src/canvas/webgl.rs	471	src	F2	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/js/src/canvas/webgl/attrib.rs	135	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Read in full: FLOAT attribute state, validation, strided LE reads, 2 unit tests
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -732,7 +733,7 @@ crates/js/src/runtime/gap_apis/nodes.rs	287	src	F2	wave-max-mod	2026-11-19	cover
 crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_b.js	923	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/gap_apis/slots.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/webgl.rs	270	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: FLOAT constant and native methods via CanvasOps only
+crates/js/src/runtime/gap_apis/webgl.rs	272	src	F2	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/js/src/runtime/gap_apis/webgl_buffers.rs	219	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: Array/BufferSource upload, deleteBuffer, vertexAttribPointer, -1 stub
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -805,7 +806,7 @@ crates/js/tests/fetch_tests.rs	363	test	F1	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/tests/fixtures/jquery-3.5.1.min.js	1	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/form_tests.rs	295	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/gap_apis.rs	11	test	F1	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
-crates/js/tests/gap_apis/dom.rs	189	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
+crates/js/tests/gap_apis/dom.rs	209	test	F1	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/js/tests/gap_apis/helpers.rs	10	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/gap_apis/misc.rs	393	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
 crates/js/tests/host_reentrancy_new.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -822,7 +823,7 @@ crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/webgl_tests.rs	144	test	F1	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: two buffer-fed points plus backward-compat vertices tests
+crates/js/tests/webgl_tests.rs	182	test	F1	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/js/tests/websocket_api_tests.rs	370	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers.rs	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers/basic.rs	194	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
@@ -1191,7 +1192,7 @@ crates/render/src/decode.rs	60	src	F2	lead	2026-11-26	covered	UI-FAVICON-LINEBYL
 crates/render/src/devtools.rs	52	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: isolated and page-bound Runtime.evaluate bridges
 crates/render/src/dom_summary.rs	155	src	F2	opencode-agent	2026-11-24	covered	#2269	read line by line: bounded body-scoped DOM summary
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/frames.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/frames.rs	423	src	F2	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	re-read after iframe scale fix
 crates/render/src/images.rs	43	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images/load.rs	318	src	F2	integrate-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn,WP-5.11	re-read after warm-pool fix and inline-SVG spacer exemption
 crates/render/src/images/selection.rs	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1242,7 +1243,7 @@ crates/render/tests/dialog_tests.rs	78	test	F1	wave-max-mod	2026-11-19	covered	#
 crates/render/tests/document_cookie_tests.rs	113	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/dom_observability_tests.rs	171	test	F1	jsfree-fix	2026-11-24	covered	CI-JSFREE-DOM-OBS	read line by line: CLI JSON observability tests
 crates/render/tests/dpr_raster_tests.rs	52	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
-crates/render/tests/e2e_task_fixtures.rs	162	test	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+crates/render/tests/e2e_task_fixtures.rs	166	test	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 crates/render/tests/encode_png_tests.rs	62	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/error_page_tests.rs	39	test	F1	docs-cleanup	2026-11-24	covered	#2255	
 crates/render/tests/event_loop_tests/budgets.rs	219	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1254,7 +1255,7 @@ crates/render/tests/event_loop_tests/timers.rs	63	test	F1	wave-max-mod	2026-11-1
 crates/render/tests/fetch_stream_tests.rs	51	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/fetch_tests.rs	92	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/filter_fixture_tests.rs	117	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/fixture_smoke.rs	59	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/fixture_smoke.rs	72	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/form_post_tests.rs	204	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/forms/control_tree.rs	109	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/fixtures/input_sizing.html	21	test	F1	input-sizing-fix	2026-11-26	covered	#2247	re-read for form-control sizing fix
@@ -1271,11 +1272,14 @@ crates/render/tests/forms/input_value.rs	223	test	F1	input-value-paint-fix	2026-
 crates/render/tests/forms/main.rs	10	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/frame_scale_tests.rs	87	test	F1	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe scale merge review
+crates/render/tests/golden/hn_chrome_reference.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/golden/rust_nav.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/render/tests/hn_arrow_tests.rs	69	test	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
 crates/render/tests/hn_title_mojibake_tests.rs	115	test	F1	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	read and verified in HN title regression
+crates/render/tests/hn_visual_parity_tests.rs	69	test	F1	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe/WebGL scale merge review
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1289,7 +1293,7 @@ crates/render/tests/import_media_tests/media.rs	87	test	F1	wave-max-mod	2026-11-
 crates/render/tests/import_media_tests/showcase.rs	94	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/inline_svg_tests.rs	436	test	F1	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
 crates/render/tests/jpeg_gif_tests.rs	69	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/tests/js_corpus_tests.rs	228	test	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	offline corpus with binding/semantic gate reviewed
+crates/render/tests/js_corpus_tests.rs	249	test	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	offline corpus with binding/semantic gate reviewed
 crates/render/tests/js_geometry_tests.rs	72	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/js_providers_tests.rs	330	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/mask_tests.rs	75	test	F1	lead	2026-11-25	covered	CSS-MASK-IMAGE	Read 75-line end-to-end tests; green
@@ -1329,6 +1333,7 @@ crates/render/tests/text_overflow_tests.rs	124	test	F1	juanpimg	2026-11-20	cover
 crates/render/tests/tla_tests.rs	49	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webfont_status_tests.rs	50	test	F1	juanpimg	2026-11-24	covered	#2244	Integration test: HTTP 404 webfont body must be rejected with a status warning before WOFF2 decoding
 crates/render/tests/webfont_tests.rs	184	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/webgl_tests.rs	36	test	F1	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe/WebGL scale merge review
 crates/render/tests/webp_lossy_tests.rs	100	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/webp_tests.rs	93	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/websocket_e2e_tests.rs	476	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1456,8 +1461,8 @@ docs/CANVAS-OPS-BOUNDARY.md	61	docs	F3	arch-agent	2026-11-25	covered	ADR-006	ADR
 docs/CONTRIBUTOR-ONBOARDING.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/DESLOP-AUDIT.md	76	docs	F3	opencode-agent	2026-11-26	covered	#audit	re-read after adding doc checker
 docs/DPR-RASTER-BOUNDARY.md	79	docs	F3	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
-docs/FUZZING.md	306	docs	F3	jp	2026-11-25	covered	#2290	documentation aligned
-docs/GAPS.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
+docs/FUZZING.md	330	docs	F3	jp	2026-11-25	covered	#2290	documentation aligned
+docs/GAPS.md	25	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/GETTING-STARTED.md	99	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ISOLATION-STRATEGY.md	51	docs	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	ADR-004 phased per-site isolation strategy doc from main
 docs/JAVASCRIPT-STRATEGY.md	259	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
@@ -1650,6 +1655,7 @@ fuzz/Cargo.toml	266	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	three new 
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/mode2-oversize	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/body_stream/mode3-oversize	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/pairs	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/small	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/three	0	exempt	-			exempt		not read line by line: exempt
@@ -1674,6 +1680,8 @@ fuzz/corpus/compression/zlib-hello.bin	0	exempt	-			exempt		not read line by lin
 fuzz/corpus/container_queries/container.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/named.css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/container_queries/queries.txt	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/cookie_parse/future-date	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/cookie_parse/past-date	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/cookie_parse/rfc6265-basic	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/css_animation/keyframes-and-transition	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/css_parse/at-rules.css	0	exempt	-			exempt		not read line by line: exempt
@@ -1756,7 +1764,25 @@ fuzz/corpus/image_decode/palette8.png	0	exempt	-			exempt		not read line by line
 fuzz/corpus/image_decode/photo.webp	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/image_decode/progressive.jpg	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/image_decode/rgba8.png	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/disallowed-scheme.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/future-generation.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/invalid-png.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/oversized-dimension.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/oversized-height.json	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/ipc_response/seed0	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/seed_baseline_max_equal	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/seed_gen2	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/seed_gen_max	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/seed_gen_max_minus_one	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/stale-generation.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_response/url-payload-over-limit.json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/framed-bad-magic	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/framed-truncated-header	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/framed-truncated-payload	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/framed-unknown-version	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/framed-valid-request	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/legacy-framed-json	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/ipc_wire/legacy-truncated-length	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/ipc_wire/seed0	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_eval/arithmetic.js	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/js_eval/dom-write.js	0	exempt	-			exempt		not read line by line: exempt
@@ -1780,8 +1806,10 @@ fuzz/corpus/layout_resolve/grid	0	exempt	-			exempt		not read line by line: exem
 fuzz/corpus/layout_tree/basic	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/layout_tree/with-css	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_file_url/seed0	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/future-date	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/http-date	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/mime-bytes	0	exempt	-			exempt		not read line by line: exempt
+fuzz/corpus/net_surface/past-date	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/range	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_surface/set-cookie	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/net_url/absolute-http.txt	0	exempt	-			exempt		not read line by line: exempt
@@ -1823,15 +1851,15 @@ fuzz/corpus/webp/webp_lossy.webp	0	exempt	-			exempt		not read line by line: exe
 fuzz/corpus/woff2_decode/huge_directory_length.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/open_sans.woff2	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/woff2_decode/truncated.woff2	0	exempt	-			exempt		not read line by line: exempt
-fuzz/fuzz_targets/body_stream.rs	118	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/body_stream.rs	130	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/charset.rs	69	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/compression.rs	24	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/container_queries.rs	94	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/cookie_parse.rs	55	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	RFC6265 lifecycle fuzz target reviewed
+fuzz/fuzz_targets/cookie_parse.rs	57	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	RFC6265 lifecycle fuzz target reviewed
 fuzz/fuzz_targets/css_animation.rs	60	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-FUZZ-31	CSS animation runtime fuzz target reviewed
 fuzz/fuzz_targets/css_parse.rs	41	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/dom_mutate.rs	107	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/dom_tree.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/dom_tree.rs	71	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/exif_parse.rs	30	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/font_decode.rs	15	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/fonts_shape.rs	37	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -1840,14 +1868,14 @@ fuzz/fuzz_targets/hpack_decode.rs	74	fuzz	F1	waveF1	2026-11-17	covered	#1421-#14
 fuzz/fuzz_targets/html_parse.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/http_head.rs	12	fuzz	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 fuzz/fuzz_targets/image_decode.rs	62	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/ipc_response.rs	14	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
+fuzz/fuzz_targets/ipc_response.rs	77	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
 fuzz/fuzz_targets/ipc_wire.rs	16	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
-fuzz/fuzz_targets/js_eval.rs	330	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/js_eval.rs	389	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/js_module.rs	100	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/fuzz_targets/layout_resolve.rs	39	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/layout_resolve.rs	48	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/layout_tree.rs	24	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/net_file_url.rs	31	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	
-fuzz/fuzz_targets/net_surface.rs	63	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
+fuzz/fuzz_targets/net_surface.rs	64	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/net_url.rs	44	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/paint_display_list.rs	35	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/render_pipeline.rs	87	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
@@ -1857,7 +1885,7 @@ fuzz/fuzz_targets/svg_path.rs	57	fuzz	F1	recon-metrics	2026-11-24	covered	WP-M3-
 fuzz/fuzz_targets/text_boundary.rs	65	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/webp.rs	71	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
 fuzz/fuzz_targets/woff2_decode.rs	26	fuzz	F1	waveF1	2026-11-17	covered	#1421-#1429	
-fuzz/src/lib.rs	181	fixture	F1	lead	2026-11-17	covered	shared fuzz helpers, read	read in the F3/F4 pass
+fuzz/src/lib.rs	248	fixture	F1	lead	2026-11-17	covered	shared fuzz helpers, read	read in the F3/F4 pass
 rust-toolchain.toml	3	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 tests/fixtures/chrome/compact.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/chrome/ui/captures/hn.png	0	binary	-			exempt		not read line by line: binary
@@ -1867,7 +1895,8 @@ tests/fixtures/chrome/ui/hn.png	0	binary	-			exempt		not read line by line: bina
 tests/fixtures/chrome/ui/rust.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/chrome/ui/wikipedia.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/e2e/article_reader.html	25	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
-tests/fixtures/e2e/checkout.html	26	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tests/fixtures/e2e/checkout.html	27	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tests/fixtures/e2e/forecast_data.json	3	fixture	F1	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe/WebGL scale merge review
 tests/fixtures/e2e/news_filter.html	35	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/profile_edit.html	28	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/search_query.html	40	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
@@ -1875,7 +1904,7 @@ tests/fixtures/e2e/shopping_cart.html	35	fixture	F1	site-corpus	2026-11-24	cover
 tests/fixtures/e2e/sign_in.html	30	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/theme_settings.html	27	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/e2e/todo_list.html	36	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
-tests/fixtures/e2e/weather_lookup.html	29	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
+tests/fixtures/e2e/weather_lookup.html	35	fixture	F1	site-corpus	2026-11-24	covered	WP-M1-E2E-CORPUS	
 tests/fixtures/js_corpus/example_com_s.html	35	fixture	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	four offline regression fixtures reviewed
 tests/fixtures/js_corpus/jquery_like.html	34	fixture	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	four offline regression fixtures reviewed
 tests/fixtures/js_corpus/module_cycle.html	14	fixture	F1	recon-js	2026-11-24	covered	WP-M1-JS-CORPUS	four offline regression fixtures reviewed
@@ -1889,10 +1918,11 @@ tests/fixtures/real-sites/example.html	1	fixture	F1	waveF1	2026-11-17	covered	#1
 tests/fixtures/real-sites/hn.html	3	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/real-sites/rust.html	390	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/real-sites/wikipedia.html	680	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/FIXTURE-INDEX.txt	126	docs	F3	lead	2026-11-27	covered	ENGINE-IFRAME-SCALE	read during engine iframe/WebGL scale merge review
 tests/fixtures/render/OFL-OpenSans.txt	92	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/OpenSans-Regular-latin-corrupt.woff2	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/OpenSans-Regular-latin.woff2	0	binary	-			exempt		not read line by line: binary
-tests/fixtures/render/README.md	139	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/README.md	143	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/animation_time.html	5	fixture	F1	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tests/fixtures/render/aspect_ratio.html	18	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/assets/bg_photo.jpg	0	binary	-			exempt		not read line by line: binary
@@ -2026,7 +2056,7 @@ tests/fixtures/render/object_fit.html	27	fixture	F1	waveF1	2026-11-17	covered	#1
 tests/fixtures/render/raf_animation.html	33	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/rust_nav.html	85	fixture	F1	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
 tests/fixtures/render/script_errors.html	22	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
-tests/fixtures/render/showcase/README.md	55	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
+tests/fixtures/render/showcase/README.md	57	docs	F3	waveF1	2026-11-17	covered	#1431-#1439	
 tests/fixtures/render/showcase/assets/logo.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/showcase/assets/tile.png	0	binary	-			exempt		not read line by line: binary
 tests/fixtures/render/showcase/css/print-sheet.css	8	fixture	F1	waveF1	2026-11-17	covered	#1431-#1439	
@@ -2434,7 +2464,7 @@ tools/check_docs_links.py	138	tool	F3	jp	2026-11-25	covered	#2290
 tools/check_fixture_hashes.py	50	tool	F3	wave2	2026-11-18	covered	#1618-#1691	Wave 2 line-by-line audit; docs/audit/findings/wave2/
 tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 50-line compile-free gate; validates fixture links
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
-tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
+tools/check_milestone.py	138	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/check_no_compile_gates.py	162	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
@@ -2471,13 +2501,13 @@ tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290
 tools/dev.sh	66	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/megi.sh	72	tool	F3	lead	2026-11-25	covered	#2290 remote docs refresh	Read 72-line shell helper after remote edit
 tools/png_check.py	369	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/progress_render.py	458	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
-tools/progress_stats.py	280	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/real_site_check.py	362	tool	F3	jp	2026-11-25	covered	#2290	
+tools/progress_render.py	457	tool	F3	jp	2026-11-25	covered	#2290	re-read after manifest duplicate-wpt fix
+tools/progress_stats.py	322	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/real_site_check.py	380	tool	F3	jp	2026-11-25	covered	#2290	
 tools/render_fixture.sh	130	tool	F3	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGETS	
 tools/test262_gate.py	208	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
-tools/test262_report.py	303	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
+tools/test262_report.py	307	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test262_stats.py	26	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read after main merge
 tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
@@ -2499,7 +2529,7 @@ tools/test_check_doc_tool_refs.py	110	tool	F3	lead	2026-11-26	covered	REMOTE-GAT
 tools/test_check_docs_links.py	93	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 70-line unit tests for fixture link gate
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
-tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
+tools/test_check_milestone.py	260	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
 tools/test_check_no_compile_gates.py	78	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	re-read full file after remote agents-constraints gate merge (49 gates); gate count assertion updated to 49/49
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
@@ -2532,7 +2562,7 @@ tools/test_check_wp_schema_docs.py	86	tool	F3	lead	2026-11-26	covered	MILESTONE-
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/test_check_wpt_manifest_files.py	103	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
 tools/test_check_wpt_report_md.py	85	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; unittest module registered
-tools/test_ci_gate.py	150	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
+tools/test_ci_gate.py	320	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
@@ -2542,15 +2572,15 @@ tools/test_image_docs.py	59	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-r
 tools/test_inspector.py	291	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/test_perf_measurer_doc.py	61	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_png_check.py	138	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/test_real_site_check.py	510	tool	F3	jp	2026-11-25	covered	#2290	
+tools/test_real_site_check.py	572	tool	F3	jp	2026-11-25	covered	#2290	
 tools/test_release_workflow.py	73	tool	F3	recon-metrics	2026-11-24	covered	WP-M0-RELEASE-VERIFY-SIGN	static workflow test reviewed
 tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotation regression tests
-tools/test_test262_report.py	132	tool	F3	subagent	2026-11-26	covered		read new unit tests
+tools/test_test262_report.py	169	tool	F3	subagent	2026-11-26	covered		read new unit tests
 tools/test_test_inspector.py	37	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_update_coverage.py	776	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_vendor_wpt.py	265	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/test_visual_parity.py	107	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool
 tools/test_visual_parity_report.py	90	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for report generator
 tools/test_whatwg_spec.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
@@ -2559,12 +2589,12 @@ tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after 
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
 tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
 tools/test_wpt_gate.py	193	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding subtest validation regression test
-tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
+tools/test_wpt_report.py	79	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
 tools/update_bench_baseline.py	180	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
 tools/update_coverage.py	653	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/update_progress.py	348	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	472	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/vendor_wpt.py	508	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
 tools/visual_parity.py	93	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: PNG parity comparison tool
 tools/visual_parity_report.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: Markdown/JSON parity report generator
 tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
@@ -2573,4 +2603,4 @@ tools/wp_generate.py	479	tool	F3	jp	2026-11-24	covered	#2290	re-read after singl
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
 tools/wpt_gate.py	220	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding string test/subtest validation
-tools/wpt_report.py	254	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check
+tools/wpt_report.py	282	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check
