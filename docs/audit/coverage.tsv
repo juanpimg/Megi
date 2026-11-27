@@ -250,7 +250,7 @@ crates/core/src/geometry.rs	155	src	F2	wave-max-mod	2026-11-19	covered	#maximal-
 crates/core/src/iter.rs	125	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/lib.rs	301	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/mutation.rs	268	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/core/src/node.rs	332	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/src/node.rs	350	src	F2	roadmap-analysis	2026-11-27	covered	#2317	Re-read: qualified_name_matches handles prefix:localName; get_attribute/has_attribute/remove_attribute no longer filter Namespace::None
 crates/core/src/query/clone.rs	118	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/lookup.rs	233	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/src/query/mod.rs	12	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -269,6 +269,7 @@ crates/core/src/validation.rs	335	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/core/tests/conformance_r226.rs	75	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/tests/conformance_r233.rs	138	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/core/tests/gap_api.rs	97	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/core/tests/namespaced_attributes.rs	52	test	F1	roadmap-analysis	2026-11-27	covered	#2317	Re-read: qualified-name lookup for XLink xlink:href and HTML case-insensitivity
 crates/css/Cargo.toml	18	manifest	F3	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/css/src/animation/chunk1.rs	400	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -752,7 +753,7 @@ crates/js/src/runtime/node_methods/attributes.rs	119	src	F2	wave-max-mod	2026-11
 crates/js/src/runtime/node_methods/dialog.rs	191	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/forms.rs	336	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_methods/mutations.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/node_methods/properties.rs	377	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/node_methods/properties.rs	378	src	F2	roadmap-analysis	2026-11-27	covered	#2317	Re-read: node_remove_attribute now delegates to element.remove_attribute by qualified name
 crates/js/src/runtime/node_methods/tables.rs	261	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/src/runtime/node_methods/validation.rs	397	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/node_wrappers.rs	489	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
@@ -816,6 +817,7 @@ crates/js/tests/intl_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 crates/js/tests/jquery_tests.rs	124	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/js_tests.rs	371	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
+crates/js/tests/namespaced_attributes_tests.rs	24	test	F1	roadmap-analysis	2026-11-27	covered	#2317	Re-read: SVG xlink:href visible through getAttribute/hasAttribute/removeAttribute bridge
 crates/js/tests/nodecollection_tests.rs	40	test	F1	roadmap-analysis	2026-11-27	covered	#2337	Re-read: class_and_selector_queries_expose_node_list_api asserts item(0)/forEach/readonly length on both query APIs
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
