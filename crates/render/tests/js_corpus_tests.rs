@@ -213,7 +213,11 @@ fn wikipedia_null_conversion_has_no_console_error() {
 #[test]
 fn jquery_like_chain_produces_the_exact_observable_result() {
     let output = render_fixture("jquery_like.html");
-    assert_eq!(output.stats.scripts_failed, 0, "{:?}", output.stats.warnings);
+    assert_eq!(
+        output.stats.scripts_failed, 0,
+        "{:?}",
+        output.stats.warnings
+    );
     assert_eq!(output.stats.console_errors, 0, "{:?}", output.stats.console);
     assert_eq!(result_text(&output, "result"), "pass:2:yes");
 }
@@ -221,7 +225,11 @@ fn jquery_like_chain_produces_the_exact_observable_result() {
 #[test]
 fn module_cycle_produces_the_exact_observable_result() {
     let output = render_fixture("module_cycle.html");
-    assert_eq!(output.stats.scripts_failed, 0, "{:?}", output.stats.warnings);
+    assert_eq!(
+        output.stats.scripts_failed, 0,
+        "{:?}",
+        output.stats.warnings
+    );
     assert_eq!(output.stats.console_errors, 0, "{:?}", output.stats.console);
     assert_eq!(result_text(&output, "result"), "pass:3");
 }
