@@ -181,7 +181,12 @@ pub(crate) fn run_due_timers(
                     })
                     .unwrap_or_default()
             };
-            let call_result = callback.call(&JsValue::undefined(), &arguments, context);
+            // WHATWG HTML §8.1.7.4 (timers) and §12.4.4.3 (animation frame callbacks):
+            // the callback's this value is the relevant global object (Window), never
+            // undefined. Strict-mode callbacks (#2344) observe the host-passed `this`
+            // directly, so passing undefined leaks to script.
+            let this_arg = JsValue::from(context.global_object());
+            let call_result = callback.call(&this_arg, &arguments, context);
             if interval.is_none() {
                 release_timer_slots(context, id);
             }
