@@ -153,7 +153,7 @@ pub(crate) fn document_get_elements_by_class_name(
         host.document.get_elements_by_class_name(&class)
     })
     .unwrap_or_default();
-    wrap_list(context, nodes)
+    node_list(context, nodes)
 }
 
 pub(crate) fn document_query_selector(
@@ -179,7 +179,7 @@ pub(crate) fn document_query_selector_all(
         megi_css::query::query_selector_all(&host.document, &selector)
     })
     .unwrap_or_default();
-    wrap_list(context, nodes)
+    node_list(context, nodes)
 }
 
 pub(crate) fn document_create_document_fragment(
