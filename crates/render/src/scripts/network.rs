@@ -7,7 +7,9 @@ use megi_net::{ResourceLoader, Scheme, Url};
 use super::modules::{file_fetch_allowed, load_worker_source};
 use super::types::{ScriptingHostContext, ScriptingLimits};
 
-/// Installs the network-backed providers (inside the worker-enabled gate).
+/// Installs the network-backed providers. `fetch`/Workers stay inside the worker gate;
+/// `WebSocket` is installed for every document (WHATWG WebSockets: the constructor is
+/// available to ordinary pages, independent of worker support).
 pub(crate) fn install_network_providers(
     runtime: &mut megi_js::JsRuntime,
     document_url: &Url,
@@ -17,6 +19,49 @@ pub(crate) fn install_network_providers(
     // #2311: bound live WebSockets for every document, even in the no-worker mode,
     // before any provider can open a socket and start its receive thread.
     runtime.set_max_websockets(limits.max_websockets);
+    // #1534: connect the JS WebSocket class to the real net WebSocket client. A pump
+    // thread handles receives; the transport is polled by the runtime's event loop. This
+    // is independent of worker support (WebSocket works in ordinary pages) — #2375.
+    let ws_options = host.fetch_options.clone();
+    let ws_no_network = host.no_network;
+    let ws_csp = host.csp.clone();
+    let ws_doc_url = document_url.clone();
+    runtime.set_websocket_provider(Arc::new(move |raw_url| {
+        if ws_no_network {
+            return Err(megi_js::JsError::Runtime(format!(
+                "WebSocket blocked: --no-network prevents opening {raw_url}"
+            )));
+        }
+        // #1641 & #1644: reject whitespace explicitly and match ws:// / wss://
+        // case-insensitively without altering path/query/userinfo/fragment case.
+        if raw_url.chars().any(char::is_whitespace) {
+            return Err(megi_js::JsError::Runtime(format!(
+                "WebSocket URL {raw_url}: surrounding or embedded whitespace"
+            )));
+        }
+        let Some((secure_ws, _)) = megi_net::websocket::strip_ws_scheme(raw_url) else {
+            return Err(megi_js::JsError::Runtime(format!(
+                "WebSocket URL {raw_url}: expected ws:// or wss://"
+            )));
+        };
+        let policy_url = megi_net::websocket::parse_ws_url(raw_url).map_err(|error| {
+            megi_js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
+        })?;
+        if ws_doc_url.scheme() == Scheme::Https && !secure_ws {
+            return Err(megi_js::JsError::Runtime(format!(
+                "Mixed content blocks insecure WebSocket {raw_url} from https document"
+            )));
+        }
+        if let Some(policy) = &ws_csp
+            && !policy.allows_websocket(&policy_url, secure_ws, &ws_doc_url)
+        {
+            return Err(megi_js::JsError::Runtime(format!(
+                "Content-Security-Policy: connect-src blocks WebSocket {raw_url}"
+            )));
+        }
+        let transport = crate::ws_bridge::LiveWebSocketTransport::connect(raw_url, &ws_options)?;
+        Ok(Box::new(transport) as Box<dyn megi_js::host::WebSocketTransport>)
+    }));
     if host.enable_workers {
         // R203: fetch() provider backed by the render's effective FetchOptions. Scripts run
         // synchronously; the Promise settles when the host drains microtasks. CORS policy is
@@ -193,50 +238,6 @@ pub(crate) fn install_network_providers(
                 }
             }));
         }
-        // #1534: connect the JS WebSocket class to the real net WebSocket client. A pump
-        // thread handles receives; the transport is polled by the runtime's event loop. This
-        // is independent of worker support (WebSocket works in ordinary pages).
-        let ws_options = host.fetch_options.clone();
-        let ws_no_network = host.no_network;
-        let ws_csp = host.csp.clone();
-        let ws_doc_url = document_url.clone();
-        runtime.set_websocket_provider(Arc::new(move |raw_url| {
-            if ws_no_network {
-                return Err(megi_js::JsError::Runtime(format!(
-                    "WebSocket blocked: --no-network prevents opening {raw_url}"
-                )));
-            }
-            // #1641 & #1644: reject whitespace explicitly and match ws:// / wss://
-            // case-insensitively without altering path/query/userinfo/fragment case.
-            if raw_url.chars().any(char::is_whitespace) {
-                return Err(megi_js::JsError::Runtime(format!(
-                    "WebSocket URL {raw_url}: surrounding or embedded whitespace"
-                )));
-            }
-            let Some((secure_ws, _)) = megi_net::websocket::strip_ws_scheme(raw_url) else {
-                return Err(megi_js::JsError::Runtime(format!(
-                    "WebSocket URL {raw_url}: expected ws:// or wss://"
-                )));
-            };
-            let policy_url = megi_net::websocket::parse_ws_url(raw_url).map_err(|error| {
-                megi_js::JsError::Runtime(format!("WebSocket URL {raw_url}: {error}"))
-            })?;
-            if ws_doc_url.scheme() == Scheme::Https && !secure_ws {
-                return Err(megi_js::JsError::Runtime(format!(
-                    "Mixed content blocks insecure WebSocket {raw_url} from https document"
-                )));
-            }
-            if let Some(policy) = &ws_csp
-                && !policy.allows_websocket(&policy_url, secure_ws, &ws_doc_url)
-            {
-                return Err(megi_js::JsError::Runtime(format!(
-                    "Content-Security-Policy: connect-src blocks WebSocket {raw_url}"
-                )));
-            }
-            let transport =
-                crate::ws_bridge::LiveWebSocketTransport::connect(raw_url, &ws_options)?;
-            Ok(Box::new(transport) as Box<dyn megi_js::host::WebSocketTransport>)
-        }));
         let worker_allow_file = document_url.is_file();
         let max_worker_bytes = limits.max_script_bytes;
         runtime.set_worker_loader(Arc::new(move |url| {
@@ -306,6 +307,36 @@ mod ws_budget_tests {
                 .count(),
             1,
             "the third open must be capped before the provider: {errors}"
+        );
+    }
+
+    /// #2375: the WebSocket constructor is available to ordinary documents. The render
+    /// provider used to live inside `if host.enable_workers`, so a page with workers
+    /// disabled got "no WebSocket provider". WHATWG WebSockets: the constructor does not
+    /// depend on Worker support. `no_network` makes the installed provider reject with a
+    /// deterministic message instead of opening a real socket.
+    #[test]
+    fn websocket_provider_installed_when_workers_disabled() {
+        let mut runtime = megi_js::JsRuntime::new().expect("runtime");
+        let mut host = ScriptingHostContext::empty();
+        host.enable_workers = false;
+        host.no_network = true;
+        let url = Url::parse("http://example.com/").expect("document url");
+        install_network_providers(&mut runtime, &url, &host, ScriptingLimits::default());
+        runtime
+            .eval(
+                "globalThis.__wsErr = ''; \
+                 var ws = new WebSocket('ws://example.com/sock'); \
+                 ws.onerror = function (e) { __wsErr = e.message; }; \
+                 'started';",
+                "t",
+            )
+            .expect("construct socket");
+        runtime.run_tasks(8).expect("error timers");
+        let error = runtime.eval("__wsErr", "t").expect("error message");
+        assert!(
+            error.contains("--no-network prevents opening"),
+            "the WebSocket provider must be installed with enable_workers=false, got: {error}"
         );
     }
 }
