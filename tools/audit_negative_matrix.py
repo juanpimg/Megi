@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import os
 import platform
+import re
 import subprocess
 import sys
 import tomllib
@@ -64,6 +65,20 @@ def verify_cmd(scenario: Scenario) -> str:
     return COMMAND_TEMPLATE.format(binary=scenario.binary, test_name=scenario.test_name)
 
 
+def defines_test(text: str, name: str) -> bool:
+    """#2449: match an actual Rust test function definition, not a mention.
+
+    Comments, strings, `use path::name`, and call sites can all contain
+    `fn name(`. Anchor the match to a definition at statement level and require
+    a `#[test]` (or `#[tokio::test]`) attribute immediately above it.
+    """
+    pattern = re.compile(
+        rf'(?m)^[ \t]*#\[(?:test|tokio::test)\][ \t]*\r?\n'
+        rf'[ \t]*(?:async[ \t]+)?fn[ \t]+{re.escape(name)}[ \t]*\('
+    )
+    return pattern.search(text) is not None
+
+
 def verify_scenarios() -> str | None:
     """Return an error string if the matrix would cite a non-existing test."""
     if len(SCENARIOS) != 12 or len({s.id for s in SCENARIOS}) != 12:
@@ -74,7 +89,7 @@ def verify_scenarios() -> str | None:
         suite = SUITES / f"{scenario.binary}.rs"
         if not suite.is_file():
             return f"missing test suite: {suite}"
-        if f"fn {scenario.test_name}(" not in suite.read_text(encoding="utf-8"):
+        if not defines_test(suite.read_text(encoding="utf-8"), scenario.test_name):
             return f"invented test: {scenario.binary}::{scenario.test_name}"
     return None
 
@@ -226,6 +241,17 @@ def cmd_check(path: Path) -> int:
         ids = {slot.get("id") for slot in slots}
         if len(ids) != len(slots):
             problems.append(f"{system}: duplicate slot ids")
+        # #2449: the aggregate os.*.status must match the recorded slots; a
+        # hand-edited "pass" cannot hide failing or unsupported slots.
+        statuses = [slot.get("status") for slot in slots]
+        expected = (
+            "pass" if info.get("runner_available") and all(s == "pass" for s in statuses)
+            else "fail" if info.get("runner_available") else "unsupported"
+        )
+        if info.get("status") != expected:
+            problems.append(
+                f"{system}: status {info.get('status')!r} disagrees with slots ({expected})"
+            )
         ids_by_os[system] = ids
         for slot in slots:
             sid = slot.get("id", "<unknown>")

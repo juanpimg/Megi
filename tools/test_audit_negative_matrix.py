@@ -50,9 +50,11 @@ class NegativeMatrixContract(unittest.TestCase):
         for scenario in scenarios:
             suite = SUITES / f"{scenario.binary}.rs"
             self.assertTrue(suite.is_file(), f"missing suite: {suite}")
-            self.assertIn(
-                f"fn {scenario.test_name}(",
-                suite.read_text(encoding="utf-8"),
+            # #2449: a comment or call site mentioning `fn name(` is not a test.
+            self.assertTrue(
+                self.matrix.defines_test(
+                    suite.read_text(encoding="utf-8"), scenario.test_name
+                ),
                 f"invented test: {scenario.binary}::{scenario.test_name}",
             )
 
@@ -63,9 +65,10 @@ class NegativeMatrixContract(unittest.TestCase):
                 self.assertIsNotNone(match, f"{system}/{slot['id']}: bad verify_cmd")
                 suite = SUITES / f"{match.group('binary')}.rs"
                 self.assertTrue(suite.is_file(), f"missing suite: {suite}")
-                self.assertIn(
-                    f"fn {match.group('test')}(",
-                    suite.read_text(encoding="utf-8"),
+                self.assertTrue(
+                    self.matrix.defines_test(
+                        suite.read_text(encoding="utf-8"), match.group("test")
+                    ),
                     f"{system}/{slot['id']}: test does not exist",
                 )
                 self.assertEqual(slot["binary"], match.group("binary"))
@@ -197,6 +200,32 @@ class NegativeMatrixContract(unittest.TestCase):
     def test_check_mode_rejects_threat_drift(self) -> None:
         output = self._check_tampered_matrix("threat", "T9")
         self.assertIn("threat drift", output)
+
+    def test_defines_test_rejects_mentions_without_a_test_attribute(self) -> None:
+        # #2449: the old substring check accepted each of these as a definition.
+        self.assertFalse(self.matrix.defines_test("// fn dotdot_escape_is_rejected()", "dotdot_escape_is_rejected"))
+        self.assertFalse(self.matrix.defines_test('let s = "fn dotdot_escape_is_rejected(";', "dotdot_escape_is_rejected"))
+        self.assertFalse(self.matrix.defines_test("fn dotdot_escape_is_rejected_other() {}", "dotdot_escape_is_rejected"))
+        self.assertFalse(self.matrix.defines_test("fn dotdot_escape_is_rejected() {}", "dotdot_escape_is_rejected"))
+        self.assertTrue(self.matrix.defines_test("#[test]\nfn dotdot_escape_is_rejected() {}", "dotdot_escape_is_rejected"))
+        self.assertTrue(self.matrix.defines_test("#[tokio::test]\n    async fn dotdot_escape_is_rejected() {}", "dotdot_escape_is_rejected"))
+
+    def test_check_mode_rejects_bogus_aggregate_status(self) -> None:
+        text = MATRIX.read_text(encoding="utf-8")
+        broken = text.replace('[os.linux]\nstatus = "pass"', '[os.linux]\nstatus = "unsupported"', 1)
+        with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as handle:
+            handle.write(broken)
+            path = Path(handle.name)
+        try:
+            result = subprocess.run(
+                [sys.executable, "tools/audit_negative_matrix.py", "--check", "--path", str(path)],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 1, output)
+            self.assertIn("status 'unsupported' disagrees with slots", output)
+        finally:
+            path.unlink(missing_ok=True)
 
     def test_generator_stays_within_line_budget(self) -> None:
         source = ROOT / "tools/audit_negative_matrix.py"
