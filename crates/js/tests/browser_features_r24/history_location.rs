@@ -141,3 +141,64 @@ fn history_state_is_capped_like_storage() {
         )
         .expect("a state under the quota is accepted");
 }
+
+#[test]
+fn history_state_urls_must_be_same_origin() {
+    // #2339 / WHATWG HTML §7.8.1: pushState/replaceState throw SecurityError for
+    // a URL whose origin differs from the document's, and must not mutate the URL.
+    let mut runtime = JsRuntime::with_document(
+        Document::new(),
+        "https://example.com/a/b?x=1#frag".to_string(),
+    )
+    .expect("runtime");
+    let actions = Arc::new(Mutex::new(Vec::<HistoryAction>::new()));
+    let seen = Arc::clone(&actions);
+    runtime.set_history_provider(Arc::new(move |action| {
+        seen.lock().expect("lock").push(action)
+    }));
+
+    let script = r#"
+        window.__crossOriginError = '';
+        try { history.pushState({}, '', 'https://other.example/x'); }
+        catch (error) { __crossOriginError = String(error); }
+        window.__urlAfterPush = location.href;
+        try { history.replaceState({}, '', 'https://other.example/y'); }
+        catch (error) { __crossOriginError += '|' + String(error); }
+        [__crossOriginError, __urlAfterPush, location.href].join('~')
+    "#;
+    let outcome = runtime.eval(script, "t").expect("eval");
+    let parts: Vec<&str> = outcome.split('~').collect();
+    assert_eq!(parts.len(), 3, "outcome = {outcome}");
+    assert!(
+        parts[0].contains("SecurityError") && parts[0].contains('|'),
+        "both calls must throw SecurityError: {}",
+        parts[0]
+    );
+    assert_eq!(
+        parts[1], "https://example.com/a/b?x=1#frag",
+        "pushState must not mutate the URL"
+    );
+    assert_eq!(
+        parts[2], "https://example.com/a/b?x=1#frag",
+        "replaceState must not mutate the URL"
+    );
+
+    // A same-origin URL still succeeds and updates the document URL.
+    runtime
+        .eval("history.pushState({}, '', '/c')", "t")
+        .expect("same-origin push");
+    assert_eq!(
+        runtime.eval("location.href", "t").unwrap(),
+        "https://example.com/c"
+    );
+
+    // No cross-origin navigation reached the provider.
+    let actions = actions.lock().expect("lock");
+    assert!(
+        actions.iter().all(|action| matches!(
+            action,
+            HistoryAction::Push { url, .. } if url.as_deref() == Some("https://example.com/c")
+        )),
+        "only the same-origin push may reach the provider: {actions:?}"
+    );
+}

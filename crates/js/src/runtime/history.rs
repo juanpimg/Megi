@@ -7,6 +7,16 @@ use super::*;
 // History, location, Web Storage and MutationObserver (round 24)
 // ---------------------------------------------------------------------------
 
+/// #2339 / WHATWG HTML §7.8.1: `pushState` and `replaceState` must refuse a URL
+/// whose origin differs from the document's. A resolved URL without a scheme is
+/// a path/query/fragment relative to the document, so it inherits its origin.
+fn history_url_is_cross_origin(host_url: &str, resolved: &str) -> bool {
+    if !resolved.contains("://") {
+        return false;
+    }
+    !crate::host::is_same_origin_url(host_url, resolved, false)
+}
+
 pub(crate) fn root_array(context: &mut Context, name: &str, create: bool) -> JsResult<JsObject> {
     let global = context.global_object();
     let value = global
@@ -112,11 +122,20 @@ pub(crate) fn history_push_state(
             .filter(|text| !text.is_empty())
     });
     let resolved = with_context_host(context, |host| {
-        url.as_deref().map(|url| host.resolve_url(url))
+        let resolved = url.as_deref().map(|url| host.resolve_url(url));
+        let cross_origin = resolved
+            .as_deref()
+            .is_some_and(|url| history_url_is_cross_origin(&host.url, url));
+        (resolved, cross_origin)
     });
-    let Some(resolved) = resolved else {
+    let Some((resolved, cross_origin)) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
+    if cross_origin {
+        return Err(js_error(
+            "SecurityError: history.pushState cannot navigate to a cross-origin URL",
+        ));
+    }
     let provider = ctx_or_mirror(
         context,
         |slot| slot.history.clone(),
@@ -165,11 +184,20 @@ pub(crate) fn history_replace_state(
             .filter(|text| !text.is_empty())
     });
     let resolved = with_context_host(context, |host| {
-        url.as_deref().map(|url| host.resolve_url(url))
+        let resolved = url.as_deref().map(|url| host.resolve_url(url));
+        let cross_origin = resolved
+            .as_deref()
+            .is_some_and(|url| history_url_is_cross_origin(&host.url, url));
+        (resolved, cross_origin)
     });
-    let Some(resolved) = resolved else {
+    let Some((resolved, cross_origin)) = resolved else {
         return Err(js_error("no active JavaScript host"));
     };
+    if cross_origin {
+        return Err(js_error(
+            "SecurityError: history.replaceState cannot navigate to a cross-origin URL",
+        ));
+    }
     let provider = ctx_or_mirror(
         context,
         |slot| slot.history.clone(),
