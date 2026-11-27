@@ -714,7 +714,7 @@ crates/js/src/runtime/api/runtime_impl.rs	259	src	F2	wave-max-mod	2026-11-19	cov
 crates/js/src/runtime/buffer_source.rs	78	src	F2	textcap-merge	2026-11-23	covered	#upstream	re-read
 crates/js/src/runtime/cssom.rs	466	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/document.rs	145	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/document/parse.rs	338	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/document/parse.rs	338	src	F2	roadmap-analysis	2026-11-27	covered	#2337	Re-read: getElementsByClassName and querySelectorAll now use node_list (item/forEach/readonly length) instead of plain wrap_list Array
 crates/js/src/runtime/document/query.rs	421	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/dom_utils.rs	475	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/frames.rs	11	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -816,6 +816,7 @@ crates/js/tests/intl_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maxima
 crates/js/tests/jquery_tests.rs	124	test	F1	jquery-fix	2026-11-21	covered	#upstream	re-read
 crates/js/tests/js_tests.rs	371	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/module_namespace_minified_tests.rs	57	test	F1	esm-merge	2026-11-24	covered	#upstream	re-read
+crates/js/tests/nodecollection_tests.rs	40	test	F1	roadmap-analysis	2026-11-27	covered	#2337	Re-read: class_and_selector_queries_expose_node_list_api asserts item(0)/forEach/readonly length on both query APIs
 crates/js/tests/reentrancy.rs	34	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/rust_api_tests.rs	246	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/service_worker_tests.rs	257	test	F1	sw1-close	2026-11-25	covered	M4-SW-PHASE1	Read and verified: WHATWG SW Appendix A scope boundary, W3C Cache API 5.4 typed quota, and six observable phase-1 tests after rebase onto 5755a816
