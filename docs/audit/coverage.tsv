@@ -682,7 +682,7 @@ crates/js/src/canvas/ops.rs	201	src	F2	arch-agent	2026-11-25	covered	ADR-006	Rea
 crates/js/src/canvas/path.rs	375	src	F2	juanpimg	2026-11-20	covered	#1959,#1961	upstream canvas primitives from main merge (#2035), re-read and verified
 crates/js/src/canvas/state.rs	328	src	F2	jp	2026-11-24	covered	#2290	Re-read after r8 rebase of remote files
 crates/js/src/canvas/tests.rs	172	src	F2	juanpimg	2026-11-20	covered	#1848	canvas tests split module
-crates/js/src/canvas/webgl.rs	469	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: buffer flags, attrib capture/delete, POINTS reads buffer with vertices fallback
+crates/js/src/canvas/webgl.rs	471	src	F2	roadmap-analysis	2026-11-27	covered	#2343	Re-read: DYNAMIC_DRAW 0x88E8 / STREAM_DRAW 0x88E0 added; bufferData usage guard now matches STATIC|DYNAMIC|STREAM
 crates/js/src/canvas/webgl/attrib.rs	135	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Read in full: FLOAT attribute state, validation, strided LE reads, 2 unit tests
 crates/js/src/error.rs	69	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events.rs	98	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -732,7 +732,7 @@ crates/js/src/runtime/gap_apis/nodes.rs	287	src	F2	wave-max-mod	2026-11-19	cover
 crates/js/src/runtime/gap_apis/prelude_a.js	432	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/gap_apis/prelude_b.js	923	src	F2	wpt-components-scope	2026-11-25	covered	#M4-WPT	final formatted state after shadow DOM support; gates green
 crates/js/src/runtime/gap_apis/slots.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/runtime/gap_apis/webgl.rs	270	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: FLOAT constant and native methods via CanvasOps only
+crates/js/src/runtime/gap_apis/webgl.rs	272	src	F2	roadmap-analysis	2026-11-27	covered	#2343	Re-read: build_webgl_context now exposes DYNAMIC_DRAW and STREAM_DRAW constants to JS
 crates/js/src/runtime/gap_apis/webgl_buffers.rs	219	src	F2	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: Array/BufferSource upload, deleteBuffer, vertexAttribPointer, -1 stub
 crates/js/src/runtime/geometry.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -822,7 +822,7 @@ crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/webgl_tests.rs	144	test	F1	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: two buffer-fed points plus backward-compat vertices tests
+crates/js/tests/webgl_tests.rs	182	test	F1	roadmap-analysis	2026-11-27	covered	#2343	Re-read: added webgl_buffer_data_accepts_dynamic_and_stream_draw checking getError and painted pixels
 crates/js/tests/websocket_api_tests.rs	370	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers.rs	10	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/workers/basic.rs	194	test	F1	juanpimg	2026-11-24	covered	upstream #2256 test split	Split from existing test module, reviewed
@@ -1277,7 +1277,7 @@ crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covere
 crates/render/tests/hero_cta.rs	93	test	F1	hero-cta-fix	2026-11-26	covered	#2290	read in full after hero CTA box-sizing fix
 crates/render/tests/hn_arrow_tests.rs	69	test	F1	nav-glyph-fix	2026-11-26	covered	CSS-VISITED-STATE	read and verified in nav/visited WP
 crates/render/tests/hn_title_mojibake_tests.rs	115	test	F1	hn-mojibake-fix	2026-11-26	covered	HN-MOJIBAKE	read and verified in HN title regression
-crates/render/tests/hn_visual_parity_tests.rs	66	test	F1	hn-mae-fix	2026-11-26	covered	#2290	HN visual parity regression: MAE<=18 vs versioned Chromium golden
+crates/render/tests/hn_visual_parity_tests.rs	69	test	F1	hn-mae-fix	2026-11-26	covered	#2290	HN visual parity regression: MAE<=18 vs versioned Chromium golden
 crates/render/tests/iframe_tests.rs	490	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_formats_tests.rs	61	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/tests/image_scaled_tests.rs	77	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
