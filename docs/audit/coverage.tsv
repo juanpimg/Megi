@@ -22,7 +22,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/workflows/wp-refill.yml	50	ci	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 .gitignore	65	manifest	F3	lead	2026-11-17	covered	#1317,#1320	manifest metadata verified in the F3 pass
 .gitleaks.toml	49	manifest	F3	gitleaks-fix	2026-11-24	covered	CI-GITLEAKS-FP,#1317,#1320	narrow WPT canonical-key allowlist reviewed; exact path and single rule
-AGENTS.md	136	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+AGENTS.md	141	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge; #2443-#2454 re-read after audit-2 fixes
 CHANGELOG.md	1774	docs	F3	f3-tools	2026-11-17	covered	#1478-#1487	
 CONTRIBUTING.md	337	docs	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
 Cargo.lock	0	generated	-			exempt		not read line by line: generated
@@ -1466,7 +1466,7 @@ docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documen
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/UI-TARGET.md	87	docs	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring
-docs/VISUAL-PARITY.md	102	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker
+docs/VISUAL-PARITY.md	106	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker; #2443-#2454 re-read after audit-2 fixes
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
 docs/adr/2026-11-24-webgl-strategy.md	59	docs	F3	opencode-agent	2026-11-25	covered	M6-WEBGL-BUFFERS	Re-read: POINTS buffer source documented as deliberate limit
@@ -2408,8 +2408,8 @@ tests/wpt/url/urlsearchparams-sort.any.js	62	fixture	F1	wpt-components-scope	202
 tests/wpt/url/urlsearchparams-stringifier.any.js	123	fixture	F1	wpt-components-scope	2026-11-25	covered	#M4-WPT	element constructor support and skip reasons audited in round 21
 tests/wpt/webgl/bufferSubData.html	26	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
 tests/wpt/webgl/common.js	13	fixture	F1	lead	2026-11-25	covered	M6-WEBGL-SOFTWARE	
-tools/audit_coverage.py	417	tool	F3	jp	2026-11-25	covered	#2290	written and reviewed while building the F0 ledger
-tools/audit_negative_matrix.py	273	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5
+tools/audit_coverage.py	439	tool	F3	jp	2026-11-25	covered	#2290	written and reviewed while building the F0 ledger; #2443-#2454 re-read after audit-2 fixes
+tools/audit_negative_matrix.py	299	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NOTE-SYNC	Re-read after aligning negative matrix note with closed M3#5; #2443-#2454 re-read after audit-2 fixes
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
@@ -2419,9 +2419,9 @@ tools/check_agent_index_refs.py	70	tool	F3	lead	2026-11-26	covered	AGENT-GATES-R
 tools/check_agents_constraints.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full file; compile-free gate registered in check_no_compile_gates.py
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
 tools/check_changelog_version.py	60	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-45	read full file after changelog gate merge; ledger/gate reconciliation
-tools/check_closed_work_packages.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
+tools/check_closed_work_packages.py	85	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py; #2443-#2454 re-read after audit-2 fixes
 tools/check_conformance_badges.py	61	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
-tools/check_conformance_freshness.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/check_conformance_freshness.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge; #2443-#2454 re-read after audit-2 fixes
 tools/check_coverage_html_areas.py	65	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 65-line compile-free gate; validates coverage HTML geometry
 tools/check_coverage_json.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_coverage_svg.py	54	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
@@ -2435,7 +2435,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	162	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring
+tools/check_no_compile_gates.py	134	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring; #2443-#2454 re-read after audit-2 fixes
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2478,16 +2478,16 @@ tools/soak_fuzz.sh	166	tool	F3	soak-fix	2026-11-24	covered	CI-SOAK-IPC-NET-TARGE
 tools/test262_gate.py	208	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test262_report.py	303	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
 tools/test262_stats.py	26	tool	F3	subagent	2026-11-26	covered		read report/gate/stats projection; stdlib only
-tools/test_audit_coverage.py	362	tool	F3	jp	2026-11-25	covered	#2290	re-read after main merge
-tools/test_audit_negative_matrix.py	207	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests
+tools/test_audit_coverage.py	436	tool	F3	jp	2026-11-25	covered	#2290	re-read after main merge; #2443-#2454 re-read after audit-2 fixes
+tools/test_audit_negative_matrix.py	236	tool	F3	jp	2026-11-24	covered	#2290	Re-read after adding evidence and threat tamper tests; #2443-#2454 re-read after audit-2 fixes
 tools/test_bench_compare.py	226	tool	F3	jp	2026-11-25	covered	#2290	bench_compare regression tests from main; reject non-finite/negative flags
 tools/test_check_agent_index_refs.py	83	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_agents_constraints.py	83	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full unit tests for the new agents constraints gate
 tools/test_check_arch.py	237	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import tests
 tools/test_check_changelog_version.py	88	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-45	read full file after changelog gate merge; ledger/gate reconciliation
-tools/test_check_closed_work_packages.py	68	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
+tools/test_check_closed_work_packages.py	93	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker; #2443-#2454 re-read after audit-2 fixes
 tools/test_check_conformance_badges.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
-tools/test_check_conformance_freshness.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
+tools/test_check_conformance_freshness.py	102	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge; #2443-#2454 re-read after audit-2 fixes
 tools/test_check_coverage_html_areas.py	86	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 86-line unit tests for coverage HTML area gate
 tools/test_check_coverage_json.py	99	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_coverage_svg.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
@@ -2500,7 +2500,7 @@ tools/test_check_fixture_links.py	70	tool	F3	lead	2026-11-26	covered	DARK-SHELL-
 tools/test_check_fuzz_manifest.py	78	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 78-line unit tests for fuzz manifest gate
 tools/test_check_milestone.py	195	tool	F3	jp	2026-11-25	covered	#2290	positional and --match regression tests
 tools/test_check_milestone_index.py	75	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/test_check_no_compile_gates.py	78	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring
+tools/test_check_no_compile_gates.py	108	tool	F3	jp	2026-11-26	covered	#2290	Task 5 WP-USER-ui-gate: read full file after visual parity gate wiring; #2443-#2454 re-read after audit-2 fixes
 tools/test_check_parity_baseline.py	89	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for checker
 tools/test_check_parity_docs.py	110	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for docs checker
 tools/test_check_parity_inventory.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for inventory checker
@@ -2547,29 +2547,29 @@ tools/test_soak_fuzz.py	146	tool	F3	juanpimg	2026-11-20	covered	#1833	soak rotat
 tools/test_test262_report.py	132	tool	F3	subagent	2026-11-26	covered		read new unit tests
 tools/test_test_inspector.py	37	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
 tools/test_update_bench_baseline.py	125	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/test_update_coverage.py	775	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/test_update_coverage.py	776	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix; #2443-#2454 re-read after audit-2 fixes
 tools/test_update_progress.py	257	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/test_vendor_wpt.py	190	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/test_visual_parity.py	107	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool
+tools/test_vendor_wpt.py	235	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix; #2443-#2454 re-read after audit-2 fixes
+tools/test_visual_parity.py	125	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for parity tool; #2443-#2454 re-read after audit-2 fixes
 tools/test_visual_parity_report.py	90	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: unit tests for report generator
-tools/test_whatwg_spec.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension
+tools/test_whatwg_spec.py	106	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: doc tool reference coverage extension; #2443-#2454 re-read after audit-2 fixes
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
+tools/test_wp_generate.py	415	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test; #2443-#2454 re-read after audit-2 fixes
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
 tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
-tools/test_wpt_gate.py	193	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding subtest validation regression test
-tools/test_wpt_report.py	62	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
+tools/test_wpt_gate.py	228	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding subtest validation regression test; #2443-#2454 re-read after audit-2 fixes
+tools/test_wpt_report.py	106	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full; #2443-#2454 re-read after audit-2 fixes
 tools/update_bench_baseline.py	180	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
-tools/update_coverage.py	653	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
+tools/update_coverage.py	656	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix; #2443-#2454 re-read after audit-2 fixes
 tools/update_progress.py	348	tool	F3	jp	2026-11-25	covered	#2290	re-read after non-numeric [stats].tests validation fix
 tools/update_psl.sh	55	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
-tools/vendor_wpt.py	472	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix
-tools/visual_parity.py	93	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: PNG parity comparison tool
+tools/vendor_wpt.py	488	tool	F3	jp	2026-11-25	covered	#2290	re-read after triage-r40 robustness fix; #2443-#2454 re-read after audit-2 fixes
+tools/visual_parity.py	98	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: PNG parity comparison tool; #2443-#2454 re-read after audit-2 fixes
 tools/visual_parity_report.py	94	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: Markdown/JSON parity report generator
-tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
+tools/whatwg_spec.py	350	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	#2443-#2454 re-read after audit-2 fixes
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-tools/wp_generate.py	479	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
+tools/wp_generate.py	490	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix; #2443-#2454 re-read after audit-2 fixes
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
 tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
-tools/wpt_gate.py	220	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding string test/subtest validation
-tools/wpt_report.py	254	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check
+tools/wpt_gate.py	237	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding string test/subtest validation; #2443-#2454 re-read after audit-2 fixes
+tools/wpt_report.py	261	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check; #2443-#2454 re-read after audit-2 fixes

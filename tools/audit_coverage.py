@@ -213,7 +213,11 @@ def cmd_generate(_args: argparse.Namespace) -> int:
         if old is None:
             added += 1
             old = initial_row(category)
-        elif old["status"] == "pending" and category in NOT_READ_CATEGORIES:
+        elif category not in NOT_READ_CATEGORIES and old["status"] != "pending":
+            # #2443: a recategorized readable file must be re-read under its new
+            # category, even if the old row was covered or (wrongly) exempt.
+            old = initial_row(category)
+        elif category in NOT_READ_CATEGORIES:
             # A category can change when files are added to a directory.
             old = initial_row(category)
         rows.append(
@@ -243,14 +247,28 @@ def cmd_mark(args: argparse.Namespace) -> int:
         return 2
     touched = 0
     skipped = 0
+    matched = False
     for row in rows:
         if not row["path"].startswith(args.path):
             continue
+        matched = True
         if row["category"] in NOT_READ_CATEGORIES:
-            # Never mark a binary/vendored/generated row as read: the exemption is
-            # a decision about the category, not about this review.
-            skipped += 1
+            # #2443: exempt is the implicit status of a not-readable category;
+            # recording it explicitly makes the ledger and --check agree.
+            if args.status == "exempt":
+                row["status"] = "exempt"
+                touched += 1
+            else:
+                skipped += 1
             continue
+        if args.status == "exempt":
+            # #2443: exempt is a property of the category, never of a readable
+            # file. Assigning it here would hide a source file from the audit.
+            print(
+                f"error: --mark --status exempt is only valid for "
+                f"{sorted(NOT_READ_CATEGORIES)} rows", file=sys.stderr,
+            )
+            return 2
         row["status"] = args.status
         if args.auditor:
             row["auditor"] = args.auditor
@@ -261,7 +279,7 @@ def cmd_mark(args: argparse.Namespace) -> int:
         if args.notes:
             row["notes"] = args.notes
         touched += 1
-    if touched == 0:
+    if not matched:
         print(f"no ledger row starts with {args.path!r}", file=sys.stderr)
         return 2
     write_ledger(rows)
@@ -329,6 +347,10 @@ def cmd_check(args: argparse.Namespace) -> int:
             drifted.append(f"{path}: {row['lines']} -> {expected} lines, re-read needed")
         if row["status"] not in STATUSES:
             problems.append(f"{path}: unknown status {row['status']!r}")
+        elif row["status"] == "exempt" and category not in NOT_READ_CATEGORIES:
+            # #2443: a readable file marked exempt silently disappears from the
+            # coverage denominator; only the not-readable categories qualify.
+            problems.append(f"{path}: exempt status is invalid for category {category!r}")
         elif row["status"] == "covered" and (not row["auditor"] or not row["date"]):
             problems.append(f"{path}: covered without auditor/date")
         elif row["status"] == "pending":

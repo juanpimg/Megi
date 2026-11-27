@@ -167,6 +167,75 @@ class InvalidLedgerTests(unittest.TestCase):
         )
 
 
+class GenerateAndMarkTests(unittest.TestCase):
+    """#2443: a readable file can never inherit or receive an exempt status."""
+
+    def setUp(self) -> None:
+        self._saved = (
+            audit_coverage.LEDGER,
+            audit_coverage.ROOT,
+            audit_coverage.audited_scope,
+            audit_coverage.count_lines,
+        )
+        self._stdout, self._stderr = sys.stdout, sys.stderr
+        self._tmp = tempfile.TemporaryDirectory()
+        audit_coverage.LEDGER = Path(self._tmp.name) / "coverage.tsv"
+        audit_coverage.ROOT = Path(self._tmp.name)
+        sys.stdout = open(Path(self._tmp.name) / "out.txt", "w", encoding="utf-8")
+        sys.stderr = open(Path(self._tmp.name) / "err.txt", "w", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        (
+            audit_coverage.LEDGER,
+            audit_coverage.ROOT,
+            audit_coverage.audited_scope,
+            audit_coverage.count_lines,
+        ) = self._saved
+        sys.stdout.close()
+        sys.stderr.close()
+        sys.stdout, sys.stderr = self._stdout, self._stderr
+        self._tmp.cleanup()
+
+    def test_generate_resets_exempt_row_when_file_becomes_readable(self) -> None:
+        audit_coverage.write_ledger([
+            row("crates/a/src/lib.rs", category="generated", phase="-", status="exempt")
+        ])
+        audit_coverage.audited_scope = lambda: [("crates/a/src/lib.rs", "src", "F2")]
+        audit_coverage.count_lines = lambda path: 10
+        self.assertEqual(audit_coverage.cmd_generate(argparse.Namespace()), 0)
+        fresh = audit_coverage.read_ledger()[0]
+        self.assertEqual(fresh["category"], "src")
+        self.assertEqual(fresh["status"], "pending")
+        self.assertEqual(fresh["auditor"], "")
+
+    def test_generate_resets_covered_row_when_category_changes(self) -> None:
+        audit_coverage.write_ledger([row("crates/a/src/lib.rs")])
+        audit_coverage.audited_scope = lambda: [("crates/a/src/lib.rs", "tool", "F3")]
+        audit_coverage.count_lines = lambda path: 10
+        self.assertEqual(audit_coverage.cmd_generate(argparse.Namespace()), 0)
+        self.assertEqual(audit_coverage.read_ledger()[0]["status"], "pending")
+
+    def test_mark_exempt_on_a_readable_file_is_rejected(self) -> None:
+        audit_coverage.write_ledger([row("crates/a/src/lib.rs")])
+        args = argparse.Namespace(
+            path="crates/a/src/lib.rs", status="exempt",
+            auditor="jp", date="2026-11-26", findings="", notes="",
+        )
+        self.assertEqual(audit_coverage.cmd_mark(args), 2)
+        self.assertEqual(audit_coverage.read_ledger()[0]["status"], "covered")
+
+    def test_mark_exempt_is_still_allowed_for_not_read_categories(self) -> None:
+        audit_coverage.write_ledger([
+            row("tests/fixtures/x.png", category="binary", phase="-", status="pending")
+        ])
+        args = argparse.Namespace(
+            path="tests/fixtures/x.png", status="exempt",
+            auditor="", date="", findings="", notes="",
+        )
+        self.assertEqual(audit_coverage.cmd_mark(args), 0)
+        self.assertEqual(audit_coverage.read_ledger()[0]["status"], "exempt")
+
+
 class CheckTests(unittest.TestCase):
     """`--check` is the CI gate: none of these states may pass."""
 
@@ -227,6 +296,11 @@ class CheckTests(unittest.TestCase):
 
     def test_rejects_pending_with_auditor(self) -> None:
         rows = [row("crates/a/src/lib.rs", status="pending")]
+        self.assertEqual(self._check(rows), 1)
+
+    def test_rejects_exempt_status_on_a_readable_file(self) -> None:
+        # #2443: only binary/vendored/generated/exempt categories qualify.
+        rows = [row("crates/a/src/lib.rs", status="exempt")]
         self.assertEqual(self._check(rows), 1)
 
     def test_rejects_pending_exempt_rows(self) -> None:
