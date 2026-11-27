@@ -50,8 +50,24 @@ def validate(root: Path) -> list[str]:
     if not isinstance(areas, list) or not areas:
         problems.append("coverage.json has no areas")
     else:
-        implemented = sum(area.get("implemented", 0) for area in areas)
-        counted = sum(area.get("known", 0) for area in areas)
+        bad_counters = [
+            f"areas[{index}].{key}={area.get(key)!r}"
+            for index, area in enumerate(areas)
+            for key in ("implemented", "known")
+            if type(area.get(key, 0)) is not int
+        ]
+        if bad_counters:
+            problems.append(
+                "coverage.json area counters must be integers: " + ", ".join(bad_counters)
+            )
+        implemented = sum(
+            area.get("implemented", 0) for area in areas
+            if type(area.get("implemented", 0)) is int
+        )
+        counted = sum(
+            area.get("known", 0) for area in areas
+            if type(area.get("known", 0)) is int
+        )
         if (implemented, counted) != (done, known):
             problems.append(
                 f"coverage.json areas sum to {implemented}/{counted}, expected {done}/{known}"

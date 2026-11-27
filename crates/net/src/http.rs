@@ -331,8 +331,9 @@ impl Response {
         self.header("accept-ranges")
     }
 
-    /// Parses the first valid `Referrer-Policy` response header, if present.
+    /// Parses the last valid `Referrer-Policy` response header token, if present.
     ///
+    /// All header values are scanned in order (WHATWG Referrer Policy §5).
     /// The render pipeline uses this (or [`crate::ReferrerPolicy::from_meta_html`]) to
     /// install a [`crate::ReferrerConfig`] for subresource fetches.
     pub fn referrer_policy(&self) -> Option<crate::ReferrerPolicy> {
@@ -355,6 +356,7 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use headers::validate_request_headers;
 pub(crate) use pool::origin_key;
 pub use pool::{H1Pool, fetch_pooled, fetch_pooled_following_redirects};
 pub use preflight::preflight;

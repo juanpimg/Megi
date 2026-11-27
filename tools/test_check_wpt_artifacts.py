@@ -104,6 +104,27 @@ class ValidateTests(unittest.TestCase):
         problems = checker.validate(self.root)
         self.assertTrue(any("counts do not add up" in p for p in problems))
 
+    def test_boolean_counts_are_reported(self) -> None:
+        baseline = json.loads((self.root / "tests/wpt/baseline.json").read_text())
+        baseline["passed"] = True
+        self._write("tests/wpt/baseline.json", baseline)
+        report = json.loads((self.root / "docs/status/wpt.json").read_text())
+        report["counts"] = {"pass": False, "fail": 0}
+        self._write("docs/status/wpt.json", report)
+        self._write_file(
+            "docs/status/progress.toml",
+            (
+                "[wpt]\n"
+                f'revision = "{SHA}"\n'
+                f'manifest_sha256 = "{MANIFEST_HASH}"\n'
+                "passed = true\ntotal = 2\nallowlist = 0\n"
+            ).encode(),
+        )
+        problems = checker.validate(self.root)
+        self.assertTrue(any("baseline passed/total must be integers" in p for p in problems))
+        self.assertTrue(any("wpt.json counts must be integers" in p for p in problems))
+        self.assertTrue(any("[wpt].passed" in p for p in problems))
+
     def test_progress_mismatch_is_reported(self) -> None:
         self._write_file(
             "docs/status/progress.toml",

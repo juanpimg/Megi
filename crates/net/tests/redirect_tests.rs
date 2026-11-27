@@ -10,7 +10,9 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use megi_net::{FetchError, FetchOptions, RedirectMode, Url, fetch, fetch_streaming};
+use megi_net::{
+    FetchError, FetchOptions, RedirectMode, Url, fetch, fetch_streaming, fetch_with_method,
+};
 
 fn read_head(stream: &mut impl Read) -> Vec<u8> {
     let mut request = Vec::new();
@@ -54,6 +56,27 @@ fn options() -> FetchOptions {
         read_timeout: Duration::from_secs(2),
         ..FetchOptions::default()
     }
+}
+
+#[test]
+fn head_303_keeps_method() {
+    // WHATWG Fetch §4.5: a 303 switches to GET only for non-GET/HEAD methods.
+    let responses = vec![
+        b"HTTP/1.1 303 See Other\r\nLocation: /next\r\nContent-Length: 0\r\n\r\n".to_vec(),
+        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_vec(),
+    ];
+    let (port, server) = spawn_sequence(responses);
+    let url = Url::parse(&format!("http://127.0.0.1:{port}/start")).expect("url");
+
+    let response = fetch_with_method(&url, &options(), "HEAD", &[], None).expect("HEAD 303");
+    assert_eq!(response.status, 200);
+    let received = server.join().expect("server");
+    assert_eq!(received.len(), 2);
+    assert!(
+        received[1].starts_with("HEAD /next HTTP/1.1"),
+        "second hop must keep HEAD, got {:?}",
+        received[1]
+    );
 }
 
 #[test]

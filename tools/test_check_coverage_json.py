@@ -73,6 +73,16 @@ class ValidateTests(unittest.TestCase):
         self._write(data)
         self.assertTrue(any("areas sum" in p for p in checker.validate(self.root)))
 
+    def test_non_integer_counters_are_reported(self) -> None:
+        data = json.loads((self.root / "docs/status/coverage.json").read_text())
+        data["areas"][0]["implemented"] = "1"
+        data["areas"][1]["known"] = "1"
+        self._write(data)
+        problems = checker.validate(self.root)
+        self.assertTrue(
+            any("areas" in p and ("implemented" in p or "known" in p) for p in problems)
+        )
+
     def test_empty_manifest_is_reported(self) -> None:
         (self.root / "docs/status/coverage.toml").write_text("", encoding="utf-8")
         self.assertEqual(checker.validate(self.root), ["coverage.toml has no capabilities"])

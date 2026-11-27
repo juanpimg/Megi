@@ -382,6 +382,45 @@ fn h2c_upgrade_falls_back_when_server_refuses() {
 }
 
 #[test]
+fn h2c_request_rejects_crlf_in_extra_headers() {
+    // RFC 9110 §5.3 / RFC 7540 §3.2: a CR/LF in an upgrade header would frame
+    // an extra header line on the wire, so it must fail before anything is sent (#2358).
+    let limits = Limits {
+        allow_h2c: true,
+        ..Limits::default()
+    };
+    let (listener, authority) = listener();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let handle = std::thread::spawn(move || {
+        let mut stream = accept(&listener);
+        let mut head = Vec::new();
+        let mut byte = [0u8; 1];
+        while !head.ends_with(b"\r\n\r\n") && matches!(stream.read(&mut byte), Ok(1)) {
+            head.push(byte[0]);
+        }
+        sender.send(head).expect("send observed head");
+    });
+    let mut stream = TcpStream::connect(&authority).expect("connect");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("timeout");
+    let extra = vec![("X-Foo".to_owned(), "ok\r\nX-Injected: 1".to_owned())];
+    let error = h2c_request(&mut stream, &authority, "/h2c", &extra, &limits)
+        .expect_err("CRLF in an h2c extra header must be rejected before framing");
+    assert!(
+        matches!(error, FetchError::InvalidRequestHeader(_)),
+        "{error:?}"
+    );
+    drop(stream);
+    let head = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("observed head");
+    let _ = handle.join();
+    let head = String::from_utf8_lossy(&head);
+    assert!(!head.contains("X-Injected"), "injected head: {head:?}");
+}
+
+#[test]
 fn h2c_requires_opt_in() {
     let limits = Limits::default();
     let (listener, authority) = listener();

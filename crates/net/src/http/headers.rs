@@ -2,7 +2,7 @@
 
 use crate::error::FetchError;
 
-pub(super) fn validate_request_headers(
+pub(crate) fn validate_request_headers(
     headers: &[(String, String)],
     max_bytes: usize,
 ) -> Result<(), FetchError> {

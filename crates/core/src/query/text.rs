@@ -103,10 +103,10 @@ impl Document {
         if self.try_node(node_id).is_none() {
             return String::new();
         }
-        // For HTML <template> the content lives in the inert contents fragment; resolve
-        // non-recursively so corrupted self-referential template links cannot blow the stack.
-        let effective_id = self.template_contents_target(node_id);
-        let Some(effective_node) = self.try_node(effective_id) else {
+        // #2320 / WHATWG DOM §4.4: textContent walks the node's own children. The inert
+        // contents fragment of an HTML <template> is not a child, so stay on `node_id`
+        // (unlike the setter, which deliberately targets the fragment).
+        let Some(node) = self.try_node(node_id) else {
             return String::new();
         };
         // #2141: the 16 MiB cap promised by this API must also apply to a
@@ -121,22 +121,22 @@ impl Document {
             }
             data[..end].to_owned()
         };
-        if let Some(text) = effective_node.as_text() {
+        if let Some(text) = node.as_text() {
             return capped(text);
         }
         // #1729 / DOM §4.4: textContent is `data` for any CharacterData node, not just Text.
-        match &effective_node.kind {
+        match &node.kind {
             NodeKind::Comment(data) => return capped(data),
             NodeKind::ProcessingInstruction { data, .. } => return capped(data),
             _ => {}
         }
-        if matches!(effective_node.kind, NodeKind::Document) {
+        if matches!(node.kind, NodeKind::Document) {
             return String::new();
         }
         let max_nodes = self.nodes.len();
         let mut text = String::new();
         // Bound sibling walks and total visited nodes against cyclic arenas (#1107).
-        let (mut pending, _) = self.bounded_children_vec(effective_id);
+        let (mut pending, _) = self.bounded_children_vec(node_id);
         pending.reverse();
         let mut visited = 0usize;
         while let Some(current) = pending.pop() {

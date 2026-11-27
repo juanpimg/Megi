@@ -289,16 +289,13 @@ impl TreeBuilder {
                     None
                 }
                 // WP-6.4 / §13.2.6.4.8 "the text insertion mode": a parser-inserted
-                // `<script>` executes when its end tag (or EOF) is reached, with the
-                // partially-built tree visible; `document.write` output is re-tokenized
-                // immediately after this token by `drive_tokenizer`.
+                // `<script>` executes when its end tag is reached, with the partially-built
+                // tree visible; `document.write` output is re-tokenized immediately after
+                // this token by `drive_tokenizer`. At EOF the script is popped and EOF is
+                // reprocessed without execution.
                 Token::Eof => {
-                    let script = self.current_script_element();
                     self.pop_open_element();
                     self.mode = self.original_mode;
-                    if let Some(script_id) = script {
-                        self.execute_parser_inserted_script(script_id);
-                    }
                     self.process_token(Token::Eof)
                 }
                 Token::EndTag { ref name, .. } => {

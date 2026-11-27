@@ -23,6 +23,18 @@ const MAX_STYLE_TEXT_BYTES: usize = 256 * 1024;
 /// Upper bound on the number of `<style>` elements collected (defensive, non-fatal).
 const MAX_STYLE_ELEMENTS: usize = 128;
 
+/// Longest prefix of `text` within `remaining` bytes that ends on a UTF-8 char boundary.
+fn bounded_style_text(text: &str, remaining: usize) -> &str {
+    if text.len() <= remaining {
+        return text;
+    }
+    let mut end = remaining;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// Maps each inline SVG to the inherited `color` value to inject as a presentation attribute.
 ///
 /// `collection` is the pipeline's cascade pool when available: it already contains external
@@ -63,7 +75,7 @@ pub(super) fn resolve(
                 continue;
             };
             let remaining = MAX_STYLE_TEXT_BYTES.saturating_sub(author_css.len());
-            author_css.push_str(&text[..text.len().min(remaining)]);
+            author_css.push_str(bounded_style_text(text, remaining));
             if author_css.len() >= MAX_STYLE_TEXT_BYTES {
                 break;
             }
@@ -153,5 +165,46 @@ fn format_color(color: megi_css::Color) -> String {
             "#{:02x}{:02x}{:02x}{:02x}",
             color.r, color.g, color.b, color.a
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use megi_core::NodeKind;
+
+    /// A multibyte character starting exactly at the remaining-byte boundary must not panic.
+    #[test]
+    fn resolve_does_not_split_a_multibyte_character_at_the_style_byte_cap() {
+        let mut document = Document::new();
+        let html = document.create_element(megi_core::Namespace::Html, "html", Vec::new());
+        assert!(document.append_child(document.root(), html));
+        let svg = document.create_element(megi_core::Namespace::Svg, "svg", Vec::new());
+        assert!(document.append_child(html, svg));
+        let style = document.create_element(megi_core::Namespace::Html, "style", Vec::new());
+        assert!(document.append_child(html, style));
+        let filler = document.create_node(NodeKind::Text("a".repeat(MAX_STYLE_TEXT_BYTES - 1)));
+        assert!(document.append_child(style, filler));
+        let accented = document.create_node(NodeKind::Text("é".to_owned()));
+        assert!(document.append_child(style, accented));
+
+        let colors = resolve(&document, &[svg], None);
+        assert!(colors.is_empty());
+    }
+
+    #[test]
+    fn bounded_style_text_stops_before_a_split_multibyte_character() {
+        let text = "aé";
+        let bounded = bounded_style_text(text, 2);
+        assert_eq!(bounded, "a");
+        assert!(text.is_char_boundary(bounded.len()));
+        assert_eq!(bounded_style_text("abcdef", 3), "abc");
+    }
+
+    #[test]
+    fn bounded_style_text_keeps_text_that_fits_unchanged() {
+        let text = "color: red; /* é */";
+        assert_eq!(bounded_style_text(text, text.len()), text);
+        assert_eq!(bounded_style_text(text, text.len() + 1), text);
     }
 }

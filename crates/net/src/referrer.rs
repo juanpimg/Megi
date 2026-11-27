@@ -20,10 +20,11 @@
 //! send a `Referer` (no tuple origin). Redirects re-evaluate the policy against the final
 //! target on every hop (the downgrade check uses the current hop).
 //!
+//! Response `Referrer-Policy` header precedence follows WHATWG Referrer Policy §5: all
+//! header values are scanned in order, split on commas, and the last valid token wins.
+//!
 //! ## Deliberate limitations
 //!
-//! - No `Referrer-Policy` **header precedence** across multiple headers: the first valid
-//!   token wins (browsers take the last one in the header).
 //! - `<meta name="referrer">` parsing is a tolerant scan of the raw HTML text, not a DOM
 //!   query; render can pass the document text through [`ReferrerPolicy::from_meta_html`].
 //! - No `Referer` for non-`http(s)` targets (browsers send `null` in some cases; this
@@ -84,13 +85,16 @@ impl ReferrerPolicy {
         }
     }
 
-    /// Picks the first valid `Referrer-Policy` response header value, if any.
+    /// Picks the last valid `Referrer-Policy` token across all response header values.
+    ///
+    /// WHATWG Referrer Policy §5: invalid tokens are ignored, the last valid one wins.
     pub fn from_headers(headers: &[(String, String)]) -> Option<Self> {
-        headers.iter().find_map(|(name, value)| {
-            name.eq_ignore_ascii_case("referrer-policy")
-                .then(|| Self::parse(value))
-                .flatten()
-        })
+        headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case("referrer-policy"))
+            .flat_map(|(_, value)| value.split(','))
+            .filter_map(Self::parse)
+            .next_back()
     }
 
     /// Tolerant `<meta name="referrer" content="...">` scan over raw HTML text.
