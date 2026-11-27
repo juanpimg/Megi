@@ -200,26 +200,44 @@ impl ElementData {
         }
     }
 
-    /// Finds the position of the attribute called `name` (see [`ElementData::has_attribute`]).
-    fn attribute_position(&self, name: &str) -> Option<usize> {
-        self.attributes.iter().position(|attribute| {
-            attribute.namespace == Namespace::None
-                && self.attribute_name_matches(&attribute.local_name, name)
-        })
+    /// Matches an attribute's qualified name against `name`.
+    ///
+    /// WHATWG DOM §4.9.2: `getAttribute`/`hasAttribute`/`removeAttribute` look up by
+    /// qualified name (`prefix:localName` when a prefix is present, otherwise `localName`),
+    /// independent of the attribute's namespace. HTML elements lowercase the whole
+    /// qualified name before comparing (#686); foreign elements compare exactly.
+    fn qualified_name_matches(&self, attribute: &Attribute, name: &str) -> bool {
+        match &attribute.prefix {
+            Some(prefix) => {
+                let mut parts = name.splitn(2, ':');
+                let given_prefix = parts.next().unwrap_or_default();
+                let Some(given_local) = parts.next() else {
+                    return false;
+                };
+                self.attribute_name_matches(prefix, given_prefix)
+                    && self.attribute_name_matches(&attribute.local_name, given_local)
+            }
+            None => self.attribute_name_matches(&attribute.local_name, name),
+        }
     }
 
-    /// Looks up an attribute value by local name (in `Namespace::None`).
+    /// Finds the position of the attribute whose qualified name is `name`
+    /// (see [`ElementData::has_attribute`]).
+    fn attribute_position(&self, name: &str) -> Option<usize> {
+        self.attributes
+            .iter()
+            .position(|attribute| self.qualified_name_matches(attribute, name))
+    }
+
+    /// Looks up an attribute value by qualified name (`prefix:localName` for namespaced
+    /// attributes), per WHATWG DOM §4.9.2.
     ///
     /// HTML elements match the name ASCII case-insensitively, like `has_attribute`,
     /// `remove_attribute` and `set_attribute` (#686).
-    pub fn get_attribute(&self, local_name: &str) -> Option<&str> {
-        self.attributes
-            .iter()
-            .find(|a| {
-                a.namespace == Namespace::None
-                    && self.attribute_name_matches(&a.local_name, local_name)
-            })
-            .map(|a| a.value.as_str())
+    pub fn get_attribute(&self, name: &str) -> Option<&str> {
+        self.attribute_position(name)
+            .and_then(|position| self.attributes.get(position))
+            .map(|attribute| attribute.value.as_str())
     }
 
     /// Sets an attribute if not already present (per HTML parser duplicate-attribute rules)

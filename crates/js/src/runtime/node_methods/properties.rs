@@ -245,9 +245,10 @@ pub(crate) fn node_remove_attribute(
             .try_node_mut(node_id)
             .and_then(|node| node.as_element_mut())
         {
-            element
-                .attributes
-                .retain(|attribute| attribute.local_name != name);
+            // WHATWG DOM §4.9.2: removeAttribute matches the qualified name, so a
+            // namespaced attribute like `xlink:href` must be removed by its qualified
+            // name rather than by raw `local_name` filtering (#2317).
+            element.remove_attribute(&name);
         }
         if matches!(name.as_str(), "src" | "srcdoc" | "sandbox") {
             invalidate_iframe_state(host, node_id);
