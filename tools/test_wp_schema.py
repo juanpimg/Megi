@@ -89,6 +89,11 @@ class WorkPackageSchemaTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
         self.assertIn("impact", str(ctx.exception))
 
+    def test_bool_impact_is_rejected(self):
+        data = self._valid(); data["impact"] = True
+        with self.assertRaises(ValueError) as ctx: wp_schema.validate_wp(data)
+        self.assertIn("impact", str(ctx.exception))
+
     def test_priority_boundaries_are_accepted(self):
         data = self._valid(); data["impact"] = 1; data["frequency"] = 10
         wp = wp_schema.validate_wp(data)

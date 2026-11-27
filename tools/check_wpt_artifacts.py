@@ -47,7 +47,10 @@ def validate(root: Path) -> list[str]:
     expected_sha = hashlib.sha256((root / MANIFEST).read_bytes()).hexdigest()
     if epoch.get("manifest_sha256") != expected_sha:
         problems.append("baseline epoch manifest_sha256 does not match MANIFEST.json")
-    if not 0 <= baseline.get("passed", -1) <= baseline.get("total", -1):
+    passed, total = baseline.get("passed"), baseline.get("total")
+    if type(passed) is not int or type(total) is not int:
+        problems.append("baseline passed/total must be integers")
+    elif not 0 <= passed <= total:
         problems.append("baseline passed/total are inconsistent")
     if not isinstance(baseline.get("allowlist"), list):
         problems.append("baseline allowlist must be a list")
@@ -58,12 +61,15 @@ def validate(root: Path) -> list[str]:
     if report.get("epoch") != epoch:
         problems.append("wpt.json epoch differs from the baseline epoch")
     counts = report.get("counts", {})
-    if sum(value for value in counts.values() if isinstance(value, int)) != baseline.get("total"):
+    if any(type(value) is not int for value in counts.values()):
+        problems.append("wpt.json counts must be integers")
+    elif sum(counts.values()) != total:
         problems.append("wpt.json counts do not add up to the baseline total")
 
     with (root / PROGRESS).open("rb") as handle:
         wpt = tomllib.load(handle).get("wpt", {})
     for key in ("revision", "manifest_sha256", "passed", "total", "allowlist"):
+        value = wpt.get(key)
         expected = {
             "revision": sha,
             "manifest_sha256": expected_sha,
@@ -71,8 +77,10 @@ def validate(root: Path) -> list[str]:
             "total": baseline.get("total"),
             "allowlist": len(baseline.get("allowlist", [])),
         }[key]
-        if wpt.get(key) != expected:
-            problems.append(f"progress.toml [wpt].{key}={wpt.get(key)!r}, expected {expected!r}")
+        if key in ("passed", "total", "allowlist") and type(value) is not int:
+            problems.append(f"progress.toml [wpt].{key} must be an integer")
+        elif value != expected:
+            problems.append(f"progress.toml [wpt].{key}={value!r}, expected {expected!r}")
     return problems
 
 

@@ -2458,7 +2458,7 @@ tools/check_closed_work_packages.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GAT
 tools/check_conformance_badges.py	61	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/check_conformance_freshness.py	76	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_coverage_html_areas.py	65	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 65-line compile-free gate; validates coverage HTML geometry
-tools/check_coverage_json.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
+tools/check_coverage_json.py	94	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/check_coverage_svg.py	54	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/check_deslop_allowlist.py	67	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_deslop_doc.py	123	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: deslop doc/allowlist consistency checker
@@ -2498,7 +2498,7 @@ tools/check_wp_board.py	118	tool	F3	opencode-agent	2026-11-26	covered	#audit	rea
 tools/check_wp_generator_functions.py	58	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
 tools/check_wp_generators.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-43	read full file after remote merge; SCHEMA/SOURCES parity checker
 tools/check_wp_schema_docs.py	65	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_wpt_artifacts.py	93	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
+tools/check_wpt_artifacts.py	101	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/check_wpt_manifest_files.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
 tools/check_wpt_report_md.py	55	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; compile-free gate registered
 tools/coverage_report.py	171	tool	F3	jp	2026-11-24	covered	#2290	
@@ -2524,7 +2524,7 @@ tools/test_check_closed_work_packages.py	68	tool	F3	lead	2026-11-26	covered	AGEN
 tools/test_check_conformance_badges.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/test_check_conformance_freshness.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_coverage_html_areas.py	86	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 86-line unit tests for coverage HTML area gate
-tools/test_check_coverage_json.py	99	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
+tools/test_check_coverage_json.py	109	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/test_check_coverage_svg.py	78	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-3	read during remote gate integration
 tools/test_check_deslop_allowlist.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/test_check_deslop_doc.py	112	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: unit tests for deslop doc checker
@@ -2563,7 +2563,7 @@ tools/test_check_wp_board.py	147	tool	F3	opencode-agent	2026-11-26	covered	#audi
 tools/test_check_wp_generator_functions.py	73	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-48	re-read full file after remote flex padding fix + wp generator gate merge (48 gates)
 tools/test_check_wp_generators.py	92	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-43	read full file after remote merge; unit and CLI tests for WP generator checker
 tools/test_check_wp_schema_docs.py	86	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
+tools/test_check_wpt_artifacts.py	160	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/test_check_wpt_manifest_files.py	103	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
 tools/test_check_wpt_report_md.py	85	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; unittest module registered
 tools/test_ci_gate.py	320	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
@@ -2591,7 +2591,7 @@ tools/test_whatwg_spec.py	57	tool	F3	opencode-agent	2026-11-26	covered	#audit	re
 tools/test_wp_dashboard.py	95	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/test_wp_generate.py	390	tool	F3	jp	2026-11-24	covered	#2290	re-read after adding malformed WPT report regression test
 tools/test_wp_plan.py	218	tool	F3	jp	2026-11-24	covered	#2290	releído: nuevo test de cierre con ID con punto; clave TOML citada
-tools/test_wp_schema.py	97	tool	F3	jp	2026-11-24	covered	#2290 re-read after adding profile TDD tests	re-read after adding profile TDD tests
+tools/test_wp_schema.py	102	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/test_wpt_gate.py	193	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding subtest validation regression test
 tools/test_wpt_report.py	79	tool	F3	jp	2026-11-25	covered	#2290	new --check regression tests read in full
 tools/update_bench_baseline.py	180	tool	F3	jp	2026-11-25	covered	#2290	read full file after rebase; evidence verified
@@ -2605,6 +2605,6 @@ tools/whatwg_spec.py	307	tool	F3	waveF3	2026-11-17	covered	#1391-#1403
 tools/wp_dashboard.py	109	tool	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 tools/wp_generate.py	479	tool	F3	jp	2026-11-24	covered	#2290	re-read after single-source CLI exit-code fix
 tools/wp_plan.py	192	tool	F3	jp	2026-11-24	covered	#2290	releído: clave de cabecera TOML citada con json.dumps en finish()
-tools/wp_schema.py	79	tool	F3	jp	2026-11-24	covered	#2290 re-read after profile validation change	re-read after profile validation change
+tools/wp_schema.py	80	tool	F3	jp	2026-11-27	covered	#2320/#auditoría	read line by line: strict integer validation for artifact counters
 tools/wpt_gate.py	220	tool	F3	jp	2026-11-25	covered	#2290	re-read after adding string test/subtest validation
 tools/wpt_report.py	282	tool	F3	jp	2026-11-25	covered	#2290	re-read after fixing missing-artifact check

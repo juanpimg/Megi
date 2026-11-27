@@ -42,10 +42,11 @@ class WorkPackage:
 
 def validate_priority_field(data: dict, name: str) -> int:
     """Parse an integer priority factor in the documented 1..10 range."""
-    try:
-        value = int(data.get(name, 1))
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"field has invalid value: {name} (expected integer 1..10)") from exc
+    value = data.get(name, 1)
+    if type(value) is not int:
+        raise ValueError(
+            f"field has invalid value: {name} (expected integer 1..10, got {value!r})"
+        )
     if not 1 <= value <= 10:
         raise ValueError(f"field has invalid value: {name} (expected 1..10, got {value})")
     return value
