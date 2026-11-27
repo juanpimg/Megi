@@ -129,7 +129,14 @@ pub(crate) fn parse_feature(parser: &mut MediaParser<'_>) -> Option<MediaConditi
         }
         "prefers-reduced-motion" => {
             let value = single_ident(value)?.to_ascii_lowercase();
-            MediaFeature::PrefersReducedMotion(value == "reduce")
+            // Media Queries 5 §5.4: `reduce | no-preference`. Follow the same
+            // pattern as `prefers-color-scheme`: a valid value maps to its
+            // boolean, an invalid one makes the feature evaluate false (#2328).
+            MediaFeature::PrefersReducedMotion(match value.as_str() {
+                "reduce" => true,
+                "no-preference" => false,
+                _ => return None,
+            })
         }
         // Syntactically valid but not modelled: evaluate to false (documented).
         _ => MediaFeature::Unsupported,
