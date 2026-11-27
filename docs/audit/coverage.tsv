@@ -995,7 +995,7 @@ crates/net/src/http/headers.rs	86	src	F2	wave-max-mod	2026-11-19	covered	#maxima
 crates/net/src/http/pool.rs	456	src	F2	perf-hn-images	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior pooling audit)
 crates/net/src/http/preflight.rs	85	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/redirect.rs	36	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http/request.rs	361	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/http/request.rs	364	src	F2	jp	2026-11-27	covered	#2360	re-read after WHATWG Fetch 4.5 HEAD/GET 303 fix (#2360)
 crates/net/src/http/response.rs	198	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/streaming.rs	424	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/tests.rs	169	src	F2	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	re-read after origin/main merge; stale line count refreshed
@@ -1065,7 +1065,7 @@ crates/net/tests/proxy_tests/http_proxy.rs	38	test	F1	wave-max-mod	2026-11-19	co
 crates/net/tests/proxy_tests/main.rs	247	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/push_loader_tests.rs	261	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/push_priority_tests.rs	279	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/tests/redirect_tests.rs	315	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/redirect_tests.rs	338	test	F1	jp	2026-11-27	covered	#2360	re-read after adding head_303_keeps_method TDD test (#2360)
 crates/net/tests/request_bodies/h1_bodies.rs	301	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/request_bodies/h2_bodies.rs	219	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/request_bodies/main.rs	161	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

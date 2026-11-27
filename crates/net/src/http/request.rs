@@ -311,7 +311,10 @@ fn fetch_with_request_body_and_trailers_once(
         if redirects >= options.max_redirects {
             return Err(FetchError::TooManyRedirects);
         }
-        if raw.status == 303 || (matches!(raw.status, 301 | 302) && method == "POST") {
+        // WHATWG Fetch §4.5: a 303 switches to GET only for non-GET/HEAD methods.
+        if (raw.status == 303 && method != "GET" && method != "HEAD")
+            || (matches!(raw.status, 301 | 302) && method == "POST")
+        {
             method = "GET".to_owned();
             body_state = None;
         } else if streaming_body && body_state.is_none() {
