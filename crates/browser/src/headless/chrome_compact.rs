@@ -90,6 +90,8 @@ pub(super) fn render_target_with_chrome_mode(
             active: 0,
             top_css: band_css,
             sidebar: true,
+            hover: None,
+            focus: None,
         }),
     };
     // Blit the reduced page into a full-size canvas beside the sidebar and below the

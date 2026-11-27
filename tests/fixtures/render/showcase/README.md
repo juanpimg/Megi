@@ -30,12 +30,14 @@ python3 tools/png_check.py tests/fixtures/render/showcase/golden.png
 
 Expected metadata of the current golden:
 
-- size: **1024 × 768**, PNG color type 6 (RGBA), opaque canvas, **80.220 bytes**.
+- size: **1024 × 768**, PNG color type 6 (RGBA), opaque canvas, **80.361 bytes**.
 - `@import`ed stylesheets: **1** (`theme.css`, depth 1); external stylesheets: 1
   (`site.css`); media-skipped sheets: 1 (`print-sheet.css`); `<img>` images loaded: 2;
   background images loaded: **2** (185 bytes); display items: **80**.
-- md5: **c95c7eff83e7bd08f815631aa42afdb0** (previous golden
-  `570aa554c88c2fdf75481e8cd076bf61`, 65.151 bytes, before table text + backgrounds).
+- md5: **926185863bdaf39f8d182ab66315b33c** (previous golden
+  `c95c7eff83e7bd08f815631aa42afdb0`, 80.220 bytes, before the serif-parity re-stamp;
+  the one before that was `570aa554c88c2fdf75481e8cd076bf61`, 65.151 bytes, before
+  table text + backgrounds).
 
 ## Known layout limitations reflected in the golden
 

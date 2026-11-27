@@ -20,7 +20,13 @@ import json
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
+
+try:
+    from tools.vendor_wpt import NOT_ADOPTED_DEBT
+except ImportError:  # executed directly as tools/wpt_report.py
+    from vendor_wpt import NOT_ADOPTED_DEBT
 
 STATUS_DIR = Path("docs/status")
 RESULT_RE = re.compile(r"^  \[(PASS|FAIL|TIMEOUT|NOTRUN|harness_error)\] (.+)$")
@@ -166,9 +172,21 @@ def build_report(root: Path, output: str | None = None) -> dict:
         counts[COUNT_FIELD[result["status"]]] += 1
     dirs = sorted({str(Path(r["test"]).parent) for r in results})
     harness = "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)"
+    # #2432: publish the excluded denominator next to the P/T numbers. A 596/596
+    # headline is only honest when readers can see what was never executed.
+    kinds = Counter(entry.get("kind") for entry in manifest if isinstance(entry, dict))
+    excluded = len(manifest) - len(expected)
+    debt_files = sum(
+        1 for entry in manifest
+        if isinstance(entry, dict)
+        and entry.get("kind") == "skip"
+        and entry.get("dir") in NOT_ADOPTED_DEBT
+    )
     scope = (
-        f"{len(expected)} vendored WPT fixtures ({total} executed subtests, "
-        f"{len(dirs)} dirs); NOT full WPT conformance"
+        f"{len(expected)} vendored WPT fixtures adopted ({total} executed subtests, "
+        f"{len(dirs)} dirs); {excluded} vendored files excluded "
+        f"({kinds['skip']} skipped incl. {debt_files} in debt dirs, "
+        f"{kinds['support']} support, {kinds['seed']} seeds); NOT full WPT conformance"
     )
     return {
         "schema": "megi-wpt-report/1",
@@ -181,6 +199,16 @@ def build_report(root: Path, output: str | None = None) -> dict:
             "scope": scope,
             "adopted_subtests": total,
             "dirs": dirs,
+            "excluded_files": excluded,
+            "excluded_by_kind": {
+                "skip": kinds["skip"],
+                "support": kinds["support"],
+                "seed": kinds["seed"],
+            },
+            "debt_dirs": [
+                {"dir": directory, "milestone": milestone, "issues": issues}
+                for directory, (milestone, issues) in sorted(NOT_ADOPTED_DEBT.items())
+            ],
         },
         "counts": counts,
         "total": total,

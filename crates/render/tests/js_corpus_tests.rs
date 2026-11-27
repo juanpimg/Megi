@@ -119,6 +119,17 @@ fn render_fixture(name: &str) -> RenderOutput {
         .unwrap_or_else(|error| panic!("render corpus fixture {name}: {error}"))
 }
 
+/// Exact `#result` text each corpus fixture must produce (#2430).
+///
+/// A `pass:` prefix alone hid regressions that changed the observable value, so
+/// every fixture now declares the complete expected string.
+const EXPECTED_RESULTS: &[(&str, &str)] = &[
+    ("example_com_s.html", "pass:prefix injected"),
+    ("wikipedia_null.html", "pass:client-js vector-feature-foo"),
+    ("jquery_like.html", "pass:2:yes"),
+    ("module_cycle.html", "pass:3"),
+];
+
 fn result_text(output: &RenderOutput, id: &str) -> String {
     let document = &output.document;
     let node = document
@@ -135,28 +146,22 @@ fn result_text(output: &RenderOutput, id: &str) -> String {
 }
 
 /// Run the whole offline corpus and classify every failure. A fixture passes only
-/// when no script failed, no `console.error` was emitted and its script reported
-/// the expected `pass:` observable result in the DOM.
+/// when no script failed, no `console.error` was emitted and its script wrote the
+/// exact expected observable result into the DOM (#2430).
 pub fn run_js_corpus() -> CorpusReport {
-    let fixtures = [
-        "example_com_s.html",
-        "wikipedia_null.html",
-        "jquery_like.html",
-        "module_cycle.html",
-    ];
     let mut report = CorpusReport {
         total: 0,
         passed: 0,
         engine_semantic_failures: 0,
         binding_failures: 0,
     };
-    for fixture in fixtures {
+    for (fixture, expected) in EXPECTED_RESULTS {
         report.total += 1;
         let output = render_fixture(fixture);
         let result = result_text(&output, "result");
         let script_failed = output.stats.scripts_failed > 0;
         let console_failed = output.stats.console_errors > 0;
-        if !script_failed && !console_failed && result.starts_with("pass:") {
+        if !script_failed && !console_failed && result == *expected {
             report.passed += 1;
             continue;
         }
@@ -203,6 +208,22 @@ fn wikipedia_null_conversion_has_no_console_error() {
         result_text(&output, "result"),
         "pass:client-js vector-feature-foo"
     );
+}
+
+#[test]
+fn jquery_like_chain_produces_the_exact_observable_result() {
+    let output = render_fixture("jquery_like.html");
+    assert_eq!(output.stats.scripts_failed, 0, "{:?}", output.stats.warnings);
+    assert_eq!(output.stats.console_errors, 0, "{:?}", output.stats.console);
+    assert_eq!(result_text(&output, "result"), "pass:2:yes");
+}
+
+#[test]
+fn module_cycle_produces_the_exact_observable_result() {
+    let output = render_fixture("module_cycle.html");
+    assert_eq!(output.stats.scripts_failed, 0, "{:?}", output.stats.warnings);
+    assert_eq!(output.stats.console_errors, 0, "{:?}", output.stats.console);
+    assert_eq!(result_text(&output, "result"), "pass:3");
 }
 
 #[test]

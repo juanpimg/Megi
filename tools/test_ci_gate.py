@@ -1,6 +1,14 @@
-"""Regression tests for the dependency-policy gates in `.github/workflows/ci.yml` (#2138)."""
+"""Regression tests for the policy gates in `.github/workflows/ci.yml`.
 
+Covers the cargo-tree capture (#2138), the explicit unittest list (#1402), and
+the docs-only classifier / umbrella skip rules (#2405).
+"""
+
+import os
 from pathlib import Path
+import re
+import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -144,6 +152,168 @@ class ToolsTestListTests(unittest.TestCase):
             ci.write_text("python3 -m unittest\n  tools.test_existing\n", encoding="utf-8")
             self.assertIn("tools.test_brand_new_module", discovered_test_modules(root))
             self.assertNotIn("tools.test_brand_new_module", registered_ci_test_modules(ci))
+
+
+RUST_GATED_JOBS = (
+    "quality", "conformance", "wpt", "release", "msrv", "minimal",
+    "package", "security", "unsafe-audit",
+)
+UMBRELLA_JOBS = (*RUST_GATED_JOBS, "changes", "docs", "workflow-lint", "secret-scan", "docs-links")
+
+
+def _dedent_yaml_block(block: str, width: int = 10) -> str:
+    """Strip the workflow's step indentation while keeping relative nesting."""
+    return "\n".join(line[width:] if line.startswith(" " * width) else line for line in block.splitlines())
+
+
+def classifier_script() -> str:
+    """Extract the exact `changes` job classifier shell from the workflow."""
+    lines = CI.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "docs_only=true")
+    end = next(
+        i for i in range(start, len(lines))
+        if 'echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"' in lines[i]
+    )
+    return _dedent_yaml_block("\n".join(lines[start : end + 1]))
+
+
+def umbrella_script() -> str:
+    """Extract the exact `check` job shell from the workflow."""
+    lines = CI.read_text(encoding="utf-8").splitlines()
+    start = next(
+        i for i, line in enumerate(lines)
+        if line.strip() == "- name: Verify all required gates succeeded"
+    )
+    run_line = next(i for i in range(start, len(lines)) if lines[i].strip() == "run: |")
+    body: list[str] = []
+    for line in lines[run_line + 1 :]:
+        if line.strip() and not line.startswith(" " * 10):
+            break
+        body.append(line)
+    return _dedent_yaml_block("\n".join(body))
+
+
+def run_bash(script: str, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "gate.sh"
+        path.write_text("#!/usr/bin/env bash\n" + script + "\n", encoding="utf-8")
+        return subprocess.run(
+            ["bash", str(path), *args], capture_output=True, text=True, env=env
+        )
+
+
+class DocsOnlyClassifierTests(unittest.TestCase):
+    """A .md under tests/ or a generated docs artifact must run the matrix (#2405)."""
+
+    def classify(self, *files: str) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "github-output"
+            env = dict(os.environ, GITHUB_OUTPUT=str(output))
+            completed = run_bash(
+                'changed="$1"\n' + classifier_script(), "\n".join(files), env=env
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            return output.read_text(encoding="utf-8").strip()
+
+    def test_pure_prose_is_docs_only(self):
+        self.assertEqual(self.classify("docs/ARCHITECTURE.md", "README.md"), "docs_only=true")
+
+    def test_markdown_test_input_forces_full_matrix(self):
+        for path in (
+            "tests/html5lib-tests/README.md",
+            "tests/fixtures/render/README.md",
+            "crates/image/tests/fixtures/README.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.classify(path), "docs_only=false")
+
+    def test_generated_docs_artifacts_force_full_matrix(self):
+        for path in (
+            "docs/status/wpt.json",
+            "docs/audit/coverage.tsv",
+            "docs/work-packages/BOARD.md",
+            "docs/images/showcase.png",
+            "PROGRESS.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.classify(path), "docs_only=false")
+
+    def test_mixed_change_forces_full_matrix(self):
+        self.assertEqual(
+            self.classify("docs/GAPS.md", "docs/status/wpt.json"), "docs_only=false"
+        )
+
+    def test_only_rust_gates_are_guarded_by_the_classifier(self):
+        text = CI.read_text(encoding="utf-8")
+        blocks = re.findall(r"(?ms)^  ([a-z0-9-]+):\n(.*?)(?=^  [a-z0-9-]+:\n|\Z)", text)
+        guarded = {
+            name for name, body in blocks
+            if any(
+                line.strip() == "if: needs.changes.outputs.docs_only != 'true'"
+                for line in body.splitlines()
+                if not line.strip().startswith("#")
+            )
+        }
+        self.assertEqual(guarded, set(RUST_GATED_JOBS))
+
+
+class UmbrellaCheckTests(unittest.TestCase):
+    """A skipped gate is not success unless the classifier expected it (#2405)."""
+
+    def run_check(self, overrides: dict[str, str] | None = None, docs_only: str = "false", omit: tuple[str, ...] = ()):
+        results = {name: "success" for name in UMBRELLA_JOBS}
+        results.update(overrides or {})
+        script = umbrella_script()
+        for name in omit:
+            del results[name]
+            script = script.replace(
+                "%s:${{ needs.%s.result }} " % (name, name), ""
+            )
+        for name, result in results.items():
+            script = script.replace("${{ needs.%s.result }}" % name, result)
+        script = script.replace("${{ needs.changes.outputs.docs_only }}", docs_only)
+        self.assertNotIn("${{", script, "unrendered GitHub expression in umbrella script")
+        return run_bash(script)
+
+    def test_all_success_passes(self):
+        completed = self.run_check()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("All required gates succeeded", completed.stdout)
+
+    def test_unexpected_skipped_rust_gate_fails(self):
+        completed = self.run_check({"quality": "skipped"})
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("quality did not succeed: skipped", completed.stderr)
+
+    def test_docs_only_skip_is_expected_and_reported(self):
+        completed = self.run_check(
+            {name: "skipped" for name in RUST_GATED_JOBS}, docs_only="true"
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("expected docs-only skips:", completed.stdout)
+        self.assertIn("unsafe-audit", completed.stdout)
+
+    def test_unconditional_gate_cannot_skip_even_on_docs_only(self):
+        for gate in ("changes", "docs", "workflow-lint", "secret-scan", "docs-links"):
+            with self.subTest(gate=gate):
+                completed = self.run_check({gate: "skipped"}, docs_only="true")
+                self.assertEqual(completed.returncode, 1)
+                self.assertIn(f"{gate} did not succeed: skipped", completed.stderr)
+
+    def test_conditional_gate_failure_or_cancellation_fails_on_docs_only(self):
+        for result in ("failure", "cancelled", "neutral"):
+            with self.subTest(result=result):
+                completed = self.run_check({"conformance": result}, docs_only="true")
+                self.assertEqual(completed.returncode, 1)
+                self.assertIn(f"conformance did not succeed: {result}", completed.stderr)
+
+    def test_missing_required_gate_fails(self):
+        completed = self.run_check(omit=("security",))
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("security missing from umbrella results", completed.stderr)
+
+    def test_umbrella_does_not_treat_skipped_as_generic_success(self):
+        self.assertNotRegex(CI.read_text(encoding="utf-8"), r'"success"\] && \[ "\$result" != "skipped"')
 
 
 if __name__ == "__main__":

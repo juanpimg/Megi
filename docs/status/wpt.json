@@ -2,11 +2,11 @@
   "schema": "megi-wpt-report/1",
   "epoch": {
     "wpt_revision": "ab2ef95d3a7c512a6e7321688c80e428086af426",
-    "manifest_sha256": "af4cb74f24c232438b3529654e803534e87039c2f518c43ee6e5a37c04c81100"
+    "manifest_sha256": "c77115416a78793a57b24d2d41df2547702980983c59ac140cea5e610a6a939e"
   },
   "run_info": {
     "harness": "megi-test-harness --summary (CSS Syntax extractor + offline JS component runner)",
-    "scope": "18 vendored WPT fixtures (596 executed subtests, 6 dirs); NOT full WPT conformance",
+    "scope": "18 vendored WPT fixtures adopted (596 executed subtests, 6 dirs); 117 vendored files excluded (106 skipped incl. 88 in debt dirs, 11 support, 0 seeds); NOT full WPT conformance",
     "adopted_subtests": 596,
     "dirs": [
       "tests/wpt/2dcontext/drawing-rectangles-to-the-canvas",
@@ -15,6 +15,29 @@
       "tests/wpt/html/webappapis/atob",
       "tests/wpt/shadow-dom",
       "tests/wpt/webgl"
+    ],
+    "excluded_files": 117,
+    "excluded_by_kind": {
+      "skip": 106,
+      "support": 11,
+      "seed": 0
+    },
+    "debt_dirs": [
+      {
+        "dir": "dom/events",
+        "milestone": "M2",
+        "issues": "#2333, #2334, #2335"
+      },
+      {
+        "dir": "dom/nodes",
+        "milestone": "M2",
+        "issues": "#2316, #2317"
+      },
+      {
+        "dir": "url",
+        "milestone": "M4",
+        "issues": "#2432"
+      }
     ]
   },
   "counts": {

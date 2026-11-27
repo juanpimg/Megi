@@ -176,42 +176,6 @@ pub(crate) fn paint_chevron(pixmap: &mut Pixmap, rect: Rect, scale: f32, left: b
     stroke_line(pixmap, tip, cy, outer, cy + dy, 2.2, color, scale);
 }
 
-/// Draws a circular arrow (open arc plus a small arrowhead) inside `rect`.
-pub(crate) fn paint_reload(pixmap: &mut Pixmap, rect: Rect, scale: f32, color: Color) {
-    let cx = rect.x + rect.width / 2.0;
-    let cy = rect.y + rect.height / 2.0;
-    let radius = rect.width * 0.30;
-    let start = -0.35 * std::f32::consts::PI;
-    let sweep = 1.65 * std::f32::consts::PI;
-    const SEGMENTS: usize = 20;
-    let mut previous = None;
-    for segment in 0..=SEGMENTS {
-        let angle = start + sweep * segment as f32 / SEGMENTS as f32;
-        let point = (cx + radius * angle.cos(), cy + radius * angle.sin());
-        if let Some((px, py)) = previous {
-            stroke_line(pixmap, px, py, point.0, point.1, 2.0, color, scale);
-        }
-        previous = Some(point);
-    }
-    let end = start + sweep;
-    let ex = cx + radius * end.cos();
-    let ey = cy + radius * end.sin();
-    let tangent = end + std::f32::consts::FRAC_PI_2;
-    for offset in [-0.55, 0.55] {
-        let angle = tangent + offset;
-        stroke_line(
-            pixmap,
-            ex,
-            ey,
-            ex - 5.0 * angle.cos(),
-            ey - 5.0 * angle.sin(),
-            2.0,
-            color,
-            scale,
-        );
-    }
-}
-
 /// Paints a three-row soft shadow immediately below the chrome band. Each row
 /// fades out; the shadow is pure geometry, no GPU or animation.
 pub(crate) fn paint_band_shadow(pixmap: &mut Pixmap, scale: f32, width: f32, band_css: f32) {

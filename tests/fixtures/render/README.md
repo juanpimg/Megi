@@ -1,7 +1,10 @@
 # Render pipeline fixtures
 
 Self-contained documents for the `crates/render` integration tests. No external
-network, no JavaScript.
+network is required: assets are local or served by loopback URLs. JavaScript is
+enabled by default (`ScriptingMode::Enabled`): the `browser_api.html`, `js_*.html`,
+`module_*.html` (with `modules/*.js`) and worker fixtures all execute scripts.
+`showcase/index.html` is an intentionally JavaScript-free page.
 
 | File | Purpose |
 |---|---|
@@ -116,9 +119,10 @@ cargo run -q -p megi-render -- tests/fixtures/render/showcase/index.html \
 python3 tools/png_check.py tests/fixtures/render/showcase/golden.png
 ```
 
-Golden md5: `c95c7eff83e7bd08f815631aa42afdb0` (80.220 bytes). This golden was
-regenerated after the task-53 (table cell text) and WP-5.9 (CSS background images /
-`list-style-image`) landings; both changes are expected: table cells now paint their
+Golden md5: `926185863bdaf39f8d182ab66315b33c` (80.361 bytes). This golden was
+regenerated after the serif-parity re-stamp (`abc4ad80`) and the task-53 (table cell
+text) and WP-5.9 (CSS background images /
+`list-style-image`) landings; all are expected: table cells now paint their
 text/bold headers and the showcase header/stage carry a checker pattern while the
 feature list uses a PNG bullet marker. See `showcase/README.md` for the statistics and
 the known layout limitations reflected in the golden.

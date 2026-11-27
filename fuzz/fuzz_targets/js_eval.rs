@@ -5,7 +5,8 @@
 //! the input, derives bounded budget/clock parameters from input bytes, evaluates one or more
 //! script slices, dispatches a short event sequence, and advances the virtual clock/timer queue
 //! in bounded steps. This explores budget/clock/DOM variation and limited realm reuse without
-//! unbounded work.
+//! unbounded work. Events target real fixture elements as well as window/document/root (#2419),
+//! and a deterministic listener oracle proves element dispatch reaches JS handlers.
 //!
 //! Host providers (`fetch`, Web Storage, layout, viewport, media, computed style, history,
 //! location, worker loader) are installed as **hostile stubs** derived from the input (#704):
@@ -46,6 +47,20 @@ const EVENTS: [&str; 6] = [
     "change",
     "hashchange",
 ];
+
+/// Element IDs present in each fixture, used to reach `JsEventTarget::Node` element wrappers
+/// instead of always dispatching at `document.root()` (#2419).
+const ELEMENT_IDS: [&[&str]; 4] = [
+    &["root", "text", "field", "btn"],
+    &["app", "i", "go"],
+    &["t", "list", "p"],
+    &["f", "name", "chk", "s", "out"],
+];
+
+fn fixture_element_id(fixture: usize, selector: u8) -> &'static str {
+    let ids = ELEMENT_IDS[fixture % ELEMENT_IDS.len()];
+    ids[usize::from(selector) % ids.len()]
+}
 
 fn bounded_usize(byte: u8, min: usize, max: usize) -> usize {
     if max <= min {
@@ -230,17 +245,55 @@ fn install_hostile_providers(runtime: &mut megi_js::JsRuntime, seed: &[u8]) {
     }));
 }
 
-fn pick_target(runtime: &megi_js::JsRuntime, selector: u8) -> megi_js::JsEventTarget {
+fn pick_target(
+    runtime: &megi_js::JsRuntime,
+    fixture: usize,
+    selector: u8,
+    index: u8,
+) -> megi_js::JsEventTarget {
     match selector % 4 {
         0 => megi_js::JsEventTarget::Window,
         1 => megi_js::JsEventTarget::Document,
         2 => megi_js::JsEventTarget::Node(runtime.document().root()),
         _ => {
-            // Prefer a stable element when available; fall back to document root.
-            let root = runtime.document().root();
-            megi_js::JsEventTarget::Node(root)
+            // Reach a real element from the fixture; only fall back to root if the
+            // (deterministic) lookup fails (#2419).
+            let document = runtime.document();
+            document
+                .get_element_by_id(fixture_element_id(fixture, index))
+                .map(megi_js::JsEventTarget::Node)
+                .unwrap_or_else(|| megi_js::JsEventTarget::Node(document.root()))
         }
     }
+}
+
+/// Deterministic oracle: a click delivered to a fixture element must reach a listener
+/// registered on that element. Runs before attacker-controlled script so the counter cannot
+/// be spoofed (#2419).
+fn assert_element_dispatch(runtime: &mut megi_js::JsRuntime, fixture: usize) {
+    let id = fixture_element_id(fixture, 0);
+    let script = format!(
+        "globalThis.__fuzz_hits = 0; document.getElementById('{id}').addEventListener('click', function () {{ globalThis.__fuzz_hits += 1; }});"
+    );
+    if runtime.eval(&script, "element_probe.js").is_err() {
+        return;
+    }
+    let Some(node) = runtime.document().get_element_by_id(id) else {
+        return;
+    };
+    if runtime
+        .dispatch_event(megi_js::JsEventTarget::Node(node), "click", true)
+        .is_err()
+    {
+        return;
+    }
+    let Ok(hits) = runtime.eval("globalThis.__fuzz_hits", "element_probe.js") else {
+        return;
+    };
+    assert_eq!(
+        hits, "1",
+        "click dispatched at #{id} did not reach its element listener"
+    );
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -248,7 +301,8 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    let fixture = FIXTURES[data[0] as usize % FIXTURES.len()];
+    let fixture_index = data[0] as usize % FIXTURES.len();
+    let fixture = FIXTURES[fixture_index];
     let document = megi_html::parse_document(fixture, false);
     let Ok(mut runtime) = megi_js::JsRuntime::with_document(document, "about:blank".to_string()) else {
         return;
@@ -264,6 +318,9 @@ fuzz_target!(|data: &[u8]| {
         recursion_limit,
         stack_size_limit,
     });
+
+    // Prove element dispatch before any hostile provider or fuzzer script can interfere.
+    assert_element_dispatch(&mut runtime, fixture_index);
 
     install_hostile_providers(&mut runtime, &data[5.min(data.len())..]);
     // Deterministic probe: reaches every provider even when the input has no relevant code.
@@ -301,7 +358,9 @@ fuzz_target!(|data: &[u8]| {
         for j in 0..seq_len {
             let b = data.get(8 + i * 4 + j).copied().unwrap_or((i + j) as u8);
             let event = EVENTS[b as usize % EVENTS.len()];
-            let target = pick_target(&runtime, data.get(9 + i * 4 + j).copied().unwrap_or(b));
+            let selector = data.get(9 + i * 4 + j).copied().unwrap_or(b);
+            let element_index = data.get(7 + i * 4 + j).copied().unwrap_or(selector);
+            let target = pick_target(&runtime, fixture_index, selector, element_index);
             let _ = runtime.dispatch_event(target, event, true);
             let _ = runtime.run_microtasks();
             let _ = runtime.run_tasks(16);

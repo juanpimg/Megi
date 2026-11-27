@@ -7,8 +7,8 @@
 
 ## 1. Objetivo
 
-Auditar **todo el código del motor** (270.986 líneas Rust en `crates/`, 273.621
-`.rs` contabilizadas por `PROGRESS.md`) línea por línea, convertir cada hallazgo
+Auditar **todo el código del motor** (270.986 líneas Rust en `crates/` y 273.621 `.rs`
+en el snapshot auditado; el snapshot actual publica 274.464 líneas en `PROGRESS.md:7`) línea por línea, convertir cada hallazgo
 en un work package verificable y cerrar las brechas que separan a Megi de un
 navegador capaz de renderizar cualquier página de Internet con paridad frente a
 Chrome/Ladybird.
@@ -23,7 +23,7 @@ barra de producción de spec §2 esté sin cumplir. El propio spec lo dice en `:
 |---|---|---|
 | Hitos cerrados | **6/13** (M0, M1, M2, M3, M7, M12) | `PROGRESS.md:7-25` |
 | Criterios verificados | **47/64 (73 %)** | `PROGRESS.md:7` |
-| Tests | **3.697** | `PROGRESS.md:7` |
+| Tests | **3.718** | `PROGRESS.md:7` |
 | Gate html5lib | PASS 7.050/7.050 + 3.904/3.904 + 230/230 + CSS 30/30 | `PROGRESS.md:201-203` |
 | WPT adoptado | **596/596 en 18 fixtures, 6 dirs**; 103 fixtures `skip` del manifiesto; ≈0,03 % del árbol de referencia (~2,18 M) | `docs/status/wpt.md:5-17`; `tests/wpt/MANIFEST.json`; spec §1/:11 |
 | Test262 | **13 casos locales**, no el árbol tc39 | `docs/status/test262.json:5-16` |
@@ -32,7 +32,7 @@ barra de producción de spec §2 esté sin cumplir. El propio spec lo dice en `:
 | Paridad visual vs Chrome | example 0,92 %; Wikipedia 4,88 %; rust 10,78 %; HN 17,39 % de píxeles distintos con `--system-fonts` | `docs/VISUAL-PARITY.md:43-53` |
 | Fuzzing | 34 targets, 176 seeds; **sin ejecuciones publicadas** (barra: 1 M/target) | `fuzz/Cargo.toml`; `.github/workflows/fuzz-nightly.yml`; spec §2/:31 |
 | Sandbox | `enforced` solo en Linux; macOS/Windows `unsupported` | `crates/browser/src/ipc/sandbox.rs:28-33`; `PROGRESS.md:103` |
-| Gates sin compilar | 49 gates Python en verde, pero `update_coverage` depende de un sello de conformidad fresco | `tools/check_no_compile_gates.py` |
+| Gates sin compilar | **50/50** gates Python en verde (49 módulos `unittest`); ledger `docs/audit/coverage.tsv` con 0 filas pendientes; `update_coverage` depende de un sello de conformidad fresco | `tools/check_no_compile_gates.py`; `tools/audit_coverage.py --check --strict` |
 
 **Conclusión**: hoy Megi es un pipeline de render determinista con JS embebido y
 un shell funcional, **no** un motor equivalente a Ladybird. Las métricas en verde

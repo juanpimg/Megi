@@ -16,202 +16,86 @@ use super::tokens::{
 };
 use super::*;
 
+/// The address pill's lock has no semantic atlas glyph yet, so it keeps its
+/// small deterministic stroke geometry.
 fn paint_lock(pixmap: &mut Pixmap, rect: Rect, scale: f32) {
-    let body = Rect::new(rect.x + 2.0, rect.y + 7.0, 10.0, 8.0);
-    fill_round(pixmap, body, scale, 2.0, SHELL.lock);
-    stroke_line(
+    fill_round(
         pixmap,
-        rect.x + 4.0,
-        rect.y + 7.0,
-        rect.x + 4.0,
-        rect.y + 4.0,
-        1.6,
-        SHELL.lock,
+        Rect::new(rect.x + 2.0, rect.y + 7.0, 10.0, 8.0),
         scale,
-    );
-    stroke_line(
-        pixmap,
-        rect.x + 4.0,
-        rect.y + 4.0,
-        rect.x + 10.0,
-        rect.y + 4.0,
-        1.6,
+        2.0,
         SHELL.lock,
-        scale,
     );
-    stroke_line(
-        pixmap,
-        rect.x + 10.0,
-        rect.y + 4.0,
-        rect.x + 10.0,
-        rect.y + 7.0,
-        1.6,
-        SHELL.lock,
-        scale,
-    );
+    for (x1, y1, x2, y2) in [
+        (rect.x + 4.0, rect.y + 7.0, rect.x + 4.0, rect.y + 4.0),
+        (rect.x + 4.0, rect.y + 4.0, rect.x + 10.0, rect.y + 4.0),
+        (rect.x + 10.0, rect.y + 4.0, rect.x + 10.0, rect.y + 7.0),
+    ] {
+        stroke_line(pixmap, x1, y1, x2, y2, 1.6, SHELL.lock, scale);
+    }
 }
 
-fn paint_actions(pixmap: &mut Pixmap, actions: &[Rect; 4], scale: f32) {
-    // Settings: a cog approximated by a ring and four spokes.
-    let gear = actions[0];
-    circle(
-        pixmap,
-        Rect::new(gear.x + 4.0, gear.y + 4.0, 10.0, 10.0),
-        SHELL.icon,
-        scale,
-    );
-    circle(
-        pixmap,
-        Rect::new(gear.x + 7.0, gear.y + 7.0, 4.0, 4.0),
-        SHELL.top,
-        scale,
-    );
-    for dx in [-3.0, 3.0] {
-        stroke_line(
-            pixmap,
-            gear.x + 9.0 + dx,
-            gear.y,
-            gear.x + 9.0 + dx,
-            gear.y + 4.0,
-            1.5,
-            SHELL.icon,
-            scale,
-        );
+/// Keyboard focus order shared by painting and input: top-bar controls, visible
+/// sidebar rows, then the new-tab action (UI-TARGET single unified component).
+pub fn shell_focus_order(view: &ShellView<'_>) -> Vec<ShellHit> {
+    let mut order = vec![
+        ShellHit::ToggleSidebar,
+        ShellHit::Nav(NavigationButton::Back),
+        ShellHit::Nav(NavigationButton::Forward),
+        ShellHit::Nav(NavigationButton::Reload),
+    ];
+    order.extend((0..view.labels.len()).map(ShellHit::Activate));
+    order.push(ShellHit::NewTab);
+    order
+}
+
+/// Tints a control from the unified interaction state; the base colour is used
+/// when neither keyboard focus nor pointer hover targets it.
+fn state_color(hit: ShellHit, view: &ShellView<'_>, base: Color) -> Color {
+    if view.focus == Some(hit) {
+        STATE.focus
+    } else if view.hover == Some(hit) {
+        STATE.hover
+    } else {
+        base
     }
-    // Share: a box with an upward arrow.
-    let share = actions[1];
-    stroke_line(
-        pixmap,
-        share.x + 4.0,
-        share.y + 8.0,
-        share.x + 4.0,
-        share.y + 16.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        share.x + 4.0,
-        share.y + 8.0,
-        share.x + 14.0,
-        share.y + 8.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        share.x + 14.0,
-        share.y + 8.0,
-        share.x + 14.0,
-        share.y + 16.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        share.x + 9.0,
-        share.y + 14.0,
-        share.x + 9.0,
-        share.y + 2.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        share.x + 5.0,
-        share.y + 6.0,
-        share.x + 9.0,
-        share.y + 2.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        share.x + 9.0,
-        share.y + 2.0,
-        share.x + 13.0,
-        share.y + 6.0,
-        1.6,
-        SHELL.icon,
-        scale,
-    );
-    let plus = actions[2];
-    stroke_line(
-        pixmap,
-        plus.x + 3.0,
-        plus.y + 9.0,
-        plus.x + 15.0,
-        plus.y + 9.0,
-        1.8,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        plus.x + 9.0,
-        plus.y + 3.0,
-        plus.x + 9.0,
-        plus.y + 15.0,
-        1.8,
-        SHELL.icon,
-        scale,
-    );
-    let menu = actions[3];
-    for row in [5.0, 9.0, 13.0] {
-        stroke_line(
-            pixmap,
-            menu.x + 2.0,
-            menu.y + row,
-            menu.x + 16.0,
-            menu.y + row,
-            1.6,
-            SHELL.icon,
-            scale,
-        );
+}
+
+fn paint_actions(
+    atlas: &IconAtlas,
+    pixmap: &mut Pixmap,
+    actions: &[Rect; 4],
+    view: &ShellView<'_>,
+    scale: f32,
+) {
+    for (index, icon) in [Icon::Gear, Icon::Share, Icon::Plus, Icon::Menu]
+        .into_iter()
+        .enumerate()
+    {
+        let base = if index == 2 {
+            state_color(ShellHit::NewTab, view, SHELL.icon)
+        } else {
+            SHELL.icon
+        };
+        let _ = atlas.paint(pixmap, icon, actions[index], base, scale);
     }
 }
 
 /// Paints the shell layer over a transparent pixmap. The caller composites the
 /// result with the page using the standard chrome alpha blend.
 pub fn paint_shell(pixmap: &mut Pixmap, scale: f32, layout: &ShellLayout, view: &ShellView<'_>) {
+    let atlas = IconAtlas::new();
     fill_round(pixmap, layout.top, scale, 0.0, SHELL.top);
     for (index, dot) in layout.dots.iter().enumerate() {
         circle(pixmap, *dot, SHELL.traffic[index], scale);
     }
-    // Sidebar toggle: two adjacent panels, matching the reference glyph.
-    stroke_line(
+    // One atlas paints every affordance, so hover/focus tints never drift from
+    // the hit rectangles used by input handling.
+    let _ = atlas.paint(
         pixmap,
-        layout.toggle.x,
-        layout.toggle.y,
-        layout.toggle.x,
-        layout.toggle.y + 16.0,
-        2.0,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        layout.toggle.x + 8.0,
-        layout.toggle.y + 3.0,
-        layout.toggle.x + 8.0,
-        layout.toggle.y + 13.0,
-        2.0,
-        SHELL.icon,
-        scale,
-    );
-    stroke_line(
-        pixmap,
-        layout.toggle.x + 16.0,
-        layout.toggle.y,
-        layout.toggle.x + 16.0,
-        layout.toggle.y + 16.0,
-        2.0,
-        SHELL.icon,
+        Icon::ToggleSidebar,
+        layout.toggle,
+        state_color(ShellHit::ToggleSidebar, view, SHELL.icon),
         scale,
     );
     // Address pill with lock glyph and the real URL, centred like the reference.
@@ -237,14 +121,20 @@ pub fn paint_shell(pixmap: &mut Pixmap, scale: f32, layout: &ShellLayout, view: 
     let text = fitted(view.url, (layout.pill.width - 64.0).max(1.0), 14.0);
     let text_y = layout.pill.y + (layout.pill.height - 16.0) * 0.5;
     draw_text(pixmap, &text, text_x, text_y, scale, 14.0, SHELL.text);
+    let nav_state = |hit: Option<ShellHit>| match hit {
+        Some(ShellHit::Nav(button)) => Some(button),
+        _ => None,
+    };
     paint_navigation_buttons_at(
         pixmap,
         scale,
         &layout.nav,
         view.can_go_back,
         view.can_go_forward,
+        nav_state(view.hover),
+        nav_state(view.focus),
     );
-    paint_actions(pixmap, &layout.actions, scale);
+    paint_actions(&atlas, pixmap, &layout.actions, view, scale);
     if view.sidebar {
         paint_sidebar(pixmap, scale, layout, view);
         // Inset page: a soft top/left shadow. The rounded corner itself is masked

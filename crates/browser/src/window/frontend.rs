@@ -83,6 +83,8 @@ impl WindowApp {
             links: Vec::new(),
             doc_title: None,
             cursor: None,
+            shell_hover: None,
+            shell_focus: None,
             chrome_mode: super::chrome_mode::ChromeMode::new(
                 view.reduced_motion,
                 view.startup_chrome,

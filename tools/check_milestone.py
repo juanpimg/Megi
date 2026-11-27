@@ -12,7 +12,9 @@ Two selection modes are supported:
   closed out of order; the text is the stable identifier.
 
 Exit 0 only when the selected criterion is no longer pending in
-docs/status/progress.toml and has been recorded as verified with evidence.
+docs/status/progress.toml and has been recorded with checkable evidence (a
+backticked command/artifact or an explicit gate result). Bare prose in `items`
+is reported as documented and fails (issue #2441).
 
 Usage: python3 tools/check_milestone.py M0 4
        python3 tools/check_milestone.py M9 --match "Distribución multiplataforma firmada"
@@ -24,6 +26,11 @@ import argparse
 import sys
 import tomllib
 from pathlib import Path
+
+try:  # imported as `tools.check_milestone` by the unit tests
+    from .progress_stats import has_evidence
+except ImportError:  # executed directly as `python3 tools/check_milestone.py`
+    from progress_stats import has_evidence
 
 DEFAULT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -61,6 +68,13 @@ def check(
         folded = needle.casefold()
         for evidence in items:
             if isinstance(evidence, str) and folded in evidence.casefold():
+                if not has_evidence(evidence):
+                    # #2441: a bare string in `items` is documented, not verified.
+                    print(
+                        f"FAIL: {milestone} --match {needle!r} documented without "
+                        f"evidence: {evidence[:140]}"
+                    )
+                    return 1
                 print(f"PASS: {milestone} --match {needle!r} verified: {evidence[:140]}")
                 return 0
         for evidence in pending:
@@ -81,6 +95,11 @@ def check(
         evidence = items[index - 1]
         if not isinstance(evidence, str) or not evidence.strip():
             print(f"FAIL: {milestone}#{index} has no recorded evidence")
+            return 1
+        if not has_evidence(evidence):
+            print(
+                f"FAIL: {milestone}#{index} documented without evidence: {evidence[:140]}"
+            )
             return 1
         print(f"PASS: {milestone}#{index} verified: {evidence[:140]}")
         return 0

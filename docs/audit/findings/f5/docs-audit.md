@@ -31,7 +31,7 @@ exist, `CHANGELOG.md`, `docs/JAVASCRIPT-STRATEGY.md`, `docs/PHASE4-SUPPORT.md`,
 | `docs/superpowers/specs/2026-11-17-honest-progress-design.md` | 73 | ok | design; implemented as described (coverage.json headline, `--check` in CI, real-sites report) |
 | `tests/fixtures/phase4/README.md` | 88 | stale | :82-84 "PNG writer uses stored DEFLATE blocks (no compression) on purpose" contradicts :20-25 (adaptive row filters + in-tree LZ77 DEFLATE) and the real encoder |
 | `tests/fixtures/render/README.md` | 123 | wrong | :88 "modules are not supported yet" contradicts :40-43 module fixtures and module tests (`crates/render/tests/scripting_tests.rs`); ES modules shipped |
-| `tests/fixtures/render/showcase/README.md` | 55 | ok | golden 80,220 B `md5 c95c7eff…` matches `docs/images/showcase.png`; bg images 185 B = pattern 93 + bullet 92 |
+| `tests/fixtures/render/showcase/README.md` | 57 | ok | golden 80,361 B `md5 92618586…` matches `docs/images/showcase.png` after the serif-parity re-stamp; bg images 185 B = pattern 93 + bullet 92 |
 | `tests/html5lib-tests/README.md` | 3 | ok | upstream pointer only |
 | `tests/html5lib-tests/tokenizer/README.md` | 108 | ok | format description matches harness (14 `.test` files, `xmlViolation` variant) |
 | `tests/wpt/css/css-syntax/README.md` | 59 | ok | SHA-256 of the 3 fixtures match; 30-result gate matches `progress.toml` gate (`css_syntax 30/30`) |

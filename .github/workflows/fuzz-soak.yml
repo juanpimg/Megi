@@ -41,8 +41,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: fuzz-soak-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # #2424: a manual dispatch must not cancel the weekly scheduled campaign.
+  group: fuzz-soak-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'schedule' && 'scheduled' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   soak:
@@ -78,13 +79,14 @@ jobs:
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
       # Corpus persistence: a soak run is only valuable if the corpus it grows
-      # survives to the next week. Keyed on the run id so each week saves a fresh
-      # cache while still restoring the most recent one.
+      # survives to the next week. Restore is separate from save so the explicit
+      # `if: always()` save below also runs when a shard crashes (#2423). Keys are
+      # per shard, avoiding four concurrent saves racing for one key.
       - name: Restore fuzz corpus
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: fuzz/corpus
-          key: fuzz-corpus-soak-${{ github.run_id }}
+          key: fuzz-corpus-soak-${{ github.run_id }}-${{ matrix.shard }}
           restore-keys: |
             fuzz-corpus-soak-
 
@@ -101,6 +103,27 @@ jobs:
             args+=(--targets "$TARGETS")
           fi
           tools/soak_fuzz.sh "${args[@]}"
+
+      # #2423: make successful campaigns observable too, not just crashes.
+      - name: Publish soak run summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Fuzz soak (shard ${{ matrix.shard }})"
+            echo
+            echo "- status: ${{ job.status }}"
+            echo "- corpus files: $(find fuzz/corpus -type f | wc -l)"
+            echo "- logs: $(find target/soak/logs -type f 2>/dev/null | wc -l)"
+            echo "- crashes: $(find target/soak/crashes -type f 2>/dev/null | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save grown corpus
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-soak-${{ github.run_id }}-${{ matrix.shard }}
 
       - name: Upload campaign logs and crashes
         if: always()

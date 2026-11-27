@@ -22,6 +22,11 @@ impl WindowApp {
         if self.ime.is_composing() {
             return false;
         }
+        // The unified shell owns Tab when there are no page focusables; the
+        // traversal itself lives with the shell's pointer/hit-testing code.
+        if self.handle_shell_focus_key(key, shift_pressed) {
+            return true;
+        }
         if matches!(key, Key::Named(NamedKey::Tab)) && !self.focus_targets.is_empty() {
             let prev_focus = self.focused_control().map(|control| control.form_id);
             if shift_pressed {

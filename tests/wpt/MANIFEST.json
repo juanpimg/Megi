@@ -54,8 +54,8 @@
     "sha256": "4c973b42488aad84ec305456a2815a3c36dcb0a5720bb1f3bb51db785a190455",
     "bytes": 4992,
     "license": "BSD-3-Clause",
-    "kind": "testharness",
-    "skip_reason": "",
+    "kind": "skip",
+    "skip_reason": "documentation (not a WPT fixture)",
     "dir": "css/css-syntax",
     "subtest_count_expected": 0
   },
@@ -154,8 +154,8 @@
     "sha256": "75ac265d738774028eab60614c8f2dc5dd8947a9472435ca67807467dccfdf43",
     "bytes": 4242,
     "license": "BSD-3-Clause",
-    "kind": "testharness",
-    "skip_reason": "",
+    "kind": "skip",
+    "skip_reason": "not adopted: iframe.srcdoc onload never fires offline, 0 of 1 subtests executed",
     "dir": "custom-elements",
     "subtest_count_expected": 0
   },
@@ -1144,8 +1144,8 @@
     "sha256": "cce62017454e5b14164680e19a39acca41fb299dd5a8cc84953fe627ddfcd55a",
     "bytes": 6458,
     "license": "BSD-3-Clause",
-    "kind": "testharness",
-    "skip_reason": "",
+    "kind": "skip",
+    "skip_reason": "not adopted: 15 async_test cases depend on slotchange events the shim does not emit, 0 subtests executed",
     "dir": "shadow-dom",
     "subtest_count_expected": 0
   },

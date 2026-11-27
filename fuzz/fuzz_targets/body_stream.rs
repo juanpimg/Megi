@@ -4,11 +4,11 @@
 //! Round 28 added pull-based request bodies with backpressure: producers return
 //! at most the requested `max` bytes and the transport pulls only when it can
 //! write. This target builds chunk plans from the input and drives a
-//! [`megi_net::RequestBody::Stream`] with bounded pull sizes, checking the public
-//! contract (never more than `max` bytes per pull, bounded total consumption,
-//! typed errors abort cleanly) and the `Bytes` helpers (`len`/`is_empty`/`Debug`).
-//! It never opens a socket; the target looks for panics/aborts/UB, not semantic
-//! mismatches.
+//! [`megi_net::RequestBody::Stream`] with bounded pull sizes. Mode 3 of the
+//! producer deliberately violates the `chunk <= max` contract; the consumer must
+//! reject it with a typed error instead of panicking (#2428). The target also
+//! checks bounded total consumption and the `Bytes` helpers (`len`/`is_empty`/
+//! `Debug`). It never opens a socket; the target looks for panics/aborts/UB.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -49,6 +49,10 @@ fuzz_target!(|data: &[u8]| {
         cursor = end;
     }
 
+    // #2428: derive the mode from the input so mode 3 (an oversize producer
+    // chunk) is reachable from a seed instead of dead code. `mode` is copied
+    // into the `'static` producer closure; the input slice cannot be captured.
+    let mode = usize::from(data.first().copied().unwrap_or(0)) % 4;
     let index = Arc::new(AtomicUsize::new(0));
     let loaded = Arc::new(AtomicUsize::new(0));
     let chunks_for_stream = Arc::new(chunks);
@@ -61,42 +65,46 @@ fuzz_target!(|data: &[u8]| {
                 return Ok(None);
             }
             let chunk = chunks[position].clone();
-            let mode = position % 3;
-            // #1762: mode 2 now exercises the `chunk == max` boundary instead
-            // of duplicating mode 0. The producer still honours next_chunk(max).
+            // Modes 0/1 truncate, mode 2 hits `chunk == max`, mode 3 violates
+            // the contract so the consumer's typed rejection is exercised.
             let chunk = megi_fuzz::producer_chunk(&chunk, max, mode);
             Ok(Some(chunk))
         }
     });
 
-    // Pull with bounded sizes derived from the input; enforce the producer
-    // contract (chunk ≤ max) and a total-consumption cap.
+    // Pull with bounded sizes derived from the input. Contract violations are
+    // rejected as typed errors (#2428); the count proves the oracle is reachable.
     let mut pulled = 0usize;
     let mut pulls = 0usize;
     let mut max_bytes = 0usize;
+    let mut expected_rejections = 0usize;
+    let mut rejected = 0usize;
     while pulls < MAX_PULLS {
         let max = if data.is_empty() {
             0
         } else {
             usize::from(data[pulls % data.len()]).saturating_mul(3)
         };
+        let position = index.load(Ordering::Relaxed);
+        let oversize_expected = mode == 3 && max > 0 && position < chunks_for_stream.len();
         let pull = match &mut stream {
-            megi_net::RequestBody::Stream(producer) => producer.next_chunk(max),
+            megi_net::RequestBody::Stream(producer) => {
+                if oversize_expected {
+                    expected_rejections += 1;
+                }
+                megi_fuzz::pull_chunk_checked(producer, max)
+            }
             megi_net::RequestBody::Bytes(bytes) => Ok(Some(std::mem::take(bytes))),
         };
-        let Ok(Some(chunk)) = pull else {
-            break;
+        let chunk = match pull {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => break,
+            Err(_) => {
+                rejected += 1;
+                pulls += 1;
+                continue;
+            }
         };
-        if chunk.len() > max && max > 0 {
-            // A producer violating the contract must not reach the transport;
-            // panic so the fuzzer records the violation rather than silently
-            // dropping it (#470).
-            panic!(
-                "producer returned {} bytes for max {} (contract violation)",
-                chunk.len(),
-                max
-            );
-        }
         pulled = pulled.saturating_add(chunk.len());
         max_bytes = max_bytes.max(chunk.len());
         if pulled > MAX_FUZZ_INPUT {
@@ -104,6 +112,10 @@ fuzz_target!(|data: &[u8]| {
         }
         pulls += 1;
     }
+    assert_eq!(
+        rejected, expected_rejections,
+        "oversize producer chunks must be rejected with a typed error"
+    );
     loaded.store(pulled.min(MAX_FUZZ_INPUT), Ordering::Relaxed);
     let _ = (loaded, max_bytes);
 

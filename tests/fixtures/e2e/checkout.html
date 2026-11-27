@@ -13,7 +13,8 @@
     document.getElementById('pay').addEventListener('click', function () {
       var amount = document.getElementById('amount').textContent;
       if (!amount) { throw new Error('empty order'); }
-      finish('pass:order confirmed');
+      // #2431: the observable result must come from the DOM, not a literal.
+      finish('pass:order confirmed ' + amount);
     });
     document.getElementById('pay').dispatchEvent(new Event('click'));
   } catch (error) {

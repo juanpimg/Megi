@@ -87,43 +87,64 @@ pub(crate) fn paint_navigation_buttons(pixmap: &mut Pixmap, scale: f32, view: &C
         &navigation_buttons(view.css_width),
         view.can_go_back,
         view.can_go_forward,
+        None,
+        None,
     );
 }
 
 /// Paints navigation buttons at explicit rectangles (the shell top bar).
+///
+/// `hover`/`focus` come from the same [`ShellHit`](super::ShellHit) state used by
+/// hit-testing, so the painted affordance and the interactive control agree.
 pub(crate) fn paint_navigation_buttons_at(
     pixmap: &mut Pixmap,
     scale: f32,
     buttons: &NavigationButtons,
     can_go_back: bool,
     can_go_forward: bool,
+    hover: Option<NavigationButton>,
+    focus: Option<NavigationButton>,
 ) {
-    // A subtle rounded surface reads as clickable; the glyphs are drawn geometry,
-    // not text, so they stay crisp at every device scale.
-    for rect in [buttons.back, buttons.forward, buttons.reload] {
-        fill_round(pixmap, rect, scale, 4.0, COLOR_ADDRESS_BG);
+    // A subtle rounded surface reads as clickable; one SVG atlas supplies the
+    // glyphs so they stay crisp at every device scale.
+    let atlas = super::IconAtlas::new();
+    let entries = [
+        (
+            buttons.back,
+            super::Icon::Back,
+            can_go_back,
+            NavigationButton::Back,
+        ),
+        (
+            buttons.forward,
+            super::Icon::Forward,
+            can_go_forward,
+            NavigationButton::Forward,
+        ),
+        (
+            buttons.reload,
+            super::Icon::Reload,
+            true,
+            NavigationButton::Reload,
+        ),
+    ];
+    for (rect, icon, enabled, button) in entries {
+        let active = focus == Some(button) || hover == Some(button);
+        let surface = if active {
+            super::STATE.pressed
+        } else {
+            COLOR_ADDRESS_BG
+        };
+        fill_round(pixmap, rect, scale, 4.0, surface);
+        let color = if !enabled {
+            COLOR_DISABLED
+        } else if focus == Some(button) {
+            super::STATE.focus
+        } else if hover == Some(button) {
+            super::STATE.hover
+        } else {
+            COLOR_ADDRESS_TEXT
+        };
+        let _ = atlas.paint(pixmap, icon, rect, color, scale);
     }
-    paint_chevron(
-        pixmap,
-        buttons.back,
-        scale,
-        true,
-        if can_go_back {
-            COLOR_ADDRESS_TEXT
-        } else {
-            COLOR_DISABLED
-        },
-    );
-    paint_chevron(
-        pixmap,
-        buttons.forward,
-        scale,
-        false,
-        if can_go_forward {
-            COLOR_ADDRESS_TEXT
-        } else {
-            COLOR_DISABLED
-        },
-    );
-    paint_reload(pixmap, buttons.reload, scale, COLOR_ADDRESS_TEXT);
 }

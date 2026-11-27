@@ -57,17 +57,17 @@ El gate sin compilación `tools/check_window_ui.py` mide la paridad del shell co
   `--chrome`. `tools/capture_real_window.sh` intenta una captura de ventana real
   con `spectacle --background --output`; si el compositor no la soporta, imprime
   el motivo y termina con EXIT 0 sin afirmar que se obtuvo una imagen.
-- **Pendiente, sin cifras medidas.** En este estado no hay referencias Chromium
-  versionadas en `tests/fixtures/chrome/ui/` ni capturas reales de Megi
-  generadas: `--check` falla con un mensaje claro por cada archivo ausente y
-  **no se registra ningún MAE real**. No se han creado referencias sintéticas en
-  esa ruta: los tests de `tools/test_check_window_ui.py` construyen imágenes
-  sintéticas en memoria/`tempfile`, marcadas explícitamente como sintéticas, y no
-  se presentan como capturas de Chromium ni como mediciones de paridad.
-- `tools/check_no_compile_gates.py` registra el gate `window_ui`, que mientras
-  no existan referencias y capturas reales ejecuta los tests sintéticos del
-  comparador. No se activa `--check` en ese gate hasta que las capturas reales
-  estén disponibles; activarlo antes sólo produciría un fallo por datos ausentes.
+- Las referencias Chromium sí están versionadas en `tests/fixtures/chrome/ui/`
+  (`hn.png`, `rust.png`, `wikipedia.png`). Las capturas de Megi se generan en
+  `target/ui-captures/` y no se versionan: `--check` falla con un mensaje claro
+  mientras no se hayan generado, y no fabrica capturas ni cifras. Para medir,
+  ejecuta `tools/capture_window_ui.sh` y vuelve a llamar a `--check`.
+- Los tests de `tools/test_check_window_ui.py` usan imágenes sintéticas en
+  memoria/`tempfile`, marcadas como sintéticas; no se presentan como capturas de
+  Chromium ni como mediciones de paridad.
+- `tools/check_no_compile_gates.py` registra el gate `window_ui` con esos tests
+  sintéticos. El gate no invoca `--check` porque las capturas son locales y
+  dependen del entorno; actívalo manualmente cuando generes las capturas reales.
 
 ## Referencia de código: Zen Browser
 
