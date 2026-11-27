@@ -34,6 +34,13 @@ pub(super) struct PlacementRequest {
     pub(super) column_span: usize,
 }
 
+/// Edge of a named grid area referenced by a bare `<custom-ident>` (CSS Grid §8.3).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum GridLineSide {
+    Start,
+    End,
+}
+
 /// Named lines and areas for one grid container (name → boundary index).
 #[derive(Default)]
 pub(super) struct GridNames {
@@ -95,6 +102,7 @@ impl GridNames {
         lines: &[Vec<String>],
         areas: &HashMap<String, (usize, usize)>,
         track_count: usize,
+        side: GridLineSide,
     ) -> Option<usize> {
         match line {
             GridLine::Line(_) => line_boundary(line, track_count),
@@ -112,7 +120,21 @@ impl GridNames {
                 if let Some(base) = name.strip_suffix("-end") {
                     return areas.get(base).map(|(_, end)| *end);
                 }
-                None
+                // CSS Grid §8.3: an area name resolves to its implicit edge line.
+                // Explicit `name-start`/`name-end` lines shadow that implicit line.
+                let explicit_edge = lines.iter().position(|names| {
+                    names.iter().any(|entry| match side {
+                        GridLineSide::Start => entry.strip_suffix("-start") == Some(name.as_str()),
+                        GridLineSide::End => entry.strip_suffix("-end") == Some(name.as_str()),
+                    })
+                });
+                if let Some(index) = explicit_edge {
+                    return Some(index);
+                }
+                areas.get(name).map(|&(start, end)| match side {
+                    GridLineSide::Start => start,
+                    GridLineSide::End => end,
+                })
             }
         }
     }
@@ -130,24 +152,28 @@ pub(super) fn placement_request(
             &names.row_lines,
             &names.row_areas,
             rows,
+            GridLineSide::Start,
         ),
         column_start: GridNames::resolve(
             &style.grid_column_start,
             &names.column_lines,
             &names.column_areas,
             columns,
+            GridLineSide::Start,
         ),
         row_end: GridNames::resolve(
             &style.grid_row_end,
             &names.row_lines,
             &names.row_areas,
             rows,
+            GridLineSide::End,
         ),
         column_end: GridNames::resolve(
             &style.grid_column_end,
             &names.column_lines,
             &names.column_areas,
             columns,
+            GridLineSide::End,
         ),
         row_span: span_from(&style.grid_row_start, &style.grid_row_end),
         column_span: span_from(&style.grid_column_start, &style.grid_column_end),

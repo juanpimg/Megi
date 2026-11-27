@@ -44,6 +44,48 @@ fn test_auto_flow_row_dense_backfills_holes() {
 }
 
 #[test]
+fn test_grid_column_start_named_area_resolves_to_edge() {
+    // CSS Grid §8.3: a bare <custom-ident> naming an area resolves to the
+    // area's start edge when no explicit line with that name exists (#2347).
+    let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
+    container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
+    container.grid_template_rows = template(vec![px(40.0)]);
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
+        rows: 1,
+        columns: 2,
+        cells: vec![Some("left".to_owned()), Some("right".to_owned())],
+    });
+    let mut item = item_style(Length::Auto, Length::Px(10.0));
+    item.grid_column_start = GridLine::Name("right".to_owned());
+    let case = layout_case(container, vec![item]);
+    assert!(
+        (case.item(0).dimensions.content.x - 100.0).abs() < 0.01,
+        "grid-column-start: right must resolve to the start edge of the right area"
+    );
+}
+
+#[test]
+fn test_grid_column_end_named_area_resolves_to_edge() {
+    // CSS Grid §8.3: the same bare name on the end side resolves to the
+    // area's end edge, so a one-track item is placed in the right column (#2347).
+    let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
+    container.grid_template_columns = template(vec![px(100.0), px(100.0)]);
+    container.grid_template_rows = template(vec![px(40.0)]);
+    container.grid_template_areas = Some(megi_css::GridTemplateAreas {
+        rows: 1,
+        columns: 2,
+        cells: vec![Some("left".to_owned()), Some("right".to_owned())],
+    });
+    let mut item = item_style(Length::Auto, Length::Px(10.0));
+    item.grid_column_end = GridLine::Name("right".to_owned());
+    let case = layout_case(container, vec![item]);
+    assert!(
+        (case.item(0).dimensions.content.x - 100.0).abs() < 0.01,
+        "grid-column-end: right must resolve to the end edge of the right area"
+    );
+}
+
+#[test]
 fn test_template_areas_and_grid_area_name() {
     let mut container = grid_container_style(Length::Px(200.0), Length::Auto);
     container.grid_template_columns = template(vec![px(100.0), px(100.0)]);

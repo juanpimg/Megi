@@ -860,7 +860,7 @@ crates/layout/src/flex/layout.rs	500	src	F2	lead	2026-11-26	covered	REMOTE-GATES
 crates/layout/src/flex/minimum.rs	53	src	F2	lead	2026-11-26	covered	RENDER-FORMS-FLEX-SVG	read and verified during integration
 crates/layout/src/grid.rs	408	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/geometry.rs	111	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/src/grid/names.rs	223	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/src/grid/names.rs	249	src	F2	jp	2026-11-27	covered	#2347	read full file after bare-area-name grid-line fix; TDD red/green and verification green
 crates/layout/src/grid/placement.rs	365	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/position.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/src/grid/tracks.rs	156	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -919,7 +919,7 @@ crates/layout/tests/floats.rs	499	test	F1	wave-max-mod	2026-11-19	covered	#maxim
 crates/layout/tests/fonts_integration.rs	233	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/basic.rs	224	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/common.rs	124	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/layout/tests/grid/flow_areas.rs	304	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/layout/tests/grid/flow_areas.rs	346	test	F1	jp	2026-11-27	covered	#2347	read full file after adding start/end bare-area-name regression tests; TDD red/green and verification green
 crates/layout/tests/grid/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/placement.rs	301	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/layout/tests/grid/regressions.rs	188	test	F1	wiki-grid-gap-fix	2026-11-26	covered	CSS-GRID-7.4/wiki-gap	Read full file: added RED/GREEN geometry regression test for shorthand plus named areas
