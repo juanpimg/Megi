@@ -559,6 +559,7 @@ class GateFreshnessTests(unittest.TestCase):
         for rel_path in (
             "crates/html/src/lib.rs",
             "crates/css/src/lib.rs",
+            "crates/render/src/lib.rs",
             "crates/test_harness/src/lib.rs",
             "tests/html5lib-tests/tree.dat",
             "tests/wpt/css/syntax.html",

@@ -28,6 +28,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# #2444: runnable as `python3 tools/update_coverage.py` from any cwd. Add the
+# tools directory to sys.path so the sibling module import works in that mode.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
@@ -52,13 +56,12 @@ FONT = "DejaVu Sans, Verdana, sans-serif"
 ISSUE_BASE = "https://github.com/juanpimg/Megi/issues/"
 # #1835: any change under these paths invalidates an older conformance gate stamp until
 # `tools/update_progress.py --write` refreshes `gate.verified_commit`.
-GATE_RELEVANT_PATHS = (
-    "crates/html/",
-    "crates/css/",
-    "crates/test_harness/",
-    "tests/html5lib-tests/",
-    "tests/wpt/",
-)
+# #2444: import the single list of gate-relevant paths owned by
+# check_conformance_freshness.py so a `crates/render/` change invalidates both
+# checks consistently.
+from tools.check_conformance_freshness import GATE_PATHS as _GATE_PATHS
+
+GATE_RELEVANT_PATHS = tuple(f"{path}/" for path in _GATE_PATHS)
 
 
 def run(root: Path, args: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:

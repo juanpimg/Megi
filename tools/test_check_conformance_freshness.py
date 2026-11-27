@@ -17,6 +17,19 @@ sys.modules["check_conformance_freshness"] = checker
 _spec.loader.exec_module(checker)
 
 
+class GatePathsTests(unittest.TestCase):
+    def test_update_coverage_shares_the_same_gate_paths(self) -> None:
+        # #2444: a render change must invalidate both checks; importing the
+        # tuple here fails if update_coverage drifts from this list again.
+        from tools import update_coverage
+
+        self.assertEqual(
+            update_coverage.GATE_RELEVANT_PATHS,
+            tuple(f"{path}/" for path in checker.GATE_PATHS),
+        )
+        self.assertIn("crates/render/", update_coverage.GATE_RELEVANT_PATHS)
+
+
 class AnalyzeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()

@@ -16,6 +16,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+# #2444: single source of truth for the paths that invalidate a conformance
+# gate stamp. `update_coverage.py` imports this tuple so both checks agree.
 GATE_PATHS = (
     "crates/html",
     "crates/css",
