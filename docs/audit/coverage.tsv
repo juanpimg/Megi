@@ -694,7 +694,7 @@ crates/js/src/events/event.rs	389	src	F2	fix-1905	2026-11-19	covered	#1905	re-re
 crates/js/src/events/inline.rs	184	src	F2	subagent-2297	2026-11-25	covered	#2297	re-read: added deliver_inline_handler() extracted from dispatch.rs
 crates/js/src/events/install.rs	200	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/events/listeners.rs	354	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/src/events/timers.rs	244	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/events/timers.rs	249	src	F2	roadmap-analysis	2026-11-27	covered	#2344	Re-read: timer/animation callbacks now receive global object as thisArg per WHATWG HTML 8.1.7.4/12.4.4.3
 crates/js/src/events/window.rs	207	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/host.rs	370	src	F2	frame-handle-leak	2026-11-25	covered	#2301	Re-read after adding frame-node handle allocation unit tests
 crates/js/src/host/context.rs	46	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -823,6 +823,7 @@ crates/js/tests/service_worker_tests.rs	257	test	F1	sw1-close	2026-11-25	covered
 crates/js/tests/shadow_dom_tests.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/slot_tests.rs	53	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/table_api_tests.rs	48	test	F1	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
+crates/js/tests/timer_this_tests.rs	53	test	F1	roadmap-analysis	2026-11-27	covered	#2344	Re-read: strict-mode callbacks assert this===globalThis for setTimeout/setInterval/requestAnimationFrame
 crates/js/tests/tla_live_bindings.rs	256	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/webgl_tests.rs	182	test	F1	lead	2026-11-27	covered	ENGINE-WEBGL-USAGE	read during WebGL usage flags integration
 crates/js/tests/websocket_api_tests.rs	370	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
