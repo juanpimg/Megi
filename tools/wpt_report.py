@@ -22,6 +22,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# #2448: support both `import tools.wpt_report` (tests/gates) and direct
+# `python3 tools/wpt_report.py` / `import wpt_report` (update_progress).
+try:
+    from tools import wpt_gate
+except ModuleNotFoundError:  # pragma: no cover - script mode
+    import wpt_gate  # type: ignore[no-redef]
+
 STATUS_DIR = Path("docs/status")
 RESULT_RE = re.compile(r"^  \[(PASS|FAIL|TIMEOUT|NOTRUN|harness_error)\] (.+)$")
 SECTION_RE = re.compile(r"^--- WPT (.+?) Suites ")
@@ -86,11 +93,15 @@ def parse_summary(output: str) -> tuple[list[tuple[str, str]], int, int]:
 def load_report(path: Path) -> dict:
     """Read a previously generated report (used by --no-gate progress generation).
 
-    Validate the full shape consumed by progress_stats.wpt_fields() so a truncated
-    report fails here with a ValueError naming the key, not with a KeyError/TypeError
-    during rendering (#2290).
+    Validate the full shape consumed by progress_stats.wpt_fields(), then delegate
+    to wpt_gate.load_report() (#2448) so canonical keys, counts and total are
+    recomputed from results instead of trusting the published numbers. The
+    wpt-specific metadata (schema/run_info) is checked here first.
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"cannot read {path}: {error}") from error
     if not isinstance(data, dict) or data.get("schema") != "megi-wpt-report/1":
         raise ValueError(f"unsupported WPT report schema in {path}")
 
@@ -98,20 +109,16 @@ def load_report(path: Path) -> dict:
         if not condition:
             raise ValueError(f"{path}: report needs {message}")
 
-    epoch = data.get("epoch")
-    need(isinstance(epoch, dict), "epoch (a dict)")
-    counts = data.get("counts")
-    need(isinstance(counts, dict), "counts (a dict)")
-    need(isinstance(data.get("results"), list), "results (a list)")
-    run_info = data.get("run_info")
-    need(isinstance(run_info, dict), "run_info (a dict)")
-    total = data.get("total")
-    need(isinstance(total, int) and not isinstance(total, bool), "total (an int)")
-    need(isinstance(epoch.get("wpt_revision"), str), "epoch.wpt_revision (a str)")
-    need(isinstance(epoch.get("manifest_sha256"), str), "epoch.manifest_sha256 (a str)")
-    need(isinstance(counts.get("pass"), int) and not isinstance(counts.get("pass"), bool),
-         "counts.pass (an int)")
-    need(isinstance(run_info.get("dirs"), list), "run_info.dirs (a list)")
+    # Keep the historical validation order: "epoch" is the first field reported
+    # missing by tests and callers; run_info comes next.
+    need(isinstance(data.get("epoch"), dict), "epoch (a dict)")
+    need(isinstance(data.get("run_info"), dict), "run_info (a dict)")
+    need(isinstance(data.get("run_info", {}).get("dirs"), list), "run_info.dirs (a list)")
+    # #2448: wpt_gate validates epoch, results, canonical keys, counts and total.
+    # Its result replaces the claimed numbers with the derived ones.
+    validated = wpt_gate.load_report(path)
+    data["counts"] = validated["counts"]
+    data["total"] = validated["total"]
     return data
 
 

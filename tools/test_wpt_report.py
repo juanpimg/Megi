@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tools import wpt_report
+from tools import wpt_gate, wpt_report
 
 REPORT = {
     "schema": "megi-wpt-report/1",
@@ -27,6 +27,50 @@ REPORT = {
     "total": 2,
     "results": [],
 }
+
+
+class LoadReportTests(unittest.TestCase):
+    """#2448: claimed numbers must agree with the recorded results."""
+
+    def _write(self, report: dict) -> Path:
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        path = Path(temp.name) / "wpt.json"
+        path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def test_inflated_counts_and_total_are_rejected(self) -> None:
+        forged = copy.deepcopy(REPORT)
+        forged["counts"]["pass"] = 99
+        forged["total"] = 99
+        with self.assertRaises(ValueError) as caught:
+            wpt_report.load_report(self._write(forged))
+        self.assertIn("counts do not match results", str(caught.exception))
+
+    def test_forged_result_key_is_rejected(self) -> None:
+        forged = copy.deepcopy(REPORT)
+        forged["results"].append({
+            "key": "0" * 64, "test": "x.html", "subtest": "x", "status": "PASS",
+        })
+        forged["counts"]["pass"] = 3
+        forged["total"] = 3
+        with self.assertRaises(ValueError) as caught:
+            wpt_report.load_report(self._write(forged))
+        self.assertIn("key does not match", str(caught.exception))
+
+    def test_valid_counts_and_total_are_derived_from_results(self) -> None:
+        report = copy.deepcopy(REPORT)
+        result = {
+            "key": wpt_gate.canonical_key("x.html", "x"),
+            "test": "x.html", "subtest": "x", "status": "FAIL",
+        }
+        report["results"] = [result]
+        report["counts"] = {"pass": 0, "fail": 1, "timeout": 0, "notrun": 0, "error": 0}
+        report["total"] = 1
+        loaded = wpt_report.load_report(self._write(report))
+        self.assertEqual(loaded["counts"]["fail"], 1)
+        self.assertEqual(loaded["counts"]["pass"], 0)
+        self.assertEqual(loaded["total"], 1)
 
 
 class WptReportCheckTests(unittest.TestCase):
