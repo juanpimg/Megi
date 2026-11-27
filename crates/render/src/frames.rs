@@ -145,6 +145,10 @@ pub fn collect_frames_with_context(
                 continue;
             }
         };
+        // ADR: DPR-RASTER-BOUNDARY (#2373). The child rasterises at CSS scale so
+        // its buffer matches the logical (width, height) used below; the parent
+        // pipeline scales the frame's display-item rect via `RasterScale::apply`.
+        child_options.raster_scale = 1.0;
         child_options.encode_png = false;
         child_options.host_events = Vec::new();
         child_options.host_dom_events = Vec::new();
