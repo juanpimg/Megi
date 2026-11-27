@@ -27,8 +27,10 @@ pub const UNSIGNED_BYTE: u32 = 0x1401;
 pub const TRIANGLES: u32 = 0x0004;
 /// WebGL 1.0 §5.14.4: buffer target used by the vendored conformance case.
 pub const ARRAY_BUFFER: u32 = 0x8892;
-/// WebGL 1.0 §5.14.4: buffer usage accepted by `bufferData`.
+/// WebGL 1.0 §5.14.4: buffer usages accepted by `bufferData`.
 pub const STATIC_DRAW: u32 = 0x88E4;
+pub const DYNAMIC_DRAW: u32 = 0x88E8;
+pub const STREAM_DRAW: u32 = 0x88E0;
 /// WebGL 1.0 §5.9: the only attribute component type accepted by the software path.
 pub const FLOAT: u32 = 0x1406;
 /// WebGL 1.0 §5.14.6: error codes reported by `getError`.
@@ -218,7 +220,7 @@ impl super::CanvasSurface {
 
     /// WebGL 1.0 §5.14.4: replaces the bound buffer's data store.
     pub fn webgl_buffer_data(&mut self, target: u32, bytes: &[u8], usage: u32) {
-        if target != ARRAY_BUFFER || usage != STATIC_DRAW {
+        if target != ARRAY_BUFFER || !matches!(usage, STATIC_DRAW | DYNAMIC_DRAW | STREAM_DRAW) {
             self.webgl.error = INVALID_ENUM;
             return;
         }

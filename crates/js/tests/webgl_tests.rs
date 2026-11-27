@@ -142,3 +142,41 @@ fn webgl_buffer_sub_data_accepts_nan_offset_without_error() {
         .expect("webgl bufferSubData must not throw");
     assert_eq!(out, "0|0|true");
 }
+
+#[test]
+fn webgl_buffer_data_accepts_dynamic_and_stream_draw() {
+    // WebGL 1.0 §5.14.4: bufferData accepts STATIC_DRAW, DYNAMIC_DRAW and
+    // STREAM_DRAW. Rejecting the latter two with INVALID_ENUM drops geometry
+    // in real pages that upload data with non-static usage hints.
+    let mut rt = runtime();
+    let out = rt
+        .eval(
+            "var c = document.createElement('canvas'); c.width = 4; c.height = 4; \
+             document.body.appendChild(c); \
+             var gl = c.getContext('webgl'); \
+             var exposed = [typeof gl.DYNAMIC_DRAW, typeof gl.STREAM_DRAW].join(','); \
+             function upload(usage) { \
+                 gl.viewport(0, 0, 4, 4); \
+                 gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); \
+                 var buffer = gl.createBuffer(); \
+                 gl.bindBuffer(gl.ARRAY_BUFFER, buffer); \
+                 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-0.5, -0.5, 0.5, 0.5]), usage); \
+                 var error = gl.getError(); \
+                 gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); \
+                 gl.drawArrays(gl.POINTS, 0, 2); \
+                 var px = new Uint8Array(4); \
+                 gl.readPixels(3, 3, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); \
+                 gl.deleteBuffer(buffer); \
+                 return error + ':' + px.join(','); \
+             } \
+             var dynamic = upload(gl.DYNAMIC_DRAW); \
+             var stream = upload(gl.STREAM_DRAW); \
+             [exposed, dynamic, stream, gl.getError() === WebGLRenderingContext.NO_ERROR].join('|');",
+            "webgl_usage_flags",
+        )
+        .expect("webgl bufferData usage hints must not throw");
+    assert_eq!(
+        out,
+        "number,number|0:255,255,255,255|0:255,255,255,255|true"
+    );
+}
