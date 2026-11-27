@@ -1204,7 +1204,7 @@ crates/render/src/images/sources.rs	119	src	F2	wave-max-mod	2026-11-19	covered	#
 crates/render/src/images/tests.rs	145	src	F2	perf-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn	re-read after warm-pool image batch fix (kept dedup audit)
 crates/render/src/images/types.rs	84	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/inline_svg.rs	304	src	F2	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
-crates/render/src/inline_svg/current_color.rs	157	src	F2	lead	2026-11-26	covered	SVG-EXTERNAL-COLOR	read during external currentColor merge review
+crates/render/src/inline_svg/current_color.rs	210	src	F2	jp	2026-11-27	covered	#2374	UTF-8 boundary fix and unit tests re-read
 crates/render/src/lib.rs	297	src	F2	lead	2026-11-26	covered	UI-FAVICON-LINEBYLINE	read after remote UI favicon and audit index merge
 crates/render/src/main.rs	495	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/offline_demo.rs	183	src	F2	lead	2026-11-25	covered	M4#6 offline demo	
