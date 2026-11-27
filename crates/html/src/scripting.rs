@@ -14,8 +14,8 @@
 //! tokenization other than a single empty check per token).
 //!
 //! Documented cases handled by the hook:
-//! * inline parser-inserted scripts run at their end tag (or at EOF for an unterminated
-//!   script), in document order, with the partially-built DOM visible to them;
+//! * inline parser-inserted scripts run at their end tag, in document order, with the
+//!   partially-built DOM visible to them; an unterminated script is never executed;
 //! * `document.write`/`writeln` output is re-tokenized at the script's position, including
 //!   nested `<script>` elements written that way (`scripted_webkit01`);
 //! * scripts with a `src` attribute are *not* executed by the parser: fetching and
@@ -69,6 +69,7 @@ mod parser_script_executor_tests {
     #[derive(Default)]
     struct RecordingExecutor {
         seen: Vec<String>,
+        seen_tx: Option<std::sync::mpsc::Sender<String>>,
         written: Vec<String>,
         mutate_id: Option<(&'static str, &'static str)>,
         detach_document_element: bool,
@@ -83,6 +84,9 @@ mod parser_script_executor_tests {
             _source_name: &str,
         ) -> ScriptExecution {
             self.seen.push(script_text.to_owned());
+            if let Some(tx) = &self.seen_tx {
+                let _ = tx.send(script_text.to_owned());
+            }
             if self.detach_document_element {
                 detach_html_and_move_first_table_to_root(document);
                 return ScriptExecution::default();
@@ -135,6 +139,39 @@ mod parser_script_executor_tests {
             &ParseOptions::default(),
             Some(Box::new(executor)),
         )
+    }
+
+    /// #2315: WHATWG HTML §13.2.6.4.8 — EOF in "text" mode pops the script, restores the
+    /// original mode and reprocesses EOF; the partial script body must not be executed.
+    #[test]
+    fn test_unterminated_script_is_not_executed() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let executor = RecordingExecutor {
+            seen_tx: Some(tx),
+            ..RecordingExecutor::default()
+        };
+        let outcome = parse_with("<script>window.x=1", executor);
+        assert!(
+            rx.try_iter().next().is_none(),
+            "unterminated script must not be executed"
+        );
+        assert!(outcome.script_errors.is_empty());
+    }
+
+    #[test]
+    fn test_terminated_script_is_executed() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let executor = RecordingExecutor {
+            seen_tx: Some(tx),
+            ..RecordingExecutor::default()
+        };
+        let outcome = parse_with("<script>window.x=1</script>", executor);
+        assert_eq!(
+            rx.try_iter().collect::<Vec<_>>(),
+            vec!["window.x=1".to_owned()],
+            "a script with its end tag must still be executed"
+        );
+        assert!(outcome.script_errors.is_empty());
     }
 
     #[test]

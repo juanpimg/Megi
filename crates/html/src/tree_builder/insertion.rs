@@ -109,8 +109,8 @@ impl TreeBuilder {
 
     /// WP-6.4: executes a parser-inserted `<script>` element (inline scripts only).
     ///
-    /// Called from the "text" insertion mode once the script's end tag (or EOF) has been
-    /// seen, i.e. after the tokenizer stored the script data as the element's text child and
+    /// Called from the "text" insertion mode once the script's end tag has been seen,
+    /// i.e. after the tokenizer stored the script data as the element's text child and
     /// before the parser continues with the following input. The executor may mutate the DOM
     /// and write HTML with `document.write`; written HTML is queued and inserted into the
     /// tokenizer at the current position by [`drive_tokenizer`], so it is re-tokenized before
