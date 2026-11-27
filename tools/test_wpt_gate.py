@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -51,14 +52,15 @@ def baseline(allow: list[dict] | None = None, passed: int = 2, total: int = 2) -
 
 
 def entry(status: str = "FAIL") -> dict:
+    """A reviewed allowlist entry; #2445 requires all three review fields."""
     return {
         "key": key(),
         "test": TEST,
         "subtest": NAME,
         "status": status,
-        "reason": "",
-        "issue": "",
-        "spec": "",
+        "reason": "known parser divergence",
+        "issue": "#2445",
+        "spec": "https://www.w3.org/TR/css-syntax-3/#anb-microsyntax",
     }
 
 
@@ -160,7 +162,9 @@ class WptGateTest(unittest.TestCase):
                     wpt_gate.load_baseline(path)
             self.assertIn("baseline passed/total must be integers", str(caught.exception))
 
-    def test_rebaseline_writes_toml_that_gate_accepts(self) -> None:
+    def test_rebaseline_writes_an_unreviewed_allowlist_that_gate_rejects(self) -> None:
+        # #2445: the old test froze the bug — a freshly rebaselined failure
+        # with empty reason/issue/spec must NOT be accepted as a clean gate.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             baseline_path = root / "baseline.json"
@@ -168,10 +172,41 @@ class WptGateTest(unittest.TestCase):
             current = report({NAME: "FAIL"})
             wpt_gate.rebaseline(current, baseline_path, allowlist_path)
             saved = wpt_gate.load_baseline(baseline_path)
-            allowed = wpt_gate.load_allowlist(allowlist_path)
-            self.assertEqual(saved["passed"], 1)
-            self.assertEqual(len(allowed), 1)
-            self.assertIsNone(wpt_gate.check_gate(current, saved, allowed))
+            with self.assertRaises(ValueError) as caught:
+                wpt_gate.load_allowlist(allowlist_path)
+            self.assertIn("needs a non-empty reason", str(caught.exception))
+            unreviewed = tomllib.loads(allowlist_path.read_text(encoding="utf-8"))["allow"]
+            error = wpt_gate.check_gate(current, saved, unreviewed)
+            self.assertIsNotNone(error)
+            self.assertIn("reason is empty", error)
+
+    def test_reviewed_allowlist_entry_passes_the_gate(self) -> None:
+        current = report({NAME: "FAIL"})
+        allowed = [entry()]
+        self.assertIsNone(
+            wpt_gate.check_gate(current, baseline(allow=allowed, passed=1), allowed)
+        )
+
+    def test_review_fields_must_be_filled_and_issue_must_be_valid(self) -> None:
+        for field in ("reason", "issue", "spec"):
+            with self.subTest(field=field):
+                current = report({NAME: "FAIL"})
+                bad = dict(entry(), **{field: ""})
+                error = wpt_gate.check_gate(current, baseline(allow=[bad]), [bad])
+                self.assertIsNotNone(error)
+                self.assertIn(f"{field} is empty", error)
+        for issue in ("TBD", "2445", "https://example.com/2445", "#abc"):
+            with self.subTest(issue=issue):
+                bad = dict(entry(), issue=issue)
+                error = wpt_gate.check_gate(
+                    report({NAME: "FAIL"}), baseline(allow=[bad]), [bad]
+                )
+                self.assertIsNotNone(error)
+                self.assertIn("issue is invalid", error)
+        good_url = dict(entry(), issue="https://github.com/juanpimg/Megi/issues/2445")
+        self.assertIsNone(wpt_gate.check_gate(
+            report({NAME: "FAIL"}), baseline(allow=[good_url], passed=1), [good_url]
+        ))
 
     def test_repository_gate_is_green(self) -> None:
         current = wpt_gate.load_report(ROOT / "docs/status/wpt.json")
