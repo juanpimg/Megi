@@ -47,6 +47,31 @@ class ValidateTests(unittest.TestCase):
         problems = checker.validate(GOOD, lambda commit: False)
         self.assertEqual(problems, ["WP-DEPTH-a: commit abc1234 is not an ancestor of HEAD"])
 
+    def test_non_hex_commit_is_rejected_even_when_git_accepts_it(self) -> None:
+        # #2453: a branch name or arbitrary string is not a commit stamp.
+        data = {"WP-X-a": {"id": "WP-X-a", "metric": "m", "commit": "not-a-sha"}}
+        problems = checker.validate(data, lambda commit: True)
+        self.assertIn("WP-X-a: commit 'not-a-sha' is not a 7-40 hex SHA", problems)
+
+    def test_bad_format_commit_is_still_checked_for_existence(self) -> None:
+        seen: list[str] = []
+
+        def ancestor(commit: str) -> bool:
+            seen.append(commit)
+            return False
+
+        data = {"WP-X-a": {"id": "WP-X-a", "metric": "m", "commit": "zzz"}}
+        problems = checker.validate(data, ancestor)
+        self.assertEqual(seen, ["zzz"])
+        self.assertIn("WP-X-a: commit zzz is not an ancestor of HEAD", problems)
+
+    def test_uppercase_and_overlong_sha_are_rejected(self) -> None:
+        for commit in ("ABC1234", "a" * 41):
+            with self.subTest(commit=commit):
+                data = {"WP-X-a": {"id": "WP-X-a", "metric": "m", "commit": commit}}
+                problems = checker.validate(data, lambda commit: True)
+                self.assertTrue(any("not a 7-40 hex SHA" in p for p in problems))
+
 
 class CliTests(unittest.TestCase):
     def test_cli_accepts_the_real_registry(self) -> None:

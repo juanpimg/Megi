@@ -38,9 +38,18 @@ def validate(data: dict, ancestor_check=None) -> list[str]:
             problems.append(f"{table_id}: duplicate id")
         seen.add(identifier)
         commit = str(entry.get("commit", ""))
-        if commit and HEX.match(commit) and ancestor_check is not None:
-            if not ancestor_check(commit):
-                problems.append(f"{table_id}: commit {commit} is not an ancestor of HEAD")
+        # #2453: validate the format first; then always ask git whether the
+        # commit exists in the repository (even when the format is wrong), so a
+        # plausible-looking non-SHA or a well-formed missing object both fail.
+        if commit:
+            if not HEX.fullmatch(commit):
+                problems.append(
+                    f"{table_id}: commit {commit!r} is not a 7-40 hex SHA"
+                )
+            if ancestor_check is not None and not ancestor_check(commit):
+                problems.append(
+                    f"{table_id}: commit {commit} is not an ancestor of HEAD"
+                )
     return problems
 
 
