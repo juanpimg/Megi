@@ -1,5 +1,7 @@
 //! Public request helpers (buffered/streaming/multiplexed) and the h2c upgrade.
 
+use crate::http::validate_request_headers;
+
 use super::*;
 
 /// Splits an encoded header block into HEADERS + CONTINUATION frames honouring the peer
@@ -232,6 +234,7 @@ pub fn h2c_request<S: Read + Write>(
          HTTP2-Settings: {}\r\n",
         base64_url_nopad(&settings.payload)
     );
+    let mut emitted = Vec::with_capacity(extra_headers.len());
     for (name, value) in extra_headers {
         let lower = name.to_ascii_lowercase();
         if matches!(
@@ -245,11 +248,15 @@ pub fn h2c_request<S: Read + Write>(
         ) {
             continue;
         }
+        emitted.push((name.clone(), value.clone()));
         head.push_str(name);
         head.push_str(": ");
         head.push_str(value);
         head.push_str("\r\n");
     }
+    // RFC 9110 §5.1/§5.3: the upgrade head is framed by hand, so validate exactly the
+    // headers emitted here (and their total size) before any byte reaches the socket (#2358).
+    validate_request_headers(&emitted, limits.max_header_block)?;
     head.push_str("\r\n");
     stream.write_all(head.as_bytes()).map_err(map_io)?;
     stream.flush().map_err(map_io)?;

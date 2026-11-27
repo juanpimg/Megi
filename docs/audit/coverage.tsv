@@ -972,7 +972,7 @@ crates/net/src/data.rs	261	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modul
 crates/net/src/error.rs	281	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/file.rs	161	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client.rs	310	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/h2/client/api.rs	312	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/h2/client/api.rs	319	src	F2	jp	2026-11-27	covered	#2358	read full file after #2358 h2c CRLF fix; TDD red/green and verification green
 crates/net/src/h2/client/session_body.rs	336	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/session_core.rs	187	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/client/session_frames.rs	473	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -988,10 +988,10 @@ crates/net/src/h2/hpack/huffman.rs	90	src	F2	wave-max-mod	2026-11-19	covered	#ma
 crates/net/src/h2/hpack/tests.rs	141	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/h2/mod.rs	65	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/hsts.rs	405	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http.rs	367	src	F2	jp	2026-11-27	covered	#2352	re-read after last-valid Referrer-Policy doc update (#2352)
+crates/net/src/http.rs	368	src	F2	jp	2026-11-27	covered	#2352,#2358	re-read after #2352 Referrer-Policy doc update and #2358 h2c CRLF fix; TDD red/green and verification green
 crates/net/src/http/chunked.rs	340	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/core.rs	387	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/http/headers.rs	86	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/http/headers.rs	86	src	F2	jp	2026-11-27	covered	#2358	read full file after #2358 h2c CRLF fix; TDD red/green and verification green
 crates/net/src/http/pool.rs	456	src	F2	perf-hn-images	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust,WP-SITE-hn	re-read after warm-pool image batch fix (kept prior pooling audit)
 crates/net/src/http/preflight.rs	85	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/http/redirect.rs	36	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1043,7 +1043,7 @@ crates/net/tests/cache_tests.rs	336	test	F1	wave-max-mod	2026-11-19	covered	#max
 crates/net/tests/data_tests.rs	107	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/fixtures/gzip_bomb_zeros_1mib.hex	1	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h1_streaming_tests.rs	244	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/tests/h2_advanced.rs	422	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/h2_advanced.rs	461	test	F1	jp	2026-11-27	covered	#2358	read full file after #2358 h2c CRLF fix; TDD red/green and verification green
 crates/net/tests/h2_flow_multiplex_tests/flow_control.rs	180	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h2_flow_multiplex_tests/main.rs	128	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/h2_flow_multiplex_tests/multiplex.rs	144	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
