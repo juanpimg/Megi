@@ -202,10 +202,6 @@ class TestAliasedCrateImports(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestOversizedTestFiles(unittest.TestCase):
     """#2253: AGENTS.md §4 caps every .rs file, including crates/*/tests/."""
 
@@ -235,3 +231,7 @@ class TestOversizedTestFiles(unittest.TestCase):
             any("crates/dummy/tests/big.rs" in v and "lines (max" in v for v in violations),
             f"oversized test file not reported: {violations}",
         )
+
+
+if __name__ == "__main__":
+    unittest.main()
