@@ -160,6 +160,8 @@ pub(crate) fn node_list_for_each(
         .first()
         .and_then(|value| value.as_object())
         .ok_or_else(|| js_error("forEach expects a function"))?;
+    // WebIDL callback this value: `forEach(callback, thisArg)` must forward `thisArg`.
+    let this_arg = args.get(1).cloned().unwrap_or(JsValue::undefined());
     let object = this
         .as_object()
         .ok_or_else(|| js_error("invalid NodeList receiver"))?;
@@ -183,11 +185,7 @@ pub(crate) fn node_list_for_each(
             .get(js_string!(index.to_string()), context)
             .map_err(|error| js_error(error.to_string()))?;
         callback
-            .call(
-                &JsValue::undefined(),
-                &[item, JsValue::from(index as f64)],
-                context,
-            )
+            .call(&this_arg, &[item, JsValue::from(index as f64)], context)
             .map_err(|error| js_error(error.to_string()))?;
     }
     Ok(JsValue::undefined())

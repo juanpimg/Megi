@@ -38,3 +38,27 @@ fn class_and_selector_queries_expose_node_list_api() {
         "function|P|PP|false#function|P|PP|false"
     );
 }
+
+#[test]
+fn node_list_for_each_passes_this_arg_to_callback() {
+    let mut runtime = runtime();
+    runtime
+        .eval(
+            "document.write('<p class=\"nl-thisarg\">a</p><p class=\"nl-thisarg\">b</p>');
+             globalThis.ctx = { label: 'CTX' };
+             globalThis.seen = '';
+             document.querySelectorAll('p.nl-thisarg').forEach(function (node, index) {
+                 'use strict';
+                 globalThis.seen += (this === globalThis.ctx ? 'CTX' : 'OTHER')
+                     + ':' + node.tagName + ':' + index + ';';
+             }, globalThis.ctx);",
+            "nodelist-thisarg.js",
+        )
+        .expect("forEach with thisArg");
+    assert_eq!(
+        runtime
+            .eval("seen", "nodelist-thisarg.js")
+            .expect("observed receiver"),
+        "CTX:P:0;CTX:P:1;"
+    );
+}
