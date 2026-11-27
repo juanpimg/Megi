@@ -377,9 +377,34 @@ class GeneratorTests(unittest.TestCase):
                 args=["gh", "issue", "list"], returncode=0, stdout="[]", stderr=""
             )
             wps, errors = wp_generate.generate_all(self.root, dry_run=True)
-        self.assertEqual(errors, [])
+        # #2451: the duplicate is now reported as a real collision instead of
+        # disappearing silently.
+        self.assertEqual(errors, ["wpt: duplicate WP-WPT-html-a-html-x skipped"])
         self.assertEqual([wp.id for wp in wps],
                          ["WP-WPT-html-a-html-x", "WP-WPT-html-b-html-y"])
+
+    def test_single_source_reports_slug_collisions(self) -> None:
+        self._write("tests/wpt/results/latest.json", json.dumps({"failures": [
+            {"test": "html/a.html", "subtest": "x"},
+            {"test": "html/a.html", "subtest": "x"},
+        ]}))
+        errors: list[str] = []
+        with contextlib.redirect_stdout(io.StringIO()):
+            wp_generate._run_source("wpt", dry_run=True, root=self.root, errors=errors)
+        self.assertEqual(errors, ["wpt: duplicate WP-WPT-html-a-html-x skipped"])
+
+    def test_report_wp_id_uses_full_sha_key(self) -> None:
+        result = self._wpt_result("subtest-a", "FAIL")
+        self._write("docs/status/wpt.json", json.dumps({
+            "schema": "megi-wpt-report/1",
+            "epoch": {"wpt_revision": "a" * 40, "manifest_sha256": "b" * 64},
+            "run_info": {"harness": "stub", "dirs": []},
+            "counts": {"pass": 0, "fail": 1, "timeout": 0, "notrun": 0, "error": 0},
+            "total": 1, "results": [result],
+        }))
+        wps = self._generate("wpt")
+        self.assertEqual(len(wps), 1)
+        self.assertIn(result["key"][:60], wps[0].id)
 
     def test_unknown_source_still_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):

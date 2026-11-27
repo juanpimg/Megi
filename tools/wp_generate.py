@@ -120,14 +120,25 @@ def _safe_wp(issues: list[str] | None, **fields) -> WorkPackage | None:
         return None
 
 
-def _dedup_by_id(wps: list[WorkPackage]) -> list[WorkPackage]:
-    """Keep the first WP per ID; stable so dry-run output is reproducible."""
+def _dedup_by_id(wps: list[WorkPackage], issues: list[str] | None = None) -> list[WorkPackage]:
+    """Keep the first WP per ID; stable so dry-run output is reproducible.
+
+    #2451: a collision means two distinct failures share a slug, not that the
+    second one is redundant. Surface it through the same diagnostics channel
+    as other generator problems so a single-source `generate()` cannot hide it.
+    """
     seen: set[str] = set()
     unique: list[WorkPackage] = []
     for wp in wps:
-        if wp.id not in seen:
-            seen.add(wp.id)
-            unique.append(wp)
+        if wp.id in seen:
+            message = f"duplicate {wp.id} skipped"
+            if issues is not None:
+                issues.append(message)
+            else:
+                print(f"wp_generate: {message}", file=sys.stderr)
+            continue
+        seen.add(wp.id)
+        unique.append(wp)
     return unique
 
 
@@ -165,17 +176,17 @@ def generate_wpt(root: Path, issues: list[str] | None = None) -> list[WorkPackag
                 key = str(result["key"])
                 subtest = str(result["subtest"])
                 wp = _safe_wp(
-                    issues, source="wpt", key=f"{key[:12]}-{subtest}",
+                    issues, source="wpt", key=f"{key}-{subtest}",
                     file=str(result["test"]), expected="PASS",
-                    actual=f"{status} — {subtest} (key {key[:12]})",
+                    actual=f"{status} — {subtest} (key {key})",
                     spec="spec v2 §2 — WPT allowlist = 0",
-                    acceptance=f"{subtest} (key {key[:12]}) pasa sin allowlist",
+                    acceptance=f"{subtest} (key {key}) pasa sin allowlist",
                     verify_cmd=WPT_GATE_VERIFY, metric="wpt_passed",
                     milestone="M0", impact=5, frequency=4,
                 )
                 if wp is not None:
                     out.append(wp)
-    return _dedup_by_id(out)
+    return _dedup_by_id(out, issues)
 
 
 def generate_js262(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
@@ -213,17 +224,17 @@ def generate_js262(root: Path, issues: list[str] | None = None) -> list[WorkPack
                 subtest = str(result["subtest"])
                 wp = _safe_wp(
                     issues,
-                    source="js262", key=f"{key[:12]}-{subtest}",
+                    source="js262", key=f"{key}-{subtest}",
                     file=str(result["test"]), expected="PASS",
-                    actual=f"{status} — {subtest} (key {key[:12]})",
+                    actual=f"{status} — {subtest} (key {key})",
                     spec="spec v2 §2 — Test262 allowlist = 0 (declared subset)",
-                    acceptance=f"{subtest} (key {key[:12]}) pasa en el subconjunto declarado",
+                    acceptance=f"{subtest} (key {key}) pasa en el subconjunto declarado",
                     verify_cmd=TEST262_GATE_VERIFY, metric="js262_passed",
                     milestone="M9", impact=4, frequency=3,
                 )
                 if wp is not None:
                     out.append(wp)
-    return _dedup_by_id(out)
+    return _dedup_by_id(out, issues)
 
 
 def generate_site(root: Path, issues: list[str] | None = None) -> list[WorkPackage]:
@@ -405,7 +416,7 @@ def _run_source(source: str, dry_run: bool, root: Path | None,
     root = root or Path(__file__).resolve().parent.parent
     source_errors: list[str] = []
     try:
-        wps = _dedup_by_id(GENERATORS[source](root, source_errors))
+        wps = _dedup_by_id(GENERATORS[source](root, source_errors), source_errors)
     except Exception as exc:  # a malformed artifact must never abort a source
         source_errors.append(f"unexpected generator failure: {exc}")
         wps = []
