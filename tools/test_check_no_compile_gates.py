@@ -41,6 +41,32 @@ class GateDefinitionTests(unittest.TestCase):
     def test_self_test_module_is_not_included_to_avoid_recursion(self) -> None:
         self.assertNotIn("tools.test_check_no_compile_gates", runner.TEST_MODULES)
 
+    def test_test_modules_are_derived_from_repository(self) -> None:
+        # #2446: the old frozen tuple silently dropped 30 pure-Python test
+        # modules; discovery must include them and exclusions must be justified.
+        from pathlib import Path
+        modules = set(runner.TEST_MODULES)
+        discovered = {
+            f"tools.{path.stem}" for path in MODULE_PATH.parent.glob("test_*.py")
+        }
+        self.assertEqual(modules, discovered - set(runner.EXCLUDED_TEST_MODULES))
+        for name, reason in runner.EXCLUDED_TEST_MODULES.items():
+            self.assertTrue(reason.strip(), f"missing reason for {name}")
+        for required in (
+            "tools.test_wpt_gate", "tools.test_check_arch", "tools.test_audit_coverage",
+            "tools.test_real_site_check", "tools.test_wp_generate",
+            "tools.test_vendor_wpt", "tools.test_bench_compare",
+        ):
+            self.assertIn(required, modules)
+
+    def test_shown_total_is_derived_from_the_real_list(self) -> None:
+        # #2446: a hard-coded "49/49" hides failures in omitted modules.
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("49/49", source)
+        self.assertNotIn("50/50", source)
+        self.assertIn("len(results) - failures", source)
+        self.assertIn("discover_test_modules", source)
+
     def test_baseline_is_used_as_a_matching_report(self) -> None:
         gate = dict(runner.GATES)["parity_baseline"]
         self.assertEqual(gate[-1], runner.BASELINE)
@@ -66,7 +92,11 @@ class CliTests(unittest.TestCase):
     def test_real_run_passes_all_gates(self) -> None:
         result = subprocess.run([sys.executable, str(MODULE_PATH)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertIn("50/50 compile-free gates passed", result.stdout)
+        # #2446: derive the expected total from the discovered test list.
+        expected = len(runner.GATES)
+        self.assertIn(
+            f"{expected}/{expected} compile-free gates passed", result.stdout
+        )
         self.assertNotIn("FAIL", result.stdout)
 
     def test_runner_has_no_cargo_in_its_own_source(self) -> None:

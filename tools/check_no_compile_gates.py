@@ -16,57 +16,29 @@ from pathlib import Path
 
 PY = sys.executable
 BASELINE = "tests/fixtures/visual-parity/baseline.json"
-TEST_MODULES = (
-    "tools.test_visual_parity",
-    "tools.test_visual_parity_report",
-    "tools.test_check_parity_baseline",
-    "tools.test_check_parity_schema",
-    "tools.test_check_parity_docs",
-    "tools.test_check_parity_ledger",
-    "tools.test_check_parity_inventory",
-    "tools.test_check_deslop_doc",
-    "tools.test_check_real_site_snapshots",
-    "tools.test_check_doc_tool_refs",
-    "tools.test_test_inspector",
-    "tools.test_whatwg_spec",
-    "tools.test_check_tool_test_coverage",
-    "tools.test_check_real_site_manifest",
-    "tools.test_check_status_json",
-    "tools.test_check_work_packages",
-    "tools.test_check_python_syntax",
-    "tools.test_check_progress_consistency",
-    "tools.test_check_wp_board",
-    "tools.test_check_wpt_artifacts",
-    "tools.test_check_real_site_report",
-    "tools.test_check_conformance_freshness",
-    "tools.test_check_deslop_allowlist",
-    "tools.test_check_agent_index_refs",
-    "tools.test_check_workflow_scripts",
-    "tools.test_check_status_badges",
-    "tools.test_check_doc_images",
-    "tools.test_check_coverage_json",
-    "tools.test_check_real_site_html",
-    "tools.test_check_closed_work_packages",
-    "tools.test_check_toolchain_config",
-    "tools.test_check_workflow_metadata",
-    "tools.test_check_coverage_svg",
-    "tools.test_check_progress_svg",
-    "tools.test_check_conformance_badges",
-    "tools.test_check_coverage_html_areas",
-    "tools.test_check_fuzz_manifest",
-    "tools.test_check_fixture_links",
-    "tools.test_check_test262_artifacts",
-    "tools.test_check_milestone_index",
-    "tools.test_check_wp_schema_docs",
-    "tools.test_check_wp_generators",
-    "tools.test_check_wpt_manifest_files",
-    "tools.test_check_changelog_version",
-    "tools.test_check_wpt_report_md",
-    "tools.test_check_real_site_md5",
-    "tools.test_check_wp_generator_functions",
-    "tools.test_check_agents_constraints",
-    "tools.test_check_window_ui",
-)
+TOOLS_DIR = Path(__file__).resolve().parent
+
+# #2446: derive the module list from the repository instead of freezing an
+# incomplete tuple. The only exclusions are modules that are not unit tests or
+# that would recurse back into this runner; see EXCLUDED_TEST_MODULES.
+EXCLUDED_TEST_MODULES = {
+    "tools.test_inspector": "CLI fixture inspector, not a unittest module (CI #1402)",
+    "tools.test_check_no_compile_gates": "self-reference: running this runner recursively",
+}
+
+
+def discover_test_modules(tools_dir: Path = TOOLS_DIR) -> tuple[str, ...]:
+    """Return every importable tools.test_* unittest module, in sorted order."""
+    return tuple(
+        sorted(
+            f"tools.{path.stem}"
+            for path in tools_dir.glob("test_*.py")
+            if f"tools.{path.stem}" not in EXCLUDED_TEST_MODULES
+        )
+    )
+
+
+TEST_MODULES = discover_test_modules()
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("check_arch", (PY, "tools/check_arch.py")),
     ("check_docs_links", (PY, "tools/check_docs_links.py")),
