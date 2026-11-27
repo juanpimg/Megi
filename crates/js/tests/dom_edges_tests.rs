@@ -18,7 +18,9 @@ fn create_element_lowercases_html_names() {
         .eval(
             "var template = document.createElement('TEMPLATE');
              template.innerHTML = '<p>x</p>';
-             globalThis.templateChildren = template.childNodes.length;",
+             globalThis.templateChildren = template.childNodes.length;
+             globalThis.templateText = template.textContent;
+             globalThis.templateMarkup = template.innerHTML;",
             "create.js",
         )
         .expect("createElement");
@@ -29,6 +31,14 @@ fn create_element_lowercases_html_names() {
             .eval("templateChildren", "create.js")
             .expect("children"),
         "0"
+    );
+    // #2320 / WHATWG DOM §4.4: textContent walks the element's own children, so the
+    // inert contents fragment is excluded even though innerHTML still serializes it.
+    assert_eq!(
+        runtime
+            .eval("[templateText, templateMarkup].join('|')", "create.js")
+            .expect("text/markup"),
+        "|<p>x</p>"
     );
 }
 

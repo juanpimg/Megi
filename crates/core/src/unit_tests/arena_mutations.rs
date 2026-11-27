@@ -148,7 +148,7 @@ fn clone_node_into_rejects_document_source() {
 }
 
 #[test]
-fn test_template_text_content_routes_to_contents_fragment() {
+fn test_template_text_content_excludes_inert_contents() {
     let mut doc = Document::new();
     let template = doc.create_element(Namespace::Html, "template", vec![]);
     let fragment = doc
@@ -158,7 +158,10 @@ fn test_template_text_content_routes_to_contents_fragment() {
         .expect("template contents");
     doc.set_text_content(template, "inert")
         .expect("set template text");
-    assert_eq!(doc.text_content(template), "inert");
+    // #2320 / WHATWG DOM §4.4: the inert contents fragment is not a child of the
+    // template, so the template's own textContent is empty while the fragment keeps its text.
+    assert_eq!(doc.text_content(template), "");
+    assert_eq!(doc.text_content(fragment), "inert");
     assert_eq!(doc.children(fragment).count(), 1);
     assert!(doc.validate_invariants().is_ok());
 }
@@ -264,7 +267,10 @@ fn test_clone_node_into_another_document() {
     assert!(target.owns(imported_contents));
     assert!(!source.owns(imported_contents));
     assert_eq!(target.children(imported_contents).count(), 1);
-    assert_eq!(target.text_content(imported_template), "inert text");
+    // #2320: the imported template's textContent excludes its inert contents, but the
+    // fragment itself still holds the cloned text.
+    assert_eq!(target.text_content(imported_template), "");
+    assert_eq!(target.text_content(imported_contents), "inert text");
     assert!(target.validate_invariants().is_ok());
     assert!(source.validate_invariants().is_ok());
     // The source tree is untouched.
@@ -278,7 +284,7 @@ fn test_clone_node_into_another_document() {
                 .is_some_and(|el| el.local_name == "template")
         })
         .expect("source template");
-    assert_eq!(source.text_content(source_template), "inert text");
+    assert_eq!(source.text_content(source_template), "");
 }
 
 #[test]
