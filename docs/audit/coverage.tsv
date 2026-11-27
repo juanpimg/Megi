@@ -741,7 +741,7 @@ crates/js/src/runtime/globals.rs	10	src	F2	wave-max-mod	2026-11-19	covered	#maxi
 crates/js/src/runtime/globals/builders.rs	298	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/globals/features.rs	842	src	F2	fix-1905	2026-11-19	covered	#1905	re-read after document node handle fix
 crates/js/src/runtime/globals/install.rs	371	src	F2	sw-phase1	2026-11-25	covered	M4-SW-PHASE1	Read and verified: Service Workers phase 1 capability-slot implementation
-crates/js/src/runtime/history.rs	271	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/src/runtime/history.rs	299	src	F2	roadmap-analysis	2026-11-27	covered	#2339	Re-read: pushState/replaceState reject cross-origin URLs with SecurityError via is_same_origin_url before provider and state mutation; relative/opaque-base URLs inherit origin
 crates/js/src/runtime/location_storage.rs	382	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_eval.rs	358	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/runtime/module_parse.rs	189	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -778,7 +778,7 @@ crates/js/src/xhr.rs	32	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modulari
 crates/js/src/xhr/prelude_a.js	388	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/src/xhr/prelude_b.js	364	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_api_tests.rs	408	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/js/tests/browser_features_r24/history_location.rs	143	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/js/tests/browser_features_r24/history_location.rs	204	test	F1	roadmap-analysis	2026-11-27	covered	#2339	Re-read: history_state_urls_must_be_same_origin asserts SecurityError and unchanged URL for both APIs plus same-origin success
 crates/js/tests/browser_features_r24/main.rs	7	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/mutation_observer.rs	278	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/js/tests/browser_features_r24/storage.rs	94	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
