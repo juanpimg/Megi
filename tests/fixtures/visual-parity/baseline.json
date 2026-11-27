@@ -21,9 +21,9 @@
       768
     ],
     "threshold": 16,
-    "changed_pixels": 94556,
-    "changed_pct": 12.02,
-    "mean_abs_diff": 11.802,
+    "changed_pixels": 93230,
+    "changed_pct": 11.85,
+    "mean_abs_diff": 11.818,
     "diff_bbox": [
       8,
       8,
@@ -37,8 +37,8 @@
       768
     ],
     "threshold": 16,
-    "changed_pixels": 157061,
-    "changed_pct": 19.97,
+    "changed_pixels": 158481,
+    "changed_pct": 20.15,
     "mean_abs_diff": 20.909,
     "diff_bbox": [
       84,
@@ -53,8 +53,8 @@
       768
     ],
     "threshold": 16,
-    "changed_pixels": 41795,
-    "changed_pct": 5.31,
+    "changed_pixels": 42062,
+    "changed_pct": 5.35,
     "mean_abs_diff": 5.256,
     "diff_bbox": [
       8,

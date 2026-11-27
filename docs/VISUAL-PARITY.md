@@ -48,9 +48,13 @@ Las capturas usadas para estas mediciones están bajo `/tmp/opencode/compare-out
 | Sitio | Línea base | Tras `system-ui` + pistas legacy | Con `--system-fonts` |
 |---|---:|---:|---:|
 | example.com | 1,04 % / 1,354 | **0,92 % / 1,246** | 0,92 % / 1,246 |
-| rust-lang.org | 12,02 % / 11,802 | 12,02 % / 11,802 | **10,78 % / 10,331** |
-| news.ycombinator.com | 20,61 % / 29,686 | **19,97 % / 20,909** | **17,39 % / 18,653** |
-| Wikipedia | 5,31 % / 5,256 | 5,31 % / 5,256 | **4,88 % / 4,911** |
+| rust-lang.org | 11,85 % / 11,818 | 11,85 % / 11,818 | **10,84 % / 10,331** |
+| news.ycombinator.com | 20,61 % / 29,686 | **20,15 % / 20,909** | **17,58 % / 18,653** |
+| Wikipedia | 5,35 % / 5,256 | 5,35 % / 5,256 | **4,91 % / 4,911** |
+
+Las cifras se recalcularon con `max(|ΔR|,|ΔG|,|ΔB|)` (#2447): la métrica
+anterior usaba luminancia y subestimaba los cambios en un solo canal. Las
+capturas temporales siguen siendo las mismas; sólo cambia la métrica.
 
 Cambios que produjeron estas mejoras (todos en `main`):
 

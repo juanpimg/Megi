@@ -34,7 +34,12 @@ def compare_images(first: Path, second: Path, threshold: int = 16) -> dict:
         raise ValueError(f"image sizes differ: {a.size} vs {b.size}")
 
     diff = ImageChops.difference(a, b)
-    mask = diff.convert("L").point(lambda value: 255 if value > threshold else 0)
+    # #2447: docs promise max(|dR|,|dG|,|dB|), but convert("L") measures a
+    # luminance-weighted mean and hides single-channel differences. Combine
+    # channels with lighter() so the mask keeps the maximum absolute delta.
+    channels = diff.split()
+    maximum = ImageChops.lighter(ImageChops.lighter(channels[0], channels[1]), channels[2])
+    mask = maximum.point(lambda value: 255 if value > threshold else 0)
     changed = sum(1 for pixel in mask.getdata() if pixel)
     stat = ImageStat.Stat(diff)
     total = a.width * a.height

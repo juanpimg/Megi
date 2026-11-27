@@ -57,6 +57,24 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(visual_parity.compare_images(self.a, self.b, 16)["changed_pixels"], 0)
         self.assertEqual(visual_parity.compare_images(self.a, self.b, 4)["changed_pixels"], 16)
 
+    def test_single_channel_difference_uses_max_not_luminance(self) -> None:
+        # #2447: a red-only delta of 40 has luminance ~12 (< 16) but its
+        # maximum channel delta is 40, so the documented rule counts it.
+        from PIL import Image
+
+        Image.new("RGB", (4, 4), (0, 0, 0)).save(self.a)
+        Image.new("RGB", (4, 4), (40, 0, 0)).save(self.b)
+        report = visual_parity.compare_images(self.a, self.b, 16)
+        self.assertEqual(report["changed_pixels"], 16)
+        self.assertEqual(report["diff_bbox"], (0, 0, 4, 4))
+
+    def test_luminance_heavy_channel_does_not_hide_other_channels(self) -> None:
+        from PIL import Image
+
+        Image.new("RGB", (4, 4), (0, 0, 0)).save(self.a)
+        Image.new("RGB", (4, 4), (100, 0, 0)).save(self.b)
+        self.assertEqual(visual_parity.compare_images(self.a, self.b, 16)["changed_pixels"], 16)
+
     def test_size_mismatch_is_a_typed_error(self) -> None:
         from PIL import Image
 
