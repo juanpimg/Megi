@@ -158,7 +158,9 @@ def declared_files(root: Path) -> list[Path]:
         return []
     return sorted(
         path.relative_to(base) for path in base.rglob("*")
-        if path.is_file() and path.name not in CONTROL_FILES
+        # #2452: is_file() follows symlinks, which would let an external file
+        # pose as a vendored fixture; report links so they can be rejected.
+        if path.is_file() and not path.is_symlink() and path.name not in CONTROL_FILES
     )
 
 
@@ -215,6 +217,9 @@ def check_manifest(root: Path) -> list[str]:
         if entry["kind"] == "skip":
             continue
         actual = root / WPT_DIR / path
+        if actual.is_symlink():
+            errors.append(f"{path}: declared fixture is a symlink")
+            continue
         if not actual.is_file():
             errors.append(f"{path}: declared file is missing")
             continue
@@ -389,19 +394,30 @@ def import_files(
         if path.is_absolute() or ".." in path.parts:
             raise ValueError(f"unsafe --files entry: {relative!r}")
         origin = source / relative
+        if origin.is_symlink():
+            raise ValueError(f"source file is a symlink: {origin}")
         if not origin.is_file():
             raise ValueError(f"missing source file: {origin}")
         data = origin.read_bytes()
         target = base / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
+        # #2452: defaulting to 1 invents a subtest count and falsifies the WPT
+        # denominator. Unknown files need an explicit, verified count.
         count = (
             SEED_COUNTS.get(relative)
-            or CANVAS_SUBSET_COUNTS.get(relative)
-            or WEBGL_SUBSET_COUNTS.get(relative, 1)
+            if relative in SEED_COUNTS else
+            CANVAS_SUBSET_COUNTS.get(relative)
+            if relative in CANVAS_SUBSET_COUNTS else
+            WEBGL_SUBSET_COUNTS.get(relative)
         )
         support_reason = SUPPORT_PATHS.get(relative)
         skip_reason = SKIP_PATHS.get(relative)
+        if count is None and not skip_reason and not support_reason:
+            raise ValueError(
+                f"no verified subtest count for {relative!r}; "
+                "add it to SEED_COUNTS/CANVAS_SUBSET_COUNTS/WEBGL_SUBSET_COUNTS"
+            )
         by_path[relative] = {
             "path": relative,
             "sha256": sha256_bytes(data),

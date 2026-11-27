@@ -128,7 +128,7 @@ class VendorWptTest(unittest.TestCase):
         source = self.root / "wpt-source"
         source.mkdir()
         (source / "LICENSE").write_text("BSD 3-Clause\n", encoding="utf-8")
-        fixture = source / "2dcontext/rect/2d.fillRect.basic.html"
+        fixture = source / "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html"
         fixture.parent.mkdir(parents=True)
         fixture.write_bytes(b"<title>canvas</title>\n")
         subprocess.run(["git", "init", "-q", str(source)], check=True)
@@ -139,8 +139,9 @@ class VendorWptTest(unittest.TestCase):
             check=True,
         )
         subprocess_run = vendor_wpt.import_files(
-            source, PIN, ["2dcontext/rect/2d.fillRect.basic.html"], self.root,
-            verify_commit=False,
+            source, PIN,
+            ["2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html"],
+            self.root, verify_commit=False,
         )
         self.assertEqual(subprocess_run, [])
         entries = vendor_wpt.load_manifest(self.root)
@@ -149,7 +150,7 @@ class VendorWptTest(unittest.TestCase):
         self.assertEqual(new[0]["kind"], "testharness")
         self.assertEqual(new[0]["subtest_count_expected"], 1)
         self.assertEqual(
-            (self.wpt / "2dcontext/rect/2d.fillRect.basic.html").read_bytes(),
+            (self.wpt / "2dcontext/drawing-rectangles-to-the-canvas/2d.fillRect.basic.html").read_bytes(),
             fixture.read_bytes(),
         )
         self.assertEqual(vendor_wpt.check_manifest(self.root), [])
@@ -184,6 +185,50 @@ class VendorWptTest(unittest.TestCase):
         self.assertEqual(entries["webgl/bufferSubData.html"]["subtest_count_expected"], 1)
         self.assertEqual(entries["webgl/common.js"]["kind"], "support")
         self.assertEqual(vendor_wpt.check_manifest(self.root), [])
+
+    def test_import_files_rejects_unknown_webgl_count(self) -> None:
+        # #2452: inventing 1 for an unlisted webgl file falsifies the denominator.
+        source = self.root / "wpt-source-unknown"
+        source.mkdir()
+        (source / "LICENSE").write_text("BSD 3-Clause\n", encoding="utf-8")
+        fixture = source / "webgl/unknown.html"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_bytes(b"<title>unknown</title>\n")
+        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "-c", "user.email=test@example.invalid",
+             "-c", "user.name=Test", "commit", "-qm", "fixture"],
+            check=True,
+        )
+        with self.assertRaises(ValueError) as caught:
+            vendor_wpt.import_files(
+                source, PIN, ["webgl/unknown.html"], self.root, verify_commit=False
+            )
+        self.assertIn("no verified subtest count", str(caught.exception))
+
+    def test_symlinked_fixture_is_not_a_declared_file(self) -> None:
+        # #2452: is_file() follows symlinks; declared_files() must not.
+        outside = self.root / "outside.html"
+        outside.write_bytes(b"outside\n")
+        link = self.wpt / "css/css-syntax/link.html"
+        link.symlink_to(outside)
+        self.assertNotIn(
+            Path("css/css-syntax/link.html"), vendor_wpt.declared_files(self.root)
+        )
+
+    def test_check_manifest_rejects_symlinked_declared_fixture(self) -> None:
+        first = FIXTURES[0]
+        target = self.wpt / first
+        data = target.read_bytes()
+        target.unlink()
+        outside = self.root / "outside.html"
+        outside.write_bytes(data)
+        target.symlink_to(outside)
+        errors = vendor_wpt.check_manifest(self.root)
+        self.assertTrue(
+            any("symlink" in error and first in error for error in errors), errors
+        )
 
 
 if __name__ == "__main__":
