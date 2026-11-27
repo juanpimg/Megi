@@ -179,7 +179,12 @@ fn find_charset_attribute(tag: &str) -> Option<usize> {
     let mut from = 0;
     while let Some(pos) = tag[from..].find("charset") {
         let index = from + pos;
-        if index == 0 || tag.as_bytes()[index - 1].is_ascii_whitespace() {
+        // WHATWG HTML §13.2.3.2: a `;` parameter delimiter also introduces `charset`,
+        // including the compact `text/html;charset=...` form (#2378).
+        if index == 0
+            || tag.as_bytes()[index - 1].is_ascii_whitespace()
+            || tag.as_bytes()[index - 1] == b';'
+        {
             return Some(index);
         }
         from = index + 1;

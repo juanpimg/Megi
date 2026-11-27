@@ -103,6 +103,19 @@ mod unit_tests {
     }
 
     #[test]
+    fn compact_meta_charset_parameter_is_used_without_header() {
+        // WHATWG HTML §13.2.3.2: `;` is a valid parameter delimiter before `charset`,
+        // even with no whitespace and no space after the semicolon (#2378).
+        let decoded = decode_html(
+            b"<meta http-equiv=Content-Type content=\"text/html;charset=windows-1252\"><p>caf\xE9</p>",
+            "text/html",
+        )
+        .expect("decode");
+        assert_eq!(decoded.charset, "windows-1252");
+        assert!(decoded.text.contains("café"));
+    }
+
+    #[test]
     fn unsupported_encoding_is_a_typed_error() {
         assert!(matches!(
             decode_html(b"<html></html>", "text/html; charset=shift_jis"),

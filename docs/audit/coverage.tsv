@@ -1189,9 +1189,9 @@ crates/render/src/backgrounds/tests.rs	169	src	F2	wave-max-mod	2026-11-19	covere
 crates/render/src/backgrounds/types.rs	86	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/browser_host.rs	479	src	F2	lead	2026-11-26	covered	HERO-CTA-WIKI-HEADER-MERGE	Read merge bdda7be8 diff: chrome refresh, CLI flags, DPR, fonts, flex/CSS, IFC, painting reconciled
 crates/render/src/cache.rs	316	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/charset.rs	326	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/charset.rs	331	src	F2	jp	2026-11-27	covered	#2378	re-read for #2378 compact meta charset prescan fix
 crates/render/src/charset/charset_gbk.rs	51	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
-crates/render/src/charset/tests.rs	234	src	F2	merge-1994	2026-11-19	covered	#1974,#1910	re-read during merge conflict resolution
+crates/render/src/charset/tests.rs	247	src	F2	jp	2026-11-27	covered	#2378	re-read for #2378 compact meta charset prescan test
 crates/render/src/decode.rs	60	src	F2	lead	2026-11-26	covered	UI-FAVICON-LINEBYLINE	read after remote UI favicon and audit index merge
 crates/render/src/devtools.rs	52	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: isolated and page-bound Runtime.evaluate bridges
 crates/render/src/dom_summary.rs	155	src	F2	opencode-agent	2026-11-24	covered	#2269	read line by line: bounded body-scoped DOM summary
