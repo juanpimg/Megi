@@ -29,14 +29,17 @@ if command -v ionice >/dev/null 2>&1; then
     runner+=(ionice -c 3)
 fi
 
+# Live URLs, not file:// snapshots: the real pages use root-absolute /static/...
+# CSS that a file: document cannot resolve (measured MAE 42.8 for rust), which
+# would turn this gate into a false regression signal.
+declare -A sites=(
+    [hn]="https://news.ycombinator.com/"
+    [rust]="https://www.rust-lang.org/"
+    [wikipedia]="https://es.wikipedia.org/wiki/Wikipedia:Ignora_las_normas"
+)
 for site in hn rust wikipedia; do
-    fixture="tests/fixtures/real-sites/$site.html"
-    if [[ ! -f "$fixture" ]]; then
-        echo "capture_window_ui: missing fixture $fixture; no capture was fabricated" >&2
-        exit 1
-    fi
-    echo "==> $site: $bin $fixture --screenshot $outdir/$site.png (1000x700, no --chrome)"
-    "${runner[@]}" "$bin" "$fixture" \
+    echo "==> $site: $bin ${sites[$site]} --screenshot $outdir/$site.png (1000x700, no --chrome)"
+    "${runner[@]}" "$bin" "${sites[$site]}" \
         --screenshot "$outdir/$site.png" --width 1000 --height 700
 done
 

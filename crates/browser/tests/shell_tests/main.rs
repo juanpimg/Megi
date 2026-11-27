@@ -9,6 +9,7 @@ mod common;
 mod content;
 mod find;
 mod forms;
+mod icons;
 mod misc;
 mod options;
 mod pages;
