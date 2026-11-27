@@ -74,6 +74,8 @@ pub(crate) fn build_webgl_context(handle: u32, context: &mut Context) -> JsObjec
         ("UNSIGNED_BYTE", webgl::UNSIGNED_BYTE),
         ("ARRAY_BUFFER", webgl::ARRAY_BUFFER),
         ("STATIC_DRAW", webgl::STATIC_DRAW),
+        ("DYNAMIC_DRAW", webgl::DYNAMIC_DRAW),
+        ("STREAM_DRAW", webgl::STREAM_DRAW),
         ("FLOAT", webgl::FLOAT),
     ] {
         init.property(js_string!(name), JsValue::from(value), Attribute::all());
