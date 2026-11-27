@@ -1191,7 +1191,7 @@ crates/render/src/decode.rs	60	src	F2	lead	2026-11-26	covered	UI-FAVICON-LINEBYL
 crates/render/src/devtools.rs	52	src	F2	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	read full file: isolated and page-bound Runtime.evaluate bridges
 crates/render/src/dom_summary.rs	155	src	F2	opencode-agent	2026-11-24	covered	#2269	read line by line: bounded body-scoped DOM summary
 crates/render/src/error.rs	135	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/render/src/frames.rs	419	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/src/frames.rs	423	src	F2	roadmap-analysis	2026-11-27	covered	#2373	Re-read: child_options.raster_scale=1.0 so nested contexts rasterise at CSS scale; parent RasterScale::apply scales the frame rect
 crates/render/src/images.rs	43	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/render/src/images/load.rs	318	src	F2	integrate-hn-images	2026-11-25	covered	#M9-IMAGE,WP-SITE-hn,WP-5.11	re-read after warm-pool fix and inline-SVG spacer exemption
 crates/render/src/images/selection.rs	327	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1271,6 +1271,7 @@ crates/render/tests/forms/input_value.rs	223	test	F1	input-value-paint-fix	2026-
 crates/render/tests/forms/main.rs	10	test	F1	input-value-paint-fix	2026-11-26	covered	INPUT-VALUE-PIPELINE	read during native input text pipeline integration
 crates/render/tests/forms/select.rs	175	test	F1	lead	2026-11-25	covered	SELECT-PARITY	read during native select control merge review
 crates/render/tests/frame_budget_tests.rs	88	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/render/tests/frame_scale_tests.rs	87	test	F1	roadmap-analysis	2026-11-27	covered	#2373	Re-read: iframe at DPR 2 keeps 40x20 logical image, no raster mismatch warning, red child paints
 crates/render/tests/golden/hn_chrome_reference.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/golden/rust_nav.png	0	binary	-			exempt		not read line by line: binary
 crates/render/tests/gradient_tests.rs	106	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
