@@ -60,6 +60,52 @@ fn referrer_policy_from_headers_and_meta() {
 }
 
 #[test]
+fn referrer_policy_last_valid_header_wins() {
+    // Referrer Policy §5: process all headers and let the last valid value win.
+    let headers = vec![
+        ("Referrer-Policy".to_owned(), "unsafe-url".to_owned()),
+        ("Referrer-Policy".to_owned(), "no-referrer".to_owned()),
+    ];
+    assert_eq!(
+        ReferrerPolicy::from_headers(&headers),
+        Some(ReferrerPolicy::NoReferrer)
+    );
+}
+
+#[test]
+fn referrer_policy_comma_separated_values_last_wins() {
+    let headers = vec![(
+        "Referrer-Policy".to_owned(),
+        "unsafe-url, no-referrer".to_owned(),
+    )];
+    assert_eq!(
+        ReferrerPolicy::from_headers(&headers),
+        Some(ReferrerPolicy::NoReferrer)
+    );
+}
+
+#[test]
+fn referrer_policy_ignores_unknown_tokens() {
+    // Invalid tokens are skipped, not fatal: the last *valid* one still wins.
+    let comma = vec![(
+        "Referrer-Policy".to_owned(),
+        "not-a-policy, unsafe-url".to_owned(),
+    )];
+    assert_eq!(
+        ReferrerPolicy::from_headers(&comma),
+        Some(ReferrerPolicy::UnsafeUrl)
+    );
+    let multi = vec![
+        ("Referrer-Policy".to_owned(), "not-a-policy".to_owned()),
+        ("Referrer-Policy".to_owned(), "origin".to_owned()),
+    ];
+    assert_eq!(
+        ReferrerPolicy::from_headers(&multi),
+        Some(ReferrerPolicy::Origin)
+    );
+}
+
+#[test]
 fn referrer_value_matrix() {
     let doc = url("https://example.com/app/index.html?q=1#frag");
     let same = url("https://example.com/other/page");
