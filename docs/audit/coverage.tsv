@@ -10,7 +10,7 @@ path	lines	category	phase	auditor	date	status	findings	notes
 .github/dependabot.yml	25	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/labeler.yml	55	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/bench.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
-.github/workflows/ci.yml	610	ci	F3	ci-final-fix	2026-11-26	covered	CI-PILLOW	re-read Docs job: install lxml and Pillow for tools visual_parity tests
+.github/workflows/ci.yml	611	ci	F3	ci-final-fix	2026-11-26	covered	CI-PILLOW	re-read Docs job: install lxml and Pillow for tools visual_parity tests
 .github/workflows/coverage.yml	77	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/dependabot-auto-merge.yml	27	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
 .github/workflows/docs.yml	51	ci	F3	waveF3	2026-11-17	covered	#1391-#1403,#1478-#1487	
@@ -213,7 +213,6 @@ crates/browser/src/worker/tests_extra.rs	200	src	F2	wave-max-mod	2026-11-19	cove
 crates/browser/src/worker/types.rs	143	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/worker/unit_tests.rs	249	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/src/zoom.rs	309	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/chrome_icons.rs	90	test	F1	jp	2026-11-26	covered	#2290	
 crates/browser/tests/devtools_protocol.rs	337	test	F1	devtools-dom-implementer	2026-11-25	covered	M7-dom-css-attach	re-read: live DOM/CSS RPC integration test
 crates/browser/tests/dpr_raster_tests.rs	47	test	F1	juanpimg	2026-11-26	covered	PR-2313-DPR	read full file; DPR raster boundary integration
 crates/browser/tests/favicon_svg.rs	24	test	F1	lead	2026-11-26	covered	UI-FAVICON-LINEBYLINE	read after remote UI favicon and audit index merge
@@ -230,7 +229,8 @@ crates/browser/tests/shell_tests/common.rs	47	test	F1	wave-max-mod	2026-11-19	co
 crates/browser/tests/shell_tests/content.rs	237	test	F1	chrome-occlusion-fix	2026-11-26	covered	F7-CHROME-OVERLAY/#1012,M2#5	Read full diff: chrome band reserved instead of occluding page; portable bidi stability invariants
 crates/browser/tests/shell_tests/find.rs	121	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/forms.rs	136	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/browser/tests/shell_tests/main.rs	18	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
+crates/browser/tests/shell_tests/icons.rs	90	test	F1	lead	2026-11-27	covered	UI-SHELL-CONNECT	read during final UI gate reconciliation
+crates/browser/tests/shell_tests/main.rs	19	test	F1	jp	2026-11-25	covered	#2290	Phase 1b rail wiring: read modified sections
 crates/browser/tests/shell_tests/misc.rs	177	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/options.rs	187	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/browser/tests/shell_tests/pages.rs	179	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1465,7 +1465,7 @@ docs/PERFORMANCE.md	470	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	do
 docs/RELEASE.md	45	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/ROADMAP.md	6	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
 docs/SHOWCASE.md	70	docs	F3	wave-max-mod	2026-11-19	covered	#modular-docs	documentation aligned
-docs/UI-TARGET.md	87	docs	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+docs/UI-TARGET.md	120	docs	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
 docs/VISUAL-PARITY.md	102	docs	F3	opencode-agent	2026-11-26	covered	#parity	re-read after adding inventory checker
 docs/adr/2026-11-24-drm-eme-decision.md	78	docs	F3	roadmap-analysis	2026-11-25	covered	M12-DRM-ADR	M12 ADR: Widevine/PlayReady/FairPlay public license data, branch (c) no DRM, real alternatives, explicit limits
 docs/adr/2026-11-24-js-jit-decision.md	73	docs	F3	lead	2026-11-25	covered	M8-JIT-DECISION	read full file after rebase; evidence verified
@@ -1600,7 +1600,7 @@ docs/superpowers/specs/2026-11-24-megi-ambition-design.md	169	docs	F3	docs-clean
 docs/work-packages/BOARD.md	69	docs	F3	integration	2026-11-25	covered	#2295	read after PDF/DevTools integration
 docs/work-packages/README.md	87	docs	F3	jp	2026-11-24	covered	#2290	created/re-read during exhaustive obsolete-doc audit
 docs/work-packages/SCHEMA.md	53	docs	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	re-read after remote merge; 51 -> 53 lines
-docs/work-packages/closed.toml	20	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
+docs/work-packages/closed.toml	45	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
 docs/work-packages/depth-inventory.toml	487	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-01.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m0-02.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
@@ -1645,12 +1645,7 @@ docs/work-packages/queue/WP-DEPTH-m9-02.toml	13	docs	F3	wp-engine	2026-11-24	cov
 docs/work-packages/queue/WP-DEPTH-m9-03.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-DEPTH-m9-04.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
 docs/work-packages/queue/WP-SITE-example.toml	13	docs	F3	wp-engine	2026-11-24	covered	#2294	re-read during WP engine implementation
-docs/work-packages/queue/WP-USER-ui-favicon.toml	13	docs	F3	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
-docs/work-packages/queue/WP-USER-ui-gate.toml	13	docs	F3	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
-docs/work-packages/queue/WP-USER-ui-icons.toml	13	docs	F3	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
-docs/work-packages/queue/WP-USER-ui-shell.toml	13	docs	F3	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
-docs/work-packages/queue/WP-USER-ui-titles.toml	13	docs	F3	lead	2026-11-26	covered	UI-CARET-TABS-PLAN	read during UI plan integration review
-docs/work-packages/state.json	10	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
+docs/work-packages/state.json	15	docs	F3	integrate-perf-styles	2026-11-25	covered	WP-SITE-wikipedia,WP-SITE-rust	re-read full file after pooling integration rebase
 fuzz/Cargo.toml	266	fuzz	F1	auto-round-03	2026-11-24	covered	M0/M1/F1	three new fuzz bins reviewed
 fuzz/corpus/body_stream/empty	0	exempt	-			exempt		not read line by line: exempt
 fuzz/corpus/body_stream/max-length	0	exempt	-			exempt		not read line by line: exempt
@@ -2419,8 +2414,8 @@ tools/audit_negative_matrix.py	273	tool	F3	lead	2026-11-25	covered	NEG-MATRIX-NO
 tools/audit_recover_issues.py	209	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	written and reviewed while building the F0 ledger
 tools/bench.sh	111	tool	F3	waveF3	2026-11-17	covered	#1391-#1403	
 tools/bench_compare.py	224	tool	F3	jp	2026-11-25	covered	#2290	
-tools/capture_real_window.sh	21	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
-tools/capture_window_ui.sh	20	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+tools/capture_real_window.sh	27	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
+tools/capture_window_ui.sh	64	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/check_agent_index_refs.py	70	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
 tools/check_agents_constraints.py	63	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-49	read full file; compile-free gate registered in check_no_compile_gates.py
 tools/check_arch.py	173	tool	F3	jp	2026-11-24	covered	#2290	re-read after aliased import fix
@@ -2441,7 +2436,7 @@ tools/check_fixture_links.py	50	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOT
 tools/check_fuzz_manifest.py	58	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 58-line compile-free gate; validates fuzz manifest
 tools/check_milestone.py	119	tool	F3	jp	2026-11-25	covered	#2290	stable-text match mode for out-of-order closure
 tools/check_milestone_index.py	55	tool	F3	lead	2026-11-26	covered	MILESTONE-WP-GATES-REMOTE	read full file; added by remote merge
-tools/check_no_compile_gates.py	158	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+tools/check_no_compile_gates.py	162	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/check_parity_baseline.py	73	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: parity baseline checker
 tools/check_parity_docs.py	105	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: docs/baseline consistency checker
 tools/check_parity_inventory.py	76	tool	F3	opencode-agent	2026-11-26	covered	#parity	read line by line: artifact inventory checker
@@ -2461,7 +2456,7 @@ tools/check_status_json.py	61	tool	F3	opencode-agent	2026-11-26	covered	#audit	r
 tools/check_test262_artifacts.py	64	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 64-line compile-free gate; validates test262 artifacts
 tools/check_tool_test_coverage.py	81	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/check_toolchain_config.py	73	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
-tools/check_window_ui.py	102	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+tools/check_window_ui.py	141	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/check_work_packages.py	71	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/check_workflow_metadata.py	66	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full file after remote merge; compile-free gate registered in check_no_compile_gates.py
 tools/check_workflow_scripts.py	69	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
@@ -2526,7 +2521,7 @@ tools/test_check_status_json.py	75	tool	F3	opencode-agent	2026-11-26	covered	#au
 tools/test_check_test262_artifacts.py	91	tool	F3	lead	2026-11-26	covered	DARK-SHELL-REMOTE-GATES	read full 91-line unit tests for test262 artifact gate
 tools/test_check_tool_test_coverage.py	88	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: tool test coverage extension
 tools/test_check_toolchain_config.py	89	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
-tools/test_check_window_ui.py	61	tool	F3	ui-gate-task5	2026-11-26	covered	WP-USER-ui-gate	WP-USER-ui-gate: authored and re-read
+tools/test_check_window_ui.py	157	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/test_check_work_packages.py	83	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: work package gate extension
 tools/test_check_workflow_metadata.py	71	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE-2	read full unit tests for the new remote gate checker
 tools/test_check_workflow_scripts.py	94	tool	F3	lead	2026-11-26	covered	AGENT-GATES-REMOTE	read during remote gate tools merge
@@ -2537,7 +2532,7 @@ tools/test_check_wp_schema_docs.py	86	tool	F3	lead	2026-11-26	covered	MILESTONE-
 tools/test_check_wpt_artifacts.py	139	tool	F3	opencode-agent	2026-11-26	covered	#audit	read line by line: WPT artifact gate extension
 tools/test_check_wpt_manifest_files.py	103	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-44	re-read in full after remote merge; ledger/gate reconciliation
 tools/test_check_wpt_report_md.py	85	tool	F3	lead	2026-11-26	covered	REMOTE-GATES-46	read full file after WPT report md gate merge; unittest module registered
-tools/test_ci_gate.py	145	tool	F3	ci-tools-list-fix	2026-11-26	covered	#1402	read diff: factored discovery/registration helpers, added duplicate and guard-detection regressions
+tools/test_ci_gate.py	150	tool	F3	lead	2026-11-27	covered	UI-WINDOW-GATE-MERGE	read during final UI gate reconciliation
 tools/test_docs_consistency.py	34	tool	F3	auto-round-03	2026-11-24	covered	M0/M1/F1	
 tools/test_exif_generators.py	51	tool	F3	jquery-fix	2026-11-21	covered	#upstream	re-read
 tools/test_fuzz_cache.py	47	tool	F3	juanpimg	2026-11-20	covered	#2062,#2055,#2059	new file from main merge
