@@ -172,10 +172,13 @@ pub(super) fn normalize_host(scheme: Scheme, raw: &str) -> Result<String, UrlErr
         // `[1.2.3.4.5]` used to be accepted and then sent to DNS/SNI/TLS as if valid.
         // `Ipv6Addr` accepts the compressed forms and an embedded IPv4 tail; a link-local
         // zone id (`fe80::1%eth0`) is not part of the host syntax and stays rejected.
-        if inner.parse::<std::net::Ipv6Addr>().is_err() {
-            return Err(UrlError::InvalidHost(raw.to_owned()));
-        }
-        return Ok(format!("[{}]", inner.to_ascii_lowercase()));
+        // WHATWG URL §3.6/§4.5: serialize the parsed address in canonical compressed form;
+        // lowercasing the input alone left `[0:0::1]` non-canonical and split identity
+        // (as_str, cache_key, Origin, Host header) from its canonical spelling (#2350).
+        let address = inner
+            .parse::<std::net::Ipv6Addr>()
+            .map_err(|_| UrlError::InvalidHost(raw.to_owned()))?;
+        return Ok(format!("[{address}]"));
     }
     if raw
         .chars()

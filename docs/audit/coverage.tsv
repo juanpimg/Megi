@@ -1020,7 +1020,7 @@ crates/net/src/referrer.rs	274	src	F2	wave-max-mod	2026-11-19	covered	#maximal-m
 crates/net/src/socks.rs	375	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/url.rs	420	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/url/encoding.rs	121	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/src/url/parsing.rs	288	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/src/url/parsing.rs	291	src	F2	jp	2026-11-27	covered	#2350	re-read after WHATWG IPv6 canonical serialization fix (#2350)
 crates/net/src/url/tests.rs	44	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket.rs	24	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/src/websocket/client.rs	469	src	F2	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
@@ -1078,7 +1078,7 @@ crates/net/tests/trailers_tests.rs	357	test	F1	wave-max-mod	2026-11-19	covered	#
 crates/net/tests/upload_streaming/h1.rs	210	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/upload_streaming/h2.rs	262	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/upload_streaming/main.rs	91	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
-crates/net/tests/url_tests.rs	354	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
+crates/net/tests/url_tests.rs	382	test	F1	jp	2026-11-27	covered	#2350	re-read after adding IPv6 canonicalization TDD tests (#2350)
 crates/net/tests/url_userinfo_auth.rs	120	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green
 crates/net/tests/websocket_protocol_tests.rs	301	test	F1	wave3-merge	2026-11-21	covered	#upstream	re-read
 crates/net/tests/websocket_tests.rs	446	test	F1	wave-max-mod	2026-11-19	covered	#maximal-modularity	final formatted state, gates green

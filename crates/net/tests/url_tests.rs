@@ -4,7 +4,7 @@
 //! (<https://url.spec.whatwg.org/>) and WPT `url/resources/urltestdata.json` cases that
 //! fall inside the supported subset (http/https/file, no IDNA/legacy forms).
 
-use megi_net::{Scheme, Url, UrlError};
+use megi_net::{Origin, Scheme, Url, UrlError};
 
 fn parse(input: &str) -> Url {
     Url::parse(input).unwrap_or_else(|error| panic!("expected `{input}` to parse: {error}"))
@@ -90,6 +90,34 @@ fn parses_ipv4_and_bracketed_ipv6_hosts() {
     let url = parse("http://[2001:db8::1]/");
     assert_eq!(url.host(), "[2001:db8::1]");
     assert_eq!(url.host_for_dns(), "2001:db8::1");
+}
+
+#[test]
+fn canonicalizes_ipv6_host_serialization() {
+    // WHATWG URL §3.6 / §4.5: an IPv6 host serializes in its canonical compressed form,
+    // so non-canonical spellings must not leak into as_str()/cache_key()/Origin (#2350).
+    let url = parse("http://[0:0::1]/x");
+    assert_eq!(url.host(), "[::1]");
+    assert_eq!(url.host_for_dns(), "::1");
+    assert_eq!(url.as_str(), "http://[::1]/x");
+
+    let url = parse("http://[2001:0DB8:0000:0000:0000:0000:0000:0001]/");
+    assert_eq!(url.host(), "[2001:db8::1]");
+    assert_eq!(url.host_for_dns(), "2001:db8::1");
+    assert_eq!(url.as_str(), "http://[2001:db8::1]/");
+
+    // Equivalence across the derived identities: cache key and origin ignore spelling.
+    let noncanonical = parse("http://[0:0::1]/x");
+    let canonical = parse("http://[::1]/x");
+    assert_eq!(noncanonical.cache_key(), canonical.cache_key());
+    assert!(
+        Origin::from_url(&noncanonical)
+            .expect("http origin")
+            .is_same_origin(&Origin::from_url(&canonical).expect("http origin"))
+    );
+
+    // Structurally invalid literals stay rejected, canonicalization must not widen parsing.
+    assert!(parse_err("http://[gggg::1]/").is_some());
 }
 
 #[test]
