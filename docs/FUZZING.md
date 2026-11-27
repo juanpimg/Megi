@@ -171,6 +171,9 @@ committing large growth).
   curated inputs (parser/decoder/protocol/script targets). Keep seeds **small** (a few
   hundred bytes): they are inputs for mutation, not test fixtures. Semantic conformance
   corpora live in `tests/html5lib-tests` and are not used here.
+- Seeds should cover rejection branches, not only the happy path: the IPC corpora include
+  stale/future generations, oversized dimensions, malformed PNGs, disallowed schemes and
+  malformed framing; cookie/cache seeds prefix an epoch to pin time-dependent branches.
 - Minimise a grown corpus before committing it:
 
   ```bash
@@ -220,7 +223,7 @@ When libFuzzer finds a crash it writes the reproducer to
 - **UBSan (UndefinedBehaviorSanitizer):** a dedicated `fuzz-ubsan` smoke matrix runs
   UB checks (120 s) on representative parser/decoder targets
   (`html_parse, css_parse, selectors, net_url, image_decode, hpack_decode, svg_parse,
-  webp, container_queries`), excluding Boa-embedding JS targets with known
+  webp, container_queries, text_boundary`), excluding Boa-embedding JS targets with known
   third-party leak/compat constraints under sanitizers. cargo-fuzz 0.13.2 has no
   `undefined` sanitizer value, so the jobs pass `--sanitizer none` and enable UB checks
   with `RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on"` (the `fuzz-nightly.yml`
@@ -254,7 +257,7 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
 - **ASan matrix** (`fuzz`): per-target budgets and flags are defined in the `strategy.matrix`
   of `.github/workflows/fuzz-nightly.yml` (the single source of truth); all targets use
   `-rss_limit_mb=2048 -timeout=25`, with `-detect_leaks=0` for the Boa-embedding targets;
-- **UBSan smoke** (`fuzz-ubsan`, 9 targets): 120 s with UB checks enabled via
+- **UBSan smoke** (`fuzz-ubsan`, 10 targets): 120 s with UB checks enabled via
   `RUSTFLAGS="-Zub-checks=yes -Cdebug-assertions=on"` and `--sanitizer none` on
   representative targets (see Sanitizers above);
 - **PR job** (`build`): `cargo +nightly fuzz build` compiles all `[[bin]]` targets in
@@ -272,10 +275,11 @@ Known non-crashes (do not report): the 3 `xmlViolation` tokenizer failures are d
   the same policy.
 
 Notes:
-- 34 harnesses exist in `fuzz/fuzz_targets/` (34 `[[bin]]` targets) and 180 seed corpus files
-  are tracked under `fuzz/corpus/<target>/` (the four extra `ipc_response` seeds cover
-  generation progression and `u64` saturation, #2418). The scheduled workflow has 34 ASan
-  matrix entries (10 at 600 s, 24 at 300 s) plus 9 UBSan smoke entries (120 s each).
+- 34 harnesses exist in `fuzz/fuzz_targets/` (34 `[[bin]]` targets) and 195 seed corpus files
+  are tracked under `fuzz/corpus/<target>/` (including the four `ipc_response` seeds for
+  generation progression and `u64` saturation, #2418, and 19 new rejection-branch seeds,
+  #2426). The scheduled workflow has 34 ASan matrix entries (10 at 600 s, 24 at 300 s) plus
+  10 UBSan smoke entries (120 s each, including `text_boundary`, #2425).
 - Daily 10-minute critical / 5-minute secondary runs are a regression gate, not a coverage
   guarantee. Longer campaigns should run outside CI.
 

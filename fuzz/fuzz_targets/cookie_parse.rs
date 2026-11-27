@@ -31,8 +31,10 @@ fuzz_target!(|data: &[u8]| {
         Err(_) => return,
     };
 
-    // RFC 6265 §5.2: a standalone Set-Cookie header parser.
-    let _ = parse_set_cookie(&text, &request_url, std::time::SystemTime::now());
+    // RFC 6265 §5.2: a standalone Set-Cookie header parser. #2427: the instant is
+    // derived from the input so expiry branches are reproducible from a seed.
+    let now = megi_fuzz::fuzz_system_time(data);
+    let _ = parse_set_cookie(&text, &request_url, now);
     let _ = megi_net::is_valid_cookie_name(&text);
     let _ = megi_net::default_cookie_path(&request_url);
     let _ = megi_net::path_matches(&text, "/dir");

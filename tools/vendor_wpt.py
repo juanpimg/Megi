@@ -111,13 +111,25 @@ CANVAS_SUBSET_COUNTS = {
 WEBGL_SUBSET_COUNTS = {
     "webgl/bufferSubData.html": 1,
 }
-# Directories probed while scoping the runner but not adopted: their engine APIs are
-# incomplete, so reporting their real failures would break the allowlist-free gate.
+# Debt, not coverage: directories probed while scoping the runner but not adopted
+# because their engine APIs are incomplete. Each entry carries the follow-up issue,
+# the milestone that must rebaseline it and the reason recorded in the manifest.
+# The gate never counts a skipped fixture as a PASS; #2432 makes the debt explicit.
 NOT_ADOPTED_DIRS = {
-    "dom/nodes": "explored, not adopted by the component runner (engine DOM APIs incomplete)",
-    "dom/events": "explored, not adopted by the component runner (engine event APIs incomplete)",
-    "url": "explored, not adopted by the component runner (engine URL APIs incomplete)",
+    "dom/nodes": "debt #2316, #2317 (M2): explored, not adopted by the component runner (engine DOM APIs incomplete)",
+    "dom/events": "debt #2333, #2334, #2335 (M2): explored, not adopted by the component runner (engine event APIs incomplete)",
+    "url": "debt #2432 (M4): explored, not adopted by the component runner (engine URL APIs incomplete)",
 }
+# Every skipped directory is re-tried when its milestone rebaselines the runner;
+# this is a hard gate, not a promise that the current denominator is full WPT.
+NOT_ADOPTED_DEBT = {
+    "dom/nodes": ("M2", "#2316, #2317"),
+    "dom/events": ("M2", "#2333, #2334, #2335"),
+    "url": ("M4", "#2432"),
+}
+# `#2433`: only real WPT test files may be classified as executable fixtures.
+# Documentation such as css/css-syntax/README.md is not a testharness case.
+TESTHARNESS_SUFFIXES = (".html", ".htm", ".any.js", ".js")
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -206,12 +218,22 @@ def check_manifest(root: Path) -> list[str]:
             errors.append(f"{path}: license {entry['license']!r} is not in the allowlist")
         if entry["kind"] not in KINDS:
             errors.append(f"{path}: unknown kind {entry['kind']!r}")
+        # #2433: prose/README files were being tagged as executable testharness cases.
+        if entry["kind"] == "testharness" and not path.endswith(TESTHARNESS_SUFFIXES):
+            errors.append(
+                f"{path}: kind=testharness requires a test file extension "
+                f"{TESTHARNESS_SUFFIXES}"
+            )
         if entry["kind"] == "skip" and not entry["skip_reason"]:
             errors.append(f"{path}: kind=skip requires a non-empty skip_reason")
         if entry["kind"] != "skip" and any(marker in path for marker in SKIP_MARKERS):
             errors.append(f"{path}: skip marker requires kind=skip with a skip_reason")
         if not isinstance(entry["subtest_count_expected"], int) or entry["subtest_count_expected"] < 0:
             errors.append(f"{path}: subtest_count_expected must be a non-negative integer")
+        # #2434: an adopted fixture that runs zero subtests inflates the denominator
+        # without executing anything. It must be recorded as `skip` instead.
+        if entry["kind"] == "testharness" and entry["subtest_count_expected"] == 0:
+            errors.append(f"{path}: kind=testharness must declare at least one expected subtest")
         if entry["kind"] == "skip":
             continue
         actual = root / WPT_DIR / path
@@ -287,6 +309,9 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
             skipped = any(marker in relative for marker in SKIP_MARKERS)
             explicit_skip = SKIP_PATHS.get(relative) or NOT_ADOPTED_DIRS.get(directory)
             support_reason = SUPPORT_PATHS.get(relative)
+            # #2433: documentation is never an executable fixture. Decide this
+            # inside the direct-child loop, before the `testharness` default below.
+            documentation = path.name == "README.md"
             data = path.read_bytes()
             target = base / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -298,12 +323,15 @@ def vendor(source: Path, commit: str, dirs: list[str], root: Path) -> None:
                     "bytes": len(data),
                     "license": license_name,
                     "kind": (
-                        "skip" if skipped or explicit_skip
+                        "skip" if documentation or skipped or explicit_skip
                         else "support" if support_reason
                         else "testharness"
                     ),
-                    "skip_reason": explicit_skip
-                    or ("upstream manual/reference/testdriver file" if skipped else support_reason or ""),
+                    "skip_reason": (
+                        "documentation (not a WPT fixture)" if documentation
+                        else explicit_skip
+                        or ("upstream manual/reference/testdriver file" if skipped else support_reason or "")
+                    ),
                     "dir": directory,
                     "subtest_count_expected": SEED_COUNTS.get(relative, 0),
                 }
@@ -402,15 +430,23 @@ def import_files(
         )
         support_reason = SUPPORT_PATHS.get(relative)
         skip_reason = SKIP_PATHS.get(relative)
+        documentation = path.name == "README.md"
         by_path[relative] = {
             "path": relative,
             "sha256": sha256_bytes(data),
             "bytes": len(data),
             "license": license_name,
-            "kind": "skip" if skip_reason else "support" if support_reason else "testharness",
-            "skip_reason": skip_reason or support_reason or "",
+            "kind": (
+                "skip" if skip_reason or documentation
+                else "support" if support_reason
+                else "testharness"
+            ),
+            "skip_reason": (
+                skip_reason or ("documentation (not a WPT fixture)" if documentation
+                                else support_reason or "")
+            ),
             "dir": str(path.parent),
-            "subtest_count_expected": 0 if skip_reason or support_reason else count,
+            "subtest_count_expected": 0 if skip_reason or documentation or support_reason else count,
         }
     entries = sorted(by_path.values(), key=lambda entry: entry["path"])
     (base / MANIFEST_FILE).write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
